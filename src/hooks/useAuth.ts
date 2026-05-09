@@ -1,6 +1,4 @@
-import { useEffect } from "react";
-import { trpc } from "@/providers/trpc";
-import { resetQueryClient } from "@/providers/trpc";
+import { trpc, resetQueryClient, setCsrfToken } from "@/providers/trpc";
 
 export interface AuthUser {
   id: number;
@@ -19,6 +17,13 @@ export interface AuthUser {
   accountId: string | null;
 }
 
+let csrfTokenFromResponse: string | null = null;
+
+export function setCsrfFromResponse(token: string | null) {
+  csrfTokenFromResponse = token;
+  setCsrfToken(token);
+}
+
 export function useAuth() {
   const { data: user, isLoading } = trpc.localAuth.me.useQuery(undefined, {
     retry: false,
@@ -27,16 +32,9 @@ export function useAuth() {
     gcTime: 0,
   });
 
-  useEffect(() => {
-    if (user && user.id) {
-      localStorage.setItem("finaflow_current_business_id", String(user.currentBusinessId ?? ""));
-    }
-  }, [user?.currentBusinessId]);
-
   const logout = () => {
     resetQueryClient();
-    localStorage.removeItem("finaflow_token");
-    localStorage.removeItem("finaflow_current_business_id");
+    setCsrfFromResponse(null);
     window.location.href = "/login";
   };
 

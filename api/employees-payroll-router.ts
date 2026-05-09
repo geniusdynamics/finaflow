@@ -3,6 +3,8 @@ import { createRouter, payrollQuery, payrollProcess, getCurrentBusinessLocationI
 import { getDb } from "./queries/connection";
 import { employees, payrollPeriods, payrollEntries, payrollAdvances, accounts, ledgerEntries, bills, billPayments, billItems } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
+import { d } from "./lib/decimal";
+import { computePaye, computeNhif, computeNssf, computeHousingLevy } from "./lib/tax";
 
 export const employeesRouter = createRouter({
   list: payrollQuery
@@ -41,7 +43,6 @@ export const employeesRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      // Verify the location belongs to current business
       const locIds = await getCurrentBusinessLocationIds(ctx);
       if (!locIds.includes(input.locationId)) throw new Error("Invalid location for current business");
       const [result] = await db.insert(employees).values({
@@ -94,7 +95,6 @@ export const payrollRouter = createRouter({
       return db.select().from(payrollPeriods).where(and(...conditions)).orderBy(desc(payrollPeriods.startDate));
     }),
 
-  // Return ALL employees for the location, with their entry if any
   entries: payrollQuery
     .input(z.object({ periodId: z.number() }))
     .query(async ({ input }) => {
@@ -102,17 +102,14 @@ export const payrollRouter = createRouter({
       const period = await db.select().from(payrollPeriods).where(eq(payrollPeriods.id, input.periodId)).limit(1);
       if (!period[0]) return [];
 
-      // Get ALL active employees for this location
       const emps = await db.select().from(employees).where(
         and(eq(employees.locationId, period[0].locationId), eq(employees.isActive, true), isNull(employees.deletedAt))
       ).orderBy(employees.fullName);
 
-      // Get entries for this period
       const entries = await db.select().from(payrollEntries).where(
         and(eq(payrollEntries.periodId, input.periodId), isNull(payrollEntries.deletedAt))
       );
 
-      // Merge: every employee gets shown, with entry if exists
       return emps.map(emp => {
         const entry = entries.find(e => e.employeeId === emp.id);
         return { employee: emp, entry: entry ?? null };
@@ -145,148 +142,147 @@ export const payrollRouter = createRouter({
         and(eq(employees.locationId, period[0].locationId), eq(employees.isActive, true), isNull(employees.deletedAt))
       );
 
-      let totalNetPay = 0;
-      const entries: { id: number; employeeId: number; netPay: string }[] = [];
-
-      // Check existing entries first
       const existingEntries = await db.select().from(payrollEntries).where(
         and(eq(payrollEntries.periodId, input.periodId), isNull(payrollEntries.deletedAt))
       );
       const existingEmpIds = new Set(existingEntries.map(e => e.employeeId));
 
-      for (const emp of emps) {
-        if (existingEmpIds.has(emp.id)) continue; // already processed
+      let totalNetPay = d(0);
+      const entries: { id: number; employeeId: number; netPay: string }[] = [];
 
-        // Get approved advances linked to this period
-        const advances = await db.select().from(payrollAdvances).where(
-          and(
-            eq(payrollAdvances.employeeId, emp.id),
-            eq(payrollAdvances.status, "approved"),
-            sql`${payrollAdvances.payrollPeriodId} = ${input.periodId} OR ${payrollAdvances.payrollPeriodId} IS NULL`,
-            isNull(payrollAdvances.deletedAt)
-          )
-        );
-        const advanceDeduction = advances.reduce((sum, a) => sum + parseFloat(a.balanceRemaining), 0);
-        const basicPay = parseFloat(emp.basicSalary);
-        const nssf = Math.min(basicPay * 0.06, 2160);
-        const nhif = basicPay < 6000 ? 150 : basicPay < 8000 ? 300 : basicPay < 12000 ? 400 : 500;
-        const netPay = Math.max(0, basicPay - advanceDeduction - nssf - nhif);
-        totalNetPay += netPay;
+      await db.transaction(async (tx) => {
+        for (const emp of emps) {
+          if (existingEmpIds.has(emp.id)) continue;
 
-        const [result] = await db.insert(payrollEntries).values({
-          periodId: input.periodId, employeeId: emp.id,
-          basicPay: emp.basicSalary, advancesDeducted: advanceDeduction.toFixed(2),
-          deductions: (nssf + nhif).toFixed(2), netPay: netPay.toFixed(2),
-        } as any);
-        entries.push({ id: Number(result.insertId), employeeId: emp.id, netPay: netPay.toFixed(2) });
+          const advances = await tx.select().from(payrollAdvances).where(
+            and(eq(payrollAdvances.employeeId, emp.id), eq(payrollAdvances.status, "approved"),
+              sql`${payrollAdvances.payrollPeriodId} = ${input.periodId} OR ${payrollAdvances.payrollPeriodId} IS NULL`,
+              isNull(payrollAdvances.deletedAt))
+          );
+          const advanceDeduction = advances.reduce((sum, a) => sum.plus(d(a.balanceRemaining)), d(0));
+          const basicPay = d(emp.basicSalary);
+          const grossNum = basicPay.toNumber();
+          const nssfVal = computeNssf(grossNum);
+          const nssf = d(nssfVal.employee);
+          const housingLevy = d(computeHousingLevy(grossNum));
+          const taxableIncome = d(Math.max(0, grossNum - nssfVal.employee - housingLevy.toNumber()));
+          const nhif = d(computeNhif(grossNum));
+          const paye = d(computePaye(taxableIncome.toNumber()));
+          const grossDeductions = advanceDeduction.plus(nssf).plus(nhif).plus(housingLevy).plus(paye);
+          const netPay = d(Math.max(0, basicPay.minus(grossDeductions).toNumber()));
 
-        // Deduct advances
-        for (const adv of advances) {
-          const newBal = Math.max(0, parseFloat(adv.balanceRemaining) - netPay * 0.3).toFixed(2);
-          const newStatus = parseFloat(newBal) <= 0 ? "repaid" : "partially_repaid";
-          await db.update(payrollAdvances).set({ balanceRemaining: newBal, status: newStatus }).where(eq(payrollAdvances.id, adv.id));
+          totalNetPay = totalNetPay.plus(netPay);
+
+          const [result] = await tx.insert(payrollEntries).values({
+            periodId: input.periodId, employeeId: emp.id,
+            basicPay: emp.basicSalary, advancesDeducted: advanceDeduction.toFixed(2),
+            deductions: grossDeductions.toFixed(2), netPay: netPay.toFixed(2),
+            payeDeducted: paye.toFixed(2),
+            nhifDeducted: nhif.toFixed(2),
+            nssfDeducted: nssf.toFixed(2),
+          } as any);
+          entries.push({ id: Number(result.insertId), employeeId: emp.id, netPay: netPay.toFixed(2) });
+
+          for (const adv of advances) {
+            const newBal = d(Math.max(0, d(adv.balanceRemaining).minus(netPay.mul(0.3)).toNumber()));
+            const newStatus = newBal.lte(0) ? "repaid" : "partially_repaid";
+            await tx.update(payrollAdvances).set({ balanceRemaining: newBal.toFixed(2), status: newStatus }).where(eq(payrollAdvances.id, adv.id));
+          }
         }
-      }
 
-      // Include existing entries in total
-      for (const e of existingEntries) {
-        totalNetPay += parseFloat(e.netPay);
-      }
+        for (const e of existingEntries) {
+          totalNetPay = totalNetPay.plus(d(e.netPay));
+        }
 
-      // Update or create the bill for total payroll amount
-      let billId = period[0].generatedBillId;
-      if (!billId) {
-        const [billResult] = await db.insert(bills).values({
-          locationId: period[0].locationId,
-          description: `Payroll: ${period[0].periodName}`,
-          amount: totalNetPay.toFixed(2),
-          balanceDue: totalNetPay.toFixed(2),
-          issueDate: new Date(),
-          dueDate: period[0].paymentDate,
-        } as any);
-        billId = Number(billResult.insertId);
-      } else {
-        await db.update(bills).set({
-          amount: totalNetPay.toFixed(2),
-          balanceDue: totalNetPay.toFixed(2),
-        }).where(eq(bills.id, billId));
-        // Clear old bill items for this payroll bill
-        await db.update(billItems).set({ deletedAt: new Date() }).where(eq(billItems.billId, billId));
-      }
+        let billId = period[0].generatedBillId;
+        if (!billId) {
+          const [billResult] = await tx.insert(bills).values({
+            locationId: period[0].locationId,
+            description: `Payroll: ${period[0].periodName}`,
+            amount: totalNetPay.toFixed(2),
+            balanceDue: totalNetPay.toFixed(2),
+            issueDate: new Date(),
+            dueDate: period[0].paymentDate,
+          } as any);
+          billId = Number(billResult.insertId);
+        } else {
+          await tx.update(bills).set({ amount: totalNetPay.toFixed(2), balanceDue: totalNetPay.toFixed(2) }).where(eq(bills.id, billId));
+          await tx.update(billItems).set({ deletedAt: new Date() }).where(eq(billItems.billId, billId));
+        }
 
-      // Add all employees in this period as bill line items
-      const allEntriesForBill = await db.select().from(payrollEntries).where(
-        and(eq(payrollEntries.periodId, input.periodId), isNull(payrollEntries.deletedAt))
-      );
-      for (const entry of allEntriesForBill) {
-        const emp = await db.select().from(employees).where(eq(employees.id, entry.employeeId)).limit(1);
-        const empName = emp[0]?.fullName ?? `Employee #${entry.employeeId}`;
-        await db.insert(billItems).values({
-          billId: billId,
-          itemName: empName,
-          quantity: "1.000",
-          unitPrice: entry.netPay,
-          totalPrice: entry.netPay,
-          notes: `Basic: ${entry.basicPay}, Deductions: ${entry.deductions}, Advances: ${entry.advancesDeducted}`,
-        } as any);
-      }
+        const allEntriesForBill = await tx.select().from(payrollEntries).where(
+          and(eq(payrollEntries.periodId, input.periodId), isNull(payrollEntries.deletedAt))
+        );
+        for (const entry of allEntriesForBill) {
+          const emp = await tx.select().from(employees).where(eq(employees.id, entry.employeeId)).limit(1);
+          const empName = emp[0]?.fullName ?? `Employee #${entry.employeeId}`;
+          await tx.insert(billItems).values({
+            billId,
+            itemName: empName,
+            quantity: "1.000",
+            unitPrice: entry.netPay,
+            totalPrice: entry.netPay,
+            notes: `Basic: ${entry.basicPay}, Deductions: ${entry.deductions}, Advances: ${entry.advancesDeducted}, PAYE: ${entry.payeDeducted ?? "0"}`,
+          } as any);
+        }
 
-      await db.update(payrollPeriods).set({
-        status: "processing",
-        generatedBillId: billId,
-        totalNetPay: totalNetPay.toFixed(2),
-      }).where(eq(payrollPeriods.id, input.periodId));
+        await tx.update(payrollPeriods).set({
+          status: "processing",
+          generatedBillId: billId,
+          totalNetPay: totalNetPay.toFixed(2),
+        }).where(eq(payrollPeriods.id, input.periodId));
+      });
 
       return { entries, billId, totalNetPay: totalNetPay.toFixed(2), success: true };
     }),
 
   markPaid: payrollProcess
     .input(z.object({ periodId: z.number(), accountId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const period = await db.select().from(payrollPeriods).where(eq(payrollPeriods.id, input.periodId)).limit(1);
       if (!period[0]) throw new Error("Period not found");
 
-      const entries = await db.select().from(payrollEntries).where(
-        and(eq(payrollEntries.periodId, input.periodId), isNull(payrollEntries.deletedAt))
-      );
-      const totalPayroll = entries.reduce((sum, e) => sum + parseFloat(e.netPay), 0);
-      const totalPayrollStr = totalPayroll.toFixed(2);
+      await db.transaction(async (tx) => {
+        const entries = await tx.select().from(payrollEntries).where(
+          and(eq(payrollEntries.periodId, input.periodId), isNull(payrollEntries.deletedAt))
+        );
+        const totalPayroll = entries.reduce((sum, e) => sum.plus(d(e.netPay)), d(0));
 
-      const acct = await db.select().from(accounts).where(eq(accounts.id, input.accountId)).limit(1);
-      if (!acct[0]) throw new Error("Account not found");
+        const acct = await tx.select().from(accounts).where(eq(accounts.id, input.accountId)).limit(1);
+        if (!acct[0]) throw new Error("Account not found");
 
-      const newBalance = (parseFloat(acct[0].currentBalance) - totalPayroll).toFixed(2);
-      await db.insert(ledgerEntries).values({
-        accountId: input.accountId, transactionType: "payroll",
-        transactionId: input.periodId, entryType: "debit",
-        amount: totalPayrollStr, balanceAfter: newBalance, entryDate: new Date(),
-        createdBy: (ctx as any).user?.id,
-      } as any);
-      await db.update(accounts).set({ currentBalance: newBalance }).where(eq(accounts.id, input.accountId));
-
-      // Mark the generated bill as paid too
-      if (period[0].generatedBillId) {
-        await db.update(bills).set({
-          status: "paid", amountPaid: totalPayrollStr, balanceDue: "0.00"
-        }).where(eq(bills.id, period[0].generatedBillId));
-        await db.insert(billPayments).values({
-          billId: period[0].generatedBillId,
-          paymentMethod: "bank_transfer",
-          amount: totalPayrollStr,
-          paymentDate: new Date(),
-          accountId: input.accountId,
-          reference: `Payroll ${period[0].periodName}`,
-          enteredBy: (ctx as any).user?.id,
+        const newBalance = d(acct[0].currentBalance).minus(totalPayroll);
+        await tx.insert(ledgerEntries).values({
+          accountId: input.accountId, transactionType: "payroll",
+          transactionId: input.periodId, entryType: "debit",
+          amount: totalPayroll.toFixed(2), balanceAfter: newBalance.toFixed(2), entryDate: new Date(),
+          createdBy: (ctx as any).user?.id,
         } as any);
-      }
+        await tx.update(accounts).set({ currentBalance: newBalance.toFixed(2) }).where(eq(accounts.id, input.accountId));
 
-      await db.update(payrollPeriods).set({ status: "paid" }).where(eq(payrollPeriods.id, input.periodId));
-      for (const entry of entries) {
-        await db.update(payrollEntries).set({ paidAt: new Date() }).where(eq(payrollEntries.id, entry.id));
-      }
+        if (period[0].generatedBillId) {
+          await tx.update(bills).set({
+            status: "paid", amountPaid: totalPayroll.toFixed(2), balanceDue: "0.00"
+          }).where(eq(bills.id, period[0].generatedBillId));
+          await tx.insert(billPayments).values({
+            billId: period[0].generatedBillId,
+            paymentMethod: "bank_transfer",
+            amount: totalPayroll.toFixed(2),
+            paymentDate: new Date(),
+            accountId: input.accountId,
+            reference: `Payroll ${period[0].periodName}`,
+            enteredBy: (ctx as any).user?.id,
+          } as any);
+        }
 
-      return { totalPayroll: totalPayrollStr, success: true };
+        await tx.update(payrollPeriods).set({ status: "paid" }).where(eq(payrollPeriods.id, input.periodId));
+        for (const entry of entries) {
+          await tx.update(payrollEntries).set({ paidAt: new Date() }).where(eq(payrollEntries.id, entry.id));
+        }
+      });
+
+      return { success: true };
     }),
 
   addEmployeeToPeriod: payrollProcess
@@ -296,95 +292,84 @@ export const payrollRouter = createRouter({
       const period = await db.select().from(payrollPeriods).where(eq(payrollPeriods.id, input.periodId)).limit(1);
       if (!period[0]) throw new Error("Period not found");
 
-      const emp = await db.select().from(employees).where(
-        and(eq(employees.id, input.employeeId), isNull(employees.deletedAt))
-      ).limit(1);
+      const emp = await db.select().from(employees).where(and(eq(employees.id, input.employeeId), isNull(employees.deletedAt))).limit(1);
       if (!emp[0]) throw new Error("Employee not found");
-      if (emp[0].locationId !== period[0].locationId) {
-        throw new Error("Employee does not belong to this period's location");
-      }
+      if (emp[0].locationId !== period[0].locationId) throw new Error("Employee does not belong to this period's location");
 
-      // Check if entry already exists (including soft-deleted)
       const existing = await db.select().from(payrollEntries).where(
         and(eq(payrollEntries.periodId, input.periodId), eq(payrollEntries.employeeId, input.employeeId), isNull(payrollEntries.deletedAt))
       ).limit(1);
       if (existing.length > 0) return { entryId: existing[0].id, success: true };
 
-      // Get approved advances linked to this period
-      const advances = await db.select().from(payrollAdvances).where(
-        and(
-          eq(payrollAdvances.employeeId, emp[0].id),
-          eq(payrollAdvances.status, "approved"),
-          sql`${payrollAdvances.payrollPeriodId} = ${input.periodId} OR ${payrollAdvances.payrollPeriodId} IS NULL`,
-          isNull(payrollAdvances.deletedAt)
-        )
-      );
-      const advanceDeduction = advances.reduce((sum, a) => sum + parseFloat(a.balanceRemaining), 0);
-      const basicPay = parseFloat(emp[0].basicSalary);
-      const nssf = Math.min(basicPay * 0.06, 2160);
-      const nhif = basicPay < 6000 ? 150 : basicPay < 8000 ? 300 : basicPay < 12000 ? 400 : 500;
-      const netPay = Math.max(0, basicPay - advanceDeduction - nssf - nhif);
+      await db.transaction(async (tx) => {
+        const advances = await tx.select().from(payrollAdvances).where(
+        and(eq(payrollAdvances.employeeId, emp[0].id), eq(payrollAdvances.status, "approved"),
+        sql`${payrollAdvances.payrollPeriodId} = ${input.periodId} OR ${payrollAdvances.payrollPeriodId} IS NULL`,
+        isNull(payrollAdvances.deletedAt))
+        );
+        const advanceDeduction = advances.reduce((sum, a) => sum.plus(d(a.balanceRemaining)), d(0));
+        const basicPay = d(emp[0].basicSalary);
+        const grossNum = basicPay.toNumber();
+        const nssfVal = computeNssf(grossNum);
+        const nssf = d(nssfVal.employee);
+        const housingLevy = d(computeHousingLevy(grossNum));
+        const taxableIncome = d(Math.max(0, grossNum - nssfVal.employee - housingLevy.toNumber()));
+        const nhif = d(computeNhif(grossNum));
+          const paye = d(computePaye(taxableIncome.toNumber()));
+        const grossDeductions = advanceDeduction.plus(nssf).plus(nhif).plus(housingLevy).plus(paye);
+        const netPay = d(Math.max(0, basicPay.minus(grossDeductions).toNumber()));
 
-      const [result] = await db.insert(payrollEntries).values({
+        const [result] = await tx.insert(payrollEntries).values({
         periodId: input.periodId, employeeId: emp[0].id,
         basicPay: emp[0].basicSalary, advancesDeducted: advanceDeduction.toFixed(2),
-        deductions: (nssf + nhif).toFixed(2), netPay: netPay.toFixed(2),
-      } as any);
+        deductions: grossDeductions.toFixed(2), netPay: netPay.toFixed(2),
+          payeDeducted: paye.toFixed(2),
+            nhifDeducted: nhif.toFixed(2),
+          nssfDeducted: nssf.toFixed(2),
+        } as any);
 
-      // Deduct advances
-      for (const adv of advances) {
-        const newBal = Math.max(0, parseFloat(adv.balanceRemaining) - netPay * 0.3).toFixed(2);
-        const newStatus = parseFloat(newBal) <= 0 ? "repaid" : "partially_repaid";
-        await db.update(payrollAdvances).set({ balanceRemaining: newBal, status: newStatus }).where(eq(payrollAdvances.id, adv.id));
-      }
+        for (const adv of advances) {
+          const newBal = d(Math.max(0, d(adv.balanceRemaining).minus(netPay.mul(0.3)).toNumber()));
+            const newStatus = newBal.lte(0) ? "repaid" : "partially_repaid";
+            await tx.update(payrollAdvances).set({ balanceRemaining: newBal.toFixed(2), status: newStatus }).where(eq(payrollAdvances.id, adv.id));
+          }
 
-      // Recalculate period total
-      const allEntries = await db.select().from(payrollEntries).where(
-        and(eq(payrollEntries.periodId, input.periodId), isNull(payrollEntries.deletedAt))
-      );
-      const totalNetPay = allEntries.reduce((sum, e) => sum + parseFloat(e.netPay), 0);
+        const allEntries = await tx.select().from(payrollEntries).where(
+          and(eq(payrollEntries.periodId, input.periodId), isNull(payrollEntries.deletedAt))
+        );
+        const totalNetPay = allEntries.reduce((sum, e) => sum.plus(d(e.netPay)), d(0));
 
-      if (period[0].generatedBillId) {
-        await db.update(bills).set({
-          amount: totalNetPay.toFixed(2),
-          balanceDue: totalNetPay.toFixed(2),
-        }).where(eq(bills.id, period[0].generatedBillId));
-      }
-      await db.update(payrollPeriods).set({ totalNetPay: totalNetPay.toFixed(2) }).where(eq(payrollPeriods.id, input.periodId));
+        if (period[0].generatedBillId) {
+          await tx.update(bills).set({ amount: totalNetPay.toFixed(2), balanceDue: totalNetPay.toFixed(2) }).where(eq(bills.id, period[0].generatedBillId));
+        }
+        await tx.update(payrollPeriods).set({ totalNetPay: totalNetPay.toFixed(2) }).where(eq(payrollPeriods.id, input.periodId));
+      });
 
-      return { entryId: Number(result.insertId), success: true };
+      return { success: true };
     }),
 
   removeEmployeeFromPeriod: payrollProcess
     .input(z.object({ periodId: z.number(), employeeId: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const period = await db.select().from(payrollPeriods).where(eq(payrollPeriods.id, input.periodId)).limit(1);
-      if (!period[0]) throw new Error("Period not found");
+      await db.transaction(async (tx) => {
+        await tx.update(payrollEntries).set({ deletedAt: new Date() }).where(
+          and(eq(payrollEntries.periodId, input.periodId), eq(payrollEntries.employeeId, input.employeeId))
+        );
+        const allEntries = await tx.select().from(payrollEntries).where(
+          and(eq(payrollEntries.periodId, input.periodId), isNull(payrollEntries.deletedAt))
+        );
+        const totalNetPay = allEntries.reduce((sum, e) => sum.plus(d(e.netPay)), d(0));
 
-      // Soft delete the entry
-      await db.update(payrollEntries).set({ deletedAt: new Date() }).where(
-        and(eq(payrollEntries.periodId, input.periodId), eq(payrollEntries.employeeId, input.employeeId))
-      );
-
-      // Recalculate period total
-      const allEntries = await db.select().from(payrollEntries).where(
-        and(eq(payrollEntries.periodId, input.periodId), isNull(payrollEntries.deletedAt))
-      );
-      const totalNetPay = allEntries.reduce((sum, e) => sum + parseFloat(e.netPay), 0);
-
-      if (period[0].generatedBillId) {
-        await db.update(bills).set({
-          amount: totalNetPay.toFixed(2),
-          balanceDue: totalNetPay.toFixed(2),
-        }).where(eq(bills.id, period[0].generatedBillId));
-      }
-      await db.update(payrollPeriods).set({ totalNetPay: totalNetPay.toFixed(2) }).where(eq(payrollPeriods.id, input.periodId));
-
+        const period = await tx.select().from(payrollPeriods).where(eq(payrollPeriods.id, input.periodId)).limit(1);
+        if (period[0]?.generatedBillId) {
+          await tx.update(bills).set({ amount: totalNetPay.toFixed(2), balanceDue: totalNetPay.toFixed(2) }).where(eq(bills.id, period[0].generatedBillId));
+        }
+        await tx.update(payrollPeriods).set({ totalNetPay: totalNetPay.toFixed(2) }).where(eq(payrollPeriods.id, input.periodId));
+      });
       return { success: true };
     }),
 
-  // Advances
   listAdvances: payrollQuery
     .input(z.object({ employeeId: z.number().optional(), status: z.string().optional() }).optional())
     .query(async ({ input }) => {

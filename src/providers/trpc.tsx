@@ -16,14 +16,29 @@ let queryClient = new QueryClient({
     },
   },
 });
+
+let csrfToken: string | null = null;
+
+export function setCsrfToken(token: string | null) {
+  csrfToken = token;
+}
+
+export function getCsrfToken(): string | null {
+  return csrfToken;
+}
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
       headers() {
-        const token = localStorage.getItem("finaflow_token");
-        return token ? { Authorization: `Bearer ${token}` } : {};
+        const headers: Record<string, string> = {};
+        const token = csrfToken;
+        if (token) {
+          headers["x-csrf-token"] = token;
+        }
+        return headers;
       },
       fetch(input, init) {
         return globalThis.fetch(input, {

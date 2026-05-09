@@ -1,5 +1,5 @@
 import type { Context } from "hono";
-import { setCookie } from "hono/cookie";
+import { setCookie, getCookie } from "hono/cookie";
 import * as jose from "jose";
 import * as cookie from "cookie";
 import { env } from "../lib/env";
@@ -10,11 +10,10 @@ import { signSessionToken, verifySessionToken } from "./session";
 import { users as kimiUsers } from "./platform";
 import { findUserByUnionId, upsertUser } from "../queries/users";
 import type { TokenResponse } from "./types";
+import { createId } from "@paralleldrive/cuid2";
+import { serialize } from "cookie";
 
-async function exchangeAuthCode(
-  code: string,
-  redirectUri: string,
-): Promise<TokenResponse> {
+async function exchangeAuthCode(code: string, redirectUri: string): Promise<TokenResponse> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code,
@@ -37,19 +36,13 @@ async function exchangeAuthCode(
   return resp.json() as Promise<TokenResponse>;
 }
 
-const jwks = jose.createRemoteJWKSet(
-  new URL(`${env.kimiAuthUrl}/api/.well-known/jwks.json`),
-);
+const jwks = jose.createRemoteJWKSet(new URL(`${env.kimiAuthUrl}/api/.well-known/jwks.json`));
 
-async function verifyAccessToken(
-  accessToken: string,
-): Promise<{ userId: string; clientId: string }> {
+async function verifyAccessToken(accessToken: string): Promise<{ userId: string; clientId: string }> {
   const { payload } = await jose.jwtVerify(accessToken, jwks);
   const userId = payload.user_id as string;
   const clientId = payload.client_id as string;
-  if (!userId) {
-    throw new Error("user_id missing from access token");
-  }
+  if (!userId) throw new Error("user_id missing from access token");
   return { userId, clientId };
 }
 
@@ -57,17 +50,12 @@ export async function authenticateRequest(headers: Headers) {
   const cookies = cookie.parse(headers.get("cookie") || "");
   const token = cookies[Session.cookieName];
   if (!token) {
-    console.warn("[auth] No session cookie found in request.");
     throw Errors.forbidden("Invalid authentication token.");
   }
   const claim = await verifySessionToken(token);
-  if (!claim) {
-    throw Errors.forbidden("Invalid authentication token.");
-  }
+  if (!claim) throw Errors.forbidden("Invalid authentication token.");
   const user = await findUserByUnionId(claim.unionId);
-  if (!user) {
-    throw Errors.forbidden("User not found. Please re-login.");
-  }
+  if (!user) throw Errors.forbidden("User not found. Please re-login.");
   return user;
 }
 
@@ -79,13 +67,8 @@ export function createOAuthCallbackHandler() {
     const errorDescription = c.req.query("error_description");
 
     if (error) {
-      if (error === "access_denied") {
-        return c.redirect("/", 302);
-      }
-      return c.json(
-        { error, error_description: errorDescription },
-        400,
-      );
+      if (error === "access_denied") return c.redirect("/", 302);
+      return c.json({ error, error_description: errorDescription }, 400);
     }
 
     if (!code || !state) {
@@ -93,13 +76,19 @@ export function createOAuthCallbackHandler() {
     }
 
     try {
-      const redirectUri = atob(state);
+      const storedState = getCookie(c, "oauth_state");
+      if (!storedState || storedState !== state) {
+        return c.json({ error: "OAuth state mismatch" }, 401);
+      }
+
+      // Clear state cookie after verification
+      setCookie(c, "oauth_state", "", { httpOnly: true, sameSite: "lax", maxAge: 0, path: "/" });
+
+      const redirectUri = c.req.query("redirect_uri") || env.appUrl;
       const tokenResp = await exchangeAuthCode(code, redirectUri);
       const { userId } = await verifyAccessToken(tokenResp.access_token);
       const userProfile = await kimiUsers.getProfile(tokenResp.access_token);
-      if (!userProfile) {
-        throw new Error("Failed to fetch user profile from Kimi Open");
-      }
+      if (!userProfile) throw new Error("Failed to fetch user profile from Kimi Open");
 
       await upsertUser({
         unionId: userId,
@@ -108,11 +97,7 @@ export function createOAuthCallbackHandler() {
         lastSignInAt: new Date(),
       });
 
-      const token = await signSessionToken({
-        unionId: userId,
-        clientId: env.appId,
-      });
-
+      const token = await signSessionToken({ unionId: userId, clientId: env.appId });
       const cookieOpts = getSessionCookieOptions(c.req.raw.headers);
       setCookie(c, Session.cookieName, token, {
         ...cookieOpts,

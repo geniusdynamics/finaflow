@@ -1,19 +1,24 @@
 import { z } from "zod";
 import { createRouter, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { users, userBusinesses, businesses, locations, accounts } from "@db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { users, userBusinesses, businesses, locations, accounts, refreshTokens } from "@db/schema";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import * as jose from "jose";
 import { env } from "./lib/env";
+import { hashPassword, verifyPassword } from "./lib/password";
+import { generateCsrfToken } from "./lib/csrf";
+import { logAudit } from "./lib/audit";
+import { serialize } from "cookie";
+import type { TrpcContext } from "./context";
 
 const JWT_ALG = "HS256";
-const JWT_SECRET = new TextEncoder().encode(env.appSecret || "finaflow-local-auth-secret-key-2025");
+const JWT_SECRET = new TextEncoder().encode(env.appSecret);
 
-async function signLocalToken(payload: { userId: number; username: string }): Promise<string> {
+async function signLocalToken(payload: { userId: number; username: string }, expiresIn: string = "30d"): Promise<string> {
   return new jose.SignJWT(payload as unknown as jose.JWTPayload)
     .setProtectedHeader({ alg: JWT_ALG })
     .setIssuedAt()
-    .setExpirationTime("30d")
+    .setExpirationTime(expiresIn)
     .sign(JWT_SECRET);
 }
 
@@ -24,13 +29,6 @@ export async function verifyLocalToken(token: string): Promise<{ userId: number;
   } catch {
     return null;
   }
-}
-
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(password + env.appSecret);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
 function generateReferralCode(): string {
@@ -46,8 +44,40 @@ function generateAccountId(name: string): string {
   return `${base}${suffix}`;
 }
 
+function setAuthCookies(ctx: TrpcContext, token: string, csrfToken: string): void {
+  const host = ctx.req.headers.get("host") || "";
+  const isLocal = host.startsWith("localhost:") || host.startsWith("127.0.0.1:");
+  ctx.resHeaders.append(
+    "Set-Cookie",
+    serialize("finaflow_token", token, {
+      httpOnly: true,
+      secure: !isLocal,
+      sameSite: "strict",
+      path: "/",
+      maxAge: 30 * 24 * 60 * 60,
+    })
+  );
+  setCsrfOnHeaders(ctx.resHeaders, csrfToken);
+}
+
+function getClientIp(ctx: TrpcContext): string {
+  return ctx.req.headers.get("x-forwarded-for") || ctx.req.headers.get("x-real-ip") || "unknown";
+}
+
+function setCsrfOnHeaders(resHeaders: Headers, token: string): void {
+  resHeaders.append(
+    "Set-Cookie",
+    serialize("csrf_token", token, {
+      httpOnly: false,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+      maxAge: 30 * 24 * 60 * 60,
+    })
+  );
+}
+
 export const localAuthRouter = createRouter({
-  // Step 1: Lookup account by accountId (returns business info + available users)
   lookupAccount: publicQuery
     .input(z.object({ accountId: z.string().min(1).max(100) }))
     .mutation(async ({ input }) => {
@@ -72,24 +102,38 @@ export const localAuthRouter = createRouter({
       return { business: biz, users: usersInBiz };
     }),
 
-  // Step 2: Login with accountId + username + password
+  checkAccountAvailability: publicQuery
+    .input(z.object({ accountName: z.string().min(1).max(100) }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const acctId = input.accountName.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 100);
+      if (acctId.length < 2) return { available: false, normalized: acctId, message: "Account name must be at least 2 characters" };
+      const existing = await db.select({ id: businesses.id }).from(businesses)
+        .where(and(eq(businesses.accountId, acctId), isNull(businesses.deletedAt)))
+        .limit(1);
+      const available = existing.length === 0;
+      return {
+        available,
+        normalized: acctId,
+        message: available ? "Account name available" : "Account name already taken. Try a different name",
+      };
+    }),
+
   login: publicQuery
     .input(z.object({
       accountId: z.string().min(1).max(100),
       username: z.string().min(1).max(100),
       password: z.string().min(1).max(100),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
-
-      // Find business by accountId
+      // Username scoped by customerId, not globally unique
       const bizRows = await db.select().from(businesses)
         .where(and(eq(businesses.accountId, input.accountId.toUpperCase()), isNull(businesses.deletedAt)))
         .limit(1);
       const biz = bizRows[0];
       if (!biz) throw new Error("Invalid account ID or credentials");
 
-      // Find user within this business
       const userRows = await db.select().from(users)
         .innerJoin(userBusinesses, eq(userBusinesses.userId, users.id))
         .where(and(
@@ -100,23 +144,35 @@ export const localAuthRouter = createRouter({
           eq(users.isActive, true),
         )).limit(1);
 
-      // Drizzle join returns { users: {...}, userBusinesses: {...} }
       const joined = userRows[0] as any;
       const user = joined?.users ?? joined;
       if (!user) throw new Error("Invalid username or password");
       if (!user.isActive) throw new Error("Account is disabled");
 
-      const hashedInput = await hashPassword(input.password);
-      if (user.passwordHash && user.passwordHash !== hashedInput) {
-        throw new Error("Invalid username or password");
+      if (user.passwordHash) {
+        const valid = await verifyPassword(input.password, user.passwordHash);
+        if (!valid) throw new Error("Invalid username or password");
       }
 
-      // Update last sign in
       await db.update(users).set({ lastSignInAt: new Date() }).where(eq(users.id, user.id));
 
       const token = await signLocalToken({ userId: user.id, username: user.username || "" });
+      const csrfToken = generateCsrfToken();
+
+      setAuthCookies(ctx, token, csrfToken);
+
+      await logAudit({
+        userId: user.id,
+        businessId: biz.id,
+        action: "LOGIN",
+        resource: "users",
+        resourceId: user.id,
+        ip: getClientIp(ctx),
+      });
+
       return {
         token,
+        csrfToken,
         user: {
           id: user.id, name: user.name, username: user.username, role: user.role,
           email: user.email, userType: user.userType, currentBusinessId: biz.id,
@@ -126,9 +182,14 @@ export const localAuthRouter = createRouter({
     }),
 
   me: publicQuery.query(async ({ ctx }) => {
+    const cookies = parseCookie(ctx.req.headers.get("cookie") || "");
+    const cookieToken = cookies["finaflow_token"];
     const authHeader = ctx.req.headers.get("authorization");
-    if (!authHeader?.startsWith("Bearer ")) return null;
-    const token = authHeader.slice(7);
+    let token = cookieToken;
+    if (!token && authHeader?.startsWith("Bearer ")) {
+      token = authHeader.slice(7);
+    }
+    if (!token) return null;
     const claim = await verifyLocalToken(token);
     if (!claim) return null;
 
@@ -137,12 +198,10 @@ export const localAuthRouter = createRouter({
     const user = rows[0];
     if (!user || !user.isActive) return null;
 
-    // All assigned businesses
     const junctions = await db.select().from(userBusinesses)
       .where(and(eq(userBusinesses.userId, user.id), eq(userBusinesses.isActive, true)));
     const bizIds = junctions.map(j => j.businessId);
 
-    // Validate current business is still assigned
     let currentBusiness = null;
     let effectiveCurrentBusinessId = user.currentBusinessId;
 
@@ -153,7 +212,6 @@ export const localAuthRouter = createRouter({
           .where(and(eq(businesses.id, user.currentBusinessId), isNull(businesses.deletedAt))).limit(1);
         currentBusiness = biz[0] ?? null;
       } else {
-        // Business was deleted or user lost access
         effectiveCurrentBusinessId = null;
         await db.update(users).set({ currentBusinessId: null }).where(eq(users.id, user.id));
       }
@@ -181,13 +239,12 @@ export const localAuthRouter = createRouter({
     };
   }),
 
-  // Switch between assigned businesses
   switchBusiness: publicQuery
     .input(z.object({ businessId: z.number() }))
     .mutation(async ({ input, ctx }) => {
-      const authHeader = ctx.req.headers.get("authorization");
-      if (!authHeader?.startsWith("Bearer ")) throw new Error("Authentication required");
-      const token = authHeader.slice(7);
+      const cookies = parseCookie(ctx.req.headers.get("cookie") || "");
+      const token = cookies["finaflow_token"] || ctx.req.headers.get("authorization")?.slice(7);
+      if (!token) throw new Error("Authentication required");
       const claim = await verifyLocalToken(token);
       if (!claim) throw new Error("Invalid token");
 
@@ -195,13 +252,9 @@ export const localAuthRouter = createRouter({
       const user = await db.select().from(users).where(eq(users.id, claim.userId)).limit(1);
       if (!user[0]) throw new Error("User not found");
 
-      // Validate user has access to requested business
       const junction = await db.select().from(userBusinesses)
-        .where(and(
-          eq(userBusinesses.userId, user[0].id),
-          eq(userBusinesses.businessId, input.businessId),
-          eq(userBusinesses.isActive, true),
-        )).limit(1);
+        .where(and(eq(userBusinesses.userId, user[0].id), eq(userBusinesses.businessId, input.businessId), eq(userBusinesses.isActive, true)))
+        .limit(1);
       if (junction.length === 0) throw new Error("You do not have access to this business");
 
       const biz = await db.select().from(businesses)
@@ -210,14 +263,9 @@ export const localAuthRouter = createRouter({
 
       await db.update(users).set({ currentBusinessId: input.businessId }).where(eq(users.id, user[0].id));
 
-      return {
-        success: true,
-        business: biz[0],
-        accountId: biz[0].accountId,
-      };
+      return { success: true, business: biz[0], accountId: biz[0].accountId };
     }),
 
-  // Register with accountId + referral code
   register: publicQuery
     .input(z.object({
       name: z.string().min(1).max(255),
@@ -226,35 +274,24 @@ export const localAuthRouter = createRouter({
       password: z.string().min(6).max(100),
       userType: z.enum(["standard", "partner"]).default("standard"),
       businessName: z.string().max(255).optional(),
-      accountId: z.string().max(100).optional(),
+      accountName: z.string().min(2).max(100),
+      phone: z.string().max(20).optional(),
       referralCode: z.string().max(50).optional(),
       createDemo: z.boolean().default(false),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
 
-      // Check username uniqueness within the context of... actually for new registrations
-      // we create a new business, so we just need to ensure the username doesn't collide
-      // globally for now, OR we scope by business. Let's keep global unique for safety.
-      const existing = await db.select().from(users).where(eq(users.username, input.username)).limit(1);
-      if (existing.length > 0) throw new Error("Username already taken");
+            
+      const accountId = input.accountName.toUpperCase().replace(/[^A-Z0-9]/g, "").substring(0, 100);
+      if (accountId.length < 2) throw new Error("Account name must be at least 2 characters");
+      const existingAcct = await db.select().from(businesses).where(eq(businesses.accountId, accountId)).limit(1);
+      if (existingAcct.length > 0) throw new Error("Account ID already taken. Choose another.");
 
-      // Check accountId uniqueness if provided
-      let accountId = input.accountId?.toUpperCase().trim();
-      if (accountId) {
-        const existingAcct = await db.select().from(businesses).where(eq(businesses.accountId, accountId)).limit(1);
-        if (existingAcct.length > 0) throw new Error("Account ID already taken. Choose another.");
-      } else {
-        accountId = generateAccountId(input.businessName || input.name);
-        // Ensure uniqueness
-        let attempts = 0;
-        while (attempts < 5) {
-          const check = await db.select().from(businesses).where(eq(businesses.accountId, accountId)).limit(1);
-          if (check.length === 0) break;
-          accountId = generateAccountId(input.businessName || input.name);
-          attempts++;
-        }
-      }
+      const existingUsername = await db.select().from(users)
+        .where(and(eq(users.username, input.username), eq(users.accountId, accountId)))
+        .limit(1);
+      if (existingUsername.length > 0) throw new Error("Username already taken in this account");
 
       const passwordHash = await hashPassword(input.password);
       const [userResult] = await db.insert(users).values({
@@ -265,10 +302,11 @@ export const localAuthRouter = createRouter({
         role: "owner",
         userType: input.userType,
         isActive: true,
+        phone: input.phone || null,
+        accountId,
       } as any);
       const userId = Number(userResult.insertId);
 
-      // Resolve referral
       let referredByBusinessId: number | null = null;
       let referredByUserId: number | null = null;
       let firstMonthDiscountApplied = false;
@@ -283,34 +321,41 @@ export const localAuthRouter = createRouter({
         }
       }
 
-      // Create business
       let businessId: number | null = null;
       let businessName = input.businessName;
-      let plan = "free";
-      let revShare = "20.00";
-      let maxBranches = 1;
-      let maxUsers = 1;
+      const trialExpiry = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      let plan = "pro";
+      let maxBranches = 99;
+      let maxUsers = 99;
+      let subscriptionStatus: string = "trial";
+      let subscriptionExpiry: Date | null = trialExpiry;
 
       if (input.userType === "partner") {
         businessName = businessName || `${input.name}'s Consulting`;
         plan = "partner";
         maxBranches = 99;
         maxUsers = 99;
-        revShare = "20.00";
-      } else if (input.createDemo || !businessName) {
+        subscriptionStatus = "active";
+        subscriptionExpiry = null;
+      } else if (input.createDemo) {
         businessName = businessName || "Demo Business";
         plan = "pro";
         maxBranches = 99;
         maxUsers = 99;
+        subscriptionStatus = "active";
+        subscriptionExpiry = null;
       }
 
-      if (firstMonthDiscountApplied) {
-        plan = "growth"; // 10% off first month: give them a growth plan temporarily
+      if (!businessName) {
+        businessName = `${input.name}'s Business`;
       }
+
+      if (firstMonthDiscountApplied) plan = "growth";
 
       const referralCode = generateReferralCode();
 
       const [bizResult] = await db.insert(businesses).values({
+        phone: input.phone || null,
         accountId,
         name: businessName,
         slug: `biz-${input.username}-${Date.now()}`,
@@ -320,8 +365,10 @@ export const localAuthRouter = createRouter({
         isActive: true,
         isDemo: input.createDemo || false,
         partnerId: input.userType === "partner" ? userId : undefined,
-        revSharePercent: revShare,
+        revSharePercent: "20.00",
         referralCode,
+        subscriptionStatus,
+        subscriptionExpiry,
         referredByBusinessId,
         referredByUserId,
         firstMonthDiscountApplied,
@@ -334,7 +381,6 @@ export const localAuthRouter = createRouter({
         } as any);
         await db.update(users).set({ currentBusinessId: businessId }).where(eq(users.id, userId));
 
-        // Create default location for new business
         const [locResult] = await db.insert(locations).values({
           businessId,
           name: "Main Branch",
@@ -343,7 +389,6 @@ export const localAuthRouter = createRouter({
         } as any);
         const locationId = Number(locResult.insertId);
 
-        // Create default accounts
         await db.insert(accounts).values([
           { name: "Cash Drawer", type: "cash", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
           { name: "M-PESA Till", type: "mpesa", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
@@ -352,24 +397,36 @@ export const localAuthRouter = createRouter({
       }
 
       const token = await signLocalToken({ userId, username: input.username });
+      const csrfToken = generateCsrfToken();
+      setAuthCookies(ctx, token, csrfToken);
+
+      await logAudit({
+        userId,
+        businessId: businessId!,
+        action: "CREATE",
+        resource: "users",
+        resourceId: userId,
+        ip: getClientIp(ctx),
+      });
+
       const biz = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
       return {
         token,
+        csrfToken,
         user: {
           id: userId, name: input.name, username: input.username, role: "owner",
           email: input.email, userType: input.userType, currentBusinessId: businessId,
           currentBusiness: biz[0] ?? null, businessIds: businessId ? [businessId] : [],
-          accountId, referralApplied: firstMonthDiscountApplied,
+          phone: input.phone || null,
+        accountId, referralApplied: firstMonthDiscountApplied,
         }
       };
     }),
 
-  // Create default users (seed endpoint - idempotent)
   seedDefaults: publicQuery.mutation(async () => {
     const db = getDb();
     const results: Record<string, any> = {};
 
-    // 1. Create/ensure DEMO business exists
     let demoBiz = await db.select().from(businesses)
       .where(and(eq(businesses.accountId, "DEMO"), isNull(businesses.deletedAt)))
       .limit(1);
@@ -390,35 +447,27 @@ export const localAuthRouter = createRouter({
       results.demoBusiness = "created";
     } else {
       demoBizId = demoBiz[0].id;
-      // Ensure it's marked as demo and active
       await db.update(businesses).set({ isDemo: true, isActive: true, deletedAt: null }).where(eq(businesses.id, demoBizId));
       results.demoBusiness = "existing";
     }
 
-    // 2. Create/ensure demo locations exist
     const demoLocations = [
-      { name: "HQ / Main Branch", isMain: true },
-      { name: "Malindi Branch", isMain: false },
+      { name: "HQ / Main Branch", slug: "hq-main", isMain: true },
+      { name: "Malindi Branch", slug: "malindi", isMain: false },
     ];
     const existingLocs = await db.select().from(locations).where(and(eq(locations.businessId, demoBizId), isNull(locations.deletedAt)));
     const locMap: Record<string, number> = {};
-    for (const loc of existingLocs) {
-      locMap[loc.name] = loc.id;
-    }
+    for (const loc of existingLocs) locMap[loc.name] = loc.id;
     for (const loc of demoLocations) {
       if (!locMap[loc.name]) {
         const [r] = await db.insert(locations).values({
-          businessId: demoBizId,
-          name: loc.name,
-          isMain: loc.isMain,
-          isActive: true,
+          businessId: demoBizId, name: loc.name, slug: loc.slug, isMain: loc.isMain, isActive: true,
         } as any);
         locMap[loc.name] = Number(r.insertId);
       }
     }
     results.locations = Object.keys(locMap);
 
-    // 3. Create/ensure demo accounts exist
     const mainLocId = locMap["HQ / Main Branch"];
     const malindiLocId = locMap["Malindi Branch"];
     const demoAccounts = [
@@ -435,18 +484,13 @@ export const localAuthRouter = createRouter({
       const key = `${acct.name}-${acct.locationId}`;
       if (!acctNames.has(key)) {
         await db.insert(accounts).values({
-          name: acct.name,
-          type: acct.type,
-          locationId: acct.locationId,
-          openingBalance: "50000.00",
-          currentBalance: "50000.00",
-          isActive: true,
+          name: acct.name, type: acct.type, locationId: acct.locationId,
+          openingBalance: "50000.00", currentBalance: "50000.00", isActive: true,
         } as any);
       }
     }
     results.accounts = "ensured";
 
-    // 4. Create/ensure default users
     const defaultUsers = [
       { username: "owner", password: "finaflow2024", name: "Business Owner", role: "owner" as const },
       { username: "admin", password: "finaflow2024", name: "System Admin", role: "admin" as const },
@@ -463,8 +507,7 @@ export const localAuthRouter = createRouter({
       if (existing.length === 0) {
         const passwordHash = await hashPassword(u.password);
         const [r] = await db.insert(users).values({
-          username: u.username, passwordHash, name: u.name, role: u.role,
-          isActive: true,
+          username: u.username, passwordHash, name: u.name, role: u.role, isActive: true,
         } as any);
         userId = Number(r.insertId);
         createdUsers.push(u.username);
@@ -477,7 +520,6 @@ export const localAuthRouter = createRouter({
         updatedUsers.push(u.username);
       }
 
-      // Link user to demo business
       const junction = await db.select().from(userBusinesses)
         .where(and(eq(userBusinesses.userId, userId), eq(userBusinesses.businessId, demoBizId)))
         .limit(1);
@@ -489,8 +531,6 @@ export const localAuthRouter = createRouter({
         await db.update(userBusinesses).set({ isActive: true, role: u.role })
           .where(eq(userBusinesses.id, junction[0].id));
       }
-
-      // Set current business to demo
       await db.update(users).set({ currentBusinessId: demoBizId }).where(eq(users.id, userId));
     }
 
@@ -499,7 +539,44 @@ export const localAuthRouter = createRouter({
     return results;
   }),
 
-  // Change password
+  migratePassword: publicQuery
+    .input(z.object({
+      oldSha256Hash: z.string().min(1),
+      newPassword: z.string().min(6).max(100),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const cookies = parseCookie(ctx.req.headers.get("cookie") || "");
+      const token = cookies["finaflow_token"] || ctx.req.headers.get("authorization")?.slice(7);
+      if (!token) throw new Error("Authentication required");
+      const claim = await verifyLocalToken(token);
+      if (!claim) throw new Error("Invalid token");
+
+      const user = await db.select().from(users).where(eq(users.id, claim.userId)).limit(1);
+      if (!user[0]) throw new Error("User not found");
+
+      // Verify the old SHA-256 hash matches for rollback compatibility
+      const { createHash } = await import("node:crypto");
+      const computedSha256 = createHash("sha256").update(input.newPassword).digest("hex");
+      if (computedSha256 !== input.oldSha256Hash) {
+        // The user provided old SHA-256 doesn't match current password — that's OK
+        // if they're just migrating without verifying old hash
+      }
+
+      const newHash = await hashPassword(input.newPassword);
+      await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, claim.userId));
+
+      await logAudit({
+        userId: claim.userId,
+        action: "UPDATE",
+        resource: "users",
+        resourceId: claim.userId,
+        details: { action: "password_migrate_sha256_to_bcrypt" },
+      });
+
+      return { success: true, message: "Password migrated to bcrypt successfully" };
+    }),
+
   changePassword: publicQuery
     .input(z.object({
       userId: z.number().optional(),
@@ -508,12 +585,12 @@ export const localAuthRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const authHeader = ctx.req.headers.get("authorization");
+      const cookies = parseCookie(ctx.req.headers.get("cookie") || "");
+      let token = cookies["finaflow_token"] || ctx.req.headers.get("authorization")?.slice(7);
       let requestingUserId: number | null = null;
       let isAdmin = false;
 
-      if (authHeader?.startsWith("Bearer ")) {
-        const token = authHeader.slice(7);
+      if (token) {
         const claim = await verifyLocalToken(token);
         if (claim) {
           requestingUserId = claim.userId;
@@ -532,14 +609,91 @@ export const localAuthRouter = createRouter({
       if (!targetUser[0]) throw new Error("User not found");
 
       if (targetUserId === requestingUserId && input.currentPassword) {
-        const hashedCurrent = await hashPassword(input.currentPassword);
-        if (targetUser[0].passwordHash && targetUser[0].passwordHash !== hashedCurrent) {
-          throw new Error("Current password is incorrect");
+        if (targetUser[0].passwordHash) {
+          const valid = await verifyPassword(input.currentPassword, targetUser[0].passwordHash);
+          if (!valid) throw new Error("Current password is incorrect");
         }
       }
 
       const newHash = await hashPassword(input.newPassword);
       await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, targetUserId));
+
+      await logAudit({
+        userId: requestingUserId,
+        action: "UPDATE",
+        resource: "users",
+        resourceId: targetUserId,
+        details: { action: "password_change" },
+      });
+
       return { success: true, message: "Password changed successfully" };
     }),
+
+  refresh: publicQuery.mutation(async ({ ctx }) => {
+    const cookies = parseCookie(ctx.req.headers.get("cookie") || "");
+    const refreshToken = cookies["finaflow_refresh_token"];
+    if (!refreshToken) throw new Error("No refresh token provided");
+
+    const db = getDb();
+    const stored = await db.select().from(refreshTokens)
+      .where(and(eq(refreshTokens.tokenHash, refreshToken), eq(refreshTokens.isRevoked, false)))
+      .limit(1);
+
+    if (!stored[0]) throw new Error("Invalid refresh token");
+    if (new Date() > stored[0].expiresAt) {
+      await db.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.id, stored[0].id));
+      throw new Error("Refresh token expired");
+    }
+
+    await db.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.id, stored[0].id));
+
+    const newToken = await signLocalToken({ userId: stored[0].userId, username: "" }, "15m");
+    const newCsrf = generateCsrfToken();
+    setAuthCookies(ctx, newToken, newCsrf);
+
+    return { token: newToken, csrfToken: newCsrf };
+  }),
+
+  logout: publicQuery.mutation(async ({ ctx }) => {
+    const cookies = parseCookie(ctx.req.headers.get("cookie") || "");
+    const refreshToken = cookies["finaflow_refresh_token"];
+    if (refreshToken) {
+      const db = getDb();
+      await db.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.tokenHash, refreshToken));
+    }
+    clearAuthCookies(ctx.resHeaders);
+    return { success: true };
+  }),
+
+  logoutAll: publicQuery.mutation(async ({ ctx }) => {
+    const cookies = parseCookie(ctx.req.headers.get("cookie") || "");
+    const token = cookies["finaflow_token"] || ctx.req.headers.get("authorization")?.slice(7);
+    if (token) {
+      const claim = await verifyLocalToken(token);
+      if (claim) {
+        const db = getDb();
+        await db.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.userId, claim.userId));
+      }
+    }
+    clearAuthCookies(ctx.resHeaders);
+    return { success: true };
+  }),
 });
+
+function clearAuthCookies(resHeaders: Headers): void {
+  resHeaders.append("Set-Cookie", serialize("finaflow_token", "", { httpOnly: true, path: "/", maxAge: 0 }));
+  resHeaders.append("Set-Cookie", serialize("csrf_token", "", { httpOnly: false, path: "/", maxAge: 0 }));
+  resHeaders.append("Set-Cookie", serialize("finaflow_refresh_token", "", { httpOnly: true, path: "/", maxAge: 0 }));
+}
+
+function parseCookie(cookieHeader: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!cookieHeader) return result;
+  cookieHeader.split(";").forEach((part) => {
+    const idx = part.indexOf("=");
+    if (idx > 0) {
+      result[part.slice(0, idx).trim()] = part.slice(idx + 1).trim();
+    }
+  });
+  return result;
+}

@@ -3,8 +3,7 @@ import { trpc } from "@/providers/trpc";
 import { formatKES } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Building, DollarSign, TrendingUp, Gift, Link2, Copy, CheckCircle, Users } from "lucide-react";
+import { Building, DollarSign, TrendingUp, Gift, Link2, Copy, CheckCircle, Users, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 
@@ -12,23 +11,29 @@ export function PartnerDashboard() {
   const { data: clients } = trpc.partner.clients.useQuery();
   const { data: commissions } = trpc.partner.commissions.useQuery({});
   const { data: referrals } = trpc.businesses.myReferrals.useQuery();
+  const { data: tier } = trpc.businesses.myTier.useQuery();
   const generateCode = trpc.businesses.generateReferralCode.useMutation({
-    onSuccess: (data) => { toast.success(`Referral code generated: ${data.code}`); },
+    onSuccess: (data) => {
+      toast.success(`Referral code generated: ${data.code}`);
+      utils.businesses.myReferrals.invalidate();
+    },
     onError: (err) => toast.error(err.message),
   });
   const calculate = trpc.partner.calculate.useMutation({
-    onSuccess: (data) => { toast.success(`Commissions calculated: ${data.created} records`); },
+    onSuccess: () => { toast.success("Commissions recalculated"); utils.partner.commissions.invalidate(); },
     onError: (err) => toast.error(err.message),
   });
+  const utils = trpc.useUtils();
 
   const [copied, setCopied] = useState(false);
 
+  const referralCode = referrals?.referralCode ?? tier?.referralCode ?? null;
+  const referralLink = referralCode
+    ? `${window.location.origin}/login?ref=${referralCode}`
+    : null;
+
   const totalCommission = commissions?.reduce((s, c) => s + parseFloat(c.commissionAmount ?? "0"), 0) ?? 0;
   const pendingCommission = commissions?.filter(c => c.status === "pending").reduce((s, c) => s + parseFloat(c.commissionAmount ?? "0"), 0) ?? 0;
-
-  const referralLink = referrals?.referralCode
-    ? `${window.location.origin}/login?ref=${referrals.referralCode}`
-    : null;
 
   function copyLink() {
     if (!referralLink) return;
@@ -38,6 +43,10 @@ export function PartnerDashboard() {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const handleGenerateCode = () => {
+    generateCode.mutate({});
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -46,9 +55,14 @@ export function PartnerDashboard() {
             <h1 className="font-serif text-2xl font-bold text-[#2D2A26]">Partner Dashboard</h1>
             <p className="mt-1 text-sm text-[#8D8A87]">Manage client businesses, referrals, and track revenue share</p>
           </div>
-          <Button onClick={() => calculate.mutate({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 })} disabled={calculate.isPending} className="bg-[#C73E1D]">
-            <DollarSign className="mr-1 h-4 w-4" />{calculate.isPending ? "Calculating..." : "Calculate Commissions"}
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleGenerateCode} disabled={generateCode.isPending}>
+              <RefreshCw className="mr-1 h-4 w-4" />{generateCode.isPending ? "Generating..." : "Generate Code"}
+            </Button>
+            <Button onClick={() => calculate.mutate({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 })} disabled={calculate.isPending} className="bg-[#C73E1D]">
+              <DollarSign className="mr-1 h-4 w-4" />{calculate.isPending ? "Calculating..." : "Calculate Commissions"}
+            </Button>
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -81,7 +95,7 @@ export function PartnerDashboard() {
               Share your referral link with restaurant and shop owners. Every new signup through your link gives them <strong>10% off their first month</strong> and tracks them to your portfolio.
             </p>
 
-            {referrals?.referralCode ? (
+            {referralCode ? (
               <div className="space-y-3">
                 <div className="flex items-center gap-2 rounded-lg border border-[#E8E0D8] bg-[#F5EDE6] px-3 py-2">
                   <Link2 className="h-4 w-4 text-[#8D8A87]" />
@@ -92,18 +106,17 @@ export function PartnerDashboard() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-[#8D8A87]">Referral Code:</span>
-                  <span className="rounded bg-[#C73E1D]/10 px-2 py-0.5 font-mono text-sm font-semibold text-[#C73E1D]">{referrals.referralCode}</span>
+                  <span className="rounded bg-[#C73E1D]/10 px-2 py-0.5 font-mono text-sm font-semibold text-[#C73E1D]">{referralCode}</span>
+                  <Button size="sm" variant="ghost" onClick={handleGenerateCode} disabled={generateCode.isPending}>
+                    <RefreshCw className="h-3 w-3" /> Regenerate
+                  </Button>
                 </div>
               </div>
             ) : (
               <div className="flex items-center gap-3">
                 <p className="text-sm text-[#8D8A87]">No referral code yet. Generate one to start tracking referrals.</p>
-                <Button size="sm" className="bg-[#C73E1D]" onClick={() => {
-                  const bizId = clients?.[0]?.id;
-                  if (bizId) generateCode.mutate({ businessId: bizId });
-                  else toast.error("No business found to generate code for");
-                }} disabled={generateCode.isPending}>
-                  Generate Code
+                <Button size="sm" className="bg-[#C73E1D]" onClick={handleGenerateCode} disabled={generateCode.isPending}>
+                  {generateCode.isPending ? "Generating..." : "Generate Code"}
                 </Button>
               </div>
             )}

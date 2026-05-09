@@ -3,14 +3,13 @@ import { createRouter, authedQuery, ownerQuery, getCurrentBusinessLocationIds } 
 import { getDb } from "./queries/connection";
 import { dailySales, expenses, bills, billItems, billPayments, accounts, mpesaTransactions, recurringBillTemplates, payrollPeriods, payrollEntries, payrollAdvances, ledgerEntries, dailyMpesaLedger, suppliers, attachments, locations } from "@db/schema";
 import { eq, and, isNull, sql, desc } from "drizzle-orm";
+import { d, Decimal } from "./lib/decimal";
 
 export const dashboardRouter = createRouter({
   summary: authedQuery
     .input(z.object({ dateFrom: z.string(), dateTo: z.string(), locationId: z.number().optional() }))
     .query(async ({ input, ctx }) => {
       const db = getDb();
-
-      // Get location filter
       let locationFilter: number[] | null = null;
       if (input.locationId) {
         locationFilter = [input.locationId];
@@ -44,7 +43,7 @@ export const dashboardRouter = createRouter({
         totalSales: salesR[0]?.total ?? "0", totalExpenses: expR[0]?.total ?? "0",
         totalBillsDue: billsR[0]?.total ?? "0",
         totalUnpaidSales: unpaidR[0]?.total ?? "0",
-        netCashflow: (parseFloat(salesR[0]?.total ?? "0") - parseFloat(expR[0]?.total ?? "0")).toFixed(2),
+        netCashflow: d(salesR[0]?.total ?? "0").minus(d(expR[0]?.total ?? "0")).toFixed(2),
         accounts: accts.map((a) => ({ id: a.id, name: a.name, type: a.type, currentBalance: a.currentBalance })),
         mpesa: { totalIn: mpR[0]?.totalIn ?? "0", totalOut: mpR[0]?.totalOut ?? "0", totalFees: mpR[0]?.totalFees ?? "0" },
       };
@@ -61,13 +60,13 @@ export const dashboardRouter = createRouter({
     const acctLocFilter = sql`${accounts.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`;
     const recurLocFilter = sql`${recurringBillTemplates.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`;
 
-    const [overdue] = await db.select().from(bills).where(and(sql`${bills.dueDate} < ${today}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).limit(10);
-    const [up7] = await db.select().from(bills).where(and(sql`${bills.dueDate} BETWEEN ${today} AND ${d7}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).orderBy(bills.dueDate).limit(10);
-    const [up30] = await db.select().from(bills).where(and(sql`${bills.dueDate} BETWEEN ${d7} AND ${d30}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).orderBy(bills.dueDate).limit(10);
+    const overdue = await db.select().from(bills).where(and(sql`${bills.dueDate} < ${today}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).limit(10);
+    const up7 = await db.select().from(bills).where(and(sql`${bills.dueDate} BETWEEN ${today} AND ${d7}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).orderBy(bills.dueDate).limit(10);
+    const up30 = await db.select().from(bills).where(and(sql`${bills.dueDate} BETWEEN ${d7} AND ${d30}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).orderBy(bills.dueDate).limit(10);
     const lowBal = await db.select().from(accounts).where(and(isNull(accounts.deletedAt), eq(accounts.isActive, true), sql`${accounts.currentBalance} < 5000`, acctLocFilter));
     const recur = await db.select().from(recurringBillTemplates).where(and(isNull(recurringBillTemplates.deletedAt), eq(recurringBillTemplates.isActive, true), sql`${recurringBillTemplates.nextDueDate} <= ${d30}`, recurLocFilter)).orderBy(recurringBillTemplates.nextDueDate).limit(10);
 
-    return { overdueBills: [overdue].filter(Boolean), upcomingBills7: [up7].filter(Boolean), upcomingBills30: [up30].filter(Boolean), lowBalanceAccounts: lowBal, upcomingRecurring: recur, today };
+    return { overdueBills: overdue, upcomingBills7: up7, upcomingBills30: up30, lowBalanceAccounts: lowBal, upcomingRecurring: recur, today };
   }),
 
   billCalendar: authedQuery
@@ -118,8 +117,6 @@ export const dashboardRouter = createRouter({
     .query(async ({ input, ctx }) => {
       const db = getDb();
       const date = input.date;
-
-      // Get location filter (either explicit or current business locations)
       let locationFilter: number[] | null = null;
       if (input.locationId) {
         locationFilter = [input.locationId];
@@ -129,31 +126,21 @@ export const dashboardRouter = createRouter({
       }
       const locIdSql = sql.join(locationFilter.map(id => sql`${id}`), sql`, `);
 
-      // Bills: show bills due on or before this date that still have a balance and are not paid/cancelled
-      const billsConditions = [
-        isNull(bills.deletedAt),
-        sql`DATE(${bills.dueDate}) <= ${date}`,
-        sql`${bills.status} IN ('pending','partial','overdue')`,
-        sql`${bills.locationId} IN (${locIdSql})`
-      ];
+      const billsConditions = [isNull(bills.deletedAt), sql`DATE(${bills.dueDate}) <= ${date}`, sql`${bills.status} IN ('pending','partial','overdue')`, sql`${bills.locationId} IN (${locIdSql})`];
       const billPaymentsToday = await db.select().from(bills).where(and(...billsConditions)).orderBy(desc(bills.dueDate));
 
-      // Expenses: show expenses recorded on this date
       const expConditions = [sql`DATE(${expenses.expenseDate}) = ${date}`, isNull(expenses.deletedAt), sql`${expenses.locationId} IN (${locIdSql})`];
       const expensesToday = await db.select().from(expenses).where(and(...expConditions)).orderBy(desc(expenses.expenseDate));
 
-      // Payroll: show payroll with paymentDate on this date
       const payrollConditions = [sql`DATE(${payrollPeriods.paymentDate}) = ${date}`, isNull(payrollPeriods.deletedAt), sql`${payrollPeriods.locationId} IN (${locIdSql})`];
       const payrollToday = await db.select().from(payrollPeriods).where(and(...payrollConditions)).orderBy(desc(payrollPeriods.paymentDate));
 
-      // M-PESA: show transactions on this date
       const mpesaConditions = [sql`DATE(${mpesaTransactions.txnDate}) = ${date}`, isNull(mpesaTransactions.deletedAt), sql`${mpesaTransactions.locationId} IN (${locIdSql})`];
       const mpesaToday = await db.select().from(mpesaTransactions).where(and(...mpesaConditions)).orderBy(desc(mpesaTransactions.txnDate));
 
       return { billPayments: billPaymentsToday, expenses: expensesToday, payroll: payrollToday, mpesa: mpesaToday };
     }),
 
-  // Previous day income across all branches and per branch
   previousDayIncome: authedQuery
     .input(z.object({ date: z.string().optional() }).optional())
     .query(async ({ input, ctx }) => {
@@ -163,10 +150,7 @@ export const dashboardRouter = createRouter({
       if (locIds.length === 0) return { date: targetDate, totalIncome: "0", byBranch: [] };
       const locFilter = sql`${dailySales.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`;
       const salesConditions = [sql`DATE(${dailySales.saleDate}) = ${targetDate}`, isNull(dailySales.deletedAt), locFilter];
-      const totalR = await db.select({
-        total: sql<string>`COALESCE(SUM(${dailySales.netSales}), 0)`,
-      }).from(dailySales).where(and(...salesConditions));
-      // Per branch
+      const totalR = await db.select({ total: sql<string>`COALESCE(SUM(${dailySales.netSales}), 0)` }).from(dailySales).where(and(...salesConditions));
       const byBranch = await db.select({
         locationId: dailySales.locationId,
         total: sql<string>`COALESCE(SUM(${dailySales.netSales}), 0)`,
@@ -174,31 +158,30 @@ export const dashboardRouter = createRouter({
       return { date: targetDate, totalIncome: totalR[0]?.total ?? "0", byBranch };
     }),
 
-  // Total account balances across all branches and per branch
   accountBalances: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     const locIds = await getCurrentBusinessLocationIds(ctx);
     if (locIds.length === 0) return { totalBalance: "0.00", byLocation: {} };
     const locFilter = sql`${accounts.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`;
     const accts = await db.select().from(accounts).where(and(isNull(accounts.deletedAt), eq(accounts.isActive, true), locFilter));
-    const totalBalance = accts.reduce((sum, a) => sum + parseFloat(a.currentBalance), 0).toFixed(2);
+    const totalBalance = accts.reduce((sum, a) => sum.plus(d(a.currentBalance)), d(0));
     const byLocation = accts.reduce((acc, a) => {
-      if (!acc[a.locationId]) acc[a.locationId] = 0;
-      acc[a.locationId] += parseFloat(a.currentBalance);
+      if (!acc[a.locationId]) acc[a.locationId] = d(0);
+      acc[a.locationId] = acc[a.locationId].plus(d(a.currentBalance));
       return acc;
-    }, {} as Record<number, number>);
-    return { totalBalance, byLocation };
+    }, {} as Record<number, Decimal>);
+    const byLocationPlain: Record<string, string> = {};
+    for (const [k, v] of Object.entries(byLocation)) {
+      byLocationPlain[k] = v.toFixed(2);
+    }
+    return { totalBalance: totalBalance.toFixed(2), byLocation: byLocationPlain };
   }),
 
-  // Bills summary for dashboard: totals by period (pending balances only)
   billsSummary: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     const locIds = await getCurrentBusinessLocationIds(ctx);
     if (locIds.length === 0) {
-      return {
-        bills: { week: { total: "0", count: 0 }, month: { total: "0", count: 0 }, year: { total: "0", count: 0 } },
-        recurring: { week: { total: "0", count: 0 }, month: { total: "0", count: 0 }, year: { total: "0", count: 0 } },
-      };
+      return { bills: { week: { total: "0", count: 0 }, month: { total: "0", count: 0 }, year: { total: "0", count: 0 } }, recurring: { week: { total: "0", count: 0 }, month: { total: "0", count: 0 }, year: { total: "0", count: 0 } } };
     }
     const billLocFilter = sql`${bills.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`;
     const recurLocFilter = sql`${recurringBillTemplates.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`;
@@ -207,41 +190,17 @@ export const dashboardRouter = createRouter({
     const monthEnd = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
     const yearEnd = new Date(Date.now() + 365 * 86400000).toISOString().split("T")[0];
 
-    // Regular bills - pending balances by period
-    const billsWeek = await db.select({
-      total: sql<string>`COALESCE(SUM(${bills.balanceDue}), 0)`,
-      count: sql<number>`COUNT(*)`,
-    }).from(bills).where(and(sql`${bills.dueDate} BETWEEN ${today} AND ${weekEnd}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial','overdue')`, billLocFilter));
+    const [billsWeek] = await db.select({ total: sql<string>`COALESCE(SUM(${bills.balanceDue}), 0)`, count: sql<number>`COUNT(*)` }).from(bills).where(and(sql`${bills.dueDate} BETWEEN ${today} AND ${weekEnd}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial','overdue')`, billLocFilter));
+    const [billsMonth] = await db.select({ total: sql<string>`COALESCE(SUM(${bills.balanceDue}), 0)`, count: sql<number>`COUNT(*)` }).from(bills).where(and(sql`${bills.dueDate} BETWEEN ${today} AND ${monthEnd}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial','overdue')`, billLocFilter));
+    const [billsYear] = await db.select({ total: sql<string>`COALESCE(SUM(${bills.balanceDue}), 0)`, count: sql<number>`COUNT(*)` }).from(bills).where(and(sql`${bills.dueDate} BETWEEN ${today} AND ${yearEnd}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial','overdue')`, billLocFilter));
 
-    const billsMonth = await db.select({
-      total: sql<string>`COALESCE(SUM(${bills.balanceDue}), 0)`,
-      count: sql<number>`COUNT(*)`,
-    }).from(bills).where(and(sql`${bills.dueDate} BETWEEN ${today} AND ${monthEnd}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial','overdue')`, billLocFilter));
-
-    const billsYear = await db.select({
-      total: sql<string>`COALESCE(SUM(${bills.balanceDue}), 0)`,
-      count: sql<number>`COUNT(*)`,
-    }).from(bills).where(and(sql`${bills.dueDate} BETWEEN ${today} AND ${yearEnd}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial','overdue')`, billLocFilter));
-
-    // Recurring bills - pending (nextDueDate within period)
-    const recurWeek = await db.select({
-      total: sql<string>`COALESCE(SUM(${recurringBillTemplates.amount}), 0)`,
-      count: sql<number>`COUNT(*)`,
-    }).from(recurringBillTemplates).where(and(isNull(recurringBillTemplates.deletedAt), eq(recurringBillTemplates.isActive, true), sql`${recurringBillTemplates.nextDueDate} BETWEEN ${today} AND ${weekEnd}`, recurLocFilter));
-
-    const recurMonth = await db.select({
-      total: sql<string>`COALESCE(SUM(${recurringBillTemplates.amount}), 0)`,
-      count: sql<number>`COUNT(*)`,
-    }).from(recurringBillTemplates).where(and(isNull(recurringBillTemplates.deletedAt), eq(recurringBillTemplates.isActive, true), sql`${recurringBillTemplates.nextDueDate} BETWEEN ${today} AND ${monthEnd}`, recurLocFilter));
-
-    const recurYear = await db.select({
-      total: sql<string>`COALESCE(SUM(${recurringBillTemplates.amount}), 0)`,
-      count: sql<number>`COUNT(*)`,
-    }).from(recurringBillTemplates).where(and(isNull(recurringBillTemplates.deletedAt), eq(recurringBillTemplates.isActive, true), sql`${recurringBillTemplates.nextDueDate} BETWEEN ${today} AND ${yearEnd}`, recurLocFilter));
+    const [recurWeek] = await db.select({ total: sql<string>`COALESCE(SUM(${recurringBillTemplates.amount}), 0)`, count: sql<number>`COUNT(*)` }).from(recurringBillTemplates).where(and(isNull(recurringBillTemplates.deletedAt), eq(recurringBillTemplates.isActive, true), sql`${recurringBillTemplates.nextDueDate} BETWEEN ${today} AND ${weekEnd}`, recurLocFilter));
+    const [recurMonth] = await db.select({ total: sql<string>`COALESCE(SUM(${recurringBillTemplates.amount}), 0)`, count: sql<number>`COUNT(*)` }).from(recurringBillTemplates).where(and(isNull(recurringBillTemplates.deletedAt), eq(recurringBillTemplates.isActive, true), sql`${recurringBillTemplates.nextDueDate} BETWEEN ${today} AND ${monthEnd}`, recurLocFilter));
+    const [recurYear] = await db.select({ total: sql<string>`COALESCE(SUM(${recurringBillTemplates.amount}), 0)`, count: sql<number>`COUNT(*)` }).from(recurringBillTemplates).where(and(isNull(recurringBillTemplates.deletedAt), eq(recurringBillTemplates.isActive, true), sql`${recurringBillTemplates.nextDueDate} BETWEEN ${today} AND ${yearEnd}`, recurLocFilter));
 
     return {
-      bills: { week: billsWeek[0], month: billsMonth[0], year: billsYear[0] },
-      recurring: { week: recurWeek[0], month: recurMonth[0], year: recurYear[0] },
+      bills: { week: billsWeek, month: billsMonth, year: billsYear },
+      recurring: { week: recurWeek, month: recurMonth, year: recurYear },
     };
   }),
 
@@ -253,7 +212,6 @@ export const dashboardRouter = createRouter({
       const locIds = await getCurrentBusinessLocationIds(ctx);
       const locIdSql = locIds.length > 0 ? sql.join(locIds.map(id => sql`${id}`), sql`, `) : sql`0`;
 
-      // Helper: soft-delete a table scoped to current business locations
       async function softDelete(tableName: string, table: any, extraSet?: Record<string, unknown>) {
         try {
           const setClause = { deletedAt: now, ...extraSet };
@@ -265,7 +223,6 @@ export const dashboardRouter = createRouter({
         }
       }
 
-      // Phase 1: Soft-delete transaction tables scoped to current business
       await softDelete("daily_sales", dailySales);
       await softDelete("expenses", expenses);
       await softDelete("bills", bills, { status: "cancelled" });
@@ -280,7 +237,6 @@ export const dashboardRouter = createRouter({
       await softDelete("attachments", attachments);
       await softDelete("recurring_bill_templates", recurringBillTemplates, { isActive: false });
 
-      // Phase 2: Reset account balances only for current business accounts
       try {
         const accts = await db.select().from(accounts)
           .where(and(isNull(accounts.deletedAt), eq(accounts.isActive, true), sql`${accounts.locationId} IN (${locIdSql})`));
@@ -288,9 +244,7 @@ export const dashboardRouter = createRouter({
         for (const acct of accts) {
           try {
             const targetBalance = acct.openingBalance ?? "0.00";
-            await db.update(accounts)
-              .set({ currentBalance: targetBalance })
-              .where(eq(accounts.id, acct.id));
+            await db.update(accounts).set({ currentBalance: targetBalance }).where(eq(accounts.id, acct.id));
             resetCount++;
           } catch (e: any) {
             results[`account_${acct.id}`] = { ok: false, error: e.message ?? String(e) };
@@ -301,7 +255,6 @@ export const dashboardRouter = createRouter({
         results.accounts = { ok: false, error: e.message ?? String(e) };
       }
 
-      // Phase 3: Reset supplier balances only for suppliers linked to current business via bills
       try {
         const supplierIds = await db.select({ supplierId: bills.supplierId }).from(bills)
           .where(and(sql`${bills.locationId} IN (${locIdSql})`, isNull(bills.deletedAt)))
@@ -309,10 +262,10 @@ export const dashboardRouter = createRouter({
         const ids = supplierIds.map(s => s.supplierId).filter(Boolean);
         if (ids.length > 0) {
           const idSql = sql.join(ids.map(id => sql`${id}`), sql`, `);
-          const r = await db.update(suppliers)
+          await db.update(suppliers)
             .set({ currentBalance: "0.00", totalBilled: "0.00", totalPaid: "0.00" })
             .where(and(sql`${suppliers.id} IN (${idSql})`, isNull(suppliers.deletedAt)));
-          results.suppliers = { ok: true, count: (r as any).rowsAffected ?? 0 };
+          results.suppliers = { ok: true, count: ids.length };
         } else {
           results.suppliers = { ok: true, count: 0 };
         }
@@ -320,14 +273,12 @@ export const dashboardRouter = createRouter({
         results.suppliers = { ok: false, error: e.message ?? String(e) };
       }
 
-      // Phase 4: Reset location auto-numbering counters only for current business
       try {
         if (locIds.length > 0) {
           const locIdFilter = sql.join(locIds.map(id => sql`${id}`), sql`, `);
-          const r = await db.update(locations)
-            .set({ nextBillNumber: 1, nextExpenseNumber: 1 })
+          await db.update(locations).set({ nextBillNumber: 1, nextExpenseNumber: 1 })
             .where(and(sql`${locations.id} IN (${locIdFilter})`, isNull(locations.deletedAt)));
-          results.locations = { ok: true, count: (r as any).rowsAffected ?? 0 };
+          results.locations = { ok: true, count: locIds.length };
         } else {
           results.locations = { ok: true, count: 0 };
         }
@@ -340,6 +291,6 @@ export const dashboardRouter = createRouter({
         const failureList = failures.map(([k, v]) => `${k}: ${v.error}`).join("; ");
         return { success: true, warning: `Some tables had errors: ${failureList}`, results };
       }
-      return { success: true, message: "All transactions have been reset. Account balances restored to opening balances. Supplier balances cleared. Recurring bills deactivated. Auto-numbering counters reset.", results };
+      return { success: true, message: "All transactions have been reset.", results };
     }),
 });

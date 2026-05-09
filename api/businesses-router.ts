@@ -2,7 +2,16 @@ import { z } from "zod";
 import { createRouter, publicQuery, authedQuery, businessManage, ownerQuery, checkBranchLimit, checkUserLimit } from "./middleware";
 import { getDb } from "./queries/connection";
 import { businesses, userBusinesses, users, locations, dailySales, expenses, bills, accounts } from "@db/schema";
-import { eq, and, isNull, sql, count } from "drizzle-orm";
+import { eq, and, isNull, sql, count, inArray } from "drizzle-orm";
+import { logAudit } from "./lib/audit";
+
+const PLAN_TIERS: Record<string, { maxBranches: number; maxUsers: number; label: string }> = {
+  free: { maxBranches: 1, maxUsers: 1, label: "Free" },
+  starter: { maxBranches: 1, maxUsers: 3, label: "Starter" },
+  growth: { maxBranches: 5, maxUsers: 5, label: "Growth" },
+  pro: { maxBranches: 99, maxUsers: 99, label: "Pro" },
+  partner: { maxBranches: 99, maxUsers: 99, label: "Partner" },
+};
 
 function generateReferralCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -25,9 +34,20 @@ export const businessesRouter = createRouter({
       .where(and(eq(userBusinesses.userId, userId), eq(userBusinesses.isActive, true)));
     if (junctions.length === 0) return [];
     const bizIds = junctions.map(j => j.businessId);
+    const idSql = sql.join(bizIds.map(id => sql`${id}`), sql`, `);
     const rows = await db.select().from(businesses)
-      .where(and(sql`${businesses.id} IN (${sql.join(bizIds.map(id => sql`${id}`), sql`, `)})`, isNull(businesses.deletedAt)));
-    return rows;
+      .where(and(sql`${businesses.id} IN (${idSql})`, isNull(businesses.deletedAt)));
+    // Batch-load location counts for all businesses
+    const locCounts = await db.select({
+      businessId: locations.businessId,
+      count: sql<number>`COUNT(*)`,
+    }).from(locations).where(and(sql`${locations.businessId} IN (${idSql})`, isNull(locations.deletedAt)))
+      .groupBy(locations.businessId);
+    const locCountMap = new Map(locCounts.map(l => [l.businessId, l.count]));
+    return rows.map(b => ({
+      ...b,
+      branchCount: locCountMap.get(b.id) ?? 0,
+    }));
   }),
 
   get: authedQuery
@@ -54,22 +74,109 @@ export const businessesRouter = createRouter({
     if (!businessId) return null;
     const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
     if (!biz) return null;
+
+    // Auto-downgrade expired trials
+    if (biz.subscriptionStatus === "trial" && biz.subscriptionExpiry && new Date() > new Date(biz.subscriptionExpiry)) {
+      await db.update(businesses).set({
+        plan: "free",
+        maxBranches: 1,
+        maxUsers: 1,
+        subscriptionStatus: "expired",
+        subscriptionExpiry: null,
+      }).where(eq(businesses.id, businessId));
+      biz.plan = "free";
+      biz.subscriptionStatus = "expired";
+    }
+
     const branchCount = await db.select({ count: sql<number>`COUNT(*)` }).from(locations).where(and(eq(locations.businessId, businessId), isNull(locations.deletedAt)));
     const userCount = await db.select({ count: sql<number>`COUNT(*)` }).from(userBusinesses).where(and(eq(userBusinesses.businessId, businessId), eq(userBusinesses.isActive, true)));
+
+    // Get referrer info
+    let referredBy: { name: string; accountId: string } | null = null;
+    if (biz.referredByBusinessId) {
+      const [ref] = await db.select({ name: businesses.name, accountId: businesses.accountId }).from(businesses).where(eq(businesses.id, biz.referredByBusinessId)).limit(1);
+      referredBy = ref ?? null;
+    }
+
+    // Get plan label
+    const planInfo = PLAN_TIERS[biz.plan ?? "free"] ?? PLAN_TIERS.free;
+
     return {
       plan: biz.plan,
-      maxBranches: biz.maxBranches ?? 1,
-      maxUsers: biz.maxUsers ?? 1,
+      planLabel: planInfo.label,
+      maxBranches: biz.maxBranches ?? planInfo.maxBranches,
+      maxUsers: biz.maxUsers ?? planInfo.maxUsers,
       currentBranches: branchCount[0]?.count ?? 0,
       currentUsers: userCount[0]?.count ?? 0,
       isDemo: biz.isDemo,
       subscriptionStatus: biz.subscriptionStatus,
+      subscriptionExpiry: biz.subscriptionExpiry,
       features: biz.features,
       accountId: biz.accountId,
       referralCode: biz.referralCode,
       firstMonthDiscountApplied: biz.firstMonthDiscountApplied,
+      referredBy,
+      isTrial: biz.subscriptionStatus === "trial",
+      trialDaysRemaining: biz.subscriptionStatus === "trial" && biz.subscriptionExpiry
+        ? Math.max(0, Math.ceil((new Date(biz.subscriptionExpiry).getTime() - Date.now()) / 86400000))
+        : 0,
     };
   }),
+
+  changePlan: authedQuery
+    .input(z.object({ plan: z.enum(["free", "starter", "growth", "pro"]) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
+      if (!businessId) throw new Error("No active business selected");
+
+      const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
+      if (!biz) throw new Error("Business not found");
+
+      const targetTier = PLAN_TIERS[input.plan];
+      if (!targetTier) throw new Error("Invalid plan");
+
+      // When downgrading, enforce limits
+      if (input.plan === "free" || input.plan === "starter") {
+        // Check current counts exceed new limits
+        const branchCount = await db.select({ count: sql<number>`COUNT(*)` }).from(locations)
+          .where(and(eq(locations.businessId, businessId), isNull(locations.deletedAt)));
+        const userCount = await db.select({ count: sql<number>`COUNT(*)` }).from(userBusinesses)
+          .where(and(eq(userBusinesses.businessId, businessId), eq(userBusinesses.isActive, true)));
+
+        if ((branchCount[0]?.count ?? 0) > targetTier.maxBranches) {
+          throw new Error(
+            `Cannot downgrade to ${targetTier.label}: you have ${branchCount[0]?.count} active branches (limit: ${targetTier.maxBranches}). ` +
+            `Delete excess branches first, or choose a higher plan.`
+          );
+        }
+        if ((userCount[0]?.count ?? 0) > targetTier.maxUsers) {
+          throw new Error(
+            `Cannot downgrade to ${targetTier.label}: you have ${userCount[0]?.count} active users (limit: ${targetTier.maxUsers}). ` +
+            `Remove excess users first, or choose a higher plan.`
+          );
+        }
+      }
+
+      await db.update(businesses).set({
+        plan: input.plan,
+        maxBranches: targetTier.maxBranches,
+        maxUsers: targetTier.maxUsers,
+        subscriptionStatus: input.plan === "free" ? "active" : "active",
+        subscriptionExpiry: null,
+      }).where(eq(businesses.id, businessId));
+
+      await logAudit({
+        userId: ctx.user!.id,
+        businessId,
+        action: "UPDATE",
+        resource: "businesses",
+        resourceId: businessId,
+        details: { action: "plan_change", from: biz.plan, to: input.plan },
+      });
+
+      return { success: true, plan: input.plan, message: `Plan changed to ${targetTier.label}` };
+    }),
 
   create: businessManage
     .input(z.object({
@@ -298,19 +405,23 @@ export const businessesRouter = createRouter({
   myReferrals: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     const userId = ctx.user!.id;
-    const myBiz = await db.select().from(businesses)
-      .where(and(eq(businesses.partnerId, userId), isNull(businesses.deletedAt)));
-    if (myBiz.length === 0) return { referralCode: null, referrals: [] };
+    const myBizs = await db.select().from(businesses)
+      .where(and(
+        sql`(${eq(businesses.partnerId, userId)} OR ${eq(businesses.referredByUserId, userId)})`,
+        isNull(businesses.deletedAt)
+      ));
+    if (myBizs.length === 0) return { referralCode: null, referrals: [] };
 
-    const bizIds = myBiz.map(b => b.id);
+    const bizIds = myBizs.map(b => b.id);
+    const idSql = sql.join(bizIds.map(id => sql`${id}`), sql`, `);
     const referrals = await db.select().from(businesses)
       .where(and(
-        sql`${businesses.referredByBusinessId} IN (${sql.join(bizIds.map(id => sql`${id}`), sql`, `)})`,
+        sql`${businesses.referredByBusinessId} IN (${idSql})`,
         isNull(businesses.deletedAt),
       ));
 
     return {
-      referralCode: myBiz[0]?.referralCode ?? null,
+      referralCode: myBizs[0]?.referralCode ?? null,
       referrals: referrals.map(r => ({
         id: r.id,
         name: r.name,
@@ -323,16 +434,19 @@ export const businessesRouter = createRouter({
   }),
 
   generateReferralCode: authedQuery
-    .input(z.object({ businessId: z.number() }))
+    .input(z.object({ businessId: z.number().optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const businessId = input.businessId ?? ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
+      if (!businessId) throw new Error("No business found to generate code for");
+
       const junction = await db.select().from(userBusinesses)
-        .where(and(eq(userBusinesses.userId, ctx.user!.id), eq(userBusinesses.businessId, input.businessId), eq(userBusinesses.isActive, true)))
+        .where(and(eq(userBusinesses.userId, ctx.user!.id), eq(userBusinesses.businessId, businessId), eq(userBusinesses.isActive, true)))
         .limit(1);
       if (junction.length === 0) throw new Error("You do not have access to this business");
 
       const code = generateReferralCode();
-      await db.update(businesses).set({ referralCode: code }).where(eq(businesses.id, input.businessId));
+      await db.update(businesses).set({ referralCode: code }).where(eq(businesses.id, businessId));
       return { code, success: true };
     }),
 

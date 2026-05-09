@@ -1,20 +1,20 @@
-FROM node:20-alpine AS base
+FROM node:20-alpine AS builder
 WORKDIR /app
-
-FROM base AS deps
 COPY package.json package-lock.json ./
-RUN npm config set registry https://npm.mirrors.msh.team
-RUN --mount=type=cache,target=/root/.npm \
-    npm ci --prefer-offline --no-audit
-
-FROM deps AS build
+RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine AS production
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY package.json .env ./
+FROM node:20-alpine AS runner
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 finaflow
+WORKDIR /app
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/package.json ./
+USER finaflow
 
 EXPOSE 3000
-CMD ["npm", "start"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+CMD ["node", "dist/boot.js"]

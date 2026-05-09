@@ -3,6 +3,8 @@ import { createRouter, accountQuery, accountManage, getCurrentBusinessLocationId
 import { getDb } from "./queries/connection";
 import { accounts, ledgerEntries } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
+import { d } from "./lib/decimal";
+import { logAudit } from "./lib/audit";
 
 export const accountsRouter = createRouter({
   list: accountQuery.query(async ({ ctx }) => {
@@ -66,102 +68,108 @@ export const accountsRouter = createRouter({
     }),
 
   adjustBalance: accountManage
-    .input(z.object({
-      id: z.number(),
-      newBalance: z.string(),
-      reason: z.string().optional(),
-    }))
+    .input(z.object({ id: z.number(), newBalance: z.string(), reason: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const userId = (ctx as any).user?.id ?? 1;
       const acct = await db.select().from(accounts).where(eq(accounts.id, input.id)).limit(1);
       if (!acct[0]) throw new Error("Account not found");
-      const oldBal = parseFloat(acct[0].currentBalance);
-      const newBal = parseFloat(input.newBalance);
-      const diff = newBal - oldBal;
+      const oldBal = d(acct[0].currentBalance);
+      const newBal = d(input.newBalance);
+      const diff = newBal.minus(oldBal);
 
-      const entryType = diff >= 0 ? "credit" : "debit";
-      const [ledgerResult] = await db.insert(ledgerEntries).values({
-        accountId: input.id,
-        transactionType: "deposit",
-        transactionId: input.id,
-        entryType,
-        amount: Math.abs(diff).toFixed(2),
-        balanceAfter: input.newBalance,
-        description: input.reason || `Balance adjustment from ${oldBal.toFixed(2)} to ${newBal.toFixed(2)}`,
-        entryDate: new Date(),
-        createdBy: userId,
-      } as any);
+      await db.transaction(async (tx) => {
+        const entryType = diff.gte(0) ? "credit" : "debit";
+        const [ledgerResult] = await tx.insert(ledgerEntries).values({
+          accountId: input.id,
+          transactionType: "deposit",
+          transactionId: input.id,
+          entryType,
+          amount: diff.abs().toFixed(2),
+          balanceAfter: input.newBalance,
+          description: input.reason || `Balance adjustment from ${oldBal.toFixed(2)} to ${newBal.toFixed(2)}`,
+          entryDate: new Date(),
+          createdBy: userId,
+        } as any);
+        await tx.update(accounts).set({ currentBalance: input.newBalance }).where(eq(accounts.id, input.id));
+      });
 
-      await db.update(accounts).set({ currentBalance: input.newBalance }).where(eq(accounts.id, input.id));
-      return { id: Number(ledgerResult.insertId), newBalance: input.newBalance, success: true };
+      await logAudit({
+        userId,
+        action: "UPDATE",
+        resource: "accounts",
+        resourceId: input.id,
+        details: { action: "balance_adjustment", from: oldBal.toFixed(2), to: newBal.toFixed(2), reason: input.reason },
+      });
+
+      return { id: input.id, newBalance: input.newBalance, success: true };
     }),
 
   recordDrawing: accountManage
-    .input(z.object({
-      accountId: z.number(),
-      amount: z.string(),
-      description: z.string().optional(),
-      date: z.string(),
-    }))
+    .input(z.object({ accountId: z.number(), amount: z.string(), description: z.string().optional(), date: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const userId = (ctx as any).user?.id ?? 1;
       const acct = await db.select().from(accounts).where(eq(accounts.id, input.accountId)).limit(1);
       if (!acct[0]) throw new Error("Account not found");
-      const oldBal = parseFloat(acct[0].currentBalance);
-      const amount = parseFloat(input.amount);
-      const newBal = (oldBal - amount).toFixed(2);
+      const oldBal = d(acct[0].currentBalance);
+      const amount = d(input.amount);
+      const newBal = oldBal.minus(amount);
 
-      const [result] = await db.insert(ledgerEntries).values({
-        accountId: input.accountId,
-        transactionType: "drawing",
-        transactionId: input.accountId,
-        entryType: "debit",
-        amount: input.amount,
-        balanceAfter: newBal,
-        description: input.description || "Owner drawing",
-        entryDate: new Date(input.date),
-        createdBy: userId,
-      } as any);
+      await db.transaction(async (tx) => {
+        const [result] = await tx.insert(ledgerEntries).values({
+          accountId: input.accountId,
+          transactionType: "drawing",
+          transactionId: input.accountId,
+          entryType: "debit",
+          amount: input.amount,
+          balanceAfter: newBal.toFixed(2),
+          description: input.description || "Owner drawing",
+          entryDate: new Date(input.date),
+          createdBy: userId,
+        } as any);
+        await tx.update(accounts).set({ currentBalance: newBal.toFixed(2) }).where(eq(accounts.id, input.accountId));
+      });
 
-      await db.update(accounts).set({ currentBalance: newBal }).where(eq(accounts.id, input.accountId));
-      return { id: Number(result.insertId), newBalance: newBal, success: true };
+      await logAudit({
+        userId,
+        action: "UPDATE",
+        resource: "accounts",
+        resourceId: input.accountId,
+        details: { action: "drawing", amount: input.amount },
+      });
+
+      return { id: input.accountId, newBalance: newBal.toFixed(2), success: true };
     }),
 
   recordDeposit: accountManage
-    .input(z.object({
-      accountId: z.number(),
-      amount: z.string(),
-      description: z.string().optional(),
-      date: z.string(),
-    }))
+    .input(z.object({ accountId: z.number(), amount: z.string(), description: z.string().optional(), date: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const userId = (ctx as any).user?.id ?? 1;
       const acct = await db.select().from(accounts).where(eq(accounts.id, input.accountId)).limit(1);
       if (!acct[0]) throw new Error("Account not found");
-      const oldBal = parseFloat(acct[0].currentBalance);
-      const amount = parseFloat(input.amount);
-      const newBal = (oldBal + amount).toFixed(2);
+      const oldBal = d(acct[0].currentBalance);
+      const amount = d(input.amount);
+      const newBal = oldBal.plus(amount);
 
-      const [result] = await db.insert(ledgerEntries).values({
-        accountId: input.accountId,
-        transactionType: "deposit",
-        transactionId: input.accountId,
-        entryType: "credit",
-        amount: input.amount,
-        balanceAfter: newBal,
-        description: input.description || "Deposit",
-        entryDate: new Date(input.date),
-        createdBy: userId,
-      } as any);
-
-      await db.update(accounts).set({ currentBalance: newBal }).where(eq(accounts.id, input.accountId));
-      return { id: Number(result.insertId), newBalance: newBal, success: true };
+      await db.transaction(async (tx) => {
+        const [result] = await tx.insert(ledgerEntries).values({
+          accountId: input.accountId,
+          transactionType: "deposit",
+          transactionId: input.accountId,
+          entryType: "credit",
+          amount: input.amount,
+          balanceAfter: newBal.toFixed(2),
+          description: input.description || "Deposit",
+          entryDate: new Date(input.date),
+          createdBy: userId,
+        } as any);
+        await tx.update(accounts).set({ currentBalance: newBal.toFixed(2) }).where(eq(accounts.id, input.accountId));
+      });
+      return { id: input.accountId, newBalance: newBal.toFixed(2), success: true };
     }),
 
-  // Transfer from account A to accounts B, C, etc. with balanced debits=credits
   transfer: accountManage
     .input(z.object({
       fromAccountId: z.number(),
@@ -180,57 +188,57 @@ export const accountsRouter = createRouter({
       const fromAcct = await db.select().from(accounts).where(eq(accounts.id, input.fromAccountId)).limit(1);
       if (!fromAcct[0]) throw new Error("Source account not found");
 
-      const totalOut = input.toAccounts.reduce((sum, t) => sum + parseFloat(t.amount), 0);
-      const fromOldBal = parseFloat(fromAcct[0].currentBalance);
-      if (fromOldBal < totalOut) throw new Error("Insufficient funds in source account");
+      const totalOut = input.toAccounts.reduce((sum, t) => sum.plus(d(t.amount)), d(0));
+      const fromOldBal = d(fromAcct[0].currentBalance);
+      if (fromOldBal.lt(totalOut)) throw new Error("Insufficient funds in source account");
+      const fromNewBal = fromOldBal.minus(totalOut);
 
-      const fromNewBal = (fromOldBal - totalOut).toFixed(2);
-
-      // Debit source account once for total
-      const [debitEntry] = await db.insert(ledgerEntries).values({
-        accountId: input.fromAccountId,
-        transactionType: "transfer",
-        transactionId: input.fromAccountId,
-        entryType: "debit",
-        amount: totalOut.toFixed(2),
-        balanceAfter: fromNewBal,
-        description: `${input.description} (to ${input.toAccounts.length} account${input.toAccounts.length > 1 ? 's' : ''})`,
-        entryDate: new Date(input.date),
-        createdBy: userId,
-      } as any);
-
-      await db.update(accounts).set({ currentBalance: fromNewBal }).where(eq(accounts.id, input.fromAccountId));
-
-      // Credit each destination account
       const results: { accountId: number; amount: string; newBalance: string }[] = [];
-      for (const to of input.toAccounts) {
-        const toAcct = await db.select().from(accounts).where(eq(accounts.id, to.accountId)).limit(1);
-        if (!toAcct[0]) throw new Error(`Destination account ${to.accountId} not found`);
-        const toOldBal = parseFloat(toAcct[0].currentBalance);
-        const toNewBal = (toOldBal + parseFloat(to.amount)).toFixed(2);
 
-        const [creditEntry] = await db.insert(ledgerEntries).values({
-          accountId: to.accountId,
+      await db.transaction(async (tx) => {
+        const [debitEntry] = await tx.insert(ledgerEntries).values({
+          accountId: input.fromAccountId,
           transactionType: "transfer",
-          transactionId: Number(debitEntry.insertId),
-          entryType: "credit",
-          amount: to.amount,
-          balanceAfter: toNewBal,
-          description: to.description || `${input.description} (from ${fromAcct[0].name})`,
+          transactionId: input.fromAccountId,
+          entryType: "debit",
+          amount: totalOut.toFixed(2),
+          balanceAfter: fromNewBal.toFixed(2),
+          description: `${input.description} (to ${input.toAccounts.length} account${input.toAccounts.length > 1 ? 's' : ''})`,
           entryDate: new Date(input.date),
           createdBy: userId,
         } as any);
+        await tx.update(accounts).set({ currentBalance: fromNewBal.toFixed(2) }).where(eq(accounts.id, input.fromAccountId));
 
-        await db.update(accounts).set({ currentBalance: toNewBal }).where(eq(accounts.id, to.accountId));
-        results.push({ accountId: to.accountId, amount: to.amount, newBalance: toNewBal });
-      }
+        for (const to of input.toAccounts) {
+          const toAcct = await tx.select().from(accounts).where(eq(accounts.id, to.accountId)).limit(1);
+          if (!toAcct[0]) throw new Error(`Destination account ${to.accountId} not found`);
+          const toOldBal = d(toAcct[0].currentBalance);
+          const toNewBal = toOldBal.plus(d(to.amount));
 
-      return {
-        totalTransferred: totalOut.toFixed(2),
-        fromNewBalance: fromNewBal,
-        toResults: results,
-        success: true,
-      };
+          const [creditEntry] = await tx.insert(ledgerEntries).values({
+            accountId: to.accountId,
+            transactionType: "transfer",
+            transactionId: Number(debitEntry.insertId),
+            entryType: "credit",
+            amount: to.amount,
+            balanceAfter: toNewBal.toFixed(2),
+            description: to.description || `${input.description} (from ${fromAcct[0].name})`,
+            entryDate: new Date(input.date),
+            createdBy: userId,
+          } as any);
+          await tx.update(accounts).set({ currentBalance: toNewBal.toFixed(2) }).where(eq(accounts.id, to.accountId));
+          results.push({ accountId: to.accountId, amount: to.amount, newBalance: toNewBal.toFixed(2) });
+        }
+      });
+
+      await logAudit({
+        userId,
+        action: "UPDATE",
+        resource: "accounts",
+        details: { action: "transfer", from: input.fromAccountId, total: totalOut.toFixed(2), to: results },
+      });
+
+      return { totalTransferred: totalOut.toFixed(2), fromNewBalance: fromNewBal.toFixed(2), toResults: results, success: true };
     }),
 
   delete: accountManage

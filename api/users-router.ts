@@ -3,14 +3,7 @@ import { createRouter, authedQuery, userManage } from "./middleware";
 import { getDb } from "./queries/connection";
 import { users, userBusinesses } from "@db/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
-
-async function hashPassword(password: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const { env } = await import("./lib/env");
-  const data = encoder.encode(password + env.appSecret);
-  const hash = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, "0")).join("");
-}
+import { hashPassword } from "./lib/password";
 
 export const usersRouter = createRouter({
   list: authedQuery.query(async () => {
@@ -41,10 +34,14 @@ export const usersRouter = createRouter({
       role: z.enum(["owner", "admin", "manager", "employee", "viewer"]),
       locationId: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const existing = await db.select().from(users).where(eq(users.username, input.username)).limit(1);
-      if (existing.length > 0) throw new Error("Username already taken");
+      const accountId = ctx.user?.currentBusiness?.accountId || null;
+      if (!accountId) throw new Error("Account context required to create user");
+      const existing = await db.select().from(users)
+        .where(and(eq(users.username, input.username), eq(users.accountId, accountId)))
+        .limit(1);
+      if (existing.length > 0) throw new Error("Username already taken in this account");
 
       const passwordHash = await hashPassword(input.password);
       const [result] = await db.insert(users).values({

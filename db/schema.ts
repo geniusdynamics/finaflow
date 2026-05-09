@@ -11,13 +11,16 @@ import {
   boolean,
   int,
   json,
+  index,
+  uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/mysql-core";
 
 // Users table (supports both OAuth and local auth)
 export const users = mysqlTable("users", {
   id: serial("id").primaryKey(),
   unionId: varchar("unionId", { length: 255 }).unique(),
-  username: varchar("username", { length: 100 }).unique(),
+  username: varchar("username", { length: 100 }).notNull(),
   passwordHash: varchar("passwordHash", { length: 255 }),
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 320 }),
@@ -26,12 +29,19 @@ export const users = mysqlTable("users", {
   phone: varchar("phone", { length: 20 }),
   locationId: bigint("locationId", { mode: "number", unsigned: true }),
   currentBusinessId: bigint("currentBusinessId", { mode: "number", unsigned: true }),
+  accountId: varchar("accountId", { length: 100 }),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   lastSignInAt: timestamp("lastSignInAt").defaultNow().notNull(),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  userIdIdx: index("idx_users_id").on(table.id),
+  userDeletedAtIdx: index("idx_users_deletedAt").on(table.deletedAt),
+  userIsActiveIdx: index("idx_users_isActive").on(table.isActive),
+  userCurrentBusinessIdx: index("idx_users_currentBusinessId").on(table.currentBusinessId),
+  userUsernameAccountIdIdx: uniqueIndex("idx_users_username_accountId").on(table.username, table.accountId),
+}));
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
@@ -352,6 +362,9 @@ export const payrollEntries = mysqlTable("payroll_entries", {
   deductions: decimal("deductions", { precision: 15, scale: 2 }).default("0.00").notNull(),
   bonuses: decimal("bonuses", { precision: 15, scale: 2 }).default("0.00").notNull(),
   overtimePay: decimal("overtimePay", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  payeDeducted: decimal("payeDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  nhifDeducted: decimal("nhifDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  nssfDeducted: decimal("nssfDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
   netPay: decimal("netPay", { precision: 15, scale: 2 }).notNull(),
   paymentMethod: mysqlEnum("paymentMethod", ["cash", "mpesa", "bank_transfer"]).default("mpesa").notNull(),
   paidAt: timestamp("paidAt"),
@@ -863,3 +876,20 @@ export const partnerCommissions = mysqlTable("partner_commissions", {
 });
 
 export type PartnerCommission = typeof partnerCommissions.$inferSelect;
+
+// Refresh tokens for session management
+export const refreshTokens = mysqlTable("refresh_tokens", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+  tokenHash: varchar("tokenHash", { length: 255 }).notNull(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  deviceInfo: text("deviceInfo"),
+  isRevoked: boolean("isRevoked").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  refreshUserIdx: index("idx_refresh_tokens_userId").on(table.userId),
+  refreshTokenHashIdx: index("idx_refresh_tokens_tokenHash").on(table.tokenHash),
+  refreshExpiresIdx: index("idx_refresh_tokens_expires").on(table.expiresAt),
+}));
+
+export type RefreshToken = typeof refreshTokens.$inferSelect;
