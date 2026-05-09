@@ -1,23 +1,46 @@
 import {
-  mysqlTable,
-  mysqlEnum,
+  pgTable,
+  pgEnum,
   serial,
   bigint,
   varchar,
   text,
   timestamp,
-  decimal,
+  numeric,
   date,
   boolean,
-  int,
+  integer,
   json,
   index,
   uniqueIndex,
   primaryKey,
-} from "drizzle-orm/mysql-core";
+} from "drizzle-orm/pg-core";
+
+export const roleEnum = pgEnum("role", ["owner", "admin", "manager", "employee", "viewer"]);
+export const typeEnum = pgEnum("type", ["cash", "mpesa", "bank_account"]);
+export const transactionTypeEnum = pgEnum("transactionType", [
+    "sale", "expense", "bill_payment", "supplier_payment",
+    "payroll", "advance", "transfer", "opening_balance", "mpesa_topup",
+    "drawing", "deposit",
+  ]);
+export const entryTypeEnum = pgEnum("entryType", ["debit", "credit"]);
+export const paymentMethodEnum = pgEnum("paymentMethod", ["cash", "mpesa", "bank_transfer"]);
+export const statusEnum = pgEnum("status", ["open", "resolved", "partial"]);
+export const frequencyEnum = pgEnum("frequency", ["daily", "weekly", "monthly", "quarterly", "annually"]);
+export const salaryTypeEnum = pgEnum("salaryType", ["monthly", "weekly", "daily", "hourly"]);
+export const txnTypeEnum = pgEnum("txnType", ["topup", "expense", "transfer", "bank_transfer", "airtime", "utility", "withdrawal"]);
+export const actionEnum = pgEnum("action", ["CREATE", "UPDATE", "DELETE", "RESTORE", "LOGIN", "LOGOUT"]);
+export const severityEnum = pgEnum("severity", ["info", "warning", "critical"]);
+export const paymentMethod2Enum = pgEnum("paymentMethod2", ["cash", "mpesa", "bank_transfer", "card"]);
+export const billStatusEnum = pgEnum("billStatus", ["pending", "partial", "paid", "overdue", "cancelled"]);
+export const payrollStatusEnum = pgEnum("payrollStatus", ["open", "processing", "paid", "cancelled"]);
+export const advanceStatusEnum = pgEnum("advanceStatus", ["pending", "approved", "partially_repaid", "repaid", "cancelled"]);
+export const leadStatusEnum = pgEnum("leadStatus", ["new", "contacted", "converted", "declined"]);
+export const orderStatusEnum = pgEnum("orderStatus", ["draft", "sent", "delivered", "billed", "cancelled"]);
+
 
 // Users table (supports both OAuth and local auth)
-export const users = mysqlTable("users", {
+export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   unionId: varchar("unionId", { length: 255 }).unique(),
   username: varchar("username", { length: 100 }).notNull(),
@@ -25,10 +48,10 @@ export const users = mysqlTable("users", {
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 320 }),
   avatar: text("avatar"),
-  role: mysqlEnum("role", ["owner", "admin", "manager", "employee", "viewer"]).default("viewer").notNull(),
+  role: roleEnum("role").default("viewer").notNull(),
   phone: varchar("phone", { length: 20 }),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }),
-  currentBusinessId: bigint("currentBusinessId", { mode: "number", unsigned: true }),
+  locationId: bigint("locationId", { mode: "number" }),
+  currentBusinessId: bigint("currentBusinessId", { mode: "number" }),
   accountId: varchar("accountId", { length: 100 }),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -47,7 +70,7 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 // Permission matrix - granular permissions per role
-export const rolePermissions = mysqlTable("role_permissions", {
+export const rolePermissions = pgTable("role_permissions", {
   id: serial("id").primaryKey(),
   roleKey: varchar("roleKey", { length: 50 }).notNull(),
   roleLabel: varchar("roleLabel", { length: 100 }).notNull(),
@@ -60,19 +83,26 @@ export const rolePermissions = mysqlTable("role_permissions", {
 export type RolePermission = typeof rolePermissions.$inferSelect;
 
 // Locations table
-export const locations = mysqlTable("locations", {
+export const locations = pgTable("locations", {
   id: serial("id").primaryKey(),
-  businessId: bigint("businessId", { mode: "number", unsigned: true }),
+  businessId: bigint("businessId", { mode: "number" }),
   name: varchar("name", { length: 255 }).notNull(),
   slug: varchar("slug", { length: 100 }).notNull().unique(),
+  businessType: varchar("businessType", { length: 50 }),
+  country: varchar("country", { length: 100 }),
+  county: varchar("county", { length: 100 }),
+  subCounty: varchar("subCounty", { length: 100 }),
   address: text("address"),
+  businessRegNumber: varchar("businessRegNumber", { length: 100 }),
   phone: varchar("phone", { length: 20 }),
+  natureOfBusiness: varchar("natureOfBusiness", { length: 255 }),
+  kraPin: varchar("kraPin", { length: 20 }),
   email: varchar("email", { length: 255 }),
   isActive: boolean("isActive").default(true).notNull(),
-  defaultMpesaAccountId: bigint("defaultMpesaAccountId", { mode: "number", unsigned: true }),
-  defaultCashAccountId: bigint("defaultCashAccountId", { mode: "number", unsigned: true }),
-  nextBillNumber: bigint("nextBillNumber", { mode: "number", unsigned: true }).default("1").notNull(),
-  nextExpenseNumber: bigint("nextExpenseNumber", { mode: "number", unsigned: true }).default("1").notNull(),
+  defaultMpesaAccountId: bigint("defaultMpesaAccountId", { mode: "number" }),
+  defaultCashAccountId: bigint("defaultCashAccountId", { mode: "number" }),
+  nextBillNumber: bigint("nextBillNumber", { mode: "number" }).default("1").notNull(),
+  nextExpenseNumber: bigint("nextExpenseNumber", { mode: "number" }).default("1").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -81,15 +111,15 @@ export const locations = mysqlTable("locations", {
 export type Location = typeof locations.$inferSelect;
 
 // Accounts table (cash, mpesa, bank accounts per location)
-export const accounts = mysqlTable("accounts", {
+export const accounts = pgTable("accounts", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
   name: varchar("name", { length: 100 }).notNull(),
-  type: mysqlEnum("type", ["cash", "mpesa", "bank_account"]).notNull(),
+  type: typeEnum("type").notNull(),
   accountCode: varchar("accountCode", { length: 20 }),
   accountNumber: varchar("accountNumber", { length: 100 }),
-  openingBalance: decimal("openingBalance", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  currentBalance: decimal("currentBalance", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  openingBalance: numeric("openingBalance", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  currentBalance: numeric("currentBalance", { precision: 15, scale: 2 }).default("0.00").notNull(),
   currency: varchar("currency", { length: 3 }).default("KES").notNull(),
   isPaymentMethod: boolean("isPaymentMethod").default(false).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
@@ -101,22 +131,18 @@ export const accounts = mysqlTable("accounts", {
 export type Account = typeof accounts.$inferSelect;
 
 // Ledger entries - now includes drawing and deposit
-export const ledgerEntries = mysqlTable("ledger_entries", {
+export const ledgerEntries = pgTable("ledger_entries", {
   id: serial("id").primaryKey(),
-  accountId: bigint("accountId", { mode: "number", unsigned: true }).notNull(),
-  transactionType: mysqlEnum("transactionType", [
-    "sale", "expense", "bill_payment", "supplier_payment",
-    "payroll", "advance", "transfer", "opening_balance", "mpesa_topup",
-    "drawing", "deposit",
-  ]).notNull(),
-  transactionId: bigint("transactionId", { mode: "number", unsigned: true }).notNull(),
-  entryType: mysqlEnum("entryType", ["debit", "credit"]).notNull(),
-  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
-  balanceAfter: decimal("balanceAfter", { precision: 15, scale: 2 }).notNull(),
+  accountId: bigint("accountId", { mode: "number" }).notNull(),
+  transactionType: transactionTypeEnum("transactionType").notNull(),
+  transactionId: bigint("transactionId", { mode: "number" }).notNull(),
+  entryType: entryTypeEnum("entryType").notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  balanceAfter: numeric("balanceAfter", { precision: 15, scale: 2 }).notNull(),
   description: text("description"),
   refNo: varchar("refNo", { length: 50 }),
   entryDate: date("entryDate").notNull(),
-  createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
+  createdBy: bigint("createdBy", { mode: "number" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   deletedAt: timestamp("deletedAt"),
 });
@@ -124,31 +150,31 @@ export const ledgerEntries = mysqlTable("ledger_entries", {
 export type LedgerEntry = typeof ledgerEntries.$inferSelect;
 
 // Daily sales
-export const dailySales = mysqlTable("daily_sales", {
+export const dailySales = pgTable("daily_sales", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
   saleDate: date("saleDate").notNull(),
-  cashTotal: decimal("cashTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  cardTotal: decimal("cardTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  mpesaTotal: decimal("mpesaTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  familyBankTotal: decimal("familyBankTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  coopBankTotal: decimal("coopBankTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  equityBankTotal: decimal("equityBankTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  boltTotal: decimal("boltTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  glovoTotal: decimal("glovoTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  creditCardTotal: decimal("creditCardTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  deliveryPartnerTotal: decimal("deliveryPartnerTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  netSales: decimal("netSales", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  discountAmount: decimal("discountAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  voidAmount: decimal("voidAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  unpaidAmount: decimal("unpaidAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  ticketCount: int("ticketCount").default(0),
-  orderCount: int("orderCount").default(0),
-  voidCount: int("voidCount").default(0),
-  giftCount: int("giftCount").default(0),
+  cashTotal: numeric("cashTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  cardTotal: numeric("cardTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  mpesaTotal: numeric("mpesaTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  familyBankTotal: numeric("familyBankTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  coopBankTotal: numeric("coopBankTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  equityBankTotal: numeric("equityBankTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  boltTotal: numeric("boltTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  glovoTotal: numeric("glovoTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  creditCardTotal: numeric("creditCardTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  deliveryPartnerTotal: numeric("deliveryPartnerTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  netSales: numeric("netSales", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  discountAmount: numeric("discountAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  voidAmount: numeric("voidAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  unpaidAmount: numeric("unpaidAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  ticketCount: integer("ticketCount").default(0),
+  orderCount: integer("orderCount").default(0),
+  voidCount: integer("voidCount").default(0),
+  giftCount: integer("giftCount").default(0),
   notes: text("notes"),
   unpaidNotes: text("unpaidNotes"),
-  enteredBy: bigint("enteredBy", { mode: "number", unsigned: true }).notNull(),
+  enteredBy: bigint("enteredBy", { mode: "number" }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -157,7 +183,7 @@ export const dailySales = mysqlTable("daily_sales", {
 export type DailySale = typeof dailySales.$inferSelect;
 
 // Expense categories
-export const expenseCategories = mysqlTable("expense_categories", {
+export const expenseCategories = pgTable("expense_categories", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
@@ -171,25 +197,25 @@ export const expenseCategories = mysqlTable("expense_categories", {
 export type ExpenseCategory = typeof expenseCategories.$inferSelect;
 
 // Expenses
-export const expenses = mysqlTable("expenses", {
+export const expenses = pgTable("expenses", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }).notNull(),
-  categoryId: bigint("categoryId", { mode: "number", unsigned: true }).notNull(),
-  supplierId: bigint("supplierId", { mode: "number", unsigned: true }),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  categoryId: bigint("categoryId", { mode: "number" }).notNull(),
+  supplierId: bigint("supplierId", { mode: "number" }),
   expenseNumber: varchar("expenseNumber", { length: 50 }),
-  billId: bigint("billId", { mode: "number", unsigned: true }),
+  billId: bigint("billId", { mode: "number" }),
   refNo: varchar("refNo", { length: 50 }),
-  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
   description: text("description").notNull(),
   expenseDate: date("expenseDate").notNull(),
-  paymentMethod: mysqlEnum("paymentMethod", ["cash", "mpesa", "bank_transfer", "card"]).notNull(),
-  accountId: bigint("accountId", { mode: "number", unsigned: true }),
+  paymentMethod: paymentMethod2Enum("paymentMethod").notNull(),
+  accountId: bigint("accountId", { mode: "number" }),
   receiptImageUrl: text("receiptImageUrl"),
   mpesaTxnId: varchar("mpesaTxnId", { length: 20 }),
   expenseRef: varchar("expenseRef", { length: 50 }),
   isReimbursable: boolean("isReimbursable").default(false),
-  reimbursedTo: bigint("reimbursedTo", { mode: "number", unsigned: true }),
-  enteredBy: bigint("enteredBy", { mode: "number", unsigned: true }).notNull(),
+  reimbursedTo: bigint("reimbursedTo", { mode: "number" }),
+  enteredBy: bigint("enteredBy", { mode: "number" }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -198,20 +224,20 @@ export const expenses = mysqlTable("expenses", {
 export type Expense = typeof expenses.$inferSelect;
 
 // Suppliers
-export const suppliers = mysqlTable("suppliers", {
+export const suppliers = pgTable("suppliers", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 20 }),
   email: varchar("email", { length: 255 }),
   contactPerson: varchar("contactPerson", { length: 255 }),
   kraPin: varchar("kraPin", { length: 20 }),
-  paymentTermsDays: int("paymentTermsDays").default(30).notNull(),
-  creditLimit: decimal("creditLimit", { precision: 15, scale: 2 }),
-  currentBalance: decimal("currentBalance", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  totalBilled: decimal("totalBilled", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  totalPaid: decimal("totalPaid", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  paymentTermsDays: integer("paymentTermsDays").default(30).notNull(),
+  creditLimit: numeric("creditLimit", { precision: 15, scale: 2 }),
+  currentBalance: numeric("currentBalance", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  totalBilled: numeric("totalBilled", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  totalPaid: numeric("totalPaid", { precision: 15, scale: 2 }).default("0.00").notNull(),
   notes: text("notes"),
-  autoCategoryId: bigint("autoCategoryId", { mode: "number", unsigned: true }),
+  autoCategoryId: bigint("autoCategoryId", { mode: "number" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -220,18 +246,18 @@ export const suppliers = mysqlTable("suppliers", {
 export type Supplier = typeof suppliers.$inferSelect;
 
 // Bills (accounts payable)
-export const bills = mysqlTable("bills", {
+export const bills = pgTable("bills", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }).notNull(),
-  supplierId: bigint("supplierId", { mode: "number", unsigned: true }),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  supplierId: bigint("supplierId", { mode: "number" }),
   billNumber: varchar("billNumber", { length: 100 }),
   description: text("description").notNull(),
-  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
-  amountPaid: decimal("amountPaid", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  balanceDue: decimal("balanceDue", { precision: 15, scale: 2 }).notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  amountPaid: numeric("amountPaid", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  balanceDue: numeric("balanceDue", { precision: 15, scale: 2 }).notNull(),
   issueDate: date("issueDate").notNull(),
   dueDate: date("dueDate").notNull(),
-  status: mysqlEnum("status", ["pending", "partial", "paid", "overdue", "cancelled"]).default("pending").notNull(),
+  status: billStatusEnum("status").default("pending").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -240,14 +266,14 @@ export const bills = mysqlTable("bills", {
 export type Bill = typeof bills.$inferSelect;
 
 // Bill line items
-export const billItems = mysqlTable("bill_items", {
+export const billItems = pgTable("bill_items", {
   id: serial("id").primaryKey(),
-  billId: bigint("billId", { mode: "number", unsigned: true }).notNull(),
+  billId: bigint("billId", { mode: "number" }).notNull(),
   itemName: varchar("itemName", { length: 255 }).notNull(),
-  quantity: decimal("quantity", { precision: 10, scale: 3 }).default("1.000").notNull(),
-  unitPrice: decimal("unitPrice", { precision: 15, scale: 2 }).notNull(),
-  totalPrice: decimal("totalPrice", { precision: 15, scale: 2 }).notNull(),
-  categoryId: bigint("categoryId", { mode: "number", unsigned: true }),
+  quantity: numeric("quantity", { precision: 10, scale: 3 }).default("1.000").notNull(),
+  unitPrice: numeric("unitPrice", { precision: 15, scale: 2 }).notNull(),
+  totalPrice: numeric("totalPrice", { precision: 15, scale: 2 }).notNull(),
+  categoryId: bigint("categoryId", { mode: "number" }),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -257,13 +283,13 @@ export const billItems = mysqlTable("bill_items", {
 export type BillItem = typeof billItems.$inferSelect;
 
 // Master items - for autocomplete and price memory
-export const masterItems = mysqlTable("master_items", {
+export const masterItems = pgTable("master_items", {
   id: serial("id").primaryKey(),
   name: varchar("name", { length: 255 }).notNull().unique(),
-  lastUnitPrice: decimal("lastUnitPrice", { precision: 15, scale: 2 }),
-  lastCategoryId: bigint("lastCategoryId", { mode: "number", unsigned: true }),
-  lastSupplierId: bigint("lastSupplierId", { mode: "number", unsigned: true }),
-  usageCount: int("usageCount").default(1).notNull(),
+  lastUnitPrice: numeric("lastUnitPrice", { precision: 15, scale: 2 }),
+  lastCategoryId: bigint("lastCategoryId", { mode: "number" }),
+  lastSupplierId: bigint("lastSupplierId", { mode: "number" }),
+  usageCount: integer("usageCount").default(1).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -272,16 +298,16 @@ export const masterItems = mysqlTable("master_items", {
 export type MasterItem = typeof masterItems.$inferSelect;
 
 // Bill payments
-export const billPayments = mysqlTable("bill_payments", {
+export const billPayments = pgTable("bill_payments", {
   id: serial("id").primaryKey(),
-  billId: bigint("billId", { mode: "number", unsigned: true }).notNull(),
-  paymentMethod: mysqlEnum("paymentMethod", ["cash", "mpesa", "bank_transfer", "card"]).notNull(),
-  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  billId: bigint("billId", { mode: "number" }).notNull(),
+  paymentMethod: paymentMethod2Enum("paymentMethod").notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
   paymentDate: date("paymentDate").notNull(),
   reference: varchar("reference", { length: 100 }),
   notes: text("notes"),
-  accountId: bigint("accountId", { mode: "number", unsigned: true }),
-  enteredBy: bigint("enteredBy", { mode: "number", unsigned: true }).notNull(),
+  accountId: bigint("accountId", { mode: "number" }),
+  enteredBy: bigint("enteredBy", { mode: "number" }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -290,16 +316,16 @@ export const billPayments = mysqlTable("bill_payments", {
 export type BillPayment = typeof billPayments.$inferSelect;
 
 // Recurring bill templates
-export const recurringBillTemplates = mysqlTable("recurring_bill_templates", {
+export const recurringBillTemplates = pgTable("recurring_bill_templates", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }).notNull(),
-  supplierId: bigint("supplierId", { mode: "number", unsigned: true }),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  supplierId: bigint("supplierId", { mode: "number" }),
   description: text("description").notNull(),
-  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
-  frequency: mysqlEnum("frequency", ["daily", "weekly", "monthly", "quarterly", "annually"]).notNull(),
-  dayOfWeek: int("dayOfWeek"),
-  dayOfMonth: int("dayOfMonth"),
-  monthOfYear: int("monthOfYear"),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  frequency: frequencyEnum("frequency").notNull(),
+  dayOfWeek: integer("dayOfWeek"),
+  dayOfMonth: integer("dayOfMonth"),
+  monthOfYear: integer("monthOfYear"),
   nextDueDate: date("nextDueDate").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -310,18 +336,18 @@ export const recurringBillTemplates = mysqlTable("recurring_bill_templates", {
 export type RecurringBillTemplate = typeof recurringBillTemplates.$inferSelect;
 
 // Employees
-export const employees = mysqlTable("employees", {
+export const employees = pgTable("employees", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }).notNull(),
-  userId: bigint("userId", { mode: "number", unsigned: true }),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  userId: bigint("userId", { mode: "number" }),
   fullName: varchar("fullName", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 20 }).notNull(),
   idNumber: varchar("idNumber", { length: 20 }),
   kraPin: varchar("kraPin", { length: 20 }),
   nssfNumber: varchar("nssfNumber", { length: 20 }),
   nhifNumber: varchar("nhifNumber", { length: 20 }),
-  salaryType: mysqlEnum("salaryType", ["monthly", "weekly", "daily", "hourly"]).notNull(),
-  basicSalary: decimal("basicSalary", { precision: 15, scale: 2 }).notNull(),
+  salaryType: salaryTypeEnum("salaryType").notNull(),
+  basicSalary: numeric("basicSalary", { precision: 15, scale: 2 }).notNull(),
   bankName: varchar("bankName", { length: 100 }),
   bankAccount: varchar("bankAccount", { length: 50 }),
   bankCode: varchar("bankCode", { length: 10 }),
@@ -336,16 +362,16 @@ export const employees = mysqlTable("employees", {
 export type Employee = typeof employees.$inferSelect;
 
 // Payroll
-export const payrollPeriods = mysqlTable("payroll_periods", {
+export const payrollPeriods = pgTable("payroll_periods", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
   periodName: varchar("periodName", { length: 50 }).notNull(),
   startDate: date("startDate").notNull(),
   endDate: date("endDate").notNull(),
   paymentDate: date("paymentDate").notNull(),
-  status: mysqlEnum("status", ["open", "processing", "paid", "cancelled"]).default("open").notNull(),
-  generatedBillId: bigint("generatedBillId", { mode: "number", unsigned: true }),
-  totalNetPay: decimal("totalNetPay", { precision: 15, scale: 2 }).default("0.00"),
+  status: payrollStatusEnum("status").default("open").notNull(),
+  generatedBillId: bigint("generatedBillId", { mode: "number" }),
+  totalNetPay: numeric("totalNetPay", { precision: 15, scale: 2 }).default("0.00"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -353,20 +379,20 @@ export const payrollPeriods = mysqlTable("payroll_periods", {
 
 export type PayrollPeriod = typeof payrollPeriods.$inferSelect;
 
-export const payrollEntries = mysqlTable("payroll_entries", {
+export const payrollEntries = pgTable("payroll_entries", {
   id: serial("id").primaryKey(),
-  periodId: bigint("periodId", { mode: "number", unsigned: true }).notNull(),
-  employeeId: bigint("employeeId", { mode: "number", unsigned: true }).notNull(),
-  basicPay: decimal("basicPay", { precision: 15, scale: 2 }).notNull(),
-  advancesDeducted: decimal("advancesDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  deductions: decimal("deductions", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  bonuses: decimal("bonuses", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  overtimePay: decimal("overtimePay", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  payeDeducted: decimal("payeDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  nhifDeducted: decimal("nhifDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  nssfDeducted: decimal("nssfDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  netPay: decimal("netPay", { precision: 15, scale: 2 }).notNull(),
-  paymentMethod: mysqlEnum("paymentMethod", ["cash", "mpesa", "bank_transfer"]).default("mpesa").notNull(),
+  periodId: bigint("periodId", { mode: "number" }).notNull(),
+  employeeId: bigint("employeeId", { mode: "number" }).notNull(),
+  basicPay: numeric("basicPay", { precision: 15, scale: 2 }).notNull(),
+  advancesDeducted: numeric("advancesDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  deductions: numeric("deductions", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  bonuses: numeric("bonuses", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  overtimePay: numeric("overtimePay", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  payeDeducted: numeric("payeDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  nhifDeducted: numeric("nhifDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  nssfDeducted: numeric("nssfDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  netPay: numeric("netPay", { precision: 15, scale: 2 }).notNull(),
+  paymentMethod: paymentMethodEnum("paymentMethod").default("mpesa").notNull(),
   paidAt: timestamp("paidAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -375,16 +401,16 @@ export const payrollEntries = mysqlTable("payroll_entries", {
 
 export type PayrollEntry = typeof payrollEntries.$inferSelect;
 
-export const payrollAdvances = mysqlTable("payroll_advances", {
+export const payrollAdvances = pgTable("payroll_advances", {
   id: serial("id").primaryKey(),
-  employeeId: bigint("employeeId", { mode: "number", unsigned: true }).notNull(),
-  payrollPeriodId: bigint("payrollPeriodId", { mode: "number", unsigned: true }),
-  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
-  balanceRemaining: decimal("balanceRemaining", { precision: 15, scale: 2 }).notNull(),
+  employeeId: bigint("employeeId", { mode: "number" }).notNull(),
+  payrollPeriodId: bigint("payrollPeriodId", { mode: "number" }),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  balanceRemaining: numeric("balanceRemaining", { precision: 15, scale: 2 }).notNull(),
   requestDate: date("requestDate").notNull(),
-  repaymentPeriods: int("repaymentPeriods").default(1),
-  status: mysqlEnum("status", ["pending", "approved", "partially_repaid", "repaid", "cancelled"]).default("pending").notNull(),
-  approvedBy: bigint("approvedBy", { mode: "number", unsigned: true }),
+  repaymentPeriods: integer("repaymentPeriods").default(1),
+  status: advanceStatusEnum("status").default("pending").notNull(),
+  approvedBy: bigint("approvedBy", { mode: "number" }),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -394,26 +420,26 @@ export const payrollAdvances = mysqlTable("payroll_advances", {
 export type PayrollAdvance = typeof payrollAdvances.$inferSelect;
 
 // M-PESA transactions
-export const mpesaTransactions = mysqlTable("mpesa_transactions", {
+export const mpesaTransactions = pgTable("mpesa_transactions", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
   txnId: varchar("txnId", { length: 20 }).notNull().unique(),
   txnDate: date("txnDate").notNull(),
   txnTime: varchar("txnTime", { length: 10 }),
-  txnType: mysqlEnum("txnType", ["topup", "expense", "transfer", "bank_transfer", "airtime", "utility", "withdrawal"]).notNull(),
+  txnType: txnTypeEnum("txnType").notNull(),
   partyName: varchar("partyName", { length: 255 }),
-  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
-  txnFee: decimal("txnFee", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  balance: decimal("balance", { precision: 15, scale: 2 }),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  txnFee: numeric("txnFee", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  balance: numeric("balance", { precision: 15, scale: 2 }),
   description: text("description"),
   rawText: text("rawText"),
   isLinked: boolean("isLinked").default(false).notNull(),
-  linkedExpenseId: bigint("linkedExpenseId", { mode: "number", unsigned: true }),
-  linkedBillId: bigint("linkedBillId", { mode: "number", unsigned: true }),
-  linkedSupplierId: bigint("linkedSupplierId", { mode: "number", unsigned: true }),
-  sourceAccountId: bigint("sourceAccountId", { mode: "number", unsigned: true }), // bank account that funded this topup
-  destinationAccountId: bigint("destinationAccountId", { mode: "number", unsigned: true }), // M-PESA wallet that received this topup
-  importedBy: bigint("importedBy", { mode: "number", unsigned: true }),
+  linkedExpenseId: bigint("linkedExpenseId", { mode: "number" }),
+  linkedBillId: bigint("linkedBillId", { mode: "number" }),
+  linkedSupplierId: bigint("linkedSupplierId", { mode: "number" }),
+  sourceAccountId: bigint("sourceAccountId", { mode: "number" }), // bank account that funded this topup
+  destinationAccountId: bigint("destinationAccountId", { mode: "number" }), // M-PESA wallet that received this topup
+  importedBy: bigint("importedBy", { mode: "number" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -422,19 +448,19 @@ export const mpesaTransactions = mysqlTable("mpesa_transactions", {
 export type MpesaTransaction = typeof mpesaTransactions.$inferSelect;
 
 // Daily M-PESA Ledger
-export const dailyMpesaLedger = mysqlTable("daily_mpesa_ledger", {
+export const dailyMpesaLedger = pgTable("daily_mpesa_ledger", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }).notNull(),
-  accountId: bigint("accountId", { mode: "number", unsigned: true }).notNull(), // specific M-PESA wallet
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  accountId: bigint("accountId", { mode: "number" }).notNull(), // specific M-PESA wallet
   ledgerDate: date("ledgerDate").notNull(),
-  openingBalance: decimal("openingBalance", { precision: 15, scale: 2 }).notNull(),
-  totalTopups: decimal("totalTopups", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  totalExpenditures: decimal("totalExpenditures", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  totalFees: decimal("totalFees", { precision: 15, scale: 2 }).default("0.00").notNull(),
-  closingBalance: decimal("closingBalance", { precision: 15, scale: 2 }).notNull(),
-  transactionCount: int("transactionCount").default(0).notNull(),
+  openingBalance: numeric("openingBalance", { precision: 15, scale: 2 }).notNull(),
+  totalTopups: numeric("totalTopups", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  totalExpenditures: numeric("totalExpenditures", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  totalFees: numeric("totalFees", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  closingBalance: numeric("closingBalance", { precision: 15, scale: 2 }).notNull(),
+  transactionCount: integer("transactionCount").default(0).notNull(),
   notes: text("notes"),
-  enteredBy: bigint("enteredBy", { mode: "number", unsigned: true }).notNull(),
+  enteredBy: bigint("enteredBy", { mode: "number" }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -443,14 +469,14 @@ export const dailyMpesaLedger = mysqlTable("daily_mpesa_ledger", {
 export type DailyMpesaLedger = typeof dailyMpesaLedger.$inferSelect;
 
 // Audit log
-export const auditLog = mysqlTable("audit_log", {
+export const auditLog = pgTable("audit_log", {
   id: serial("id").primaryKey(),
   tableName: varchar("tableName", { length: 100 }).notNull(),
-  recordId: bigint("recordId", { mode: "number", unsigned: true }).notNull(),
-  action: mysqlEnum("action", ["CREATE", "UPDATE", "DELETE", "RESTORE", "LOGIN", "LOGOUT"]).notNull(),
+  recordId: bigint("recordId", { mode: "number" }).notNull(),
+  action: actionEnum("action").notNull(),
   oldValues: json("oldValues"),
   newValues: json("newValues"),
-  changedBy: bigint("changedBy", { mode: "number", unsigned: true }),
+  changedBy: bigint("changedBy", { mode: "number" }),
   ipAddress: varchar("ipAddress", { length: 45 }),
   userAgent: text("userAgent"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -459,18 +485,25 @@ export const auditLog = mysqlTable("audit_log", {
 export type AuditLog = typeof auditLog.$inferSelect;
 
 // Businesses (multi-tenancy)
-export const businesses = mysqlTable("businesses", {
+export const businesses = pgTable("businesses", {
   id: serial("id").primaryKey(),
   accountId: varchar("accountId", { length: 100 }).notNull().unique(),
   name: varchar("name", { length: 255 }).notNull(),
   slug: varchar("slug", { length: 100 }).notNull().unique(),
+  businessType: varchar("businessType", { length: 50 }),
+  country: varchar("country", { length: 100 }),
+  county: varchar("county", { length: 100 }),
+  subCounty: varchar("subCounty", { length: 100 }),
   address: text("address"),
+  businessRegNumber: varchar("businessRegNumber", { length: 100 }),
   phone: varchar("phone", { length: 20 }),
+  natureOfBusiness: varchar("natureOfBusiness", { length: 255 }),
+  kraPin: varchar("kraPin", { length: 20 }),
   email: varchar("email", { length: 255 }),
   plan: varchar("plan", { length: 20 }).default("free").notNull(),
-  maxBranches: int("maxBranches").default(1),
-  maxUsers: int("maxUsers").default(1),
-  maxTransactionsPerMonth: int("maxTransactionsPerMonth").default(100),
+  maxBranches: integer("maxBranches").default(1),
+  maxUsers: integer("maxUsers").default(1),
+  maxTransactionsPerMonth: integer("maxTransactionsPerMonth").default(100),
   features: json("features"),
   subscriptionStatus: varchar("subscriptionStatus", { length: 20 }).default("active"),
   subscriptionExpiry: date("subscriptionExpiry"),
@@ -480,11 +513,11 @@ export const businesses = mysqlTable("businesses", {
   isWhiteLabel: boolean("isWhiteLabel").default(false).notNull(),
   whiteLabelDomain: varchar("whiteLabelDomain", { length: 255 }),
   referralCode: varchar("referralCode", { length: 50 }),
-  referredByBusinessId: bigint("referredByBusinessId", { mode: "number", unsigned: true }),
-  referredByUserId: bigint("referredByUserId", { mode: "number", unsigned: true }),
+  referredByBusinessId: bigint("referredByBusinessId", { mode: "number" }),
+  referredByUserId: bigint("referredByUserId", { mode: "number" }),
   firstMonthDiscountApplied: boolean("firstMonthDiscountApplied").default(false).notNull(),
-  partnerId: bigint("partnerId", { mode: "number", unsigned: true }),
-  revSharePercent: decimal("revSharePercent", { precision: 5, scale: 2 }).default("20.00"),
+  partnerId: bigint("partnerId", { mode: "number" }),
+  revSharePercent: numeric("revSharePercent", { precision: 5, scale: 2 }).default("20.00"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -492,11 +525,28 @@ export const businesses = mysqlTable("businesses", {
 
 export type Business = typeof businesses.$inferSelect;
 
-// User-Business junction (many-to-many)
-export const userBusinesses = mysqlTable("user_businesses", {
+// Business documents (registration certs, KRA, licenses, etc.)
+export const businessDocuments = pgTable("business_documents", {
   id: serial("id").primaryKey(),
-  userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
-  businessId: bigint("businessId", { mode: "number", unsigned: true }).notNull(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  documentType: varchar("documentType", { length: 50 }).notNull(),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  fileData: text("fileData").notNull(),
+  mimeType: varchar("mimeType", { length: 50 }),
+  notes: text("notes"),
+  uploadedBy: bigint("uploadedBy", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+});
+
+export type BusinessDocument = typeof businessDocuments.$inferSelect;
+
+// User-Business junction (many-to-many)
+export const userBusinesses = pgTable("user_businesses", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number" }).notNull(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
   role: varchar("role", { length: 50 }).default("admin"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -505,10 +555,10 @@ export const userBusinesses = mysqlTable("user_businesses", {
 export type UserBusiness = typeof userBusinesses.$inferSelect;
 
 // Generic attachments (photos for daily_sales, expenses, bills)
-export const attachments = mysqlTable("attachments", {
+export const attachments = pgTable("attachments", {
   id: serial("id").primaryKey(),
   recordType: varchar("recordType", { length: 50 }).notNull(),
-  recordId: bigint("recordId", { mode: "number", unsigned: true }).notNull(),
+  recordId: bigint("recordId", { mode: "number" }).notNull(),
   imageData: text("imageData").notNull(),
   mimeType: varchar("mimeType", { length: 50 }).default("image/jpeg"),
   caption: varchar("caption", { length: 255 }),
@@ -519,9 +569,9 @@ export const attachments = mysqlTable("attachments", {
 export type Attachment = typeof attachments.$inferSelect;
 
 // App settings (feature toggles)
-export const appSettings = mysqlTable("app_settings", {
+export const appSettings = pgTable("app_settings", {
   id: serial("id").primaryKey(),
-  businessId: bigint("businessId", { mode: "number", unsigned: true }),
+  businessId: bigint("businessId", { mode: "number" }),
   key: varchar("key", { length: 100 }).notNull(),
   value: text("value"),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -530,9 +580,9 @@ export const appSettings = mysqlTable("app_settings", {
 export type AppSetting = typeof appSettings.$inferSelect;
 
 // Feedback questionnaires
-export const feedbackQuestionnaires = mysqlTable("feedback_questionnaires", {
+export const feedbackQuestionnaires = pgTable("feedback_questionnaires", {
   id: serial("id").primaryKey(),
-  businessId: bigint("businessId", { mode: "number", unsigned: true }),
+  businessId: bigint("businessId", { mode: "number" }),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
   questions: json("questions").notNull(),
@@ -543,9 +593,9 @@ export const feedbackQuestionnaires = mysqlTable("feedback_questionnaires", {
 export type FeedbackQuestionnaire = typeof feedbackQuestionnaires.$inferSelect;
 
 // Feedback responses
-export const feedbackResponses = mysqlTable("feedback_responses", {
+export const feedbackResponses = pgTable("feedback_responses", {
   id: serial("id").primaryKey(),
-  questionnaireId: bigint("questionnaireId", { mode: "number", unsigned: true }).notNull(),
+  questionnaireId: bigint("questionnaireId", { mode: "number" }).notNull(),
   respondentName: varchar("respondentName", { length: 255 }),
   respondentEmail: varchar("respondentEmail", { length: 320 }),
   answers: json("answers").notNull(),
@@ -555,13 +605,13 @@ export const feedbackResponses = mysqlTable("feedback_responses", {
 export type FeedbackResponse = typeof feedbackResponses.$inferSelect;
 
 // Payment methods - configurable per business (account linking happens at branch level)
-export const paymentMethods = mysqlTable("payment_methods", {
+export const paymentMethods = pgTable("payment_methods", {
   id: serial("id").primaryKey(),
-  businessId: bigint("businessId", { mode: "number", unsigned: true }),
+  businessId: bigint("businessId", { mode: "number" }),
   name: varchar("name", { length: 100 }).notNull(),
   code: varchar("code", { length: 50 }).notNull(),
   color: varchar("color", { length: 20 }).default("#C73E1D"),
-  sortOrder: int("sortOrder").default(0).notNull(),
+  sortOrder: integer("sortOrder").default(0).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -571,11 +621,11 @@ export const paymentMethods = mysqlTable("payment_methods", {
 export type PaymentMethod = typeof paymentMethods.$inferSelect;
 
 // Location-PaymentMethod junction (which methods a location accepts + which account they link to)
-export const locationPaymentMethods = mysqlTable("location_payment_methods", {
+export const locationPaymentMethods = pgTable("location_payment_methods", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }).notNull(),
-  paymentMethodId: bigint("paymentMethodId", { mode: "number", unsigned: true }).notNull(),
-  linkedAccountId: bigint("linkedAccountId", { mode: "number", unsigned: true }),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  paymentMethodId: bigint("paymentMethodId", { mode: "number" }).notNull(),
+  linkedAccountId: bigint("linkedAccountId", { mode: "number" }),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -583,40 +633,40 @@ export const locationPaymentMethods = mysqlTable("location_payment_methods", {
 export type LocationPaymentMethod = typeof locationPaymentMethods.$inferSelect;
 
 // Daily sale payments (child records linking daily sales to payment methods)
-export const dailySalePayments = mysqlTable("daily_sale_payments", {
+export const dailySalePayments = pgTable("daily_sale_payments", {
   id: serial("id").primaryKey(),
-  dailySaleId: bigint("dailySaleId", { mode: "number", unsigned: true }).notNull(),
-  paymentMethodId: bigint("paymentMethodId", { mode: "number", unsigned: true }).notNull(),
-  amount: decimal("amount", { precision: 15, scale: 2 }).notNull(),
+  dailySaleId: bigint("dailySaleId", { mode: "number" }).notNull(),
+  paymentMethodId: bigint("paymentMethodId", { mode: "number" }).notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type DailySalePayment = typeof dailySalePayments.$inferSelect;
 
 // Business inquiries (landing page registrations)
-export const businessInquiries = mysqlTable("business_inquiries", {
+export const businessInquiries = pgTable("business_inquiries", {
   id: serial("id").primaryKey(),
   businessName: varchar("businessName", { length: 255 }).notNull(),
   contactName: varchar("contactName", { length: 255 }).notNull(),
   email: varchar("email", { length: 320 }).notNull(),
   phone: varchar("phone", { length: 20 }),
   position: varchar("position", { length: 100 }),
-  suggestedPrice: decimal("suggestedPrice", { precision: 10, scale: 2 }),
+  suggestedPrice: numeric("suggestedPrice", { precision: 10, scale: 2 }),
   notes: text("notes"),
-  status: mysqlEnum("status", ["new", "contacted", "converted", "declined"]).default("new").notNull(),
+  status: leadStatusEnum("status").default("new").notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type BusinessInquiry = typeof businessInquiries.$inferSelect;
 
 // Budgets per category per location per month
-export const budgets = mysqlTable("budgets", {
+export const budgets = pgTable("budgets", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }),
-  categoryId: bigint("categoryId", { mode: "number", unsigned: true }),
-  month: int("month").notNull(),
-  year: int("year").notNull(),
-  amount: decimal("amount", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  locationId: bigint("locationId", { mode: "number" }),
+  categoryId: bigint("categoryId", { mode: "number" }),
+  month: integer("month").notNull(),
+  year: integer("year").notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).default("0.00").notNull(),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -626,18 +676,18 @@ export const budgets = mysqlTable("budgets", {
 export type Budget = typeof budgets.$inferSelect;
 
 // Payroll settings (statutory deduction rates per location)
-export const payrollSettings = mysqlTable("payroll_settings", {
+export const payrollSettings = pgTable("payroll_settings", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }),
-  nhifRate: decimal("nhifRate", { precision: 5, scale: 2 }).default("2.75"),
-  nssfTier1Limit: decimal("nssfTier1Limit", { precision: 15, scale: 2 }).default("7000.00"),
-  nssfTier1Employee: decimal("nssfTier1Employee", { precision: 15, scale: 2 }).default("420.00"),
-  nssfTier1Employer: decimal("nssfTier1Employer", { precision: 15, scale: 2 }).default("420.00"),
-  nssfTier2Limit: decimal("nssfTier2Limit", { precision: 15, scale: 2 }).default("36000.00"),
-  nssfTier2Employee: decimal("nssfTier2Employee", { precision: 15, scale: 2 }).default("1740.00"),
-  nssfTier2Employer: decimal("nssfTier2Employer", { precision: 15, scale: 2 }).default("1740.00"),
-  personalRelief: decimal("personalRelief", { precision: 15, scale: 2 }).default("2400.00"),
-  insuranceRelief: decimal("insuranceRelief", { precision: 15, scale: 2 }).default("0.00"),
+  locationId: bigint("locationId", { mode: "number" }),
+  nhifRate: numeric("nhifRate", { precision: 5, scale: 2 }).default("2.75"),
+  nssfTier1Limit: numeric("nssfTier1Limit", { precision: 15, scale: 2 }).default("7000.00"),
+  nssfTier1Employee: numeric("nssfTier1Employee", { precision: 15, scale: 2 }).default("420.00"),
+  nssfTier1Employer: numeric("nssfTier1Employer", { precision: 15, scale: 2 }).default("420.00"),
+  nssfTier2Limit: numeric("nssfTier2Limit", { precision: 15, scale: 2 }).default("36000.00"),
+  nssfTier2Employee: numeric("nssfTier2Employee", { precision: 15, scale: 2 }).default("1740.00"),
+  nssfTier2Employer: numeric("nssfTier2Employer", { precision: 15, scale: 2 }).default("1740.00"),
+  personalRelief: numeric("personalRelief", { precision: 15, scale: 2 }).default("2400.00"),
+  insuranceRelief: numeric("insuranceRelief", { precision: 15, scale: 2 }).default("0.00"),
   payeBands: json("payeBands"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -646,11 +696,11 @@ export const payrollSettings = mysqlTable("payroll_settings", {
 export type PayrollSetting = typeof payrollSettings.$inferSelect;
 
 // COGS (food cost) targets per location
-export const cogsTargets = mysqlTable("cogs_targets", {
+export const cogsTargets = pgTable("cogs_targets", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }),
-  targetFoodCostPercent: decimal("targetFoodCostPercent", { precision: 5, scale: 2 }).default("35.00"),
-  alertThresholdPercent: decimal("alertThresholdPercent", { precision: 5, scale: 2 }).default("38.00"),
+  locationId: bigint("locationId", { mode: "number" }),
+  targetFoodCostPercent: numeric("targetFoodCostPercent", { precision: 5, scale: 2 }).default("35.00"),
+  alertThresholdPercent: numeric("alertThresholdPercent", { precision: 5, scale: 2 }).default("38.00"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
 });
@@ -658,11 +708,11 @@ export const cogsTargets = mysqlTable("cogs_targets", {
 export type CogsTarget = typeof cogsTargets.$inferSelect;
 
 // Account balance alert configuration
-export const alertsConfig = mysqlTable("alerts_config", {
+export const alertsConfig = pgTable("alerts_config", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }),
-  accountId: bigint("accountId", { mode: "number", unsigned: true }),
-  minBalance: decimal("minBalance", { precision: 15, scale: 2 }).default("10000.00"),
+  locationId: bigint("locationId", { mode: "number" }),
+  accountId: bigint("accountId", { mode: "number" }),
+  minBalance: numeric("minBalance", { precision: 15, scale: 2 }).default("10000.00"),
   notifyEmail: varchar("notifyEmail", { length: 320 }),
   notifyPhone: varchar("notifyPhone", { length: 20 }),
   isActive: boolean("isActive").default(true).notNull(),
@@ -673,14 +723,14 @@ export const alertsConfig = mysqlTable("alerts_config", {
 export type AlertConfig = typeof alertsConfig.$inferSelect;
 
 // Alerts log
-export const alertsLog = mysqlTable("alerts_log", {
+export const alertsLog = pgTable("alerts_log", {
   id: serial("id").primaryKey(),
   type: varchar("type", { length: 50 }).notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   message: text("message"),
-  severity: mysqlEnum("severity", ["info", "warning", "critical"]).default("info").notNull(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }),
-  accountId: bigint("accountId", { mode: "number", unsigned: true }),
+  severity: severityEnum("severity").default("info").notNull(),
+  locationId: bigint("locationId", { mode: "number" }),
+  accountId: bigint("accountId", { mode: "number" }),
   isRead: boolean("isRead").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -688,21 +738,21 @@ export const alertsLog = mysqlTable("alerts_log", {
 export type AlertLog = typeof alertsLog.$inferSelect;
 
 // Purchase Orders
-export const purchaseOrders = mysqlTable("purchase_orders", {
+export const purchaseOrders = pgTable("purchase_orders", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }).notNull(),
-  supplierId: bigint("supplierId", { mode: "number", unsigned: true }),
-  billId: bigint("billId", { mode: "number", unsigned: true }),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  supplierId: bigint("supplierId", { mode: "number" }),
+  billId: bigint("billId", { mode: "number" }),
   poNumber: varchar("poNumber", { length: 50 }),
   description: text("description"),
-  status: mysqlEnum("status", ["draft", "sent", "delivered", "billed", "cancelled"]).default("draft").notNull(),
-  subtotal: decimal("subtotal", { precision: 15, scale: 2 }).default("0.00"),
-  taxAmount: decimal("taxAmount", { precision: 15, scale: 2 }).default("0.00"),
-  total: decimal("total", { precision: 15, scale: 2 }).default("0.00"),
+  status: orderStatusEnum("status").default("draft").notNull(),
+  subtotal: numeric("subtotal", { precision: 15, scale: 2 }).default("0.00"),
+  taxAmount: numeric("taxAmount", { precision: 15, scale: 2 }).default("0.00"),
+  total: numeric("total", { precision: 15, scale: 2 }).default("0.00"),
   deliveryDate: date("deliveryDate"),
   deliveryNotes: text("deliveryNotes"),
   terms: text("terms"),
-  createdBy: bigint("createdBy", { mode: "number", unsigned: true }),
+  createdBy: bigint("createdBy", { mode: "number" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -710,13 +760,13 @@ export const purchaseOrders = mysqlTable("purchase_orders", {
 
 export type PurchaseOrder = typeof purchaseOrders.$inferSelect;
 
-export const purchaseOrderItems = mysqlTable("purchase_order_items", {
+export const purchaseOrderItems = pgTable("purchase_order_items", {
   id: serial("id").primaryKey(),
-  poId: bigint("poId", { mode: "number", unsigned: true }).notNull(),
+  poId: bigint("poId", { mode: "number" }).notNull(),
   itemName: varchar("itemName", { length: 255 }).notNull(),
-  quantity: decimal("quantity", { precision: 10, scale: 3 }).default("1.000").notNull(),
-  unitPrice: decimal("unitPrice", { precision: 15, scale: 2 }).notNull(),
-  totalPrice: decimal("totalPrice", { precision: 15, scale: 2 }).notNull(),
+  quantity: numeric("quantity", { precision: 10, scale: 3 }).default("1.000").notNull(),
+  unitPrice: numeric("unitPrice", { precision: 15, scale: 2 }).notNull(),
+  totalPrice: numeric("totalPrice", { precision: 15, scale: 2 }).notNull(),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   deletedAt: timestamp("deletedAt"),
@@ -725,14 +775,14 @@ export const purchaseOrderItems = mysqlTable("purchase_order_items", {
 export type PurchaseOrderItem = typeof purchaseOrderItems.$inferSelect;
 
 // M-PESA reconciliation
-export const mpesaReconciliation = mysqlTable("mpesa_reconciliation", {
+export const mpesaReconciliation = pgTable("mpesa_reconciliation", {
   id: serial("id").primaryKey(),
   txnDate: date("txnDate").notNull(),
-  orphanCount: int("orphanCount").default(0),
-  orphanTotal: decimal("orphanTotal", { precision: 15, scale: 2 }).default("0.00"),
-  matchedCount: int("matchedCount").default(0),
-  matchedTotal: decimal("matchedTotal", { precision: 15, scale: 2 }).default("0.00"),
-  status: mysqlEnum("status", ["open", "resolved", "partial"]).default("open").notNull(),
+  orphanCount: integer("orphanCount").default(0),
+  orphanTotal: numeric("orphanTotal", { precision: 15, scale: 2 }).default("0.00"),
+  matchedCount: integer("matchedCount").default(0),
+  matchedTotal: numeric("matchedTotal", { precision: 15, scale: 2 }).default("0.00"),
+  status: statusEnum("status").default("open").notNull(),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   resolvedAt: timestamp("resolvedAt"),
@@ -741,16 +791,16 @@ export const mpesaReconciliation = mysqlTable("mpesa_reconciliation", {
 export type MpesaReconciliation = typeof mpesaReconciliation.$inferSelect;
 
 // Notifications (push + in-app)
-export const notifications = mysqlTable("notifications", {
+export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
-  userId: bigint("userId", { mode: "number", unsigned: true }),
+  userId: bigint("userId", { mode: "number" }),
   type: varchar("type", { length: 50 }).notNull(),
   title: varchar("title", { length: 255 }).notNull(),
   message: text("message"),
-  severity: mysqlEnum("severity", ["info", "warning", "critical"]).default("info").notNull(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }),
+  severity: severityEnum("severity").default("info").notNull(),
+  locationId: bigint("locationId", { mode: "number" }),
   entityType: varchar("entityType", { length: 50 }),
-  entityId: bigint("entityId", { mode: "number", unsigned: true }),
+  entityId: bigint("entityId", { mode: "number" }),
   isRead: boolean("isRead").default(false).notNull(),
   isPushed: boolean("isPushed").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -759,27 +809,27 @@ export const notifications = mysqlTable("notifications", {
 export type Notification = typeof notifications.$inferSelect;
 
 // Supplier price history
-export const supplierPriceHistory = mysqlTable("supplier_price_history", {
+export const supplierPriceHistory = pgTable("supplier_price_history", {
   id: serial("id").primaryKey(),
-  supplierId: bigint("supplierId", { mode: "number", unsigned: true }),
+  supplierId: bigint("supplierId", { mode: "number" }),
   itemName: varchar("itemName", { length: 255 }).notNull(),
-  billId: bigint("billId", { mode: "number", unsigned: true }),
-  unitPrice: decimal("unitPrice", { precision: 15, scale: 2 }).notNull(),
-  quantity: decimal("quantity", { precision: 10, scale: 3 }).default("1.000").notNull(),
+  billId: bigint("billId", { mode: "number" }),
+  unitPrice: numeric("unitPrice", { precision: 15, scale: 2 }).notNull(),
+  quantity: numeric("quantity", { precision: 10, scale: 3 }).default("1.000").notNull(),
   priceDate: date("priceDate").notNull(),
-  locationId: bigint("locationId", { mode: "number", unsigned: true }),
+  locationId: bigint("locationId", { mode: "number" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type SupplierPriceHistory = typeof supplierPriceHistory.$inferSelect;
 
 // Price alert rules
-export const priceAlertRules = mysqlTable("price_alert_rules", {
+export const priceAlertRules = pgTable("price_alert_rules", {
   id: serial("id").primaryKey(),
-  supplierId: bigint("supplierId", { mode: "number", unsigned: true }),
+  supplierId: bigint("supplierId", { mode: "number" }),
   itemName: varchar("itemName", { length: 255 }).notNull(),
-  expectedPrice: decimal("expectedPrice", { precision: 15, scale: 2 }),
-  variancePercent: decimal("variancePercent", { precision: 5, scale: 2 }).default("10.00"),
+  expectedPrice: numeric("expectedPrice", { precision: 15, scale: 2 }),
+  variancePercent: numeric("variancePercent", { precision: 5, scale: 2 }).default("10.00"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -788,12 +838,12 @@ export const priceAlertRules = mysqlTable("price_alert_rules", {
 export type PriceAlertRule = typeof priceAlertRules.$inferSelect;
 
 // Quick actions log
-export const quickActionsLog = mysqlTable("quick_actions_log", {
+export const quickActionsLog = pgTable("quick_actions_log", {
   id: serial("id").primaryKey(),
-  userId: bigint("userId", { mode: "number", unsigned: true }),
+  userId: bigint("userId", { mode: "number" }),
   action: varchar("action", { length: 50 }).notNull(),
   entityType: varchar("entityType", { length: 50 }),
-  entityId: bigint("entityId", { mode: "number", unsigned: true }),
+  entityId: bigint("entityId", { mode: "number" }),
   details: text("details"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -801,9 +851,9 @@ export const quickActionsLog = mysqlTable("quick_actions_log", {
 export type QuickActionLog = typeof quickActionsLog.$inferSelect;
 
 // Web push subscriptions
-export const pushSubscriptions = mysqlTable("push_subscriptions", {
+export const pushSubscriptions = pgTable("push_subscriptions", {
   id: serial("id").primaryKey(),
-  userId: bigint("userId", { mode: "number", unsigned: true }),
+  userId: bigint("userId", { mode: "number" }),
   subscription: json("subscription").notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -813,9 +863,9 @@ export const pushSubscriptions = mysqlTable("push_subscriptions", {
 export type PushSubscription = typeof pushSubscriptions.$inferSelect;
 
 // API Keys for external integrations
-export const apiKeys = mysqlTable("api_keys", {
+export const apiKeys = pgTable("api_keys", {
   id: serial("id").primaryKey(),
-  businessId: bigint("businessId", { mode: "number", unsigned: true }).notNull(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
   name: varchar("name", { length: 100 }).notNull(),
   keyHash: varchar("keyHash", { length: 255 }).notNull(),
   keyPrefix: varchar("keyPrefix", { length: 20 }).notNull(),
@@ -829,9 +879,9 @@ export const apiKeys = mysqlTable("api_keys", {
 export type ApiKey = typeof apiKeys.$inferSelect;
 
 // Webhooks
-export const webhooks = mysqlTable("webhooks", {
+export const webhooks = pgTable("webhooks", {
   id: serial("id").primaryKey(),
-  businessId: bigint("businessId", { mode: "number", unsigned: true }).notNull(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
   name: varchar("name", { length: 100 }).notNull(),
   url: varchar("url", { length: 500 }).notNull(),
   events: json("events").notNull(),
@@ -847,13 +897,13 @@ export const webhooks = mysqlTable("webhooks", {
 export type Webhook = typeof webhooks.$inferSelect;
 
 // Webhook delivery log
-export const webhookDeliveries = mysqlTable("webhook_deliveries", {
+export const webhookDeliveries = pgTable("webhook_deliveries", {
   id: serial("id").primaryKey(),
-  webhookId: bigint("webhookId", { mode: "number", unsigned: true }).notNull(),
+  webhookId: bigint("webhookId", { mode: "number" }).notNull(),
   event: varchar("event", { length: 50 }).notNull(),
   payload: json("payload"),
   status: varchar("status", { length: 50 }).notNull(),
-  statusCode: int("statusCode"),
+  statusCode: integer("statusCode"),
   response: text("response"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -861,15 +911,15 @@ export const webhookDeliveries = mysqlTable("webhook_deliveries", {
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
 
 // Partner commission tracking
-export const partnerCommissions = mysqlTable("partner_commissions", {
+export const partnerCommissions = pgTable("partner_commissions", {
   id: serial("id").primaryKey(),
-  partnerId: bigint("partnerId", { mode: "number", unsigned: true }).notNull(),
-  businessId: bigint("businessId", { mode: "number", unsigned: true }).notNull(),
-  month: int("month").notNull(),
-  year: int("year").notNull(),
-  subscriptionAmount: decimal("subscriptionAmount", { precision: 15, scale: 2 }).default("0.00"),
-  commissionPercent: decimal("commissionPercent", { precision: 5, scale: 2 }).default("20.00"),
-  commissionAmount: decimal("commissionAmount", { precision: 15, scale: 2 }).default("0.00"),
+  partnerId: bigint("partnerId", { mode: "number" }).notNull(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  month: integer("month").notNull(),
+  year: integer("year").notNull(),
+  subscriptionAmount: numeric("subscriptionAmount", { precision: 15, scale: 2 }).default("0.00"),
+  commissionPercent: numeric("commissionPercent", { precision: 5, scale: 2 }).default("20.00"),
+  commissionAmount: numeric("commissionAmount", { precision: 15, scale: 2 }).default("0.00"),
   status: varchar("status", { length: 20 }).default("pending"),
   paidAt: timestamp("paidAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -878,9 +928,9 @@ export const partnerCommissions = mysqlTable("partner_commissions", {
 export type PartnerCommission = typeof partnerCommissions.$inferSelect;
 
 // Refresh tokens for session management
-export const refreshTokens = mysqlTable("refresh_tokens", {
+export const refreshTokens = pgTable("refresh_tokens", {
   id: serial("id").primaryKey(),
-  userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+  userId: bigint("userId", { mode: "number" }).notNull(),
   tokenHash: varchar("tokenHash", { length: 255 }).notNull(),
   expiresAt: timestamp("expiresAt").notNull(),
   deviceInfo: text("deviceInfo"),

@@ -1,22 +1,22 @@
-import { drizzle } from "drizzle-orm/mysql2";
-import mysql from "mysql2/promise";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
 import * as schema from "@db/schema";
 import * as relations from "@db/relations";
 
 const fullSchema = { ...schema, ...relations };
 
-let pool: mysql.Pool | null = null;
+let pool: pg.Pool | null = null;
 let instance: ReturnType<typeof drizzle<typeof fullSchema>> | null = null;
 
 export function getTestDb() {
   if (!pool) {
-    pool = mysql.createPool({
-      uri: process.env.DATABASE_URL || "mysql://root:test@127.0.0.1:3306/finaflow_test",
-      connectionLimit: 2,
+    pool = new pg.Pool({
+      connectionString: process.env.DATABASE_URL || "postgresql://postgres:postgres@127.0.0.1:5432/finaflow_test",
+      max: 2,
     });
   }
   if (!instance) {
-    instance = drizzle(pool, { mode: "planetscale", schema: fullSchema });
+    instance = drizzle(pool);
   }
   return instance;
 }

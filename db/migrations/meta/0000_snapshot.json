@@ -1,68 +1,62 @@
 {
-  "version": "5",
-  "dialect": "mysql",
-  "id": "850754d2-bb57-453a-8b1e-d8c96f42f68e",
+  "id": "4d4584fb-1402-449c-a5cd-8e9ea5329437",
   "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
   "tables": {
-    "accounts": {
+    "public.accounts": {
       "name": "accounts",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "name": {
           "name": "name",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "type": {
           "name": "type",
-          "type": "enum('cash','mpesa','bank_account')",
+          "type": "type",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "accountCode": {
           "name": "accountCode",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "accountNumber": {
           "name": "accountNumber",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "openingBalance": {
           "name": "openingBalance",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "currentBalance": {
           "name": "currentBalance",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "currency": {
@@ -70,7 +64,6 @@
           "type": "varchar(3)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'KES'"
         },
         "isPaymentMethod": {
@@ -78,7 +71,6 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": false
         },
         "isActive": {
@@ -86,7 +78,6 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -94,90 +85,76 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "accounts_id": {
-          "name": "accounts_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "alerts_config": {
+    "public.alerts_config": {
       "name": "alerts_config",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "accountId": {
           "name": "accountId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "minBalance": {
           "name": "minBalance",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'10000.00'"
         },
         "notifyEmail": {
           "name": "notifyEmail",
           "type": "varchar(320)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "notifyPhone": {
           "name": "notifyPhone",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "isActive": {
           "name": "isActive",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -185,90 +162,77 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "alerts_config_id": {
-          "name": "alerts_config_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "alerts_log": {
+    "public.alerts_log": {
       "name": "alerts_log",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "type": {
           "name": "type",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "title": {
           "name": "title",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "message": {
           "name": "message",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "severity": {
           "name": "severity",
-          "type": "enum('info','warning','critical')",
+          "type": "severity",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'info'"
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "accountId": {
           "name": "accountId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "isRead": {
           "name": "isRead",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": false
         },
         "createdAt": {
@@ -276,81 +240,68 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "alerts_log_id": {
-          "name": "alerts_log_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "api_keys": {
+    "public.api_keys": {
       "name": "api_keys",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "businessId": {
           "name": "businessId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "name": {
           "name": "name",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "keyHash": {
           "name": "keyHash",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "keyPrefix": {
           "name": "keyPrefix",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "scopes": {
           "name": "scopes",
           "type": "json",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "lastUsedAt": {
           "name": "lastUsedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "isActive": {
           "name": "isActive",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -358,526 +309,446 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "api_keys_id": {
-          "name": "api_keys_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "app_settings": {
+    "public.app_settings": {
       "name": "app_settings",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "businessId": {
           "name": "businessId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "key": {
           "name": "key",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "value": {
           "name": "value",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "app_settings_id": {
-          "name": "app_settings_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "attachments": {
+    "public.attachments": {
       "name": "attachments",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "recordType": {
           "name": "recordType",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "recordId": {
           "name": "recordId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "imageData": {
           "name": "imageData",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "mimeType": {
           "name": "mimeType",
           "type": "varchar(50)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'image/jpeg'"
         },
         "caption": {
           "name": "caption",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "attachments_id": {
-          "name": "attachments_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "audit_log": {
+    "public.audit_log": {
       "name": "audit_log",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "tableName": {
           "name": "tableName",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "recordId": {
           "name": "recordId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "action": {
           "name": "action",
-          "type": "enum('CREATE','UPDATE','DELETE','RESTORE','LOGIN','LOGOUT')",
+          "type": "action",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "oldValues": {
           "name": "oldValues",
           "type": "json",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "newValues": {
           "name": "newValues",
           "type": "json",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "changedBy": {
           "name": "changedBy",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "ipAddress": {
           "name": "ipAddress",
           "type": "varchar(45)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "userAgent": {
           "name": "userAgent",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "audit_log_id": {
-          "name": "audit_log_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "bill_items": {
+    "public.bill_items": {
       "name": "bill_items",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "billId": {
           "name": "billId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "itemName": {
           "name": "itemName",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "quantity": {
           "name": "quantity",
-          "type": "decimal(10,3)",
+          "type": "numeric(10, 3)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'1.000'"
         },
         "unitPrice": {
           "name": "unitPrice",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "totalPrice": {
           "name": "totalPrice",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "categoryId": {
           "name": "categoryId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "notes": {
           "name": "notes",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "bill_items_id": {
-          "name": "bill_items_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "bill_payments": {
+    "public.bill_payments": {
       "name": "bill_payments",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "billId": {
           "name": "billId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "paymentMethod": {
           "name": "paymentMethod",
-          "type": "enum('cash','mpesa','bank_transfer','card')",
+          "type": "paymentMethod2",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "amount": {
           "name": "amount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "paymentDate": {
           "name": "paymentDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "reference": {
           "name": "reference",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "notes": {
           "name": "notes",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "accountId": {
           "name": "accountId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "enteredBy": {
           "name": "enteredBy",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "bill_payments_id": {
-          "name": "bill_payments_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "bills": {
+    "public.bills": {
       "name": "bills",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "supplierId": {
           "name": "supplierId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "billNumber": {
           "name": "billNumber",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "description": {
           "name": "description",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "amount": {
           "name": "amount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "amountPaid": {
           "name": "amountPaid",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "balanceDue": {
           "name": "balanceDue",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "issueDate": {
           "name": "issueDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "dueDate": {
           "name": "dueDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "status": {
           "name": "status",
-          "type": "enum('pending','partial','paid','overdue','cancelled')",
+          "type": "billStatus",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'pending'"
         },
         "createdAt": {
@@ -885,193 +756,245 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "bills_id": {
-          "name": "bills_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "budgets": {
+    "public.budgets": {
       "name": "budgets",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "categoryId": {
           "name": "categoryId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "month": {
           "name": "month",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "year": {
           "name": "year",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "amount": {
           "name": "amount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "notes": {
           "name": "notes",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "budgets_id": {
-          "name": "budgets_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "business_inquiries": {
-      "name": "business_inquiries",
+    "public.business_documents": {
+      "name": "business_documents",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
-        "businessName": {
-          "name": "businessName",
+        "businessId": {
+          "name": "businessId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "documentType": {
+          "name": "documentType",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "fileName": {
+          "name": "fileName",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
-        "contactName": {
-          "name": "contactName",
-          "type": "varchar(255)",
+        "fileData": {
+          "name": "fileData",
+          "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
-        "email": {
-          "name": "email",
-          "type": "varchar(320)",
+        "mimeType": {
+          "name": "mimeType",
+          "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "phone": {
-          "name": "phone",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "position": {
-          "name": "position",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
-        },
-        "suggestedPrice": {
-          "name": "suggestedPrice",
-          "type": "decimal(10,2)",
-          "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "notes": {
           "name": "notes",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
+        },
+        "uploadedBy": {
+          "name": "uploadedBy",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.business_inquiries": {
+      "name": "business_inquiries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "businessName": {
+          "name": "businessName",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "contactName": {
+          "name": "contactName",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "varchar(320)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phone": {
+          "name": "phone",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "position": {
+          "name": "position",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suggestedPrice": {
+          "name": "suggestedPrice",
+          "type": "numeric(10, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "status": {
           "name": "status",
-          "type": "enum('new','contacted','converted','declined')",
+          "type": "leadStatus",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'new'"
         },
         "createdAt": {
@@ -1079,135 +1002,157 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "business_inquiries_id": {
-          "name": "business_inquiries_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "businesses": {
+    "public.businesses": {
       "name": "businesses",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "accountId": {
           "name": "accountId",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "name": {
           "name": "name",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "slug": {
           "name": "slug",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
+        },
+        "businessType": {
+          "name": "businessType",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country": {
+          "name": "country",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "county": {
+          "name": "county",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subCounty": {
+          "name": "subCounty",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
         },
         "address": {
           "name": "address",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
+        },
+        "businessRegNumber": {
+          "name": "businessRegNumber",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
         },
         "phone": {
           "name": "phone",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
+        },
+        "natureOfBusiness": {
+          "name": "natureOfBusiness",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kraPin": {
+          "name": "kraPin",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
         },
         "email": {
           "name": "email",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "plan": {
           "name": "plan",
           "type": "varchar(20)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'free'"
         },
         "maxBranches": {
           "name": "maxBranches",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": 1
         },
         "maxUsers": {
           "name": "maxUsers",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": 1
         },
         "maxTransactionsPerMonth": {
           "name": "maxTransactionsPerMonth",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": 100
         },
         "features": {
           "name": "features",
           "type": "json",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "subscriptionStatus": {
           "name": "subscriptionStatus",
           "type": "varchar(20)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'active'"
         },
         "subscriptionExpiry": {
           "name": "subscriptionExpiry",
           "type": "date",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "isMultiLocation": {
           "name": "isMultiLocation",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "isActive": {
@@ -1215,7 +1160,6 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "isDemo": {
@@ -1223,7 +1167,6 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": false
         },
         "isWhiteLabel": {
@@ -1231,58 +1174,50 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": false
         },
         "whiteLabelDomain": {
           "name": "whiteLabelDomain",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "referralCode": {
           "name": "referralCode",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "referredByBusinessId": {
           "name": "referredByBusinessId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "referredByUserId": {
           "name": "referredByUserId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "firstMonthDiscountApplied": {
           "name": "firstMonthDiscountApplied",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": false
         },
         "partnerId": {
           "name": "partnerId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "revSharePercent": {
           "name": "revSharePercent",
-          "type": "decimal(5,2)",
+          "type": "numeric(5, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'20.00'"
         },
         "createdAt": {
@@ -1290,82 +1225,73 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "businesses_id": {
-          "name": "businesses_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "businesses_accountId_unique": {
           "name": "businesses_accountId_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "accountId"
           ]
         },
         "businesses_slug_unique": {
           "name": "businesses_slug_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "slug"
           ]
         }
       },
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "cogs_targets": {
+    "public.cogs_targets": {
       "name": "cogs_targets",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "targetFoodCostPercent": {
           "name": "targetFoodCostPercent",
-          "type": "decimal(5,2)",
+          "type": "numeric(5, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'35.00'"
         },
         "alertThresholdPercent": {
           "name": "alertThresholdPercent",
-          "type": "decimal(5,2)",
+          "type": "numeric(5, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'38.00'"
         },
         "createdAt": {
@@ -1373,559 +1299,478 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "cogs_targets_id": {
-          "name": "cogs_targets_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "daily_mpesa_ledger": {
+    "public.daily_mpesa_ledger": {
       "name": "daily_mpesa_ledger",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "accountId": {
           "name": "accountId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "ledgerDate": {
           "name": "ledgerDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "openingBalance": {
           "name": "openingBalance",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "totalTopups": {
           "name": "totalTopups",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "totalExpenditures": {
           "name": "totalExpenditures",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "totalFees": {
           "name": "totalFees",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "closingBalance": {
           "name": "closingBalance",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "transactionCount": {
           "name": "transactionCount",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": 0
         },
         "notes": {
           "name": "notes",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "enteredBy": {
           "name": "enteredBy",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "daily_mpesa_ledger_id": {
-          "name": "daily_mpesa_ledger_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "daily_sale_payments": {
+    "public.daily_sale_payments": {
       "name": "daily_sale_payments",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "dailySaleId": {
           "name": "dailySaleId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "paymentMethodId": {
           "name": "paymentMethodId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "amount": {
           "name": "amount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "daily_sale_payments_id": {
-          "name": "daily_sale_payments_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "daily_sales": {
+    "public.daily_sales": {
       "name": "daily_sales",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "saleDate": {
           "name": "saleDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "cashTotal": {
           "name": "cashTotal",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "cardTotal": {
           "name": "cardTotal",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "mpesaTotal": {
           "name": "mpesaTotal",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "familyBankTotal": {
           "name": "familyBankTotal",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "coopBankTotal": {
           "name": "coopBankTotal",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "equityBankTotal": {
           "name": "equityBankTotal",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "boltTotal": {
           "name": "boltTotal",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "glovoTotal": {
           "name": "glovoTotal",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "creditCardTotal": {
           "name": "creditCardTotal",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "deliveryPartnerTotal": {
           "name": "deliveryPartnerTotal",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "netSales": {
           "name": "netSales",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "discountAmount": {
           "name": "discountAmount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "voidAmount": {
           "name": "voidAmount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "unpaidAmount": {
           "name": "unpaidAmount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "ticketCount": {
           "name": "ticketCount",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": 0
         },
         "orderCount": {
           "name": "orderCount",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": 0
         },
         "voidCount": {
           "name": "voidCount",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": 0
         },
         "giftCount": {
           "name": "giftCount",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": 0
         },
         "notes": {
           "name": "notes",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "unpaidNotes": {
           "name": "unpaidNotes",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "enteredBy": {
           "name": "enteredBy",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "daily_sales_id": {
-          "name": "daily_sales_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "employees": {
+    "public.employees": {
       "name": "employees",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "userId": {
           "name": "userId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "fullName": {
           "name": "fullName",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "phone": {
           "name": "phone",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "idNumber": {
           "name": "idNumber",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "kraPin": {
           "name": "kraPin",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "nssfNumber": {
           "name": "nssfNumber",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "nhifNumber": {
           "name": "nhifNumber",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "salaryType": {
           "name": "salaryType",
-          "type": "enum('monthly','weekly','daily','hourly')",
+          "type": "salaryType",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "basicSalary": {
           "name": "basicSalary",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "bankName": {
           "name": "bankName",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "bankAccount": {
           "name": "bankAccount",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "bankCode": {
           "name": "bankCode",
           "type": "varchar(10)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "employmentDate": {
           "name": "employmentDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "terminationDate": {
           "name": "terminationDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "isActive": {
           "name": "isActive",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -1933,68 +1778,57 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "employees_id": {
-          "name": "employees_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "expense_categories": {
+    "public.expense_categories": {
       "name": "expense_categories",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "name": {
           "name": "name",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "description": {
           "name": "description",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "color": {
           "name": "color",
           "type": "varchar(20)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'#C73E1D'"
         },
         "isActive": {
@@ -2002,7 +1836,6 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -2010,249 +1843,212 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "expense_categories_id": {
-          "name": "expense_categories_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "expenses": {
+    "public.expenses": {
       "name": "expenses",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "categoryId": {
           "name": "categoryId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "supplierId": {
           "name": "supplierId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "expenseNumber": {
           "name": "expenseNumber",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "billId": {
           "name": "billId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "refNo": {
           "name": "refNo",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "amount": {
           "name": "amount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "description": {
           "name": "description",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "expenseDate": {
           "name": "expenseDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "paymentMethod": {
           "name": "paymentMethod",
-          "type": "enum('cash','mpesa','bank_transfer','card')",
+          "type": "paymentMethod2",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "accountId": {
           "name": "accountId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "receiptImageUrl": {
           "name": "receiptImageUrl",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "mpesaTxnId": {
           "name": "mpesaTxnId",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "expenseRef": {
           "name": "expenseRef",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "isReimbursable": {
           "name": "isReimbursable",
           "type": "boolean",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": false
         },
         "reimbursedTo": {
           "name": "reimbursedTo",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "enteredBy": {
           "name": "enteredBy",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "expenses_id": {
-          "name": "expenses_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "feedback_questionnaires": {
+    "public.feedback_questionnaires": {
       "name": "feedback_questionnaires",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "businessId": {
           "name": "businessId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "title": {
           "name": "title",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "description": {
           "name": "description",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "questions": {
           "name": "questions",
           "type": "json",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "isActive": {
           "name": "isActive",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -2260,229 +2056,194 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "feedback_questionnaires_id": {
-          "name": "feedback_questionnaires_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "feedback_responses": {
+    "public.feedback_responses": {
       "name": "feedback_responses",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "questionnaireId": {
           "name": "questionnaireId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "respondentName": {
           "name": "respondentName",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "respondentEmail": {
           "name": "respondentEmail",
           "type": "varchar(320)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "answers": {
           "name": "answers",
           "type": "json",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "feedback_responses_id": {
-          "name": "feedback_responses_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "ledger_entries": {
+    "public.ledger_entries": {
       "name": "ledger_entries",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "accountId": {
           "name": "accountId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "transactionType": {
           "name": "transactionType",
-          "type": "enum('sale','expense','bill_payment','supplier_payment','payroll','advance','transfer','opening_balance','mpesa_topup','drawing','deposit')",
+          "type": "transactionType",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "transactionId": {
           "name": "transactionId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "entryType": {
           "name": "entryType",
-          "type": "enum('debit','credit')",
+          "type": "entryType",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "amount": {
           "name": "amount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "balanceAfter": {
           "name": "balanceAfter",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "description": {
           "name": "description",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "refNo": {
           "name": "refNo",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "entryDate": {
           "name": "entryDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "createdBy": {
           "name": "createdBy",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "ledger_entries_id": {
-          "name": "ledger_entries_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "location_payment_methods": {
+    "public.location_payment_methods": {
       "name": "location_payment_methods",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "paymentMethodId": {
           "name": "paymentMethodId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "linkedAccountId": {
           "name": "linkedAccountId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "isActive": {
           "name": "isActive",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -2490,111 +2251,136 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "location_payment_methods_id": {
-          "name": "location_payment_methods_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "locations": {
+    "public.locations": {
       "name": "locations",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "businessId": {
           "name": "businessId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "name": {
           "name": "name",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "slug": {
           "name": "slug",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
+        },
+        "businessType": {
+          "name": "businessType",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "country": {
+          "name": "country",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "county": {
+          "name": "county",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subCounty": {
+          "name": "subCounty",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
         },
         "address": {
           "name": "address",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
+        },
+        "businessRegNumber": {
+          "name": "businessRegNumber",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
         },
         "phone": {
           "name": "phone",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
+        },
+        "natureOfBusiness": {
+          "name": "natureOfBusiness",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kraPin": {
+          "name": "kraPin",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
         },
         "email": {
           "name": "email",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "isActive": {
           "name": "isActive",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "defaultMpesaAccountId": {
           "name": "defaultMpesaAccountId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "defaultCashAccountId": {
           "name": "defaultCashAccountId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "nextBillNumber": {
           "name": "nextBillNumber",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'1'"
         },
         "nextExpenseNumber": {
           "name": "nextExpenseNumber",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'1'"
         },
         "createdAt": {
@@ -2602,89 +2388,77 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "locations_id": {
-          "name": "locations_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "locations_slug_unique": {
           "name": "locations_slug_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "slug"
           ]
         }
       },
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "master_items": {
+    "public.master_items": {
       "name": "master_items",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "name": {
           "name": "name",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "lastUnitPrice": {
           "name": "lastUnitPrice",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "lastCategoryId": {
           "name": "lastCategoryId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "lastSupplierId": {
           "name": "lastSupplierId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "usageCount": {
           "name": "usageCount",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": 1
         },
         "createdAt": {
@@ -2692,393 +2466,341 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "master_items_id": {
-          "name": "master_items_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "master_items_name_unique": {
           "name": "master_items_name_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "name"
           ]
         }
       },
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "mpesa_reconciliation": {
+    "public.mpesa_reconciliation": {
       "name": "mpesa_reconciliation",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "txnDate": {
           "name": "txnDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "orphanCount": {
           "name": "orphanCount",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": 0
         },
         "orphanTotal": {
           "name": "orphanTotal",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "matchedCount": {
           "name": "matchedCount",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": 0
         },
         "matchedTotal": {
           "name": "matchedTotal",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "status": {
           "name": "status",
-          "type": "enum('open','resolved','partial')",
+          "type": "status",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'open'"
         },
         "notes": {
           "name": "notes",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "resolvedAt": {
           "name": "resolvedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "mpesa_reconciliation_id": {
-          "name": "mpesa_reconciliation_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "mpesa_transactions": {
+    "public.mpesa_transactions": {
       "name": "mpesa_transactions",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "txnId": {
           "name": "txnId",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "txnDate": {
           "name": "txnDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "txnTime": {
           "name": "txnTime",
           "type": "varchar(10)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "txnType": {
           "name": "txnType",
-          "type": "enum('topup','expense','transfer','bank_transfer','airtime','utility','withdrawal')",
+          "type": "txnType",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "partyName": {
           "name": "partyName",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "amount": {
           "name": "amount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "txnFee": {
           "name": "txnFee",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "balance": {
           "name": "balance",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "description": {
           "name": "description",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "rawText": {
           "name": "rawText",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "isLinked": {
           "name": "isLinked",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": false
         },
         "linkedExpenseId": {
           "name": "linkedExpenseId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "linkedBillId": {
           "name": "linkedBillId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "linkedSupplierId": {
           "name": "linkedSupplierId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "sourceAccountId": {
           "name": "sourceAccountId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "destinationAccountId": {
           "name": "destinationAccountId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "importedBy": {
           "name": "importedBy",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "mpesa_transactions_id": {
-          "name": "mpesa_transactions_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "mpesa_transactions_txnId_unique": {
           "name": "mpesa_transactions_txnId_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "txnId"
           ]
         }
       },
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "notifications": {
+    "public.notifications": {
       "name": "notifications",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "userId": {
           "name": "userId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "type": {
           "name": "type",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "title": {
           "name": "title",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "message": {
           "name": "message",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "severity": {
           "name": "severity",
-          "type": "enum('info','warning','critical')",
+          "type": "severity",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'info'"
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "entityType": {
           "name": "entityType",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "entityId": {
           "name": "entityId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "isRead": {
           "name": "isRead",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": false
         },
         "isPushed": {
@@ -3086,7 +2808,6 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": false
         },
         "createdAt": {
@@ -3094,83 +2815,70 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "notifications_id": {
-          "name": "notifications_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "partner_commissions": {
+    "public.partner_commissions": {
       "name": "partner_commissions",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "partnerId": {
           "name": "partnerId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "businessId": {
           "name": "businessId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "month": {
           "name": "month",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "year": {
           "name": "year",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "subscriptionAmount": {
           "name": "subscriptionAmount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "commissionPercent": {
           "name": "commissionPercent",
-          "type": "decimal(5,2)",
+          "type": "numeric(5, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'20.00'"
         },
         "commissionAmount": {
           "name": "commissionAmount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "status": {
@@ -3178,83 +2886,70 @@
           "type": "varchar(20)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'pending'"
         },
         "paidAt": {
           "name": "paidAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "partner_commissions_id": {
-          "name": "partner_commissions_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "payment_methods": {
+    "public.payment_methods": {
       "name": "payment_methods",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "businessId": {
           "name": "businessId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "name": {
           "name": "name",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "code": {
           "name": "code",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "color": {
           "name": "color",
           "type": "varchar(20)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'#C73E1D'"
         },
         "sortOrder": {
           "name": "sortOrder",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": 0
         },
         "isActive": {
@@ -3262,7 +2957,6 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -3270,362 +2964,311 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "payment_methods_id": {
-          "name": "payment_methods_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "payroll_advances": {
+    "public.payroll_advances": {
       "name": "payroll_advances",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "employeeId": {
           "name": "employeeId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "payrollPeriodId": {
           "name": "payrollPeriodId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "amount": {
           "name": "amount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "balanceRemaining": {
           "name": "balanceRemaining",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "requestDate": {
           "name": "requestDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "repaymentPeriods": {
           "name": "repaymentPeriods",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": 1
         },
         "status": {
           "name": "status",
-          "type": "enum('pending','approved','partially_repaid','repaid','cancelled')",
+          "type": "advanceStatus",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'pending'"
         },
         "approvedBy": {
           "name": "approvedBy",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "notes": {
           "name": "notes",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "payroll_advances_id": {
-          "name": "payroll_advances_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "payroll_entries": {
+    "public.payroll_entries": {
       "name": "payroll_entries",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "periodId": {
           "name": "periodId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "employeeId": {
           "name": "employeeId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "basicPay": {
           "name": "basicPay",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "advancesDeducted": {
           "name": "advancesDeducted",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "deductions": {
           "name": "deductions",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "bonuses": {
           "name": "bonuses",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "overtimePay": {
           "name": "overtimePay",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "payeDeducted": {
           "name": "payeDeducted",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "nhifDeducted": {
           "name": "nhifDeducted",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "nssfDeducted": {
           "name": "nssfDeducted",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "netPay": {
           "name": "netPay",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "paymentMethod": {
           "name": "paymentMethod",
-          "type": "enum('cash','mpesa','bank_transfer')",
+          "type": "paymentMethod",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'mpesa'"
         },
         "paidAt": {
           "name": "paidAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "payroll_entries_id": {
-          "name": "payroll_entries_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "payroll_periods": {
+    "public.payroll_periods": {
       "name": "payroll_periods",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "periodName": {
           "name": "periodName",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "startDate": {
           "name": "startDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "endDate": {
           "name": "endDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "paymentDate": {
           "name": "paymentDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "status": {
           "name": "status",
-          "type": "enum('open','processing','paid','cancelled')",
+          "type": "payrollStatus",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'open'"
         },
         "generatedBillId": {
           "name": "generatedBillId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "totalNetPay": {
           "name": "totalNetPay",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "createdAt": {
@@ -3633,201 +3276,171 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "payroll_periods_id": {
-          "name": "payroll_periods_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "payroll_settings": {
+    "public.payroll_settings": {
       "name": "payroll_settings",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "nhifRate": {
           "name": "nhifRate",
-          "type": "decimal(5,2)",
+          "type": "numeric(5, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'2.75'"
         },
         "nssfTier1Limit": {
           "name": "nssfTier1Limit",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'7000.00'"
         },
         "nssfTier1Employee": {
           "name": "nssfTier1Employee",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'420.00'"
         },
         "nssfTier1Employer": {
           "name": "nssfTier1Employer",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'420.00'"
         },
         "nssfTier2Limit": {
           "name": "nssfTier2Limit",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'36000.00'"
         },
         "nssfTier2Employee": {
           "name": "nssfTier2Employee",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'1740.00'"
         },
         "nssfTier2Employer": {
           "name": "nssfTier2Employer",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'1740.00'"
         },
         "personalRelief": {
           "name": "personalRelief",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'2400.00'"
         },
         "insuranceRelief": {
           "name": "insuranceRelief",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "payeBands": {
           "name": "payeBands",
           "type": "json",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "payroll_settings_id": {
-          "name": "payroll_settings_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "price_alert_rules": {
+    "public.price_alert_rules": {
       "name": "price_alert_rules",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "supplierId": {
           "name": "supplierId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "itemName": {
           "name": "itemName",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "expectedPrice": {
           "name": "expectedPrice",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "variancePercent": {
           "name": "variancePercent",
-          "type": "decimal(5,2)",
+          "type": "numeric(5, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'10.00'"
         },
         "isActive": {
@@ -3835,7 +3448,6 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -3843,285 +3455,242 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "price_alert_rules_id": {
-          "name": "price_alert_rules_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "purchase_order_items": {
+    "public.purchase_order_items": {
       "name": "purchase_order_items",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "poId": {
           "name": "poId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "itemName": {
           "name": "itemName",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "quantity": {
           "name": "quantity",
-          "type": "decimal(10,3)",
+          "type": "numeric(10, 3)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'1.000'"
         },
         "unitPrice": {
           "name": "unitPrice",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "totalPrice": {
           "name": "totalPrice",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "notes": {
           "name": "notes",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "purchase_order_items_id": {
-          "name": "purchase_order_items_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "purchase_orders": {
+    "public.purchase_orders": {
       "name": "purchase_orders",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "supplierId": {
           "name": "supplierId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "billId": {
           "name": "billId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "poNumber": {
           "name": "poNumber",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "description": {
           "name": "description",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "status": {
           "name": "status",
-          "type": "enum('draft','sent','delivered','billed','cancelled')",
+          "type": "orderStatus",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'draft'"
         },
         "subtotal": {
           "name": "subtotal",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "taxAmount": {
           "name": "taxAmount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "total": {
           "name": "total",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "deliveryDate": {
           "name": "deliveryDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "deliveryNotes": {
           "name": "deliveryNotes",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "terms": {
           "name": "terms",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdBy": {
           "name": "createdBy",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "purchase_orders_id": {
-          "name": "purchase_orders_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "push_subscriptions": {
+    "public.push_subscriptions": {
       "name": "push_subscriptions",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "userId": {
           "name": "userId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "subscription": {
           "name": "subscription",
           "type": "json",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "isActive": {
           "name": "isActive",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -4129,177 +3698,150 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "push_subscriptions_id": {
-          "name": "push_subscriptions_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "quick_actions_log": {
+    "public.quick_actions_log": {
       "name": "quick_actions_log",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "userId": {
           "name": "userId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "action": {
           "name": "action",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "entityType": {
           "name": "entityType",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "entityId": {
           "name": "entityId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "details": {
           "name": "details",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "quick_actions_log_id": {
-          "name": "quick_actions_log_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "recurring_bill_templates": {
+    "public.recurring_bill_templates": {
       "name": "recurring_bill_templates",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "supplierId": {
           "name": "supplierId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "description": {
           "name": "description",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "amount": {
           "name": "amount",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "frequency": {
           "name": "frequency",
-          "type": "enum('daily','weekly','monthly','quarterly','annually')",
+          "type": "frequency",
+          "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "dayOfWeek": {
           "name": "dayOfWeek",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "dayOfMonth": {
           "name": "dayOfMonth",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "monthOfYear": {
           "name": "monthOfYear",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "nextDueDate": {
           "name": "nextDueDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "isActive": {
           "name": "isActive",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -4307,82 +3849,69 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "recurring_bill_templates_id": {
-          "name": "recurring_bill_templates_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "refresh_tokens": {
+    "public.refresh_tokens": {
       "name": "refresh_tokens",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "userId": {
           "name": "userId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "tokenHash": {
           "name": "tokenHash",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "expiresAt": {
           "name": "expiresAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "deviceInfo": {
           "name": "deviceInfo",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "isRevoked": {
           "name": "isRevoked",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": false
         },
         "createdAt": {
@@ -4390,82 +3919,96 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {
         "idx_refresh_tokens_userId": {
           "name": "idx_refresh_tokens_userId",
           "columns": [
-            "userId"
+            {
+              "expression": "userId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "idx_refresh_tokens_tokenHash": {
           "name": "idx_refresh_tokens_tokenHash",
           "columns": [
-            "tokenHash"
+            {
+              "expression": "tokenHash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "idx_refresh_tokens_expires": {
           "name": "idx_refresh_tokens_expires",
           "columns": [
-            "expiresAt"
+            {
+              "expression": "expiresAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "refresh_tokens_id": {
-          "name": "refresh_tokens_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "role_permissions": {
+    "public.role_permissions": {
       "name": "role_permissions",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "roleKey": {
           "name": "roleKey",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "roleLabel": {
           "name": "roleLabel",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "permissions": {
           "name": "permissions",
           "type": "json",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "isActive": {
           "name": "isActive",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -4473,278 +4016,235 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "role_permissions_id": {
-          "name": "role_permissions_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "supplier_price_history": {
+    "public.supplier_price_history": {
       "name": "supplier_price_history",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "supplierId": {
           "name": "supplierId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "itemName": {
           "name": "itemName",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "billId": {
           "name": "billId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "unitPrice": {
           "name": "unitPrice",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "quantity": {
           "name": "quantity",
-          "type": "decimal(10,3)",
+          "type": "numeric(10, 3)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'1.000'"
         },
         "priceDate": {
           "name": "priceDate",
           "type": "date",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "supplier_price_history_id": {
-          "name": "supplier_price_history_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "suppliers": {
+    "public.suppliers": {
       "name": "suppliers",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "name": {
           "name": "name",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "phone": {
           "name": "phone",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "email": {
           "name": "email",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "contactPerson": {
           "name": "contactPerson",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "kraPin": {
           "name": "kraPin",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "paymentTermsDays": {
           "name": "paymentTermsDays",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": 30
         },
         "creditLimit": {
           "name": "creditLimit",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "currentBalance": {
           "name": "currentBalance",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "totalBilled": {
           "name": "totalBilled",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "totalPaid": {
           "name": "totalPaid",
-          "type": "decimal(15,2)",
+          "type": "numeric(15, 2)",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'0.00'"
         },
         "notes": {
           "name": "notes",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "autoCategoryId": {
           "name": "autoCategoryId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "suppliers_id": {
-          "name": "suppliers_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "user_businesses": {
+    "public.user_businesses": {
       "name": "user_businesses",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "userId": {
           "name": "userId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "businessId": {
           "name": "businessId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "role": {
           "name": "role",
           "type": "varchar(50)",
           "primaryKey": false,
           "notNull": false,
-          "autoincrement": false,
           "default": "'admin'"
         },
         "isActive": {
@@ -4752,7 +4252,6 @@
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -4760,110 +4259,100 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "user_businesses_id": {
-          "name": "user_businesses_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "users": {
+    "public.users": {
       "name": "users",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "unionId": {
           "name": "unionId",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "username": {
           "name": "username",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "passwordHash": {
           "name": "passwordHash",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "name": {
           "name": "name",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "email": {
           "name": "email",
           "type": "varchar(320)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "avatar": {
           "name": "avatar",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "role": {
           "name": "role",
-          "type": "enum('owner','admin','manager','employee','viewer')",
+          "type": "role",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": "'viewer'"
         },
         "phone": {
           "name": "phone",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "locationId": {
           "name": "locationId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "currentBusinessId": {
           "name": "currentBusinessId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
+        },
+        "accountId": {
+          "name": "accountId",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
         },
         "isActive": {
           "name": "isActive",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "createdAt": {
@@ -4871,269 +4360,469 @@
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "lastSignInAt": {
           "name": "lastSignInAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {
         "idx_users_id": {
           "name": "idx_users_id",
           "columns": [
-            "id"
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "idx_users_deletedAt": {
           "name": "idx_users_deletedAt",
           "columns": [
-            "deletedAt"
+            {
+              "expression": "deletedAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "idx_users_isActive": {
           "name": "idx_users_isActive",
           "columns": [
-            "isActive"
+            {
+              "expression": "isActive",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         },
         "idx_users_currentBusinessId": {
           "name": "idx_users_currentBusinessId",
           "columns": [
-            "currentBusinessId"
+            {
+              "expression": "currentBusinessId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
           ],
-          "isUnique": false
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_users_username_accountId": {
+          "name": "idx_users_username_accountId",
+          "columns": [
+            {
+              "expression": "username",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "accountId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "users_id": {
-          "name": "users_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "users_unionId_unique": {
           "name": "users_unionId_unique",
+          "nullsNotDistinct": false,
           "columns": [
             "unionId"
           ]
         }
       },
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "webhook_deliveries": {
+    "public.webhook_deliveries": {
       "name": "webhook_deliveries",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "webhookId": {
           "name": "webhookId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "event": {
           "name": "event",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "payload": {
           "name": "payload",
           "type": "json",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "status": {
           "name": "status",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "statusCode": {
           "name": "statusCode",
-          "type": "int",
+          "type": "integer",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "response": {
           "name": "response",
           "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "webhook_deliveries_id": {
-          "name": "webhook_deliveries_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     },
-    "webhooks": {
+    "public.webhooks": {
       "name": "webhooks",
+      "schema": "",
       "columns": {
         "id": {
           "name": "id",
           "type": "serial",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": true
+          "primaryKey": true,
+          "notNull": true
         },
         "businessId": {
           "name": "businessId",
-          "type": "bigint unsigned",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "name": {
           "name": "name",
           "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "url": {
           "name": "url",
           "type": "varchar(500)",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "events": {
           "name": "events",
           "type": "json",
           "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
+          "notNull": true
         },
         "secret": {
           "name": "secret",
           "type": "varchar(255)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "isActive": {
           "name": "isActive",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
           "default": true
         },
         "lastTriggeredAt": {
           "name": "lastTriggeredAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "lastStatus": {
           "name": "lastStatus",
           "type": "varchar(50)",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(now())"
+          "default": "now()"
         },
         "deletedAt": {
           "name": "deletedAt",
           "type": "timestamp",
           "primaryKey": false,
-          "notNull": false,
-          "autoincrement": false
+          "notNull": false
         }
       },
       "indexes": {},
       "foreignKeys": {},
-      "compositePrimaryKeys": {
-        "webhooks_id": {
-          "name": "webhooks_id",
-          "columns": [
-            "id"
-          ]
-        }
-      },
+      "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "checkConstraint": {}
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
     }
   },
+  "enums": {
+    "public.action": {
+      "name": "action",
+      "schema": "public",
+      "values": [
+        "CREATE",
+        "UPDATE",
+        "DELETE",
+        "RESTORE",
+        "LOGIN",
+        "LOGOUT"
+      ]
+    },
+    "public.advanceStatus": {
+      "name": "advanceStatus",
+      "schema": "public",
+      "values": [
+        "pending",
+        "approved",
+        "partially_repaid",
+        "repaid",
+        "cancelled"
+      ]
+    },
+    "public.billStatus": {
+      "name": "billStatus",
+      "schema": "public",
+      "values": [
+        "pending",
+        "partial",
+        "paid",
+        "overdue",
+        "cancelled"
+      ]
+    },
+    "public.entryType": {
+      "name": "entryType",
+      "schema": "public",
+      "values": [
+        "debit",
+        "credit"
+      ]
+    },
+    "public.frequency": {
+      "name": "frequency",
+      "schema": "public",
+      "values": [
+        "daily",
+        "weekly",
+        "monthly",
+        "quarterly",
+        "annually"
+      ]
+    },
+    "public.leadStatus": {
+      "name": "leadStatus",
+      "schema": "public",
+      "values": [
+        "new",
+        "contacted",
+        "converted",
+        "declined"
+      ]
+    },
+    "public.orderStatus": {
+      "name": "orderStatus",
+      "schema": "public",
+      "values": [
+        "draft",
+        "sent",
+        "delivered",
+        "billed",
+        "cancelled"
+      ]
+    },
+    "public.paymentMethod2": {
+      "name": "paymentMethod2",
+      "schema": "public",
+      "values": [
+        "cash",
+        "mpesa",
+        "bank_transfer",
+        "card"
+      ]
+    },
+    "public.paymentMethod": {
+      "name": "paymentMethod",
+      "schema": "public",
+      "values": [
+        "cash",
+        "mpesa",
+        "bank_transfer"
+      ]
+    },
+    "public.payrollStatus": {
+      "name": "payrollStatus",
+      "schema": "public",
+      "values": [
+        "open",
+        "processing",
+        "paid",
+        "cancelled"
+      ]
+    },
+    "public.role": {
+      "name": "role",
+      "schema": "public",
+      "values": [
+        "owner",
+        "admin",
+        "manager",
+        "employee",
+        "viewer"
+      ]
+    },
+    "public.salaryType": {
+      "name": "salaryType",
+      "schema": "public",
+      "values": [
+        "monthly",
+        "weekly",
+        "daily",
+        "hourly"
+      ]
+    },
+    "public.severity": {
+      "name": "severity",
+      "schema": "public",
+      "values": [
+        "info",
+        "warning",
+        "critical"
+      ]
+    },
+    "public.status": {
+      "name": "status",
+      "schema": "public",
+      "values": [
+        "open",
+        "resolved",
+        "partial"
+      ]
+    },
+    "public.transactionType": {
+      "name": "transactionType",
+      "schema": "public",
+      "values": [
+        "sale",
+        "expense",
+        "bill_payment",
+        "supplier_payment",
+        "payroll",
+        "advance",
+        "transfer",
+        "opening_balance",
+        "mpesa_topup",
+        "drawing",
+        "deposit"
+      ]
+    },
+    "public.txnType": {
+      "name": "txnType",
+      "schema": "public",
+      "values": [
+        "topup",
+        "expense",
+        "transfer",
+        "bank_transfer",
+        "airtime",
+        "utility",
+        "withdrawal"
+      ]
+    },
+    "public.type": {
+      "name": "type",
+      "schema": "public",
+      "values": [
+        "cash",
+        "mpesa",
+        "bank_account"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
   "views": {},
   "_meta": {
+    "columns": {},
     "schemas": {},
-    "tables": {},
-    "columns": {}
-  },
-  "internal": {
-    "tables": {},
-    "indexes": {}
+    "tables": {}
   }
 }

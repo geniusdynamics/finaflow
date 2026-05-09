@@ -26,6 +26,7 @@ const Locations = lazy(() => import("./pages/Locations").then(m => ({ default: m
 const Settings = lazy(() => import("./pages/Settings").then(m => ({ default: m.Settings })));
 const Feedback = lazy(() => import("./pages/Feedback").then(m => ({ default: m.Feedback })));
 const Businesses = lazy(() => import("./pages/Businesses").then(m => ({ default: m.Businesses })));
+const BusinessDetails = lazy(() => import("./pages/BusinessDetails").then(m => ({ default: m.BusinessDetails })));
 const PaymentMethods = lazy(() => import("./pages/PaymentMethods").then(m => ({ default: m.PaymentMethods })));
 const SupplierPrices = lazy(() => import("./pages/SupplierPrices").then(m => ({ default: m.SupplierPrices })));
 const Integrations = lazy(() => import("./pages/Integrations").then(m => ({ default: m.Integrations })));
@@ -66,6 +67,7 @@ export default function App() {
         <Route path="/settings" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Settings /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/feedback" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Feedback /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/businesses" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Businesses /></ProtectedPage></Suspense></ErrorBoundary>} />
+        <Route path="/businesses/:id/details" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><BusinessDetails /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/payment-methods" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><PaymentMethods /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/supplier-prices" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><SupplierPrices /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/integrations" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Integrations /></ProtectedPage></Suspense></ErrorBoundary>} />

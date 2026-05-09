@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, publicQuery, authedQuery, businessManage, ownerQuery, checkBranchLimit, checkUserLimit } from "./middleware";
 import { getDb } from "./queries/connection";
-import { businesses, userBusinesses, users, locations, dailySales, expenses, bills, accounts } from "@db/schema";
+import { businesses, userBusinesses, users, locations, dailySales, expenses, bills, accounts, businessDocuments } from "@db/schema";
 import { eq, and, isNull, sql, count, inArray } from "drizzle-orm";
 import { logAudit } from "./lib/audit";
 
@@ -183,8 +183,15 @@ export const businessesRouter = createRouter({
       name: z.string().min(1).max(255),
       slug: z.string().min(1).max(100),
       accountId: z.string().max(100).optional(),
+      businessType: z.string().max(50).optional(),
+      country: z.string().max(100).optional(),
+      county: z.string().max(100).optional(),
+      subCounty: z.string().max(100).optional(),
       address: z.string().optional(),
+      businessRegNumber: z.string().max(100).optional(),
       phone: z.string().optional(),
+      natureOfBusiness: z.string().max(255).optional(),
+      kraPin: z.string().max(20).optional(),
       email: z.string().optional(),
       plan: z.string().default("free"),
     }))
@@ -286,8 +293,15 @@ export const businessesRouter = createRouter({
     .input(z.object({
       id: z.number(),
       name: z.string().min(1).max(255).optional(),
+      businessType: z.string().max(50).optional(),
+      country: z.string().max(100).optional(),
+      county: z.string().max(100).optional(),
+      subCounty: z.string().max(100).optional(),
       address: z.string().optional(),
+      businessRegNumber: z.string().max(100).optional(),
       phone: z.string().optional(),
+      natureOfBusiness: z.string().max(255).optional(),
+      kraPin: z.string().max(20).optional(),
       email: z.string().optional(),
       plan: z.string().optional(),
       isActive: z.boolean().optional(),
@@ -464,5 +478,53 @@ export const businessesRouter = createRouter({
         accountId: row[0].accountId,
         discount: "10% off first month",
       };
+    }),
+
+  uploadDocument: businessManage
+    .input(z.object({
+      businessId: z.number(),
+      documentType: z.string().max(50),
+      fileName: z.string().max(255),
+      fileData: z.string(),
+      mimeType: z.string().max(50).optional(),
+      notes: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const [doc] = await db.insert(businessDocuments).values({
+        businessId: input.businessId,
+        documentType: input.documentType,
+        fileName: input.fileName,
+        fileData: input.fileData,
+        mimeType: input.mimeType || null,
+        notes: input.notes || null,
+        uploadedBy: ctx.user!.id,
+      } as any);
+      return { success: true, id: Number(doc.insertId) };
+    }),
+
+  getDocuments: businessManage
+    .input(z.object({ businessId: z.number() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      return db.select({
+        id: businessDocuments.id,
+        documentType: businessDocuments.documentType,
+        fileName: businessDocuments.fileName,
+        mimeType: businessDocuments.mimeType,
+        notes: businessDocuments.notes,
+        uploadedBy: businessDocuments.uploadedBy,
+        createdAt: businessDocuments.createdAt,
+      }).from(businessDocuments)
+        .where(and(eq(businessDocuments.businessId, input.businessId), isNull(businessDocuments.deletedAt)));
+    }),
+
+  deleteDocument: businessManage
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      await db.update(businessDocuments).set({ deletedAt: new Date() })
+        .where(eq(businessDocuments.id, input.id));
+      return { success: true };
     }),
 });

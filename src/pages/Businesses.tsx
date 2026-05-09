@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,10 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Building2, Trash2, Users, CheckCircle, RotateCcw, MapPin, Edit3, Save, X } from "lucide-react";
+import { Plus, Building2, Building, Trash2, Users, CheckCircle, RotateCcw, MapPin, Edit3, Save, X } from "lucide-react";
 import { toast } from "sonner";
 
 export function Businesses() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.BUSINESS_MANAGE);
   const utils = trpc.useUtils();
@@ -149,7 +151,11 @@ export function Businesses() {
                       </Button>
                     )}
                     {isActive && user?.role === "owner" && (
-                      <Button
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => navigate(`/businesses/${b.id}/details`)}>
+                          <Building className="mr-1 h-3 w-3" /> Details
+                        </Button>
+                        <Button
                         size="sm"
                         variant="outline"
                         className="border-[#D32F2F] text-[#D32F2F] hover:bg-[#D32F2F]/5"
@@ -164,7 +170,7 @@ export function Businesses() {
                       >
                         <RotateCcw className="mr-1 h-3 w-3" />{resetAll.isPending ? "Resetting..." : "Reset All"}
                       </Button>
-                    )}
+                      </>)}
                     {canManage && (
                       <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete this business?")) deleteBiz.mutate({ id: b.id }); }}>
                         <Trash2 className="h-4 w-4 text-[#D32F2F]" />
