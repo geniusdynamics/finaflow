@@ -1,3 +1,5 @@
+// ABOUTME: Renders editable business details plus profile summary and document metadata actions.
+// ABOUTME: Handles secure document upload/delete/download interactions through businesses tRPC procedures.
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useParams } from "react-router";
 import { trpc } from "@/providers/trpc";
@@ -5,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { buildPrintGeneratedLabel, formatFileSize } from "@/features/business-profile/formatters";
 import { toast } from "sonner";
 import { Building, Check, ChevronLeft, ChevronRight, FileText, Globe, Landmark, Loader2, Save, Shield, Store, Upload, X } from "lucide-react";
 
@@ -72,7 +75,14 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-export default function BusinessDetails() {
+function getErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message;
+  }
+  return fallback;
+}
+
+export function BusinessDetails() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const businessId = id ? Number(id) : null;
@@ -89,9 +99,14 @@ export default function BusinessDetails() {
     { businessId: businessId! },
     { enabled: !!businessId }
   );
+  const { data: documentsDetailed, isLoading: docsLoading } = trpc.businesses.getDocumentsDetailed.useQuery(
+    { businessId: businessId! },
+    { enabled: !!businessId }
+  );
   const updateMutation = trpc.businesses.update.useMutation();
   const uploadDocMutation = trpc.businesses.uploadDocument.useMutation();
   const deleteDocMutation = trpc.businesses.deleteDocument.useMutation();
+  const downloadDocumentMutation = trpc.businesses.downloadDocument.useMutation();
 
   const [form, setForm] = useState({
     name: "",
@@ -126,7 +141,6 @@ export default function BusinessDetails() {
   }, [business]);
 
   const stepIndex = steps.findIndex(s => s.id === step);
-  const currentStep = steps[stepIndex];
   const isLastStep = stepIndex === steps.length - 1;
   const isFirstStep = stepIndex === 0;
 
@@ -144,8 +158,8 @@ export default function BusinessDetails() {
       await updateMutation.mutateAsync({ id: businessId, ...form });
       utils.businesses.get.invalidate({ id: businessId });
       toast.success("Business details saved successfully");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to save");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to save"));
     } finally {
       setSaving(false);
     }
@@ -166,8 +180,8 @@ export default function BusinessDetails() {
       });
       await refetchDocs();
       toast.success(`${docType} uploaded successfully`);
-    } catch (err: any) {
-      toast.error(err.message || "Upload failed");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Upload failed"));
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -179,8 +193,35 @@ export default function BusinessDetails() {
       await deleteDocMutation.mutateAsync({ id: docId });
       await refetchDocs();
       toast.success("Document deleted");
-    } catch (err: any) {
-      toast.error(err.message || "Delete failed");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Delete failed"));
+    }
+  };
+
+  const triggerBase64Download = (fileName: string, mimeType: string, fileData: string) => {
+    const byteChars = atob(fileData);
+    const bytes = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) {
+      bytes[i] = byteChars.charCodeAt(i);
+    }
+    const blob = new Blob([bytes], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadDocument = async (documentId: number) => {
+    try {
+      const payload = await downloadDocumentMutation.mutateAsync({ documentId });
+      triggerBase64Download(payload.fileName, payload.mimeType, payload.fileData);
+      toast.success("Document download started");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to download document"));
     }
   };
 
@@ -230,6 +271,14 @@ export default function BusinessDetails() {
             <p className="text-sm text-[#8D8A87]">{business.name} — {business.accountId}</p>
           </div>
         </div>
+        <div className="mb-4 flex items-center justify-end gap-2 print:hidden">
+          <Button variant="outline" onClick={() => window.print()}>
+            Print Profile
+          </Button>
+        </div>
+        <p className="hidden text-xs text-[#8D8A87] print:block">
+          {buildPrintGeneratedLabel(business.accountId || "N/A", new Date())}
+        </p>
 
         {/* Step indicator */}
         <div className="mb-8">
@@ -262,7 +311,7 @@ export default function BusinessDetails() {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="md:col-span-2">
                     <Label className="text-xs text-[#8D8A87]">Business Name *</Label>
-                    <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Karafuu Restaurant" required />
+                  <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Karafuu Business" required />
                   </div>
                 </div>
                 <div>
@@ -284,7 +333,7 @@ export default function BusinessDetails() {
                 </div>
                 <div>
                   <Label className="text-xs text-[#8D8A87]">Nature of Business</Label>
-                  <Input value={form.natureOfBusiness} onChange={e => setForm(p => ({ ...p, natureOfBusiness: e.target.value }))} placeholder="e.g. Restaurant & Catering Services" />
+                  <Input value={form.natureOfBusiness} onChange={e => setForm(p => ({ ...p, natureOfBusiness: e.target.value }))} placeholder="e.g. restaurant, retail and SME businesses" />
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
@@ -478,7 +527,89 @@ export default function BusinessDetails() {
             </div>
           </CardContent>
         </Card>
+
+        <div className="mt-6 space-y-4">
+          <section className="rounded-lg border border-[#E8E0D8] bg-white p-4">
+            <h2 className="font-serif text-lg font-semibold text-[#2D2A26]">Profile Summary</h2>
+            <dl className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div>
+                <dt className="text-xs text-[#8D8A87]">Business Name</dt>
+                <dd className="text-sm text-[#2D2A26]">{form.name || business.name || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[#8D8A87]">Registration Number</dt>
+                <dd className="text-sm text-[#2D2A26]">{form.businessRegNumber || business.businessRegNumber || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[#8D8A87]">Business Type</dt>
+                <dd className="text-sm text-[#2D2A26]">{form.businessType || business.businessType || "—"}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-[#8D8A87]">Operational Status</dt>
+                <dd className="text-sm text-[#2D2A26]">{business.isActive ? "Active" : "Inactive"}</dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="rounded-lg border border-[#E8E0D8] bg-white p-4">
+            <h2 className="font-serif text-lg font-semibold text-[#2D2A26]">Business Documents</h2>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead>
+                  <tr className="border-b border-[#E8E0D8] text-left text-xs uppercase tracking-wide text-[#8D8A87]">
+                    <th className="px-2 py-2">Name</th>
+                    <th className="px-2 py-2">Type</th>
+                    <th className="px-2 py-2">Uploaded</th>
+                    <th className="px-2 py-2">Size</th>
+                    <th className="px-2 py-2 print:hidden">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {docsLoading ? (
+                    <tr>
+                      <td colSpan={5} className="px-2 py-4 text-[#8D8A87]">Loading documents…</td>
+                    </tr>
+                  ) : (documentsDetailed?.length ?? 0) === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-2 py-4 text-[#8D8A87]">No documents available.</td>
+                    </tr>
+                  ) : (
+                    documentsDetailed!.map((doc) => (
+                      <tr key={doc.id} className="border-b border-[#F2EAE2] align-middle text-[#2D2A26]">
+                        <td className="px-2 py-2">{doc.fileName}</td>
+                        <td className="px-2 py-2">{doc.documentType}</td>
+                        <td className="px-2 py-2">{new Date(doc.createdAt).toLocaleDateString("en-KE")}</td>
+                        <td className="px-2 py-2">{formatFileSize(doc.fileSizeBytes)}</td>
+                        <td className="px-2 py-2 print:hidden">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDownloadDocument(doc.id)}
+                            disabled={downloadDocumentMutation.isPending}
+                          >
+                            Download
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+        <style>{`
+          @media print {
+            .print\\:hidden { display: none !important; }
+            .print\\:block { display: block !important; }
+            body { background: #fff !important; }
+            table, tr, td, th { page-break-inside: avoid; }
+            section { break-inside: avoid; }
+          }
+        `}</style>
       </div>
     </div>
   );
 }
+
+export default BusinessDetails;

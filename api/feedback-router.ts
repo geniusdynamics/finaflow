@@ -33,8 +33,8 @@ export const feedbackRouter = createRouter({
         questions: JSON.stringify(input.questions),
         isActive: true,
         businessId: input.businessId,
-      } as any);
-      return { id: Number(result.insertId), success: true };
+      } as any).returning();
+      return { id: result.id, success: true };
     }),
 
   updateQuestionnaire: authedQuery
@@ -83,7 +83,7 @@ export const feedbackRouter = createRouter({
         respondentName: input.respondentName,
         respondentEmail: input.respondentEmail,
         answers: JSON.stringify(input.answers),
-      } as any);
+      } as any).returning();
       return { success: true };
     }),
 

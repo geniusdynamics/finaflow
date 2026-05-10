@@ -67,7 +67,7 @@ export const partnerRouter = createRouter({
             subscriptionAmount: subAmount.toFixed(2),
             commissionPercent: revShare.toFixed(2),
             commissionAmount: commission.toFixed(2),
-          } as any);
+          } as any).returning();
           created++;
         }
       }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, salesQuery, salesCreate, getCurrentBusinessLocationIds } from "./middleware";
+import { createRouter, salesQuery, salesCreate, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity } from "./middleware";
 import { getDb } from "./queries/connection";
 import { dailySales, accounts, ledgerEntries, attachments, paymentMethods, dailySalePayments, locationPaymentMethods } from "@db/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
@@ -18,6 +18,7 @@ export const dailySalesRouter = createRouter({
       const db = getDb();
       let locationIds: number[];
       if (input.locationId) {
+        await requireAuthorizedLocation(ctx, input.locationId);
         locationIds = [input.locationId];
       } else {
         locationIds = await getCurrentBusinessLocationIds(ctx);
@@ -47,8 +48,9 @@ export const dailySalesRouter = createRouter({
 
   getByLocation: salesQuery
     .input(z.object({ locationId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
+      await requireAuthorizedLocation(ctx, input.locationId);
       const sales = await db.select().from(dailySales).where(
         and(eq(dailySales.locationId, input.locationId), isNull(dailySales.deletedAt))
       ).orderBy(desc(dailySales.saleDate));
@@ -86,6 +88,8 @@ export const dailySalesRouter = createRouter({
       const db = getDb();
       const enteredBy = (ctx as any).user?.id ?? 1;
 
+      await requireAuthorizedLocation(ctx, input.locationId);
+
       const existing = await db.select().from(dailySales).where(
         and(eq(dailySales.locationId, input.locationId), sql`${dailySales.saleDate} = ${input.saleDate}`, isNull(dailySales.deletedAt))
       ).limit(1);
@@ -108,8 +112,8 @@ export const dailySalesRouter = createRouter({
           notes: input.notes,
           unpaidNotes: input.unpaidNotes,
           enteredBy,
-        } as any);
-        saleId = Number(result.insertId);
+        } as any).returning();
+        saleId = result.id;
 
         for (const payment of input.payments) {
           if (d(payment.amount).gt(0)) {
@@ -117,13 +121,14 @@ export const dailySalesRouter = createRouter({
               dailySaleId: saleId,
               paymentMethodId: payment.paymentMethodId,
               amount: payment.amount,
-            } as any);
+            } as any).returning();
 
             const junction = await tx.select().from(locationPaymentMethods).where(
               and(eq(locationPaymentMethods.locationId, input.locationId), eq(locationPaymentMethods.paymentMethodId, payment.paymentMethodId), eq(locationPaymentMethods.isActive, true))
             ).limit(1);
 
             if (junction[0]?.linkedAccountId) {
+              // We already validated locationId so we know this account is safe to update because the junction enforces the link
               const acct = await tx.select().from(accounts).where(eq(accounts.id, junction[0].linkedAccountId)).limit(1);
               if (acct[0]) {
                 const newBalance = d(acct[0].currentBalance).plus(d(payment.amount));
@@ -136,7 +141,7 @@ export const dailySalesRouter = createRouter({
                   balanceAfter: newBalance.toFixed(2),
                   entryDate: new Date(input.saleDate),
                   createdBy: enteredBy,
-                } as any);
+                } as any).returning();
                 await tx.update(accounts).set({ currentBalance: newBalance.toFixed(2) }).where(eq(accounts.id, acct[0].id));
               }
             }
@@ -151,7 +156,7 @@ export const dailySalesRouter = createRouter({
               imageData: att.imageData,
               mimeType: att.mimeType,
               caption: att.caption,
-            } as any);
+            } as any).returning();
           }
         }
       });
@@ -170,8 +175,9 @@ export const dailySalesRouter = createRouter({
       notes: z.string().optional(),
       unpaidNotes: z.string().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      await requireAuthorizedEntity(ctx, dailySales, input.id);
       const { id, ...updates } = input;
       await db.update(dailySales).set(updates as any).where(eq(dailySales.id, id));
       return { success: true };
@@ -179,16 +185,18 @@ export const dailySalesRouter = createRouter({
 
   delete: salesCreate
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      await requireAuthorizedEntity(ctx, dailySales, input.id);
       await db.update(dailySales).set({ deletedAt: new Date() }).where(eq(dailySales.id, input.id));
       return { success: true };
     }),
 
   getAttachments: salesQuery
     .input(z.object({ recordId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
+      await requireAuthorizedEntity(ctx, dailySales, input.recordId);
       return db.select().from(attachments).where(
         and(eq(attachments.recordType, "daily_sales"), eq(attachments.recordId, input.recordId))
       ).orderBy(desc(attachments.createdAt));
@@ -196,19 +204,24 @@ export const dailySalesRouter = createRouter({
 
   addAttachment: salesCreate
     .input(z.object({ recordId: z.number(), imageData: z.string(), mimeType: z.string().default("image/jpeg"), caption: z.string().optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      await requireAuthorizedEntity(ctx, dailySales, input.recordId);
       const [result] = await db.insert(attachments).values({
         recordType: "daily_sales", recordId: input.recordId,
         imageData: input.imageData, mimeType: input.mimeType, caption: input.caption,
-      } as any);
-      return { id: Number(result.insertId), success: true };
+      } as any).returning();
+      return { id: result.id, success: true };
     }),
 
   deleteAttachment: salesCreate
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const atts = await db.select().from(attachments).where(eq(attachments.id, input.id)).limit(1);
+      if (atts.length > 0 && atts[0].recordType === "daily_sales") {
+        await requireAuthorizedEntity(ctx, dailySales, Number(atts[0].recordId));
+      }
       await db.delete(attachments).where(eq(attachments.id, input.id));
       return { success: true };
     }),

@@ -1,3 +1,5 @@
+// ABOUTME: Defines the PostgreSQL schema and typed Drizzle table models used by the API.
+// ABOUTME: Keeps database structure, constraints, and inferred TypeScript types in one shared module.
 import {
   pgTable,
   pgEnum,
@@ -39,6 +41,29 @@ export const leadStatusEnum = pgEnum("leadStatus", ["new", "contacted", "convert
 export const orderStatusEnum = pgEnum("orderStatus", ["draft", "sent", "delivered", "billed", "cancelled"]);
 
 
+export const customerAccounts = pgTable("customer_accounts", {
+  id: serial("id").primaryKey(),
+  accountId: varchar("accountId", { length: 100 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  plan: varchar("plan", { length: 20 }).default("free").notNull(),
+  maxBusinesses: integer("maxBusinesses").default(1).notNull(),
+  maxUsers: integer("maxUsers").default(1).notNull(),
+  maxTransactionsPerMonth: integer("maxTransactionsPerMonth").default(100).notNull(),
+  features: json("features"),
+  subscriptionStatus: varchar("subscriptionStatus", { length: 20 }).default("active").notNull(),
+  subscriptionExpiry: date("subscriptionExpiry"),
+  isActive: boolean("isActive").default(true).notNull(),
+  migratedAt: timestamp("migratedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  accountIdIdx: uniqueIndex("idx_customer_accounts_accountId").on(table.accountId),
+}));
+
+export type CustomerAccount = typeof customerAccounts.$inferSelect;
+export type InsertCustomerAccount = typeof customerAccounts.$inferInsert;
+
 // Users table (supports both OAuth and local auth)
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -53,6 +78,7 @@ export const users = pgTable("users", {
   locationId: bigint("locationId", { mode: "number" }),
   currentBusinessId: bigint("currentBusinessId", { mode: "number" }),
   accountId: varchar("accountId", { length: 100 }),
+  accountRefId: bigint("accountRefId", { mode: "number" }).references(() => customerAccounts.id),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -226,6 +252,8 @@ export type Expense = typeof expenses.$inferSelect;
 // Suppliers
 export const suppliers = pgTable("suppliers", {
   id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }),
   name: varchar("name", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 20 }),
   email: varchar("email", { length: 255 }),
@@ -241,7 +269,11 @@ export const suppliers = pgTable("suppliers", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  businessIdx: index("business_idx").on(table.businessId),
+  locationIdx: index("location_idx").on(table.locationId),
+  deletedIdx: index("deleted_idx").on(table.deletedAt),
+}));
 
 export type Supplier = typeof suppliers.$inferSelect;
 
@@ -487,7 +519,8 @@ export type AuditLog = typeof auditLog.$inferSelect;
 // Businesses (multi-tenancy)
 export const businesses = pgTable("businesses", {
   id: serial("id").primaryKey(),
-  accountId: varchar("accountId", { length: 100 }).notNull().unique(),
+  accountId: varchar("accountId", { length: 100 }).notNull(),
+  accountRefId: bigint("accountRefId", { mode: "number" }).references(() => customerAccounts.id),
   name: varchar("name", { length: 255 }).notNull(),
   slug: varchar("slug", { length: 100 }).notNull().unique(),
   businessType: varchar("businessType", { length: 50 }),
@@ -608,6 +641,7 @@ export type FeedbackResponse = typeof feedbackResponses.$inferSelect;
 export const paymentMethods = pgTable("payment_methods", {
   id: serial("id").primaryKey(),
   businessId: bigint("businessId", { mode: "number" }),
+  accountRefId: bigint("accountRefId", { mode: "number" }).references(() => customerAccounts.id),
   name: varchar("name", { length: 100 }).notNull(),
   code: varchar("code", { length: 50 }).notNull(),
   color: varchar("color", { length: 20 }).default("#C73E1D"),

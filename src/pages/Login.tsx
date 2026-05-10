@@ -288,7 +288,7 @@ export default function Login() {
                     <div><Label className="text-xs text-[#8D8A87]">Password</Label><Input type="password" value={signupForm.password} onChange={e => setSignupForm(p => ({ ...p, password: e.target.value }))} placeholder="Min 6 chars" required /></div>
                     <div><Label className="text-xs text-[#8D8A87]">Confirm</Label><Input type="password" value={signupForm.confirmPassword} onChange={e => setSignupForm(p => ({ ...p, confirmPassword: e.target.value }))} placeholder="Repeat password" required /></div>
                   </div>
-                  <div><Label className="text-xs text-[#8D8A87]">Business / Firm Name <span className="font-normal">(optional)</span></Label><Input value={signupForm.businessName} onChange={e => setSignupForm(p => ({ ...p, businessName: e.target.value }))} placeholder={signupForm.userType === "partner" ? "e.g. ABC Accounting" : "e.g. Karafuu Restaurant"} /></div>
+                  <div><Label className="text-xs text-[#8D8A87]">Business / Firm Name <span className="font-normal">(optional)</span></Label><Input value={signupForm.businessName} onChange={e => setSignupForm(p => ({ ...p, businessName: e.target.value }))} placeholder={signupForm.userType === "partner" ? "e.g. ABC Accounting" : "e.g. Karafuu Business"} /></div>
                   <div className="flex items-center gap-2 rounded-lg bg-[#F5EDE6] p-3">
                     <input id="demo" type="checkbox" checked={signupForm.createDemo} onChange={e => setSignupForm(p => ({ ...p, createDemo: e.target.checked }))} className="h-4 w-4 rounded border-[#8D8A87]" />
                     <label htmlFor="demo" className="text-xs text-[#2D2A26]">Start with <strong>Demo Mode</strong> -- preloaded with sample data</label>

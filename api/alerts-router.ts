@@ -22,8 +22,8 @@ export const alertsRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const [result] = await db.insert(alertsConfig).values(input as any);
-      return { id: Number(result.insertId), success: true };
+      const [result] = await db.insert(alertsConfig).values(input as any).returning();
+      return { id: result.id, success: true };
     }),
 
   updateConfig: authedQuery

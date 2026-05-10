@@ -27,6 +27,20 @@ export function getCsrfToken(): string | null {
   return csrfToken;
 }
 
+export function getCsrfTokenFromCookies(cookieHeader?: string | null): string | null {
+  const source = cookieHeader ?? (typeof document !== "undefined" ? document.cookie : "");
+  if (!source) return null;
+
+  for (const part of source.split(";")) {
+    const [rawName, ...rawValue] = part.trim().split("=");
+    if (rawName === "csrf_token") {
+      return rawValue.join("=") || null;
+    }
+  }
+
+  return null;
+}
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
@@ -34,7 +48,10 @@ const trpcClient = trpc.createClient({
       transformer: superjson,
       headers() {
         const headers: Record<string, string> = {};
-        const token = csrfToken;
+        const token = csrfToken ?? getCsrfTokenFromCookies();
+        if (!csrfToken && token) {
+          csrfToken = token;
+        }
         if (token) {
           headers["x-csrf-token"] = token;
         }

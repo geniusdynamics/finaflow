@@ -4,6 +4,7 @@
  */
 const { Pool } = require("pg");
 require("dotenv").config();
+const { buildDemoReportingSeedPlan } = require("./seed-demo-plan.cjs");
 
 const uri = process.env.DATABASE_URL;
 if (!uri) { console.error("DATABASE_URL not set"); process.exit(1); }
@@ -12,6 +13,14 @@ async function hashPassword(password) {
   const crypto = require("crypto");
   const secret = process.env.APP_SECRET || "finaflow-local-auth-secret-key-2025";
   return crypto.createHash("sha256").update(password + secret).digest("hex");
+}
+
+function requiredId(map, key, label) {
+  const value = map[key];
+  if (!value) {
+    throw new Error(`Missing ${label}: ${key}`);
+  }
+  return value;
 }
 
 async function run() {
@@ -93,6 +102,7 @@ async function run() {
     { username: "cashier", password: "finaflow2024", name: "Front Desk Cashier", role: "employee" },
     { username: "viewer", password: "finaflow2024", name: "View Only User", role: "viewer" },
   ];
+  const userIds = {};
 
   for (const u of defaultUsers) {
     const { rows: existing } = await conn.query("SELECT id, \"currentBusinessId\" FROM users WHERE username = $1", [u.username]);
@@ -113,6 +123,7 @@ async function run() {
       );
       console.log(`[seed-demo] Updated user: ${u.username} (id=${userId})`);
     }
+    userIds[u.username] = userId;
 
     // Link to demo business
     const { rows: junction } = await conn.query(
@@ -157,7 +168,28 @@ async function run() {
     }
   }
 
-  // 6. Create demo payment methods
+  // 6. Create demo suppliers
+  const suppliers = [
+    { name: "Sunset Properties", phone: "+254700100001", email: "rent@sunset.demo", contactPerson: "Grace Mwangi", paymentTermsDays: 15, notes: "Primary landlord" },
+    { name: "Coast Fuel Supplies", phone: "+254700100002", email: "orders@coastfuel.demo", contactPerson: "Ali Hassan", paymentTermsDays: 14, notes: "Fuel and emergency logistics" },
+    { name: "KPLC & Water Services", phone: "+254700100003", email: "billing@utilities.demo", contactPerson: "Utility Desk", paymentTermsDays: 10, notes: "Electricity and water" },
+    { name: "Papertrail Packaging", phone: "+254700100004", email: "sales@papertrail.demo", contactPerson: "Winnie Kariuki", paymentTermsDays: 21, notes: "Packaging and stationery" },
+  ];
+  for (const supplier of suppliers) {
+    const { rows: existing } = await conn.query(
+      'SELECT id FROM suppliers WHERE name = $1 AND "deletedAt" IS NULL',
+      [supplier.name],
+    );
+    if (existing.length === 0) {
+      await conn.query(
+        'INSERT INTO suppliers (name, phone, email, "contactPerson", "paymentTermsDays", notes, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())',
+        [supplier.name, supplier.phone, supplier.email, supplier.contactPerson, supplier.paymentTermsDays, supplier.notes],
+      );
+      console.log(`[seed-demo] Created supplier: ${supplier.name}`);
+    }
+  }
+
+  // 7. Create demo payment methods
   const methods = [
     { name: "Cash", code: "CASH" },
     { name: "M-PESA", code: "MPESA" },
@@ -165,7 +197,10 @@ async function run() {
     { name: "Card", code: "CARD" },
   ];
   for (const m of methods) {
-    const { rows: existing } = await conn.query("SELECT id FROM payment_methods WHERE name = $1 AND \"deletedAt\" IS NULL", [m.name]);
+    const { rows: existing } = await conn.query(
+      'SELECT id FROM payment_methods WHERE "businessId" = $1 AND name = $2 AND "deletedAt" IS NULL',
+      [demoBizId, m.name],
+    );
     if (existing.length === 0) {
       await conn.query(
         "INSERT INTO payment_methods (\"businessId\", name, code, \"isActive\", \"createdAt\") VALUES ($1, $2, $3, $4, NOW())",
@@ -173,6 +208,220 @@ async function run() {
       );
       console.log(`[seed-demo] Created payment method: ${m.name}`);
     }
+  }
+
+  // 8. Build and apply deterministic reporting data for DEMO
+  const demoLocationIds = Object.values(locIds);
+  const { rows: accountRows } = await conn.query(
+    'SELECT id, name, "locationId" FROM accounts WHERE "locationId" = ANY($1::bigint[]) AND "deletedAt" IS NULL',
+    [demoLocationIds],
+  );
+  const { rows: categoryRows } = await conn.query(
+    'SELECT id, name FROM expense_categories WHERE name = ANY($1::text[]) AND "deletedAt" IS NULL',
+    [categories.map((cat) => cat.name)],
+  );
+  const { rows: paymentMethodRows } = await conn.query(
+    'SELECT id, name FROM payment_methods WHERE "businessId" = $1 AND name = ANY($2::text[]) AND "deletedAt" IS NULL',
+    [demoBizId, methods.map((method) => method.name)],
+  );
+  const { rows: supplierRows } = await conn.query(
+    'SELECT id, name FROM suppliers WHERE name = ANY($1::text[]) AND "deletedAt" IS NULL',
+    [suppliers.map((supplier) => supplier.name)],
+  );
+
+  const accountIds = {
+    cash: requiredId(
+      Object.fromEntries(accountRows.map((row) => [`${row.locationId}:${row.name}`, row.id])),
+      `${mainLocId}:Cash Drawer`,
+      "account",
+    ),
+    mpesa: requiredId(
+      Object.fromEntries(accountRows.map((row) => [`${row.locationId}:${row.name}`, row.id])),
+      `${mainLocId}:M-PESA Till`,
+      "account",
+    ),
+    bank: requiredId(
+      Object.fromEntries(accountRows.map((row) => [`${row.locationId}:${row.name}`, row.id])),
+      `${mainLocId}:Bank (KCB)`,
+      "account",
+    ),
+  };
+  const categoryIdMap = Object.fromEntries(categoryRows.map((row) => [row.name, row.id]));
+  const paymentMethodIdMap = Object.fromEntries(paymentMethodRows.map((row) => [row.name, row.id]));
+  const supplierIdMap = Object.fromEntries(supplierRows.map((row) => [row.name, row.id]));
+  const plan = buildDemoReportingSeedPlan({
+    anchorDate: new Date().toISOString().slice(0, 10),
+    locationIds: {
+      main: mainLocId,
+      secondary: malindiLocId,
+    },
+    categoryIds: {
+      food: requiredId(categoryIdMap, "Food & Beverage", "category"),
+      utilities: requiredId(categoryIdMap, "Utilities", "category"),
+      salaries: requiredId(categoryIdMap, "Salaries", "category"),
+      rent: requiredId(categoryIdMap, "Rent", "category"),
+      supplies: requiredId(categoryIdMap, "Supplies", "category"),
+      marketing: requiredId(categoryIdMap, "Marketing", "category"),
+    },
+    paymentMethodIds: {
+      cash: requiredId(paymentMethodIdMap, "Cash", "payment method"),
+      mpesa: requiredId(paymentMethodIdMap, "M-PESA", "payment method"),
+      bank: requiredId(paymentMethodIdMap, "Bank Transfer", "payment method"),
+      card: requiredId(paymentMethodIdMap, "Card", "payment method"),
+    },
+    accountIds,
+    supplierIds: {
+      landlord: requiredId(supplierIdMap, "Sunset Properties", "supplier"),
+      fuel: requiredId(supplierIdMap, "Coast Fuel Supplies", "supplier"),
+      utilities: requiredId(supplierIdMap, "KPLC & Water Services", "supplier"),
+      stationery: requiredId(supplierIdMap, "Papertrail Packaging", "supplier"),
+    },
+    enteredBy: requiredId(userIds, "owner", "user"),
+  });
+
+  await conn.query("BEGIN");
+  try {
+    await conn.query(
+      'DELETE FROM "daily_sale_payments" WHERE "dailySaleId" IN (SELECT id FROM "daily_sales" WHERE "locationId" = ANY($1::bigint[]))',
+      [demoLocationIds],
+    );
+    await conn.query('DELETE FROM "daily_sales" WHERE "locationId" = ANY($1::bigint[])', [demoLocationIds]);
+    await conn.query('DELETE FROM "expenses" WHERE "locationId" = ANY($1::bigint[])', [demoLocationIds]);
+    await conn.query('DELETE FROM "mpesa_transactions" WHERE "locationId" = ANY($1::bigint[])', [demoLocationIds]);
+    await conn.query('DELETE FROM "budgets" WHERE "locationId" = ANY($1::bigint[])', [demoLocationIds]);
+    await conn.query(
+      'DELETE FROM "bill_payments" WHERE "billId" IN (SELECT id FROM "bills" WHERE "locationId" = ANY($1::bigint[]))',
+      [demoLocationIds],
+    );
+    await conn.query(
+      'DELETE FROM "bill_items" WHERE "billId" IN (SELECT id FROM "bills" WHERE "locationId" = ANY($1::bigint[]))',
+      [demoLocationIds],
+    );
+    await conn.query('DELETE FROM "bills" WHERE "locationId" = ANY($1::bigint[])', [demoLocationIds]);
+
+    for (const budget of plan.budgets) {
+      await conn.query(
+        'INSERT INTO budgets ("locationId", "categoryId", month, year, amount, notes, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())',
+        [budget.locationId, budget.categoryId, budget.month, budget.year, budget.amount, budget.notes],
+      );
+    }
+
+    const saleIdByKey = new Map();
+    for (const sale of plan.sales) {
+      const { rows } = await conn.query(
+        'INSERT INTO daily_sales ("locationId", "saleDate", "cashTotal", "cardTotal", "mpesaTotal", "familyBankTotal", "coopBankTotal", "equityBankTotal", "boltTotal", "glovoTotal", "creditCardTotal", "deliveryPartnerTotal", "netSales", "discountAmount", "voidAmount", "unpaidAmount", "ticketCount", "orderCount", "voidCount", "giftCount", notes, "unpaidNotes", "enteredBy", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW(), NOW()) RETURNING id',
+        [
+          sale.locationId,
+          sale.saleDate,
+          sale.cashTotal,
+          sale.cardTotal,
+          sale.mpesaTotal,
+          sale.familyBankTotal,
+          sale.coopBankTotal,
+          sale.equityBankTotal,
+          sale.boltTotal,
+          sale.glovoTotal,
+          sale.creditCardTotal,
+          sale.deliveryPartnerTotal,
+          sale.netSales,
+          sale.discountAmount,
+          sale.voidAmount,
+          sale.unpaidAmount,
+          sale.ticketCount,
+          sale.orderCount,
+          sale.voidCount,
+          sale.giftCount,
+          sale.notes,
+          sale.unpaidNotes,
+          sale.enteredBy,
+        ],
+      );
+      saleIdByKey.set(sale.saleKey, rows[0].id);
+    }
+
+    for (const payment of plan.salePayments) {
+      await conn.query(
+        'INSERT INTO daily_sale_payments ("dailySaleId", "paymentMethodId", amount, "createdAt") VALUES ($1, $2, $3, NOW())',
+        [requiredId(Object.fromEntries(saleIdByKey), payment.saleKey, "sale"), payment.paymentMethodId, payment.amount],
+      );
+    }
+
+    for (const expense of plan.expenses) {
+      await conn.query(
+        'INSERT INTO expenses ("locationId", "categoryId", "supplierId", "expenseNumber", "billId", "refNo", amount, description, "expenseDate", "paymentMethod", "accountId", "receiptImageUrl", "mpesaTxnId", "expenseRef", "isReimbursable", "reimbursedTo", "enteredBy", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, NOW(), NOW())',
+        [
+          expense.locationId,
+          expense.categoryId,
+          expense.supplierId,
+          expense.expenseNumber,
+          expense.billId,
+          expense.refNo,
+          expense.amount,
+          expense.description,
+          expense.expenseDate,
+          expense.paymentMethod,
+          expense.accountId,
+          expense.receiptImageUrl,
+          expense.mpesaTxnId,
+          expense.expenseRef,
+          expense.isReimbursable,
+          expense.reimbursedTo,
+          expense.enteredBy,
+        ],
+      );
+    }
+
+    for (const txn of plan.mpesaTransactions) {
+      await conn.query(
+        'INSERT INTO mpesa_transactions ("locationId", "txnId", "txnDate", "txnTime", "txnType", "partyName", amount, "txnFee", balance, description, "rawText", "isLinked", "linkedExpenseId", "linkedBillId", "linkedSupplierId", "sourceAccountId", "destinationAccountId", "importedBy", "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, NOW(), NOW())',
+        [
+          txn.locationId,
+          txn.txnId,
+          txn.txnDate,
+          txn.txnTime,
+          txn.txnType,
+          txn.partyName,
+          txn.amount,
+          txn.txnFee,
+          txn.balance,
+          txn.description,
+          txn.rawText,
+          txn.isLinked,
+          txn.linkedExpenseId,
+          txn.linkedBillId,
+          txn.linkedSupplierId,
+          txn.sourceAccountId,
+          txn.destinationAccountId,
+          txn.importedBy,
+        ],
+      );
+    }
+
+    for (const bill of plan.futureBills) {
+      await conn.query(
+        'INSERT INTO bills ("locationId", "supplierId", "billNumber", description, amount, "amountPaid", "balanceDue", "issueDate", "dueDate", status, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())',
+        [
+          bill.locationId,
+          bill.supplierId,
+          bill.billNumber,
+          bill.description,
+          bill.amount,
+          bill.amountPaid,
+          bill.balanceDue,
+          bill.issueDate,
+          bill.dueDate,
+          bill.status,
+        ],
+      );
+    }
+
+    await conn.query("COMMIT");
+    console.log(
+      `[seed-demo] Seeded reporting data: ${plan.sales.length} sales, ${plan.expenses.length} expenses, ${plan.budgets.length} budgets, ${plan.mpesaTransactions.length} mpesa txns, ${plan.futureBills.length} future bills`,
+    );
+  } catch (error) {
+    await conn.query("ROLLBACK");
+    throw error;
   }
 
   conn.release();

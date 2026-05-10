@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { createRouter, authedQuery, userManage, PERMISSIONS, loadRolePermissionsFromDb, invalidateRolePermissionCache, hasPermission } from "./middleware";
+import { createRouter, authedQuery, userManage, PERMISSIONS, loadRolePermissionsFromDb, invalidateRolePermissionCache } from "./middleware";
 import { getDb } from "./queries/connection";
-import { users, rolePermissions } from "@db/schema";
+import { users, rolePermissions, userBusinesses } from "@db/schema";
 import { eq, isNull } from "drizzle-orm";
 
 const HARD_DEFAULTS: Record<string, string[]> = {
@@ -145,9 +145,9 @@ export const permissionsRouter = createRouter({
       const [result] = await db.insert(rolePermissions).values({
         roleKey: input.roleKey, roleLabel: input.roleLabel,
         permissions: input.permissions as any,
-      });
+      }).returning();
       invalidateRolePermissionCache();
-      return { id: Number(result.insertId), success: true };
+      return { id: result.id, success: true };
     }),
 
   updateRoleTemplate: userManage

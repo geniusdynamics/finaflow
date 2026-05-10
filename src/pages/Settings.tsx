@@ -10,12 +10,14 @@ import { Label } from "@/components/ui/label";
 import { Settings as SettingsIcon, Camera, MessageSquare, Briefcase, Shield, Crown, Award, ArrowUpCircle, ArrowDownCircle, Users, MapPin, Gift, Clock } from "lucide-react";
 import { toast } from "sonner";
 
-const PLAN_DETAILS: Record<string, { label: string; price: string; branches: number; users: number; color: string; features: string[] }> = {
-  free: { label: "Free", price: "KES 0/mo", branches: 1, users: 1, color: "text-[#8D8A87]", features: ["1 branch", "1 user", "Basic sales & expenses", "M-PESA import"] },
-  starter: { label: "Starter", price: "KES 500/mo", branches: 1, users: 3, color: "text-[#D4A854]", features: ["1 branch", "3 users", "Unlimited transactions", "Recurring bills"] },
-  growth: { label: "Growth", price: "KES 1,500/mo", branches: 5, users: 5, color: "text-[#2E7D32]", features: ["5 branches", "5 users", "Full payroll", "Priority support"] },
-  pro: { label: "Pro", price: "KES 3,000/mo", branches: 99, users: 99, color: "text-[#C73E1D]", features: ["Unlimited branches", "Unlimited users", "API access", "Webhooks"] },
+const PLAN_DETAILS: Record<string, { label: string; price: string; businesses: number; branches: number; users: number; transactions: string; payroll: string; support: string; color: string; features: string[] }> = {
+  free: { label: "Free", price: "KES 0/mo", businesses: 1, branches: 1, users: 1, transactions: "100 / month", payroll: "No", support: "Community", color: "text-[#8D8A87]", features: ["1 business", "1 branch", "1 user", "Basic sales & expenses", "M-PESA import"] },
+  starter: { label: "Starter", price: "KES 500/mo", businesses: 1, branches: 1, users: 3, transactions: "5,000 / month", payroll: "No", support: "Email", color: "text-[#D4A854]", features: ["1 business", "1 branch", "3 users", "Recurring bills", "Email support"] },
+  growth: { label: "Growth", price: "KES 1,500/mo", businesses: 3, branches: 5, users: 5, transactions: "20,000 / month", payroll: "Yes", support: "Priority", color: "text-[#2E7D32]", features: ["3 businesses", "5 branches", "5 users", "Full payroll", "Priority support"] },
+  pro: { label: "Pro", price: "KES 3,000/mo", businesses: 10, branches: 99, users: 99, transactions: "Unlimited", payroll: "Yes", support: "Dedicated", color: "text-[#C73E1D]", features: ["10 businesses", "Unlimited branches", "Unlimited users", "API access", "Dedicated support"] },
 };
+
+type PlanKey = "free" | "starter" | "growth" | "pro";
 
 export function Settings() {
   const { user } = useAuth();
@@ -24,9 +26,16 @@ export function Settings() {
   const [tab, setTab] = useState<"features" | "account">("features");
 
   const { data: settings } = trpc.settings.list.useQuery();
-  const { data: tier } = trpc.businesses.myTier.useQuery();
-  const changePlan = trpc.businesses.changePlan.useMutation({
-    onSuccess: (data) => { toast.success(data.message); utils.businesses.myTier.invalidate(); },
+  const { data: subscription } = trpc.accountSubscriptions.mySubscription.useQuery();
+  const changePlan = trpc.accountSubscriptions.changePlan.useMutation({
+    onSuccess: (data) => { toast.success(data.message); utils.accountSubscriptions.mySubscription.invalidate(); },
+    onError: (err) => toast.error(err.message),
+  });
+  const extendTrial = trpc.accountSubscriptions.extendTrial.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.message);
+      utils.accountSubscriptions.mySubscription.invalidate();
+    },
     onError: (err) => toast.error(err.message),
   });
   const setSetting = trpc.settings.set.useMutation({
@@ -39,7 +48,7 @@ export function Settings() {
     setSetting.mutate({ key, value: String(!current) });
   };
 
-  const allPlans = ["free", "starter", "growth", "pro"];
+  const allPlans: PlanKey[] = ["free", "starter", "growth", "pro"];
 
   return (
     <Layout>
@@ -143,24 +152,24 @@ export function Settings() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {tier ? (
+                {subscription ? (
                   <div className="space-y-4">
                     <div className="flex items-center justify-between rounded-lg border border-[#E8E0D8] bg-[#F5EDE6] p-4">
                       <div>
-                        <p className="text-lg font-semibold text-[#2D2A26]">{PLAN_DETAILS[tier.plan]?.label ?? tier.plan}</p>
-                        <p className="text-xs text-[#8D8A87]">{PLAN_DETAILS[tier.plan]?.price ?? ""}</p>
+                        <p className="text-lg font-semibold text-[#2D2A26]">{PLAN_DETAILS[subscription.plan]?.label ?? subscription.plan}</p>
+                        <p className="text-xs text-[#8D8A87]">{PLAN_DETAILS[subscription.plan]?.price ?? subscription.priceLabel ?? ""}</p>
                       </div>
                       <div className="text-right">
-                        {tier.isTrial ? (
+                        {subscription.isTrial ? (
                           <span className="rounded-full bg-[#D4A854]/10 px-3 py-1 text-xs font-medium text-[#D4A854]">
-                            <Clock className="inline h-3 w-3 mr-1" />{tier.trialDaysRemaining} days trial
+                            <Clock className="inline h-3 w-3 mr-1" />{subscription.trialDaysRemaining} days trial
                           </span>
                         ) : (
                           <span className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${
-                            tier.subscriptionStatus === "active" ? "bg-[#2E7D32]/10 text-[#2E7D32]" :
-                            tier.subscriptionStatus === "expired" ? "bg-[#D32F2F]/10 text-[#D32F2F]" :
+                            subscription.subscriptionStatus === "active" ? "bg-[#2E7D32]/10 text-[#2E7D32]" :
+                            subscription.subscriptionStatus === "expired" ? "bg-[#D32F2F]/10 text-[#D32F2F]" :
                             "bg-[#ED6C02]/10 text-[#ED6C02]"
-                          }`}>{tier.subscriptionStatus}</span>
+                          }`}>{subscription.subscriptionStatus}</span>
                         )}
                       </div>
                     </div>
@@ -168,28 +177,81 @@ export function Settings() {
                     {/* Usage stats */}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-lg border border-[#E8E0D8] p-3">
+                        <div className="flex items-center gap-1 text-xs text-[#8D8A87]"><Briefcase className="h-3 w-3" /> Businesses</div>
+                        <p className="mt-1 font-mono text-lg font-semibold text-[#2D2A26]">{subscription.currentBusinesses} / {subscription.maxBusinesses === 99 ? "∞" : subscription.maxBusinesses}</p>
+                      </div>
+                      <div className="rounded-lg border border-[#E8E0D8] p-3">
                         <div className="flex items-center gap-1 text-xs text-[#8D8A87]"><MapPin className="h-3 w-3" /> Branches</div>
-                        <p className="mt-1 font-mono text-lg font-semibold text-[#2D2A26]">{tier.currentBranches} / {tier.maxBranches === 99 ? "∞" : tier.maxBranches}</p>
+                        <p className="mt-1 font-mono text-lg font-semibold text-[#2D2A26]">{subscription.currentBranches} / {subscription.maxBranches === 99 ? "∞" : subscription.maxBranches}</p>
                       </div>
                       <div className="rounded-lg border border-[#E8E0D8] p-3">
                         <div className="flex items-center gap-1 text-xs text-[#8D8A87]"><Users className="h-3 w-3" /> Users</div>
-                        <p className="mt-1 font-mono text-lg font-semibold text-[#2D2A26]">{tier.currentUsers} / {tier.maxUsers === 99 ? "∞" : tier.maxUsers}</p>
+                        <p className="mt-1 font-mono text-lg font-semibold text-[#2D2A26]">{subscription.currentUsers} / {subscription.maxUsers === 99 ? "∞" : subscription.maxUsers}</p>
+                      </div>
+                      <div className="rounded-lg border border-[#E8E0D8] p-3">
+                        <div className="flex items-center gap-1 text-xs text-[#8D8A87]"><Award className="h-3 w-3" /> Transactions</div>
+                        <p className="mt-1 font-mono text-lg font-semibold text-[#2D2A26]">{subscription.transactionQuotaLabel}</p>
                       </div>
                     </div>
 
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div className="rounded-lg border border-[#E8E0D8] p-3">
+                        <p className="text-xs text-[#8D8A87]">Payroll</p>
+                        <p className="mt-1 text-sm font-semibold text-[#2D2A26]">{subscription.payrollAvailable ? "Available" : "Not included"}</p>
+                      </div>
+                      <div className="rounded-lg border border-[#E8E0D8] p-3">
+                        <p className="text-xs text-[#8D8A87]">Support Tier</p>
+                        <p className="mt-1 text-sm font-semibold text-[#2D2A26]">{subscription.supportTier}</p>
+                      </div>
+                      <div className="rounded-lg border border-[#E8E0D8] p-3">
+                        <p className="text-xs text-[#8D8A87]">Payment Method</p>
+                        <p className="mt-1 text-sm font-semibold text-[#2D2A26]">{subscription.hasPaymentMethodOnFile ? "On file" : "Not on file"}</p>
+                      </div>
+                      <div className="rounded-lg border border-[#E8E0D8] p-3">
+                        <p className="text-xs text-[#8D8A87]">Trial Extension</p>
+                        <p className="mt-1 text-sm font-semibold text-[#2D2A26]">{subscription.trialExtensionUsedAt ? "Used" : subscription.canExtendTrial ? "Available" : "Not available"}</p>
+                      </div>
+                    </div>
+
+                    {subscription.isTrial && (
+                      <div className="rounded-lg border border-[#E8E0D8] bg-white p-4">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-[#2D2A26]">Trial lifecycle</p>
+                            <p className="text-xs text-[#8D8A87]">
+                              {subscription.trialDaysRemaining} days remaining. {subscription.canExtendTrial ? "One 14-day extension is still available." : "No further extension is available."}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="border-[#C73E1D] text-[#C73E1D]"
+                            disabled={!subscription.canExtendTrial || extendTrial.isPending}
+                            onClick={() => extendTrial.mutate()}
+                          >
+                            {extendTrial.isPending ? "Extending..." : "Extend Trial by 14 Days"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Referred by */}
-                    {tier.referredBy && (
+                    {subscription.referredBy && (
                       <div className="flex items-center gap-2 rounded-lg border border-[#E8E0D8] bg-[#F5EDE6] px-3 py-2">
                         <Gift className="h-4 w-4 text-[#C73E1D]" />
                         <span className="text-sm text-[#2D2A26]">
-                          Referred by <strong>{tier.referredBy.name}</strong>
+                          Referred by <strong>{subscription.referredBy.name}</strong>
                         </span>
                       </div>
                     )}
 
-                    {/* Account ID */}
-                    <div className="text-xs text-[#8D8A87]">
-                      Account ID: <span className="font-mono text-[#2D2A26]">{tier.accountId}</span>
+                    <div className="space-y-1 text-xs text-[#8D8A87]">
+                      <p>
+                        Subscription applies to all businesses under account <span className="font-mono text-[#2D2A26]">{subscription.accountId}</span>
+                      </p>
+                      <p>
+                        Account ID: <span className="font-mono text-[#2D2A26]">{subscription.accountId}</span>
+                      </p>
                     </div>
                   </div>
                 ) : (
@@ -210,8 +272,8 @@ export function Settings() {
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {allPlans.map((planKey) => {
                     const plan = PLAN_DETAILS[planKey];
-                    const isCurrent = tier?.plan === planKey;
-                    const isUpgrade = allPlans.indexOf(planKey) > allPlans.indexOf(tier?.plan ?? "free");
+                    const isCurrent = subscription?.plan === planKey;
+                    const isUpgrade = allPlans.indexOf(planKey) > allPlans.indexOf(subscription?.plan ?? "free");
                     return (
                       <div key={planKey} className={`rounded-lg border p-3 ${isCurrent ? "border-[#C73E1D] ring-1 ring-[#C73E1D]" : "border-[#E8E0D8]"}`}>
                         <div className="flex items-center justify-between">
@@ -219,6 +281,14 @@ export function Settings() {
                           {isCurrent && <span className="rounded-full bg-[#C73E1D]/10 px-2 py-0.5 text-[10px] text-[#C73E1D]">Current</span>}
                         </div>
                         <p className="mt-1 text-xs text-[#8D8A87]">{plan.price}</p>
+                        <div className="mt-2 space-y-1 text-[10px] text-[#8D8A87]">
+                          <p>Businesses: {plan.businesses === 99 ? "Unlimited" : plan.businesses}</p>
+                          <p>Branches / business: {plan.branches === 99 ? "Unlimited" : plan.branches}</p>
+                          <p>Users: {plan.users === 99 ? "Unlimited" : plan.users}</p>
+                          <p>Transactions: {plan.transactions}</p>
+                          <p>Payroll: {plan.payroll}</p>
+                          <p>Support: {plan.support}</p>
+                        </div>
                         <ul className="mt-2 space-y-1">
                           {plan.features.map((f, i) => (
                             <li key={i} className="flex items-center gap-1 text-[10px] text-[#2D2A26]">
@@ -235,7 +305,7 @@ export function Settings() {
                                 ? `Upgrade to ${plan.label} (${plan.price})?`
                                 : `Downgrade to ${plan.label} (${plan.price})?\n\nDowngrading may limit existing branches and users.`;
                               if (confirm(confirmMsg)) {
-                                changePlan.mutate({ plan: planKey as any });
+                                changePlan.mutate({ plan: planKey });
                               }
                             }}
                             disabled={changePlan.isPending}

@@ -11,7 +11,8 @@ let instance: ReturnType<typeof drizzle<typeof fullSchema>> | null = null;
 
 export function getPool(): pg.Pool {
   if (!pool) {
-    pool = new pg.Pool({ connectionString: env.databaseUrl, max: 10 });
+    const connectionString = process.env.DATABASE_URL ?? env.databaseUrl;
+    pool = new pg.Pool({ connectionString, max: 10 });
   }
   return pool;
 }

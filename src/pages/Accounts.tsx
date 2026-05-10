@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
@@ -7,7 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Wallet, CreditCard, Smartphone, Landmark, BookOpen, ArrowDownLeft, ArrowUpRight, Pencil, Trash2, ArrowRightLeft } from "lucide-react";
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
+import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
+import { Plus, Wallet, CreditCard, Smartphone, Landmark, BookOpen, ArrowDownLeft, ArrowUpRight, Pencil, Trash2, ArrowRightLeft, BarChart3, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
+
+const accountPalette = ["#2E7D32", "#388E3C", "#43A047", "#C77D2D", "#D4A854", "#B8872E", "#9E9D24", "#5D4037"];
 
 export function Accounts() {
   const [open, setOpen] = useState(false);
@@ -17,20 +22,40 @@ export function Accounts() {
   const [selectedAccount, setSelectedAccount] = useState<number | null>(null);
 
   const { data: locations } = trpc.locations.list.useQuery();
-  const { data: accounts, refetch } = trpc.accounts.list.useQuery();
+  const { data: accounts } = trpc.accounts.list.useQuery();
+  const {
+    data: balanceHistory,
+    isLoading: isBalanceHistoryLoading,
+    isError: isBalanceHistoryError,
+  } = trpc.accounts.balanceHistory.useQuery(
+    { days: 30 },
+    {
+      refetchInterval: 15000,
+      refetchOnWindowFocus: true,
+    }
+  );
   const { data: ledger } = trpc.accounts.ledger.useQuery(
     { accountId: selectedAccount ?? 0, limit: 50 },
     { enabled: selectedAccount !== null }
   );
 
-  const createAccount = trpc.accounts.create.useMutation({ onSuccess: () => { setOpen(false); refetch(); } });
-  const updateAccount = trpc.accounts.update.useMutation({ onSuccess: () => { setEditOpen(null); refetch(); } });
-  const adjustBalance = trpc.accounts.adjustBalance.useMutation({ onSuccess: () => refetch() });
-  const recordDrawing = trpc.accounts.recordDrawing.useMutation({ onSuccess: () => { setDrawingOpen(null); refetch(); } });
-  const recordDeposit = trpc.accounts.recordDeposit.useMutation({ onSuccess: () => { setDepositOpen(null); refetch(); } });
-  const deleteAccount = trpc.accounts.delete.useMutation({ onSuccess: () => { setSelectedAccount(null); refetch(); } });
+  const utils = trpc.useUtils();
+  const refreshAccountData = () => {
+    utils.accounts.list.invalidate();
+    utils.accounts.balanceHistory.invalidate();
+    if (selectedAccount !== null) {
+      utils.accounts.ledger.invalidate();
+    }
+  };
+
+  const createAccount = trpc.accounts.create.useMutation({ onSuccess: () => { setOpen(false); refreshAccountData(); } });
+  const updateAccount = trpc.accounts.update.useMutation({ onSuccess: () => { setEditOpen(null); refreshAccountData(); } });
+  const adjustBalance = trpc.accounts.adjustBalance.useMutation({ onSuccess: () => refreshAccountData() });
+  const recordDrawing = trpc.accounts.recordDrawing.useMutation({ onSuccess: () => { setDrawingOpen(null); refreshAccountData(); } });
+  const recordDeposit = trpc.accounts.recordDeposit.useMutation({ onSuccess: () => { setDepositOpen(null); refreshAccountData(); } });
+  const deleteAccount = trpc.accounts.delete.useMutation({ onSuccess: () => { setSelectedAccount(null); refreshAccountData(); } });
   const transfer = trpc.accounts.transfer.useMutation({
-    onSuccess: () => { setTransferOpen(false); setTransferForm({ fromAccountId: "", description: "", date: getLocalDateString(), toAccounts: [{ accountId: "", amount: "", description: "" }] }); refetch(); },
+    onSuccess: () => { setTransferOpen(false); setTransferForm({ fromAccountId: "", description: "", date: getLocalDateString(), toAccounts: [{ accountId: "", amount: "", description: "" }] }); refreshAccountData(); },
   });
 
   const [transferOpen, setTransferOpen] = useState(false);
@@ -39,6 +64,7 @@ export function Accounts() {
     toAccounts: [{ accountId: "", amount: "", description: "" }],
   });
   const totalTransferOut = transferForm.toAccounts.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
+  const todayDate = getLocalDateString();
 
   const [form, setForm] = useState({
     locationId: "", name: "", type: "cash" as "cash" | "mpesa" | "bank_account",
@@ -75,6 +101,26 @@ export function Accounts() {
     }
   };
 
+  const chartConfig = useMemo<ChartConfig>(() => {
+    const config: ChartConfig = {
+      cashTotal: { label: "Cash Total", color: "#2E7D32" },
+      bankTotal: { label: "Bank Total", color: "#D4A854" },
+      mpesaTotal: { label: "M-PESA Total", color: "#C73E1D" },
+      totalBalance: { label: "All Accounts Total", color: "#2D2A26" },
+    };
+    balanceHistory?.accountMeta?.forEach((account, index) => {
+      config[account.key] = {
+        label: `${account.name} (${account.type === "cash" ? "Cash" : "Bank"})`,
+        color: account.type === "cash" ? accountPalette[index % 3] : accountPalette[3 + (index % 5)],
+      };
+    });
+    return config;
+  }, [balanceHistory]);
+
+  const hasHistoryData = (balanceHistory?.series?.length ?? 0) > 0;
+  const formatChartDate = (value: string) =>
+    new Date(value).toLocaleDateString("en-KE", { month: "short", day: "numeric" });
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -90,7 +136,7 @@ export function Accounts() {
               </DialogTrigger>
               <DialogContent className="bg-white max-h-[90vh] overflow-y-auto">
                 <DialogHeader><DialogTitle className="font-serif text-xl">Transfer Between Accounts</DialogTitle></DialogHeader>
-                <form onSubmit={(e) => { e.preventDefault(); transfer.mutate({ fromAccountId: +transferForm.fromAccountId, description: transferForm.description, date: transferForm.date, toAccounts: transferForm.toAccounts.filter(t => t.accountId && t.amount).map(t => ({ accountId: +t.accountId, amount: t.amount, description: t.description })) }); }} className="space-y-3">
+                <form onSubmit={(e) => { e.preventDefault(); if (transferForm.date > todayDate) { toast.error("Transfer date cannot be in the future"); return; } transfer.mutate({ fromAccountId: +transferForm.fromAccountId, description: transferForm.description, date: transferForm.date, toAccounts: transferForm.toAccounts.filter(t => t.accountId && t.amount).map(t => ({ accountId: +t.accountId, amount: t.amount, description: t.description })) }); }} className="space-y-3">
                   <div className="space-y-2"><Label>From Account (Source)</Label>
                     <select value={transferForm.fromAccountId} onChange={e => setTransferForm(p => ({ ...p, fromAccountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required>
                       <option value="">Select source account</option>
@@ -98,7 +144,7 @@ export function Accounts() {
                     </select>
                   </div>
                   <div className="space-y-2"><Label>Description</Label><Input value={transferForm.description} onChange={e => setTransferForm(p => ({ ...p, description: e.target.value }))} placeholder="e.g. Branch fund transfer" required /></div>
-                  <div className="space-y-2"><Label>Date</Label><Input type="date" value={transferForm.date} onChange={e => setTransferForm(p => ({ ...p, date: e.target.value }))} required /></div>
+                  <div className="space-y-2"><Label>Date</Label><Input type="date" value={transferForm.date} max={todayDate} onChange={e => setTransferForm(p => ({ ...p, date: e.target.value }))} required /></div>
                   <div className="space-y-2">
                     <div className="flex items-center justify-between"><Label>To Accounts (Destinations)</Label><Button type="button" size="sm" variant="outline" onClick={() => setTransferForm(p => ({ ...p, toAccounts: [...p.toAccounts, { accountId: "", amount: "", description: "" }] }))}><Plus className="h-3 w-3" /></Button></div>
                     {transferForm.toAccounts.map((to, i) => (
@@ -135,7 +181,7 @@ export function Accounts() {
                     </select>
                   </div>
                   <div className="space-y-2"><Label>Type</Label>
-                    <select value={form.type} onChange={(e) => setForm(p => ({ ...p, type: e.target.value as any }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
+                    <select value={form.type} onChange={(e) => setForm(p => ({ ...p, type: e.target.value as "cash" | "mpesa" | "bank_account" }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
                       <option value="cash">Cash</option><option value="mpesa">M-PESA</option><option value="bank_account">Bank Account</option>
                     </select>
                   </div>
@@ -158,6 +204,117 @@ export function Accounts() {
             </DialogContent>
           </Dialog>
         </div>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card className="border-[#E8E0D8] bg-white">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 font-serif text-lg text-[#2D2A26]">
+              <BarChart3 className="h-5 w-5 text-[#2E7D32]" />
+              Bank / Cash Balance Trend
+            </CardTitle>
+            <p className="text-xs text-[#8D8A87]">Last 30 days aggregate balance movement</p>
+          </CardHeader>
+          <CardContent>
+            {isBalanceHistoryLoading && (
+              <div className="flex h-[260px] items-center justify-center rounded-lg border border-dashed border-[#E8E0D8] text-sm text-[#8D8A87]">
+                Loading balance trends...
+              </div>
+            )}
+            {isBalanceHistoryError && (
+              <div className="flex h-[260px] items-center justify-center gap-2 rounded-lg border border-[#D32F2F]/30 bg-[#D32F2F]/5 text-sm text-[#D32F2F]">
+                <AlertTriangle className="h-4 w-4" />
+                Unable to load balance trends.
+              </div>
+            )}
+            {!isBalanceHistoryLoading && !isBalanceHistoryError && !hasHistoryData && (
+              <div className="flex h-[260px] items-center justify-center rounded-lg border border-dashed border-[#E8E0D8] text-sm text-[#8D8A87]">
+                No balance history available yet.
+              </div>
+            )}
+            {!isBalanceHistoryLoading && !isBalanceHistoryError && hasHistoryData && (
+              <ChartContainer config={chartConfig} className="h-[260px] w-full">
+                <AreaChart data={balanceHistory?.series}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis dataKey="date" tickLine={false} axisLine={false} tickFormatter={formatChartDate} minTickGap={24} />
+                  <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`} width={38} />
+                  <ChartTooltip content={<ChartTooltipContent labelFormatter={(label) => formatChartDate(String(label))} />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  <Area
+                    type="monotone"
+                    dataKey="cashTotal"
+                    stroke="var(--color-cashTotal)"
+                    fill="var(--color-cashTotal)"
+                    fillOpacity={0.2}
+                    strokeWidth={2}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="bankTotal"
+                    stroke="var(--color-bankTotal)"
+                    fill="var(--color-bankTotal)"
+                    fillOpacity={0.2}
+                    strokeWidth={2}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="mpesaTotal"
+                    stroke="var(--color-mpesaTotal)"
+                    fill="var(--color-mpesaTotal)"
+                    fillOpacity={0.2}
+                    strokeWidth={2}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="totalBalance"
+                    stroke="var(--color-totalBalance)"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                </AreaChart>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border-[#E8E0D8] bg-white">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 font-serif text-lg text-[#2D2A26]">
+              <BarChart3 className="h-5 w-5 text-[#D4A854]" />
+              Account Balance History
+            </CardTitle>
+            <p className="text-xs text-[#8D8A87]">Historical account balances by account type</p>
+          </CardHeader>
+          <CardContent>
+            {!isBalanceHistoryLoading && !isBalanceHistoryError && hasHistoryData && (
+              <ChartContainer config={chartConfig} className="h-[260px] w-full">
+                <LineChart data={balanceHistory?.series}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis dataKey="date" tickLine={false} axisLine={false} tickFormatter={formatChartDate} minTickGap={24} />
+                  <YAxis tickLine={false} axisLine={false} tickFormatter={(v) => `${Math.round(Number(v) / 1000)}k`} width={38} />
+                  <ChartTooltip content={<ChartTooltipContent labelFormatter={(label) => formatChartDate(String(label))} />} />
+                  <ChartLegend content={<ChartLegendContent />} />
+                  {(balanceHistory?.accountMeta ?? []).map((account) => (
+                    <Line
+                      key={account.key}
+                      type="monotone"
+                      dataKey={account.key}
+                      stroke={`var(--color-${account.key})`}
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  ))}
+                </LineChart>
+              </ChartContainer>
+            )}
+            {(isBalanceHistoryLoading || isBalanceHistoryError || !hasHistoryData) && (
+              <div className="flex h-[260px] items-center justify-center rounded-lg border border-dashed border-[#E8E0D8] text-sm text-[#8D8A87]">
+                {!isBalanceHistoryLoading && isBalanceHistoryError ? "Unable to load account chart." : "Account trend chart will appear when historical data is available."}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -216,11 +373,11 @@ export function Accounts() {
                       <DialogTrigger asChild><Button size="sm" variant="outline" className="text-xs border-[#D32F2F] text-[#D32F2F]" onClick={e => e.stopPropagation()}><ArrowUpRight className="h-3 w-3 mr-1"/>Drawing</Button></DialogTrigger>
                       <DialogContent className="bg-white">
                         <DialogHeader><DialogTitle className="font-serif text-xl">Record Drawing</DialogTitle></DialogHeader>
-                        <form onSubmit={(e) => { e.preventDefault(); recordDrawing.mutate({ accountId: account.id, ...drawingForm }); }} className="space-y-3">
+                        <form onSubmit={(e) => { e.preventDefault(); if (drawingForm.date > todayDate) { toast.error("Drawing date cannot be in the future"); return; } recordDrawing.mutate({ accountId: account.id, ...drawingForm }); }} className="space-y-3">
                           <div className="rounded bg-[#F5EDE6] p-3"><p className="text-sm font-medium">{account.name}</p><p className="text-xs text-[#8D8A87]">Current: {formatKES(account.currentBalance)}</p></div>
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-2"><Label>Amount</Label><Input type="number" step="0.01" value={drawingForm.amount} onChange={e => setDrawingForm(p => ({ ...p, amount: e.target.value }))} required /></div>
-                            <div className="space-y-2"><Label>Date</Label><Input type="date" value={drawingForm.date} onChange={e => setDrawingForm(p => ({ ...p, date: e.target.value }))} required /></div>
+                            <div className="space-y-2"><Label>Date</Label><Input type="date" value={drawingForm.date} max={todayDate} onChange={e => setDrawingForm(p => ({ ...p, date: e.target.value }))} required /></div>
                           </div>
                           <div className="space-y-2"><Label>Description</Label><Input value={drawingForm.description} onChange={e => setDrawingForm(p => ({ ...p, description: e.target.value }))} placeholder="Owner drawing, petty cash, etc." /></div>
                           <Button type="submit" className="w-full bg-[#D32F2F]" disabled={recordDrawing.isPending}>Record Drawing</Button>
@@ -231,11 +388,11 @@ export function Accounts() {
                       <DialogTrigger asChild><Button size="sm" variant="outline" className="text-xs border-[#2E7D32] text-[#2E7D32]" onClick={e => e.stopPropagation()}><ArrowDownLeft className="h-3 w-3 mr-1"/>Deposit</Button></DialogTrigger>
                       <DialogContent className="bg-white">
                         <DialogHeader><DialogTitle className="font-serif text-xl">Record Deposit</DialogTitle></DialogHeader>
-                        <form onSubmit={(e) => { e.preventDefault(); recordDeposit.mutate({ accountId: account.id, ...depositForm }); }} className="space-y-3">
+                        <form onSubmit={(e) => { e.preventDefault(); if (depositForm.date > todayDate) { toast.error("Deposit date cannot be in the future"); return; } recordDeposit.mutate({ accountId: account.id, ...depositForm }); }} className="space-y-3">
                           <div className="rounded bg-[#F5EDE6] p-3"><p className="text-sm font-medium">{account.name}</p><p className="text-xs text-[#8D8A87]">Current: {formatKES(account.currentBalance)}</p></div>
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-2"><Label>Amount</Label><Input type="number" step="0.01" value={depositForm.amount} onChange={e => setDepositForm(p => ({ ...p, amount: e.target.value }))} required /></div>
-                            <div className="space-y-2"><Label>Date</Label><Input type="date" value={depositForm.date} onChange={e => setDepositForm(p => ({ ...p, date: e.target.value }))} required /></div>
+                            <div className="space-y-2"><Label>Date</Label><Input type="date" value={depositForm.date} max={todayDate} onChange={e => setDepositForm(p => ({ ...p, date: e.target.value }))} required /></div>
                           </div>
                           <div className="space-y-2"><Label>Description</Label><Input value={depositForm.description} onChange={e => setDepositForm(p => ({ ...p, description: e.target.value }))} placeholder="Sales deposit, transfer in, etc." /></div>
                           <Button type="submit" className="w-full bg-[#2E7D32]" disabled={recordDeposit.isPending}>Record Deposit</Button>

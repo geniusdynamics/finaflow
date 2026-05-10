@@ -13,6 +13,8 @@ import { csrfProtection } from "./lib/csrf";
 import { apiLimiter, loginLimiter } from "./lib/rate-limit";
 import { getDb, closePool } from "./queries/connection";
 import { sql } from "drizzle-orm";
+import { processTrialLifecycle, TRIAL_JOB_INTERVAL_MS } from "./lib/subscriptions";
+import { shouldStartStandaloneServer } from "./lib/server-runtime";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -64,13 +66,47 @@ const { serve } = await import("@hono/node-server");
 const { serveStaticFiles } = await import("./lib/vite");
 serveStaticFiles(app);
 
+async function runTrialLifecycleJob() {
+  try {
+    const result = await processTrialLifecycle(getDb());
+    if (result.remindersSent || result.downgraded || result.activated) {
+      console.log("[subscriptions] trial lifecycle processed", result);
+    }
+  } catch (error) {
+    console.error("[subscriptions] trial lifecycle job failed", error);
+  }
+}
+
+const runStandaloneServer = shouldStartStandaloneServer(import.meta.env);
+
+let trialLifecycleTimer: NodeJS.Timeout | null = null;
+if (runStandaloneServer) {
+  trialLifecycleTimer = setInterval(() => {
+    void runTrialLifecycleJob();
+  }, TRIAL_JOB_INTERVAL_MS);
+  trialLifecycleTimer.unref();
+  void runTrialLifecycleJob();
+}
+
 const port = parseInt(process.env.PORT || "3000");
-const server = serve({ fetch: app.fetch, port }, () => {
-  console.log(`Server running on http://localhost:${port}/`);
-});
+const server = runStandaloneServer
+  ? serve({ fetch: app.fetch, port }, () => {
+      console.log(`Server running on http://localhost:${port}/`);
+    })
+  : null;
 
 const shutdown = async (signal: string) => {
   console.log(`Received ${signal}, shutting down gracefully...`);
+
+  if (trialLifecycleTimer) {
+    clearInterval(trialLifecycleTimer);
+  }
+
+  if (!server) {
+    await closePool();
+    process.exit(0);
+  }
+
   server.close(async () => {
     await closePool();
     console.log("Server shut down");
@@ -82,5 +118,5 @@ const shutdown = async (signal: string) => {
   }, 10000).unref();
 };
 
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));

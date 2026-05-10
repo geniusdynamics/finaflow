@@ -92,7 +92,7 @@ export function PartnerDashboard() {
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-sm text-[#8D8A87]">
-              Share your referral link with restaurant and shop owners. Every new signup through your link gives them <strong>10% off their first month</strong> and tracks them to your portfolio.
+              Share your referral link with business owners. Every new signup through your link gives them <strong>10% off their first month</strong> and tracks them to your portfolio.
             </p>
 
             {referralCode ? (

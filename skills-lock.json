@@ -1,11 +1,47 @@
 {
   "version": 1,
   "skills": {
+    "create-paykit": {
+      "source": "getpaykit/skills",
+      "sourceType": "github",
+      "skillPath": "paykit/create-paykit/SKILL.md",
+      "computedHash": "cac78f92010351f8f833a1f0420f3587e0d6f1b3e5f8d0ce932921c6cb05b499"
+    },
     "hono": {
       "source": "yusukebe/hono-skill",
       "sourceType": "github",
       "skillPath": "skills/hono/SKILL.md",
       "computedHash": "24bad73932f309cec73a5a9171b838f59050990a634d8590c2d2c204507e64f9"
+    },
+    "metered-usage-best-practices": {
+      "source": "getpaykit/skills",
+      "sourceType": "github",
+      "skillPath": "paykit/metered-usage/SKILL.md",
+      "computedHash": "afe8304050982e12bbe2fbab79dafc009da4b009a843f1c71d4e4becf75f71c0"
+    },
+    "paykit-best-practices": {
+      "source": "getpaykit/skills",
+      "sourceType": "github",
+      "skillPath": "paykit/best-practices/SKILL.md",
+      "computedHash": "ddf9e702b474c30961ae25a2f59569a3c9fbe472408570b93b8cb5158e63924c"
+    },
+    "plans-and-features-best-practices": {
+      "source": "getpaykit/skills",
+      "sourceType": "github",
+      "skillPath": "paykit/plans-and-features/SKILL.md",
+      "computedHash": "6d72f1ec6e56edda8b2d9df88c700dc429aac183be82a3ec84cd0ba963a79ab8"
+    },
+    "stripe-best-practices": {
+      "source": "getpaykit/skills",
+      "sourceType": "github",
+      "skillPath": "paykit/stripe/SKILL.md",
+      "computedHash": "3f6114ab674c30d2c54b48a9a06a45853bc788e2264f79dfec4249febaade6e2"
+    },
+    "subscriptions-best-practices": {
+      "source": "getpaykit/skills",
+      "sourceType": "github",
+      "skillPath": "paykit/subscriptions/SKILL.md",
+      "computedHash": "8b23df3ae433c360fafb833621d010f8d79ddfb59bec98b11305e16e8cb3be59"
     }
   }
 }

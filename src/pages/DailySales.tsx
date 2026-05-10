@@ -24,13 +24,14 @@ export function DailySales() {
   const [expandedSale, setExpandedSale] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
+  const utils = trpc.useUtils();
   const { data: locations } = trpc.locations.list.useQuery();
   const { data: sales, refetch } = trpc.dailySales.list.useQuery();
   const { data: settings } = trpc.settings.list.useQuery();
   const { data: allPaymentMethods } = trpc.paymentMethods.list.useQuery();
 
   const createSale = trpc.dailySales.create.useMutation({
-    onSuccess: () => { setOpen(false); resetForm(); refetch(); toast.success("Sales recorded"); },
+    onSuccess: () => { setOpen(false); resetForm(); utils.dailySales.list.invalidate(); toast.success("Sales recorded"); },
     onError: (err) => toast.error(err.message),
   });
 

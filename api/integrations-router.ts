@@ -36,8 +36,8 @@ export const integrationsRouter = createRouter({
         keyHash,
         keyPrefix: prefix,
         scopes: input.scopes ?? ["read"],
-      } as any);
-      return { id: Number(result.insertId), key: rawKey, prefix };
+      } as any).returning();
+      return { id: result.id, key: rawKey, prefix };
     }),
 
   revokeKey: apiKeysManage
@@ -81,8 +81,8 @@ export const integrationsRouter = createRouter({
         url: input.url,
         events: input.events,
         secret: input.secret,
-      } as any);
-      return { id: Number(result.insertId) };
+      } as any).returning();
+      return { id: result.id };
     }),
 
   updateWebhook: webhooksManage

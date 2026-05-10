@@ -1,13 +1,25 @@
 import { z } from "zod";
-import { createRouter, authedQuery, settingsManage } from "./middleware";
+import { createRouter, authedQuery, settingsManage, getUserBusinessIds } from "./middleware";
 import { getDb } from "./queries/connection";
 import { appSettings } from "@db/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
+
+async function verifyBusinessAccess(ctx: any, businessId?: number) {
+  if (!businessId) return;
+  const userId = ctx.user?.id;
+  if (!userId) throw new TRPCError({ code: "UNAUTHORIZED" });
+  const allowedIds = await getUserBusinessIds(userId);
+  if (!allowedIds.includes(businessId)) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "You do not have access to this business settings." });
+  }
+}
 
 export const settingsRouter = createRouter({
   get: authedQuery
     .input(z.object({ key: z.string(), businessId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await verifyBusinessAccess(ctx, input.businessId);
       const db = getDb();
       const conditions = [eq(appSettings.key, input.key)];
       if (input.businessId) conditions.push(eq(appSettings.businessId, input.businessId));
@@ -22,7 +34,8 @@ export const settingsRouter = createRouter({
       value: z.string(),
       businessId: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      await verifyBusinessAccess(ctx, input.businessId);
       const db = getDb();
       const conditions = [eq(appSettings.key, input.key)];
       if (input.businessId) conditions.push(eq(appSettings.businessId, input.businessId));
@@ -35,14 +48,15 @@ export const settingsRouter = createRouter({
           key: input.key,
           value: input.value,
           businessId: input.businessId,
-        } as any);
+        } as any).returning();
       }
       return { success: true };
     }),
 
   list: authedQuery
     .input(z.object({ businessId: z.number().optional() }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      await verifyBusinessAccess(ctx, input?.businessId);
       const db = getDb();
       const conditions: any[] = [];
       if (input?.businessId) {

@@ -14,20 +14,21 @@ export function Suppliers() {
   const [open, setOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<number | null>(null);
   const [billOpen, setBillOpen] = useState(false);
+  const utils = trpc.useUtils();
   const { data: suppliers, refetch } = trpc.suppliers.list.useQuery();
   const { data: supplierStatement } = trpc.suppliers.statement.useQuery(
     { id: selectedSupplier ?? 0 },
     { enabled: selectedSupplier !== null }
   );
   const createSupplier = trpc.suppliers.create.useMutation({
-    onSuccess: () => { setOpen(false); refetch(); toast.success("Supplier added"); },
+    onSuccess: () => { setOpen(false); utils.suppliers.list.invalidate(); toast.success("Supplier added"); },
     onError: (err) => toast.error(err.message),
   });
   const updateBalance = trpc.suppliers.updateBalance.useMutation({
-    onSuccess: () => refetch(),
+    onSuccess: () => { utils.suppliers.list.invalidate(); if (selectedSupplier) utils.suppliers.statement.invalidate({ id: selectedSupplier }); },
   });
   const createBill = trpc.suppliers.createBill.useMutation({
-    onSuccess: () => { setBillOpen(false); refetch(); toast.success("Bill added"); },
+    onSuccess: () => { setBillOpen(false); utils.suppliers.list.invalidate(); if (selectedSupplier) utils.suppliers.statement.invalidate({ id: selectedSupplier }); toast.success("Bill added"); },
     onError: (err) => toast.error(err.message),
   });
 

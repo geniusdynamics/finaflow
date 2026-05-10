@@ -21,8 +21,8 @@ export const inquiryRouter = createRouter({
       const [result] = await db.insert(businessInquiries).values({
         ...input,
         status: "new",
-      } as any);
-      return { id: Number(result.insertId), success: true };
+      } as any).returning();
+      return { id: result.id, success: true };
     }),
 
   list: inquiryView.query(async () => {

@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { createRouter, mpesaQuery, mpesaImport, getCurrentBusinessLocationIds } from "./middleware";
+import { createRouter, mpesaQuery, mpesaImport, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { mpesaTransactions, expenses, suppliers, accounts, ledgerEntries } from "@db/schema";
+import { mpesaTransactions, expenses, suppliers, accounts, ledgerEntries, locations } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
 
 export const mpesaRouter = createRouter({
@@ -86,7 +86,7 @@ export const mpesaRouter = createRouter({
             txnFee: txn.txnFee, balance: txn.balance,
             description: txn.partyIdentifier ? `${txn.partyName} (${txn.partyIdentifier})` : txn.partyName,
             rawText: txn.rawText, isLinked: false, importedBy,
-          } as any);
+          } as any).returning();
           imported++;
         } catch (e) { errors.push(`${txn.txnId}: ${(e as Error).message}`); }
       }
@@ -95,8 +95,11 @@ export const mpesaRouter = createRouter({
 
   tagToSupplier: mpesaQuery
     .input(z.object({ mpesaTxnId: z.number(), supplierId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      await requireAuthorizedEntity(ctx, mpesaTransactions, input.mpesaTxnId);
+      await requireAuthorizedBusinessEntity(ctx, suppliers, input.supplierId);
+
       await db.update(mpesaTransactions).set({ isLinked: true, linkedSupplierId: input.supplierId })
         .where(eq(mpesaTransactions.id, input.mpesaTxnId));
       return { success: true };
@@ -110,30 +113,50 @@ export const mpesaRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const enteredBy = (ctx as any).user?.id ?? 1;
-      const txn = await db.select().from(mpesaTransactions).where(eq(mpesaTransactions.id, input.mpesaTxnId)).limit(1);
-      if (!txn[0]) throw new Error("Transaction not found");
-      const amount = Math.abs(parseFloat(txn[0].amount)).toFixed(2);
-
-      const [result] = await db.insert(expenses).values({
-        locationId: input.locationId, categoryId: input.categoryId,
-        supplierId: input.supplierId, amount,
-        description: input.description || txn[0].description || `M-PESA ${txn[0].txnType}`,
-        expenseDate: txn[0].txnDate, paymentMethod: "mpesa",
-        mpesaTxnId: txn[0].txnId, enteredBy,
-      } as any);
-
-      await db.update(mpesaTransactions).set({ isLinked: true, linkedExpenseId: Number(result.insertId) })
-        .where(eq(mpesaTransactions.id, input.mpesaTxnId));
-
+      
+      await requireAuthorizedLocation(ctx, input.locationId);
+      const txn = await requireAuthorizedEntity(ctx, mpesaTransactions, input.mpesaTxnId);
+      
       if (input.supplierId) {
-        const sup = await db.select().from(suppliers).where(eq(suppliers.id, input.supplierId)).limit(1);
-        if (sup[0]) {
-          const newPaid = (parseFloat(sup[0].totalPaid) + parseFloat(amount)).toFixed(2);
-          const newBal = (parseFloat(sup[0].currentBalance) - parseFloat(amount)).toFixed(2);
-          await db.update(suppliers).set({ totalPaid: newPaid, currentBalance: newBal }).where(eq(suppliers.id, input.supplierId));
-        }
+        await requireAuthorizedBusinessEntity(ctx, suppliers, input.supplierId);
       }
-      return { expenseId: Number(result.insertId), success: true };
+      
+      const amount = Math.abs(parseFloat(txn.amount)).toFixed(2);
+
+      let expenseId: number;
+      let expenseNumber = "";
+
+      await db.transaction(async (tx) => {
+        const loc = await tx.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
+        const nextNum = loc[0]?.nextExpenseNumber ?? 1;
+        expenseNumber = `EXP-${String(nextNum).padStart(4, "0")}`;
+        await tx.update(locations).set({ nextExpenseNumber: nextNum + 1 }).where(eq(locations.id, input.locationId));
+
+        const [result] = await tx.insert(expenses).values({
+          locationId: input.locationId, categoryId: input.categoryId,
+          supplierId: input.supplierId, amount,
+          expenseNumber,
+          description: input.description || txn.description || `M-PESA ${txn.txnType}`,
+          expenseDate: txn.txnDate, paymentMethod: "mpesa",
+          mpesaTxnId: txn.txnId, enteredBy,
+        } as any).returning();
+        
+        expenseId = result.id;
+
+        await tx.update(mpesaTransactions).set({ isLinked: true, linkedExpenseId: expenseId })
+          .where(eq(mpesaTransactions.id, input.mpesaTxnId));
+
+        if (input.supplierId) {
+          const sup = await tx.select().from(suppliers).where(eq(suppliers.id, input.supplierId)).limit(1);
+          if (sup[0]) {
+            const newPaid = (parseFloat(sup[0].totalPaid) + parseFloat(amount)).toFixed(2);
+            const newBal = (parseFloat(sup[0].currentBalance) - parseFloat(amount)).toFixed(2);
+            await tx.update(suppliers).set({ totalPaid: newPaid, currentBalance: newBal }).where(eq(suppliers.id, input.supplierId));
+          }
+        }
+      });
+
+      return { expenseId, expenseNumber, success: true };
     }),
 
   // Link a topup to source bank account AND destination M-PESA wallet
@@ -171,7 +194,7 @@ export const mpesaRouter = createRouter({
         description: `M-PESA topup to wallet: ${txn[0].txnId}`,
         entryDate: txn[0].txnDate,
         createdBy: userId,
-      } as any);
+      } as any).returning();
 
       // Record fee as separate ledger entry
       if (fee > 0) {
@@ -185,7 +208,7 @@ export const mpesaRouter = createRouter({
           description: `M-PESA topup transaction fee: ${txn[0].txnId}`,
           entryDate: txn[0].txnDate,
           createdBy: userId,
-        } as any);
+        } as any).returning();
       }
 
       // Update source account balance
@@ -207,7 +230,7 @@ export const mpesaRouter = createRouter({
             description: `Topup received from ${acct[0].name}: ${txn[0].txnId}`,
             entryDate: txn[0].txnDate,
             createdBy: userId,
-          } as any);
+          } as any).returning();
           await db.update(accounts).set({ currentBalance: destNewBal }).where(eq(accounts.id, input.destinationAccountId));
         }
       }

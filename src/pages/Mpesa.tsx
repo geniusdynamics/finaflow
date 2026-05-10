@@ -20,6 +20,7 @@ export function Mpesa() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
+  const utils = trpc.useUtils();
   const { data: locations } = trpc.locations.list.useQuery();
   const { data: categories, refetch: refetchCategories } = trpc.expenses.categories.useQuery();
   const { data: suppliers } = trpc.suppliers.list.useQuery();
@@ -33,13 +34,23 @@ export function Mpesa() {
   const { data: feeAnalysis } = trpc.dashboard.feeAnalysis.useQuery({});
 
   const importSms = trpc.mpesa.importSms.useMutation({
-    onSuccess: () => { setParsedPreview([]); setSmsText(""); refetch(); },
+    onSuccess: () => { setParsedPreview([]); setSmsText(""); refetch(); utils.mpesa.stats.invalidate(); },
   });
   const createExpenseFromTxn = trpc.mpesa.createExpenseFromTxn.useMutation({
-    onSuccess: () => { setTagTxnId(null); refetch(); },
+    onSuccess: () => { 
+      setTagTxnId(null); 
+      refetch(); 
+      utils.expenses.list.invalidate(); 
+      utils.suppliers.list.invalidate(); 
+    },
   });
   const linkTopup = trpc.mpesa.linkTopupToAccount.useMutation({
-    onSuccess: () => { setLinkTxnId(null); setLinkForm({ sourceAccountId: "", destinationAccountId: "" }); refetch(); },
+    onSuccess: () => { 
+      setLinkTxnId(null); 
+      setLinkForm({ sourceAccountId: "", destinationAccountId: "" }); 
+      refetch(); 
+      utils.accounts.list.invalidate(); 
+    },
   });
 
   // Ensure categories are loaded when dialog opens

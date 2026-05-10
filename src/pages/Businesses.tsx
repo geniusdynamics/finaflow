@@ -189,3 +189,5 @@ export function Businesses() {
     </Layout>
   );
 }
+
+export default Businesses;

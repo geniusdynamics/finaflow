@@ -5,8 +5,23 @@ import { paymentMethods, locationPaymentMethods, accounts } from "@db/schema";
 import { eq, and, isNull, asc, sql } from "drizzle-orm";
 
 export const paymentMethodsRouter = createRouter({
-  list: settingsManage.query(async () => {
+  list: settingsManage.query(async ({ ctx }) => {
     const db = getDb();
+    const accountRefId = ctx.user?.accountRefId ?? ctx.user?.currentBusiness?.accountRefId ?? null;
+    const currentBusinessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? null;
+
+    if (accountRefId) {
+      return db.select().from(paymentMethods)
+        .where(and(eq(paymentMethods.accountRefId, accountRefId), isNull(paymentMethods.deletedAt)))
+        .orderBy(asc(paymentMethods.sortOrder));
+    }
+
+    if (currentBusinessId) {
+      return db.select().from(paymentMethods)
+        .where(and(eq(paymentMethods.businessId, currentBusinessId), isNull(paymentMethods.deletedAt)))
+        .orderBy(asc(paymentMethods.sortOrder));
+    }
+
     return db.select().from(paymentMethods)
       .where(isNull(paymentMethods.deletedAt))
       .orderBy(asc(paymentMethods.sortOrder));
@@ -19,15 +34,21 @@ export const paymentMethodsRouter = createRouter({
       color: z.string().default("#C73E1D"),
       sortOrder: z.number().default(0),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const currentBusinessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? null;
+      const accountRefId = ctx.user?.accountRefId ?? ctx.user?.currentBusiness?.accountRefId ?? null;
+
       const [result] = await db.insert(paymentMethods).values({
+        businessId: currentBusinessId,
+        accountRefId,
         name: input.name,
         code: input.code,
         color: input.color,
         sortOrder: input.sortOrder,
-      } as any);
-      return { id: Number(result.insertId), success: true };
+        isActive: true,
+      } as any).returning();
+      return { id: result.id, success: true };
     }),
 
   update: settingsManage
@@ -122,7 +143,7 @@ export const paymentMethodsRouter = createRouter({
           paymentMethodId: input.paymentMethodId,
           linkedAccountId: input.linkedAccountId,
           isActive: true,
-        } as any);
+        } as any).returning();
       }
       return { success: true };
     }),

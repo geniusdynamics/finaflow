@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, CreditCard, AlertTriangle, CheckCircle, Clock, Trash2, Package, Search, Camera, Calendar, Repeat, FileText } from "lucide-react";
+import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -35,7 +36,7 @@ export function Bills() {
   const { data: suppliers } = trpc.suppliers.list.useQuery();
   const { data: accounts } = trpc.accounts.list.useQuery();
   const { data: categories } = trpc.expenses.categories.useQuery();
-  const { data: bills, refetch } = trpc.bills.list.useQuery({});
+  const { data: bills } = trpc.bills.list.useQuery({});
   const { data: recurring } = trpc.bills.listRecurring.useQuery({});
   const { data: billsSummary } = trpc.dashboard.billsSummary.useQuery();
   const { data: billItemsData } = trpc.bills.getItems.useQuery(
@@ -43,18 +44,19 @@ export function Bills() {
   );
 
   const utils = trpc.useUtils();
-  const createBill = trpc.bills.create.useMutation({ onSuccess: () => { setOpen(false); refetch(); } });
+  const createBill = trpc.bills.create.useMutation({ onSuccess: () => { setOpen(false); utils.bills.list.invalidate(); } });
   const createRecurring = trpc.bills.createRecurring.useMutation({ onSuccess: () => { setRecurringOpen(false); utils.bills.listRecurring.invalidate(); } });
-  const generateRecurring = trpc.bills.generateRecurring.useMutation({ onSuccess: () => refetch() });
-  const deleteRecurring = trpc.bills.deleteRecurring.useMutation({ onSuccess: () => { utils.bills.listRecurring.invalidate(); refetch(); } });
-  const recordPayment = trpc.bills.recordPayment.useMutation({ onSuccess: () => { setPaymentOpen(null); refetch(); } });
-  const addItem = trpc.bills.addItem.useMutation({ onSuccess: () => { utils.bills.getItems.invalidate(); refetch(); } });
-  const deleteItem = trpc.bills.deleteItem.useMutation({ onSuccess: () => { utils.bills.getItems.invalidate(); refetch(); } });
-  const deleteBill = trpc.bills.delete.useMutation({ onSuccess: () => refetch() });
+  const generateRecurring = trpc.bills.generateRecurring.useMutation({ onSuccess: () => utils.bills.list.invalidate() });
+  const deleteRecurring = trpc.bills.deleteRecurring.useMutation({ onSuccess: () => { utils.bills.listRecurring.invalidate(); utils.bills.list.invalidate(); } });
+  const recordPayment = trpc.bills.recordPayment.useMutation({ onSuccess: () => { setPaymentOpen(null); utils.bills.list.invalidate(); } });
+  const addItem = trpc.bills.addItem.useMutation({ onSuccess: () => { utils.bills.getItems.invalidate(); utils.bills.list.invalidate(); } });
+  const deleteItem = trpc.bills.deleteItem.useMutation({ onSuccess: () => { utils.bills.getItems.invalidate(); utils.bills.list.invalidate(); } });
+  const deleteBill = trpc.bills.delete.useMutation({ onSuccess: () => utils.bills.list.invalidate() });
 
   const [form, setForm] = useState({ locationId: "", supplierId: "", description: "", amount: "", issueDate: "", dueDate: "" });
   const [recForm, setRecForm] = useState({ locationId: "", supplierId: "", description: "", amount: "", frequency: "monthly" as const, nextDueDate: "" });
   const [payForm, setPayForm] = useState({ paymentMethod: "mpesa" as const, amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" });
+  const todayDate = getLocalDateString();
 
   // Item form with autocomplete
   const [itemForm, setItemForm] = useState({ itemName: "", quantity: "1", unitPrice: "", totalPrice: "", categoryId: "", notes: "" });
@@ -140,7 +142,14 @@ export function Bills() {
 
   const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); createBill.mutate({ locationId: +form.locationId, supplierId: form.supplierId ? +form.supplierId : undefined, description: form.description, amount: form.amount, issueDate: form.issueDate, dueDate: form.dueDate, attachments: photosEnabled ? attachments : undefined }); };
   const handleRecurring = (e: React.FormEvent) => { e.preventDefault(); createRecurring.mutate({ locationId: +recForm.locationId, supplierId: recForm.supplierId ? +recForm.supplierId : undefined, description: recForm.description, amount: recForm.amount, frequency: recForm.frequency, nextDueDate: recForm.nextDueDate }); };
-  const handlePayment = (billId: number) => (e: React.FormEvent) => { e.preventDefault(); recordPayment.mutate({ billId, paymentMethod: payForm.paymentMethod, amount: payForm.amount, paymentDate: payForm.paymentDate, reference: payForm.reference, accountId: payForm.accountId ? +payForm.accountId : undefined }); };
+  const handlePayment = (billId: number) => (e: React.FormEvent) => {
+    e.preventDefault();
+    if (payForm.paymentDate > todayDate) {
+      toast.error("Payment date cannot be in the future");
+      return;
+    }
+    recordPayment.mutate({ billId, paymentMethod: payForm.paymentMethod, amount: payForm.amount, paymentDate: payForm.paymentDate, reference: payForm.reference, accountId: payForm.accountId ? +payForm.accountId : undefined });
+  };
 
   const getStatusStyle = (s: string) => { switch(s){ case "paid": return "text-[#2E7D32] bg-[#2E7D32]/10"; case "overdue": return "text-[#D32F2F] bg-[#D32F2F]/10"; case "partial": return "text-[#ED6C02] bg-[#ED6C02]/10"; default: return "text-[#8D8A87] bg-[#8D8A87]/10"; } };
 
@@ -269,6 +278,7 @@ export function Bills() {
                           <form onSubmit={handlePayment(bill.id)} className="space-y-3">
                             <div className="rounded bg-[#F5EDE6] p-3"><p className="text-sm font-medium">{bill.description}</p><p className="text-xs text-[#8D8A87]">Balance: {formatKES(bill.balanceDue)}</p></div>
                             <div className="grid grid-cols-2 gap-3"><div><Label>Amount</Label><Input type="number" step="0.01" max={parseFloat(bill.balanceDue)} value={payForm.amount} onChange={e => setPayForm(p => ({...p, amount: e.target.value}))} required /></div><div><Label>Method</Label><select value={payForm.paymentMethod} onChange={e => setPayForm(p => ({...p, paymentMethod: e.target.value as any}))} className="w-full rounded border px-3 py-2 text-sm"><option value="cash">Cash</option><option value="mpesa">M-PESA</option><option value="bank_transfer">Bank</option><option value="card">Card</option></select></div></div>
+                            <div><Label>Payment Date</Label><Input type="date" value={payForm.paymentDate} max={todayDate} onChange={e => setPayForm(p => ({ ...p, paymentDate: e.target.value }))} required /></div>
                             <div className="grid grid-cols-2 gap-3"><div><Label>Account</Label><select value={payForm.accountId} onChange={e => setPayForm(p => ({...p, accountId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Select</option>{accounts?.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {loc ? `· ${loc}` : ""}</option>; })}</select></div><div><Label>Reference</Label><Input value={payForm.reference} onChange={e => setPayForm(p => ({...p, reference: e.target.value}))} placeholder="M-PESA code"/></div></div>
                             <Button type="submit" className="w-full bg-[#C73E1D]" disabled={recordPayment.isPending}>{recordPayment.isPending ? "Processing..." : "Record Payment"}</Button>
                           </form>

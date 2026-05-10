@@ -116,8 +116,8 @@ export const supplierPricesRouter = createRouter({
         billId: input.billId,
         locationId: input.locationId,
         priceDate: new Date(input.priceDate),
-      } as any);
-      return { id: Number(result.insertId) };
+      } as any).returning();
+      return { id: result.id };
     }),
 
   // Check price alerts (auto-detect significant price changes)
@@ -169,8 +169,8 @@ export const supplierPricesRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const [result] = await db.insert(priceAlertRules).values(input as any);
-      return { id: Number(result.insertId) };
+      const [result] = await db.insert(priceAlertRules).values(input as any).returning();
+      return { id: result.id };
     }),
 
   updateRule: authedQuery

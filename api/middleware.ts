@@ -1,9 +1,11 @@
+// ABOUTME: Defines shared tRPC middleware, permission guards, and error formatting for the backend routers.
+// ABOUTME: Centralizes auth, RBAC, tenant scoping, and helper utilities that every API module reuses.
 import { TRPCError, initTRPC } from "@trpc/server";
 import { ZodError } from "zod";
 import SuperJSON from "superjson";
 import { getDb } from "./queries/connection";
-import { businesses, locations, users, userBusinesses, rolePermissions } from "@db/schema";
-import { eq, and, sql, isNull } from "drizzle-orm";
+import { businesses, locations, users, userBusinesses, rolePermissions, type Business } from "@db/schema";
+import { eq, and, sql, isNull, type AnyColumn, type AnyTable } from "drizzle-orm";
 
 export const ErrorMessages = {
   unknownError: "Unknown error",
@@ -158,29 +160,55 @@ function hasPermissionWithCache(role: string, permission: Permission): boolean {
   return hasPermission(role, permission);
 }
 
+type CurrentBusinessContext = Pick<
+  Business,
+  "id" | "accountId" | "accountRefId" | "plan" | "features" | "maxBranches" | "maxUsers"
+>;
+
+interface TrpcUser {
+  id: number;
+  role: string;
+  name?: string | null;
+  email?: string | null;
+  currentBusinessId?: number | null;
+  currentBusiness?: CurrentBusinessContext | null;
+  businessIds?: number[];
+  accountId?: string | null;
+  accountRefId?: number | null;
+  [key: string]: unknown;
+}
+
 // tRPC setup with context type
 interface TrpcCtx {
   req: Request;
   resHeaders: Headers;
-  user?: {
-    id: number;
-    role: string;
-    name: string | null;
-    email: string | null;
-    currentBusinessId?: number | null;
-    currentBusiness?: any;
-    businessIds?: number[];
-    [key: string]: any;
-  };
+  user?: TrpcUser;
 }
+
+type UserContextCarrier = Pick<TrpcCtx, "user">;
+type LocationScopedTable = AnyTable<{ name: string }> & {
+  id: AnyColumn;
+  locationId: AnyColumn;
+  deletedAt?: AnyColumn;
+};
+type BusinessScopedTable = AnyTable<{ name: string }> & {
+  id: AnyColumn;
+  businessId: AnyColumn;
+  deletedAt?: AnyColumn;
+};
 
 const t = initTRPC.context<TrpcCtx>().create({
   transformer: SuperJSON,
   errorFormatter({ shape, error }) {
+    const causeData = error.cause && typeof error.cause === "object" && !(error.cause instanceof ZodError)
+      ? error.cause as Record<string, unknown>
+      : null;
+
     return {
       ...shape,
       data: {
         ...shape.data,
+        ...(causeData ?? {}),
         zodError:
           error.code === "BAD_REQUEST" && error.cause instanceof ZodError
             ? error.cause.flatten()
@@ -206,7 +234,7 @@ const requireAuth = t.middleware(async (opts) => {
 });
 
 // Permission middleware factory
-function requirePermission(permission: Permission) {
+export function requirePermission(permission: Permission) {
   return t.middleware(async (opts) => {
     const user = opts.ctx.user;
     if (!user) {
@@ -236,8 +264,6 @@ export const requireTier = (feature: string) => t.middleware(async (opts) => {
   if (!biz) throw new TRPCError({ code: "FORBIDDEN", message: "No active business selected" });
 
   const plan = biz.plan ?? "free";
-  const features = biz.features ?? {};
-
   // Plan tier limits
   const TIER_FEATURES: Record<string, string[]> = {
     free: [],
@@ -327,7 +353,7 @@ const requireOwner = t.middleware(async (opts) => {
 });
 export const ownerQuery = t.procedure.use(requireOwner);
 
-export async function getCurrentBusinessLocationIds(ctx: any): Promise<number[]> {
+export async function getCurrentBusinessLocationIds(ctx: UserContextCarrier): Promise<number[]> {
   const db = getDb();
   const userId = ctx.user?.id;
   const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
@@ -354,4 +380,93 @@ export async function getUserBusinessIds(userId: number): Promise<number[]> {
   const junctions = await db.select({ businessId: userBusinesses.businessId }).from(userBusinesses)
     .where(and(eq(userBusinesses.userId, userId), eq(userBusinesses.isActive, true)));
   return junctions.map(j => j.businessId);
+}
+
+// ── Tenant Validation Helpers ────────────────────────────────────────
+
+/**
+ * Validates that a provided location ID belongs to the current user's business.
+ * Throws an error if unauthorized.
+ */
+export async function requireAuthorizedLocation(ctx: UserContextCarrier, locationId: number): Promise<number> {
+  const locIds = await getCurrentBusinessLocationIds(ctx);
+  if (!locIds.includes(locationId)) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "The specified location does not belong to the active business or you lack access.",
+    });
+  }
+  return locationId;
+}
+
+/**
+ * Generic helper to fetch an entity by ID and verify it belongs to the current business.
+ * Assumes the entity table has an `id` and `locationId` column.
+ */
+export async function requireAuthorizedEntity<TTable extends LocationScopedTable>(
+  ctx: UserContextCarrier,
+  table: TTable,
+  id: number
+) {
+  const db = getDb();
+  const locIds = await getCurrentBusinessLocationIds(ctx);
+  if (locIds.length === 0) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "No active business locations available." });
+  }
+
+  const locIdSql = sql.join(locIds.map(locId => sql`${locId}`), sql`, `);
+  const conditions = [
+    eq(table.id, id),
+    sql`${table.locationId} IN (${locIdSql})`
+  ];
+
+  // Optional: if the table has deletedAt, we only fetch non-deleted ones.
+  // We'll dynamically check if it exists in the schema table def.
+  if ("deletedAt" in table && table.deletedAt) {
+    conditions.push(isNull(table.deletedAt));
+  }
+
+  const rows = await db.select().from(table).where(and(...conditions)).limit(1);
+  if (rows.length === 0) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Entity not found or does not belong to the active business.",
+    });
+  }
+  return rows[0];
+}
+
+/**
+ * Generic helper to fetch an entity by ID and verify it belongs to the current business by its businessId.
+ * Assumes the entity table has an `id` and `businessId` column.
+ */
+export async function requireAuthorizedBusinessEntity<TTable extends BusinessScopedTable>(
+  ctx: UserContextCarrier,
+  table: TTable,
+  id: number
+) {
+  const db = getDb();
+  const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
+  
+  if (!businessId) {
+    throw new TRPCError({ code: "FORBIDDEN", message: "No active business context available." });
+  }
+
+  const conditions = [
+    eq(table.id, id),
+    eq(table.businessId, businessId)
+  ];
+
+  if ("deletedAt" in table && table.deletedAt) {
+    conditions.push(isNull(table.deletedAt));
+  }
+
+  const rows = await db.select().from(table).where(and(...conditions)).limit(1);
+  if (rows.length === 0) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: "Entity not found or does not belong to the active business.",
+    });
+  }
+  return rows[0];
 }

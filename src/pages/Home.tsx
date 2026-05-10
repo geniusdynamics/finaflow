@@ -29,7 +29,7 @@ export default function Home() {
       <Helmet>
         <title>Finaflow — Business Financial Tracking Platform</title>
         <meta name="description" content="Finaflow helps businesses track cashflow, manage payroll, process bills, and generate financial reports in real-time." />
-        <meta property="og:title" content="Finaflow — Financial Tracking for Kenyan Businesses" />
+        <meta property="og:title" content="Finaflow — Financial Tracking for African Businesses" />
         <meta property="og:description" content="Comprehensive business financial management platform with M-PESA integration, payroll, and reporting." />
         <meta property="og:type" content="website" />
         <script type="application/ld+json">
@@ -38,7 +38,7 @@ export default function Home() {
             "@type": "SoftwareApplication",
             "name": "Finaflow",
             "applicationCategory": "BusinessApplication",
-            "description": "Business financial tracking platform for Kenyan restaurants",
+            "description": "Business financial tracking platform for African businesses",
             "offers": { "@type": "Offer", "price": "0", "priceCurrency": "KES" },
           })}
         </script>
@@ -78,10 +78,10 @@ export default function Home() {
                 <Zap className="h-3 w-3" /> Now with Partner & Reseller Program
               </div>
               <h1 className="font-serif text-4xl font-bold leading-tight text-[#2D2A26] md:text-5xl">
-                Restaurant finances,<br />finally <span className="text-[#C73E1D]">made simple</span>
+                Business finances,<br />finally <span className="text-[#C73E1D]">made simple</span>
               </h1>
               <p className="mt-4 text-lg text-[#8D8A87]">
-                Track sales, manage expenses, run payroll, and reconcile M-PESA — all in one place. Built for Kenyan restaurants with multiple branches.
+                Track sales, manage expenses, run payroll, and reconcile M-PESA — all in one place. Built for African Businesses.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link to="/login"><Button className="bg-[#C73E1D] hover:bg-[#C73E1D]/90 px-6">Get Started Free</Button></Link>
@@ -142,8 +142,11 @@ export default function Home() {
                   <CardContent className="p-4">
                     <h3 className="text-sm font-semibold text-[#2D2A26]">{t.name}</h3>
                     <div className="mt-2">
-                      <span className="font-serif text-3xl font-bold text-[#2D2A26]">{t.price}</span>
-                      <span className="text-xs text-[#8D8A87]">/mo</span>
+                      <div className="flex flex-wrap items-end gap-2" aria-label={`${t.name} plan price reduced to zero`}>
+                        <span className="font-serif text-2xl font-bold text-[#8D8A87] line-through decoration-2">{t.price}</span>
+                        <span className="font-serif text-3xl font-bold text-[#2D2A26]">0</span>
+                        <span className="text-xs text-[#8D8A87]">/mo</span>
+                      </div>
                     </div>
                     <ul className="mt-3 space-y-1.5">
                       {t.features.map((f, j) => (
@@ -165,7 +168,7 @@ export default function Home() {
           <div className="mx-auto max-w-3xl px-4 text-center">
             <h2 className="font-serif text-3xl font-bold text-[#2D2A26]">Are you an accountant or consultant?</h2>
             <p className="mt-3 text-sm text-[#8D8A87]">
-              Join our Partner Program and earn <strong className="text-[#D4A854]">20% revenue share</strong> from every restaurant client you onboard.
+              Join our Partner Program and earn <strong className="text-[#D4A854]">20% revenue share</strong> from every business client you onboard.
             </p>
             <div className="mt-6 flex justify-center gap-3">
               <Link to="/login"><Button className="bg-[#D4A854] text-white hover:bg-[#D4A854]/90">Join as Partner</Button></Link>
@@ -182,7 +185,7 @@ export default function Home() {
                 </div>
                 <span className="font-serif text-sm font-bold text-[#2D2A26]">Finaflow</span>
               </div>
-              <p className="text-xs text-[#8D8A87]">© 2026 Finaflow. Built for Kenyan restaurants.</p>
+              <p className="text-xs text-[#8D8A87]">© 2026 Finaflow. Built for African Businesses.</p>
               <div className="flex gap-4 text-xs text-[#8D8A87]">
                 <Link to="/login" className="hover:text-[#2D2A26]">Sign In</Link>
                 <Link to="/login" className="hover:text-[#2D2A26]">Sign Up</Link>

@@ -4,7 +4,6 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Toaster } from "@/components/ui/sonner";
 import { PageSkeleton } from "@/components/Skeleton";
-import AuthLayout from "@/components/AuthLayout";
 
 const Home = lazy(() => import("./pages/Home"));
 const Login = lazy(() => import("./pages/Login"));
@@ -25,7 +24,7 @@ const Users = lazy(() => import("./pages/Users").then(m => ({ default: m.Users }
 const Locations = lazy(() => import("./pages/Locations").then(m => ({ default: m.Locations })));
 const Settings = lazy(() => import("./pages/Settings").then(m => ({ default: m.Settings })));
 const Feedback = lazy(() => import("./pages/Feedback").then(m => ({ default: m.Feedback })));
-const Businesses = lazy(() => import("./pages/Businesses").then(m => ({ default: m.Businesses })));
+const Businesses = lazy(() => import("./pages/Businesses"));
 const BusinessDetails = lazy(() => import("./pages/BusinessDetails").then(m => ({ default: m.BusinessDetails })));
 const PaymentMethods = lazy(() => import("./pages/PaymentMethods").then(m => ({ default: m.PaymentMethods })));
 const SupplierPrices = lazy(() => import("./pages/SupplierPrices").then(m => ({ default: m.SupplierPrices })));
@@ -37,11 +36,7 @@ function SuspendedPage({ children }: { children: React.ReactNode }) {
 }
 
 function ProtectedPage({ children }: { children: React.ReactNode }) {
-  return (
-    <ProtectedRoute>
-      <AuthLayout>{children}</AuthLayout>
-    </ProtectedRoute>
-  );
+  return <ProtectedRoute>{children}</ProtectedRoute>;
 }
 
 export default function App() {
