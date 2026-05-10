@@ -3,15 +3,50 @@ import type { User } from "@db/schema";
 import { authenticateRequest } from "./kimi/auth";
 import { verifyLocalToken } from "./local-auth-router";
 import { getDb } from "./queries/connection";
-import { users, businesses, userBusinesses } from "@db/schema";
+import { users, businesses, userBusinesses, partnerAllocations } from "@db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import * as cookie from "cookie";
+import type { RightsProfile } from "./lib/partner-allocations";
 
 export type TrpcContext = {
   req: Request;
   resHeaders: Headers;
-  user?: User & { currentBusiness?: typeof businesses.$inferSelect | null; businessIds?: number[] };
+  user?: User & {
+    currentBusiness?: typeof businesses.$inferSelect | null;
+    businessIds?: number[];
+    allocationRightsProfile?: RightsProfile | null;
+    accessSource?: "owned" | "allocated";
+  };
 };
+
+async function resolveAllocationAccess(
+  userId: number,
+  businessId: number | null | undefined,
+): Promise<{ allocationRightsProfile: RightsProfile | null; accessSource: "owned" | "allocated" }> {
+  if (!businessId) {
+    return { allocationRightsProfile: null, accessSource: "owned" };
+  }
+  const db = getDb();
+  const allocationRows = await db.select({ rightsProfile: partnerAllocations.rightsProfile })
+    .from(partnerAllocations)
+    .where(and(
+      eq(partnerAllocations.partnerUserId, userId),
+      eq(partnerAllocations.ownerBusinessId, businessId),
+      eq(partnerAllocations.status, "active"),
+      isNull(partnerAllocations.deletedAt),
+    ))
+    .limit(1);
+
+  const allocation = allocationRows[0];
+  if (!allocation) {
+    return { allocationRightsProfile: null, accessSource: "owned" };
+  }
+
+  return {
+    allocationRightsProfile: allocation.rightsProfile,
+    accessSource: "allocated",
+  };
+}
 
 export async function createContext(
   opts: FetchCreateContextFnOptions,
@@ -42,7 +77,8 @@ export async function createContext(
               .where(and(eq(businesses.id, bizIds[0]), isNull(businesses.deletedAt))).limit(1);
             currentBusiness = biz[0] ?? null;
           }
-          ctx.user = { ...user, currentBusiness, businessIds: bizIds };
+          const allocationAccess = await resolveAllocationAccess(user.id, currentBusiness?.id ?? null);
+          ctx.user = { ...user, currentBusiness, businessIds: bizIds, ...allocationAccess };
           return ctx;
         }
       }
@@ -75,7 +111,8 @@ export async function createContext(
               .where(and(eq(businesses.id, bizIds[0]), isNull(businesses.deletedAt))).limit(1);
             currentBusiness = biz[0] ?? null;
           }
-          ctx.user = { ...user, currentBusiness, businessIds: bizIds };
+          const allocationAccess = await resolveAllocationAccess(user.id, currentBusiness?.id ?? null);
+          ctx.user = { ...user, currentBusiness, businessIds: bizIds, ...allocationAccess };
           return ctx;
         }
       }
@@ -98,7 +135,8 @@ export async function createContext(
           .where(and(eq(businesses.id, oauthUser.currentBusinessId), isNull(businesses.deletedAt))).limit(1);
         currentBusiness = biz[0] ?? null;
       }
-      ctx.user = { ...oauthUser, currentBusiness, businessIds: bizIds };
+      const allocationAccess = await resolveAllocationAccess(oauthUser.id, currentBusiness?.id ?? null);
+      ctx.user = { ...oauthUser, currentBusiness, businessIds: bizIds, ...allocationAccess };
     }
   } catch {
     // Authentication is optional

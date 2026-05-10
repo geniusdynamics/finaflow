@@ -6,6 +6,7 @@ import SuperJSON from "superjson";
 import { getDb } from "./queries/connection";
 import { businesses, locations, users, userBusinesses, rolePermissions, type Business } from "@db/schema";
 import { eq, and, sql, isNull, type AnyColumn, type AnyTable } from "drizzle-orm";
+import type { RightsProfile } from "./lib/partner-allocations";
 
 export const ErrorMessages = {
   unknownError: "Unknown error",
@@ -153,11 +154,39 @@ export function invalidateRolePermissionCache(): void {
 }
 
 // Override hasPermission to check DB cache first, then fall back to hardcoded defaults
-function hasPermissionWithCache(role: string, permission: Permission): boolean {
+function getRolePermissionsWithCache(role: string): Permission[] {
   if (ROLE_PERMISSIONS_CACHE && ROLE_PERMISSIONS_CACHE[role]) {
-    return ROLE_PERMISSIONS_CACHE[role].includes(permission);
+    return ROLE_PERMISSIONS_CACHE[role];
   }
-  return hasPermission(role, permission);
+  return ROLE_PERMISSIONS[role] || [];
+}
+
+function hasPermissionWithCache(role: string, permission: Permission): boolean {
+  return getRolePermissionsWithCache(role).includes(permission);
+}
+
+function getPermissionAction(permission: string): string {
+  if (permission.includes(":")) {
+    return permission.split(":").at(-1)?.toLowerCase() ?? "";
+  }
+  if (permission.includes(".")) {
+    return permission.split(".").at(-1)?.toLowerCase() ?? "";
+  }
+  return permission.toLowerCase();
+}
+
+export function clampPermissionsForAllocation(base: string[], profile: RightsProfile): string[] {
+  if (profile === "manage") {
+    return base;
+  }
+
+  const viewActions = new Set(["view", "read"]);
+  if (profile === "view_only") {
+    return base.filter((permission) => viewActions.has(getPermissionAction(permission)));
+  }
+
+  const createViewActions = new Set(["view", "read", "create", "add"]);
+  return base.filter((permission) => createViewActions.has(getPermissionAction(permission)));
 }
 
 type CurrentBusinessContext = Pick<
@@ -175,6 +204,8 @@ interface TrpcUser {
   businessIds?: number[];
   accountId?: string | null;
   accountRefId?: number | null;
+  allocationRightsProfile?: RightsProfile | null;
+  accessSource?: "owned" | "allocated";
   [key: string]: unknown;
 }
 
@@ -245,7 +276,11 @@ export function requirePermission(permission: Permission) {
     }
     // Ensure DB role cache is loaded before checking
     await loadRolePermissionsFromDb();
-    if (!hasPermissionWithCache(user.role, permission)) {
+    const basePermissions = getRolePermissionsWithCache(user.role);
+    const effectivePermissions = user.accessSource === "allocated" && user.allocationRightsProfile
+      ? clampPermissionsForAllocation(basePermissions, user.allocationRightsProfile)
+      : basePermissions;
+    if (!effectivePermissions.includes(permission)) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: ErrorMessages.insufficientRole,
