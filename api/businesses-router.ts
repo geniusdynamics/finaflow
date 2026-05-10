@@ -4,10 +4,11 @@
 import { z } from "zod";
 import { createRouter, publicQuery, authedQuery, businessManage } from "./middleware";
 import { getDb } from "./queries/connection";
-import { businesses, userBusinesses, users, locations, dailySales, expenses, bills, accounts, businessDocuments } from "@db/schema";
+import { businesses, userBusinesses, users, locations, dailySales, expenses, bills, accounts, businessDocuments, businessLogos } from "@db/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { logAudit } from "./lib/audit";
 import { base64SizeBytes, resolveMimeType, sanitizeDownloadFileName } from "./lib/business-documents";
+import { assertAllowedLogoMimeType, assertLogoMaxSize } from "./lib/logo-validation";
 import { assertCanCreateBusiness } from "./lib/subscription-enforcement";
 import {
   countBusinessesForAccount,
@@ -40,6 +41,24 @@ export const downloadDocumentInputSchema = z.object({
   documentId: z.number().int().positive(),
 });
 
+export const uploadLogoInputSchema = z.object({
+  businessId: z.number().int().positive(),
+  fileName: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(100),
+  fileData: z.string().min(1),
+  width: z.number().int().positive().nullable().optional(),
+  height: z.number().int().positive().nullable().optional(),
+  sizeBytes: z.number().int().positive(),
+});
+
+export const getActiveLogoInputSchema = z.object({
+  businessId: z.number().int().positive(),
+});
+
+export const deleteLogoInputSchema = z.object({
+  businessId: z.number().int().positive(),
+});
+
 export function mapDownloadPayload(row: {
   fileName: string;
   mimeType?: string | null;
@@ -50,6 +69,22 @@ export function mapDownloadPayload(row: {
     mimeType: resolveMimeType(row.mimeType),
     fileData: row.fileData,
   };
+}
+
+async function assertBusinessMembership(params: {
+  userId: number;
+  businessId: number;
+}): Promise<void> {
+  const db = getDb();
+  const access = await db.select({ id: userBusinesses.id }).from(userBusinesses).where(and(
+    eq(userBusinesses.userId, params.userId),
+    eq(userBusinesses.businessId, params.businessId),
+    eq(userBusinesses.isActive, true),
+  )).limit(1);
+
+  if (access.length === 0) {
+    throw new Error("You do not have access to this business");
+  }
 }
 
 export const businessesRouter = createRouter({
@@ -657,6 +692,114 @@ export const businessesRouter = createRouter({
       const db = getDb();
       await db.update(businessDocuments).set({ deletedAt: new Date() })
         .where(eq(businessDocuments.id, input.id));
+      return { success: true };
+    }),
+
+  uploadLogo: businessManage
+    .input(uploadLogoInputSchema)
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const userId = ctx.user!.id;
+      await assertBusinessMembership({ userId, businessId: input.businessId });
+      assertAllowedLogoMimeType(input.mimeType);
+      assertLogoMaxSize(input.sizeBytes);
+
+      const uploadedLogo = await db.transaction(async (tx) => {
+        await tx.update(businessLogos).set({
+          isActive: false,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(businessLogos.businessId, input.businessId),
+          eq(businessLogos.isActive, true),
+          isNull(businessLogos.deletedAt),
+        ));
+
+        const [logo] = await tx.insert(businessLogos).values({
+          businessId: input.businessId,
+          fileName: input.fileName,
+          mimeType: input.mimeType,
+          fileData: input.fileData,
+          width: input.width ?? null,
+          height: input.height ?? null,
+          sizeBytes: input.sizeBytes,
+          isActive: true,
+          uploadedBy: userId,
+        } as any).returning();
+
+        await logAudit({
+          userId,
+          businessId: input.businessId,
+          action: "CREATE",
+          resource: "business_logos",
+          resourceId: logo.id,
+          details: {
+            operation: "upload_logo",
+            fileName: input.fileName,
+            mimeType: input.mimeType,
+            sizeBytes: input.sizeBytes,
+          },
+        });
+
+        return logo;
+      });
+
+      return { success: true, id: uploadedLogo.id };
+    }),
+
+  getActiveLogo: businessManage
+    .input(getActiveLogoInputSchema)
+    .query(async ({ input, ctx }) => {
+      const db = getDb();
+      await assertBusinessMembership({ userId: ctx.user!.id, businessId: input.businessId });
+
+      const [row] = await db.select().from(businessLogos).where(and(
+        eq(businessLogos.businessId, input.businessId),
+        eq(businessLogos.isActive, true),
+        isNull(businessLogos.deletedAt),
+      )).limit(1);
+
+      return row ?? null;
+    }),
+
+  deleteLogo: businessManage
+    .input(deleteLogoInputSchema)
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const userId = ctx.user!.id;
+      await assertBusinessMembership({ userId, businessId: input.businessId });
+
+      await db.transaction(async (tx) => {
+        const [activeLogo] = await tx.select().from(businessLogos).where(and(
+          eq(businessLogos.businessId, input.businessId),
+          eq(businessLogos.isActive, true),
+          isNull(businessLogos.deletedAt),
+        )).limit(1);
+
+        if (!activeLogo) {
+          throw new Error("Active logo not found");
+        }
+
+        await tx.update(businessLogos).set({
+          isActive: false,
+          deletedAt: new Date(),
+          updatedAt: new Date(),
+        }).where(eq(businessLogos.id, activeLogo.id));
+
+        await logAudit({
+          userId,
+          businessId: input.businessId,
+          action: "DELETE",
+          resource: "business_logos",
+          resourceId: activeLogo.id,
+          details: {
+            operation: "delete_logo",
+            fileName: activeLogo.fileName,
+            mimeType: activeLogo.mimeType,
+            sizeBytes: activeLogo.sizeBytes,
+          },
+        });
+      });
+
       return { success: true };
     }),
 });

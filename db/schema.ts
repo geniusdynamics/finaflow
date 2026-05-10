@@ -15,7 +15,6 @@ import {
   json,
   index,
   uniqueIndex,
-  primaryKey,
 } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["owner", "admin", "manager", "employee", "viewer"]);
@@ -558,6 +557,30 @@ export const businesses = pgTable("businesses", {
 
 export type Business = typeof businesses.$inferSelect;
 
+// Business logos (letterheads and brand assets)
+export const businessLogos = pgTable("business_logos", {
+  id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  mimeType: varchar("mimeType", { length: 100 }).notNull(),
+  fileData: text("fileData").notNull(),
+  width: integer("width"),
+  height: integer("height"),
+  sizeBytes: integer("sizeBytes").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  uploadedBy: bigint("uploadedBy", { mode: "number" }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  bizLogoBusinessIdx: index("idx_business_logos_businessId").on(table.businessId),
+  bizLogoIsActiveIdx: index("idx_business_logos_isActive").on(table.isActive),
+  bizLogoUploadedByIdx: index("idx_business_logos_uploadedBy").on(table.uploadedBy),
+  bizLogoDeletedAtIdx: index("idx_business_logos_deletedAt").on(table.deletedAt),
+}));
+
+export type BusinessLogo = typeof businessLogos.$inferSelect;
+
 // Business documents (registration certs, KRA, licenses, etc.)
 export const businessDocuments = pgTable("business_documents", {
   id: serial("id").primaryKey(),
@@ -977,3 +1000,4 @@ export const refreshTokens = pgTable("refresh_tokens", {
 }));
 
 export type RefreshToken = typeof refreshTokens.$inferSelect;
+

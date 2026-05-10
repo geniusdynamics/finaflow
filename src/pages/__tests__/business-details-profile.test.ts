@@ -68,6 +68,13 @@ vi.mock("@/providers/trpc", () => ({
           isLoading: false,
         }),
       },
+      getActiveLogo: {
+        useQuery: () => ({
+          data: null,
+          refetch: vi.fn(),
+          isLoading: false,
+        }),
+      },
       update: {
         useMutation: () => ({
           mutateAsync: vi.fn(),
@@ -81,6 +88,18 @@ vi.mock("@/providers/trpc", () => ({
       deleteDocument: {
         useMutation: () => ({
           mutateAsync: vi.fn(),
+        }),
+      },
+      uploadLogo: {
+        useMutation: () => ({
+          mutateAsync: vi.fn(),
+          isPending: false,
+        }),
+      },
+      deleteLogo: {
+        useMutation: () => ({
+          mutateAsync: vi.fn(),
+          isPending: false,
         }),
       },
       downloadDocument: {
@@ -102,6 +121,7 @@ describe("BusinessDetails profile view", () => {
     const html = renderToStaticMarkup(React.createElement(BusinessDetails));
 
     expect(html).toContain("Business Details");
+    expect(html).toContain("Logo Management");
     expect(html).toContain("Profile Summary");
     expect(html).toContain("Business Name");
     expect(html).toContain("Acme Foods");
@@ -111,7 +131,7 @@ describe("BusinessDetails profile view", () => {
     expect(html).toContain("Download");
   });
 
-  it("renders print action and generated metadata block", () => {
+  it("keeps print profile action and letterhead block", () => {
     const html = renderToStaticMarkup(React.createElement(BusinessDetails));
 
     expect(html).toContain("Print Profile");

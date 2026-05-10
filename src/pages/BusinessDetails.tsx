@@ -7,7 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { BusinessLetterhead } from "@/features/business-profile/BusinessLetterhead";
 import { buildPrintGeneratedLabel, formatFileSize } from "@/features/business-profile/formatters";
+import { isAllowedLogoType, optimizeLogoFile, validateLogoFileSizeBytes } from "@/features/business-profile/logo-utils";
 import { toast } from "sonner";
 import { Building, Check, ChevronLeft, ChevronRight, FileText, Globe, Landmark, Loader2, Save, Shield, Store, Upload, X } from "lucide-react";
 
@@ -103,10 +105,16 @@ export function BusinessDetails() {
     { businessId: businessId! },
     { enabled: !!businessId }
   );
+  const { data: activeLogo, refetch: refetchLogo, isLoading: logoLoading } = trpc.businesses.getActiveLogo.useQuery(
+    { businessId: businessId! },
+    { enabled: !!businessId }
+  );
   const updateMutation = trpc.businesses.update.useMutation();
   const uploadDocMutation = trpc.businesses.uploadDocument.useMutation();
   const deleteDocMutation = trpc.businesses.deleteDocument.useMutation();
   const downloadDocumentMutation = trpc.businesses.downloadDocument.useMutation();
+  const uploadLogoMutation = trpc.businesses.uploadLogo.useMutation();
+  const deleteLogoMutation = trpc.businesses.deleteLogo.useMutation();
 
   const [form, setForm] = useState({
     name: "",
@@ -225,6 +233,60 @@ export function BusinessDetails() {
     }
   };
 
+  const handleLogoUpload = async (file: File) => {
+    if (!businessId) {
+      return;
+    }
+    if (!isAllowedLogoType(file.type)) {
+      throw new Error("Unsupported logo format. Allowed: JPEG, PNG, SVG.");
+    }
+    if (!validateLogoFileSizeBytes(file.size)) {
+      throw new Error("Logo exceeds 5MB maximum size.");
+    }
+
+    const optimized = await optimizeLogoFile(file);
+    await uploadLogoMutation.mutateAsync({
+      businessId,
+      fileName: file.name,
+      mimeType: optimized.mimeType,
+      fileData: optimized.fileData,
+      width: optimized.width,
+      height: optimized.height,
+      sizeBytes: optimized.sizeBytes,
+    });
+    await refetchLogo();
+    toast.success("Logo uploaded successfully");
+  };
+
+  const handleLogoInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      await handleLogoUpload(file);
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Logo upload failed"));
+    } finally {
+      e.target.value = "";
+    }
+  };
+
+  const handleDeleteLogo = async () => {
+    if (!businessId) {
+      return;
+    }
+
+    try {
+      await deleteLogoMutation.mutateAsync({ businessId });
+      await refetchLogo();
+      toast.success("Logo deleted");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to delete logo"));
+    }
+  };
+
   const handleNext = async () => {
     if (step === "confirmation") {
       await handleSave();
@@ -275,6 +337,21 @@ export function BusinessDetails() {
           <Button variant="outline" onClick={() => window.print()}>
             Print Profile
           </Button>
+        </div>
+        <div className="hidden print:block">
+          <BusinessLetterhead
+            business={{
+              name: form.name || business.name || "—",
+              accountId: business.accountId || "N/A",
+              phone: form.phone || business.phone,
+              email: form.email || business.email,
+              address: form.address || business.address,
+              county: form.county || business.county,
+              subCounty: form.subCounty || business.subCounty,
+            }}
+            logo={activeLogo ?? null}
+            generatedAt={new Date()}
+          />
         </div>
         <p className="hidden text-xs text-[#8D8A87] print:block">
           {buildPrintGeneratedLabel(business.accountId || "N/A", new Date())}
@@ -529,6 +606,65 @@ export function BusinessDetails() {
         </Card>
 
         <div className="mt-6 space-y-4">
+          <section className="rounded-lg border border-[#E8E0D8] bg-white p-4 print:hidden">
+            <h2 className="font-serif text-lg font-semibold text-[#2D2A26]">Logo Management</h2>
+            {logoLoading ? (
+              <p className="mt-2 text-xs text-[#8D8A87]">Loading logo…</p>
+            ) : activeLogo ? (
+              <div className="mt-3 space-y-3">
+                <img
+                  src={`data:${activeLogo.mimeType};base64,${activeLogo.fileData}`}
+                  alt="Business logo preview"
+                  className="h-20 w-auto max-w-full object-contain"
+                />
+                <p className="text-xs text-[#8D8A87]">
+                  {activeLogo.fileName} · {formatFileSize(activeLogo.sizeBytes)}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-[#8D8A87]">No logo uploaded.</p>
+            )}
+            <div className="mt-3 flex items-center gap-2">
+              <label className="cursor-pointer">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={uploadLogoMutation.isPending}
+                  className="text-xs"
+                  asChild
+                >
+                  <span>
+                    <Upload className="mr-1 h-3 w-3" />
+                    {activeLogo ? "Replace logo" : "Upload logo"}
+                  </span>
+                </Button>
+                <input
+                  type="file"
+                  className="hidden"
+                  accept=".jpg,.jpeg,.png,.svg,image/jpeg,image/png,image/svg+xml"
+                  onChange={handleLogoInputChange}
+                  disabled={uploadLogoMutation.isPending}
+                  aria-label="Upload business logo"
+                />
+              </label>
+              {activeLogo ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDeleteLogo}
+                  disabled={deleteLogoMutation.isPending}
+                  className="text-red-600 hover:text-red-800"
+                >
+                  <X className="mr-1 h-4 w-4" />
+                  Delete logo
+                </Button>
+              ) : null}
+            </div>
+            <p className="mt-2 text-xs text-[#8D8A87]">
+              Accepted formats: JPEG, PNG, SVG. Maximum size: 5 MB.
+            </p>
+          </section>
+
           <section className="rounded-lg border border-[#E8E0D8] bg-white p-4">
             <h2 className="font-serif text-lg font-semibold text-[#2D2A26]">Profile Summary</h2>
             <dl className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
