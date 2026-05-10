@@ -38,6 +38,9 @@ export const payrollStatusEnum = pgEnum("payrollStatus", ["open", "processing", 
 export const advanceStatusEnum = pgEnum("advanceStatus", ["pending", "approved", "partially_repaid", "repaid", "cancelled"]);
 export const leadStatusEnum = pgEnum("leadStatus", ["new", "contacted", "converted", "declined"]);
 export const orderStatusEnum = pgEnum("orderStatus", ["draft", "sent", "delivered", "billed", "cancelled"]);
+export const allocationRightsEnum = pgEnum("allocation_rights", ["view_only", "create_view", "manage"]);
+export const allocationInviteStatusEnum = pgEnum("allocation_invite_status", ["active", "consumed", "revoked", "expired"]);
+export const partnerAllocationStatusEnum = pgEnum("partner_allocation_status", ["active", "revoked"]);
 
 
 export const customerAccounts = pgTable("customer_accounts", {
@@ -610,6 +613,60 @@ export const userBusinesses = pgTable("user_businesses", {
 
 export type UserBusiness = typeof userBusinesses.$inferSelect;
 
+// One-time invite codes from owners that allow partners to claim allocated business access.
+export const allocationInvites = pgTable("allocation_invites", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 20 }).notNull(),
+  ownerAccountId: bigint("ownerAccountId", { mode: "number" }).notNull(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  rightsProfile: allocationRightsEnum("rightsProfile").notNull(),
+  status: allocationInviteStatusEnum("status").default("active").notNull(),
+  createdBy: bigint("createdBy", { mode: "number" }).notNull(),
+  consumedByPartnerAccountId: bigint("consumedByPartnerAccountId", { mode: "number" }),
+  consumedByPartnerUserId: bigint("consumedByPartnerUserId", { mode: "number" }),
+  consumedAt: timestamp("consumedAt"),
+  revokedAt: timestamp("revokedAt"),
+  expiresAt: timestamp("expiresAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  codeUnique: uniqueIndex("uq_allocation_invites_code").on(table.code),
+  ownerAccountIdx: index("idx_allocation_invites_ownerAccountId").on(table.ownerAccountId),
+  businessIdx: index("idx_allocation_invites_businessId").on(table.businessId),
+  statusIdx: index("idx_allocation_invites_status").on(table.status),
+  deletedAtIdx: index("idx_allocation_invites_deletedAt").on(table.deletedAt),
+}));
+
+export type AllocationInvite = typeof allocationInvites.$inferSelect;
+
+// Active/revoked lifecycle records for partner allocations after invite claim.
+export const partnerAllocations = pgTable("partner_allocations", {
+  id: serial("id").primaryKey(),
+  ownerAccountId: bigint("ownerAccountId", { mode: "number" }).notNull(),
+  ownerBusinessId: bigint("ownerBusinessId", { mode: "number" }).notNull(),
+  partnerAccountId: bigint("partnerAccountId", { mode: "number" }).notNull(),
+  partnerUserId: bigint("partnerUserId", { mode: "number" }).notNull(),
+  rightsProfile: allocationRightsEnum("rightsProfile").notNull(),
+  inviteId: bigint("inviteId", { mode: "number" }).notNull(),
+  status: partnerAllocationStatusEnum("status").default("active").notNull(),
+  revokedAt: timestamp("revokedAt"),
+  createdBy: bigint("createdBy", { mode: "number" }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  ownerAccountIdx: index("idx_partner_allocations_ownerAccountId").on(table.ownerAccountId),
+  ownerBusinessIdx: index("idx_partner_allocations_ownerBusinessId").on(table.ownerBusinessId),
+  partnerAccountIdx: index("idx_partner_allocations_partnerAccountId").on(table.partnerAccountId),
+  partnerUserIdx: index("idx_partner_allocations_partnerUserId").on(table.partnerUserId),
+  inviteIdx: uniqueIndex("uq_partner_allocations_inviteId").on(table.inviteId),
+  statusIdx: index("idx_partner_allocations_status").on(table.status),
+  deletedAtIdx: index("idx_partner_allocations_deletedAt").on(table.deletedAt),
+}));
+
+export type PartnerAllocation = typeof partnerAllocations.$inferSelect;
+
 // Generic attachments (photos for daily_sales, expenses, bills)
 export const attachments = pgTable("attachments", {
   id: serial("id").primaryKey(),
@@ -1000,4 +1057,3 @@ export const refreshTokens = pgTable("refresh_tokens", {
 }));
 
 export type RefreshToken = typeof refreshTokens.$inferSelect;
-
