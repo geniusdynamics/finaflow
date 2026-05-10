@@ -4,7 +4,7 @@ import { z } from "zod";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { authedQuery, createRouter } from "./middleware";
 import { getDb } from "./queries/connection";
-import { businesses, locations, userBusinesses, customerAccounts } from "@db/schema";
+import { businesses, locations, customerAccounts } from "@db/schema";
 import {
   extendBusinessTrial,
   getPlanConfig,

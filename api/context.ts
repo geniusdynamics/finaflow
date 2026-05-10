@@ -10,7 +10,7 @@ import * as cookie from "cookie";
 export type TrpcContext = {
   req: Request;
   resHeaders: Headers;
-  user?: User & { currentBusiness?: any; businessIds?: number[] };
+  user?: User & { currentBusiness?: typeof businesses.$inferSelect | null; businessIds?: number[] };
 };
 
 export async function createContext(
@@ -32,7 +32,7 @@ export async function createContext(
           const junctions = await db.select().from(userBusinesses)
             .where(and(eq(userBusinesses.userId, user.id), eq(userBusinesses.isActive, true)));
           const bizIds = junctions.map(j => j.businessId);
-          let currentBusiness = null;
+          let currentBusiness: typeof businesses.$inferSelect | null = null;
           if (user.currentBusinessId) {
             const biz = await db.select().from(businesses)
               .where(and(eq(businesses.id, user.currentBusinessId), isNull(businesses.deletedAt))).limit(1);
@@ -65,7 +65,7 @@ export async function createContext(
           const junctions = await db.select().from(userBusinesses)
             .where(and(eq(userBusinesses.userId, user.id), eq(userBusinesses.isActive, true)));
           const bizIds = junctions.map(j => j.businessId);
-          let currentBusiness = null;
+          let currentBusiness: typeof businesses.$inferSelect | null = null;
           if (user.currentBusinessId) {
             const biz = await db.select().from(businesses)
               .where(and(eq(businesses.id, user.currentBusinessId), isNull(businesses.deletedAt))).limit(1);
@@ -92,7 +92,7 @@ export async function createContext(
       const junctions = await db.select().from(userBusinesses)
         .where(and(eq(userBusinesses.userId, oauthUser.id), eq(userBusinesses.isActive, true)));
       const bizIds = junctions.map(j => j.businessId);
-      let currentBusiness = null;
+      let currentBusiness: typeof businesses.$inferSelect | null = null;
       if (oauthUser.currentBusinessId) {
         const biz = await db.select().from(businesses)
           .where(and(eq(businesses.id, oauthUser.currentBusinessId), isNull(businesses.deletedAt))).limit(1);

@@ -482,9 +482,21 @@ export const businessesRouter = createRouter({
       if ((currentUsers[0]?.count ?? 0) >= maxUsers) {
         throw new Error(`User limit reached (${maxUsers}). Upgrade plan to add more users.`);
       }
-      await db.insert(userBusinesses).values({
-        userId: input.userId, businessId: input.businessId, role: input.role, isActive: true,
-      } as any).returning().onDuplicateKeyUpdate({ set: { role: input.role, isActive: true } });
+      const existingMember = await db.select({ id: userBusinesses.id }).from(userBusinesses)
+        .where(and(eq(userBusinesses.userId, input.userId), eq(userBusinesses.businessId, input.businessId)))
+        .limit(1);
+      if (existingMember[0]) {
+        await db.update(userBusinesses)
+          .set({ role: input.role, isActive: true })
+          .where(eq(userBusinesses.id, existingMember[0].id));
+      } else {
+        await db.insert(userBusinesses).values({
+          userId: input.userId,
+          businessId: input.businessId,
+          role: input.role,
+          isActive: true,
+        } as typeof userBusinesses.$inferInsert);
+      }
       return { success: true };
     }),
 

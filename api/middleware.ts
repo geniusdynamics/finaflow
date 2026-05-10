@@ -201,7 +201,7 @@ const t = initTRPC.context<TrpcCtx>().create({
   transformer: SuperJSON,
   errorFormatter({ shape, error }) {
     const causeData = error.cause && typeof error.cause === "object" && !(error.cause instanceof ZodError)
-      ? error.cause as Record<string, unknown>
+      ? (error.cause as unknown as Record<string, unknown>)
       : null;
 
     return {
@@ -426,7 +426,7 @@ export async function requireAuthorizedEntity<TTable extends LocationScopedTable
     conditions.push(isNull(table.deletedAt));
   }
 
-  const rows = await db.select().from(table).where(and(...conditions)).limit(1);
+  const rows = await db.select().from(table as unknown as AnyTable<{ name: string }>).where(and(...conditions)).limit(1);
   if (rows.length === 0) {
     throw new TRPCError({
       code: "NOT_FOUND",
@@ -461,7 +461,7 @@ export async function requireAuthorizedBusinessEntity<TTable extends BusinessSco
     conditions.push(isNull(table.deletedAt));
   }
 
-  const rows = await db.select().from(table).where(and(...conditions)).limit(1);
+  const rows = await db.select().from(table as unknown as AnyTable<{ name: string }>).where(and(...conditions)).limit(1);
   if (rows.length === 0) {
     throw new TRPCError({
       code: "NOT_FOUND",

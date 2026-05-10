@@ -7,8 +7,20 @@
 - **Test with coverage**: `npm run test:coverage`
 - **Test watch**: `npm run test:watch`
 - **Build**: `npm run build`
-- **Dev server**: `npm run dev`
+- **Dev server (Portless)**: `npm run dev`
+- **Dev server (no Portless)**: `npm run dev:app`
 - **Format**: `npm run format`
+
+## Portless
+- Install: `npm install -g portless`
+- Dev URL: `https://finaflow.test` (Portless uses `.test` TLD — IANA-reserved, no collision risk)
+- The proxy auto-syncs `/etc/hosts` so `.test` resolves on your machine
+- **Windows prerequisite**: Portless needs `openssl.exe` on PATH for TLS. After installing OpenSSL:
+  - Binary: `C:\Program Files\OpenSSL-Win64\bin\openssl.exe`
+  - Config: `C:\Program Files\OpenSSL-Win64\bin\cnf\openssl.cnf`
+  - These are wired automatically via `scripts\dev.cmd` — edit that file if your paths differ
+- First run generates a local CA and prompts to trust it for HTTPS
+- Temporarily bypass by setting `PORTLESS=0` in your environment (or use `npm run dev:app`)
 
 ## Project Structure
 - `api/` - Backend Hono.js + tRPC server

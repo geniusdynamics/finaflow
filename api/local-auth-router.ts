@@ -20,7 +20,6 @@ import { generateCsrfToken } from "./lib/csrf";
 import { logAudit } from "./lib/audit";
 import { serialize } from "cookie";
 import { TRPCError } from "@trpc/server";
-import type { TrpcContext } from "./context";
 import { DEFAULT_TRIAL_DAYS, getPlanConfig } from "./lib/subscriptions";
 
 const JWT_ALG = "HS256";
@@ -65,6 +64,10 @@ type DatabaseError = {
   detail?: string;
   constraint?: string;
 };
+type AuthCookieContext = {
+  req: Request;
+  resHeaders: Headers;
+};
 
 function isDatabaseError(error: unknown): error is DatabaseError {
   return typeof error === "object" && error !== null;
@@ -97,7 +100,7 @@ async function findPrimaryBusinessForAccount(
   return rows[0] ?? null;
 }
 
-function setAuthCookies(ctx: TrpcContext, token: string, csrfToken: string): void {
+function setAuthCookies(ctx: AuthCookieContext, token: string, csrfToken: string): void {
   const host = ctx.req.headers.get("host") || "";
   const isLocal = host.startsWith("localhost:") || host.startsWith("127.0.0.1:");
   ctx.resHeaders.append(
@@ -113,7 +116,7 @@ function setAuthCookies(ctx: TrpcContext, token: string, csrfToken: string): voi
   setCsrfOnHeaders(ctx.resHeaders, csrfToken);
 }
 
-function getClientIp(ctx: TrpcContext): string {
+function getClientIp(ctx: Pick<AuthCookieContext, "req">): string {
   return ctx.req.headers.get("x-forwarded-for") || ctx.req.headers.get("x-real-ip") || "unknown";
 }
 
@@ -239,7 +242,7 @@ export const localAuthRouter = createRouter({
         csrfToken,
         user: {
           id: user.id, name: user.name, username: user.username, role: user.role,
-          email: user.email, userType: user.userType, currentBusinessId: currentBusiness?.id ?? null,
+          email: user.email, currentBusinessId: currentBusiness?.id ?? null,
           currentBusiness, businessIds: bizIds, accountId: currentBusiness?.accountId ?? user.accountId ?? accountId,
           accountRefId,
         }
@@ -267,7 +270,7 @@ export const localAuthRouter = createRouter({
       .where(and(eq(userBusinesses.userId, user.id), eq(userBusinesses.isActive, true)));
     const bizIds = junctions.map(j => j.businessId);
 
-    let currentBusiness = null;
+    let currentBusiness: typeof businesses.$inferSelect | null = null;
     let effectiveCurrentBusinessId = user.currentBusinessId;
 
     if (user.currentBusinessId) {
@@ -298,7 +301,7 @@ export const localAuthRouter = createRouter({
     return {
       id: user.id, name: user.name, username: user.username, role: user.role,
       email: user.email, phone: user.phone, locationId: user.locationId,
-      isActive: user.isActive, userType: user.userType,
+      isActive: user.isActive,
       currentBusinessId: effectiveCurrentBusinessId,
       currentBusiness,
       businessIds: bizIds,
@@ -366,7 +369,7 @@ export const localAuthRouter = createRouter({
         .where(and(eq(users.username, input.username), eq(users.accountId, accountId), isNull(users.deletedAt)))
         .limit(1);
       const retryUser = retryUserRows[0];
-      if (retryUser && retryUser.email === input.email && await verifyPassword(input.password, retryUser.passwordHash)) {
+      if (retryUser && retryUser.passwordHash && retryUser.email === input.email && await verifyPassword(input.password, retryUser.passwordHash)) {
         const retryLinks = await db.select().from(userBusinesses)
           .where(and(eq(userBusinesses.userId, retryUser.id), eq(userBusinesses.isActive, true)));
         const retryBusinessId = retryUser.currentBusinessId ?? retryLinks[0]?.businessId ?? null;
@@ -387,7 +390,6 @@ export const localAuthRouter = createRouter({
                 username: retryUser.username,
                 role: retryUser.role,
                 email: retryUser.email,
-                userType: retryUser.userType,
                 currentBusinessId: retryBizRows[0].id,
                 currentBusiness: retryBizRows[0],
                 businessIds: retryLinks.map(link => link.businessId),
@@ -455,6 +457,7 @@ export const localAuthRouter = createRouter({
       maxTransactionsPerMonth = planConfig.transactionQuota;
 
       const referralCode = generateReferralCode();
+      const subscriptionExpiryValue = subscriptionExpiry ? subscriptionExpiry.toISOString().slice(0, 10) : null;
 
       let userId: number;
       let businessId: number;
@@ -480,7 +483,7 @@ export const localAuthRouter = createRouter({
             maxUsers,
             maxTransactionsPerMonth,
             subscriptionStatus,
-            subscriptionExpiry,
+            subscriptionExpiry: subscriptionExpiryValue,
             features: {},
             isActive: true,
           };
@@ -517,7 +520,6 @@ export const localAuthRouter = createRouter({
             email: input.email,
             passwordHash,
             role: "owner",
-            userType: input.userType,
             isActive: true,
             phone: input.phone || null,
             accountId,
@@ -541,7 +543,7 @@ export const localAuthRouter = createRouter({
             revSharePercent: "20.00",
             referralCode,
             subscriptionStatus,
-            subscriptionExpiry,
+            subscriptionExpiry: subscriptionExpiryValue,
             referredByBusinessId,
             referredByUserId,
             firstMonthDiscountApplied,
@@ -683,7 +685,7 @@ export const localAuthRouter = createRouter({
     for (const loc of demoLocations) {
       if (!locMap[loc.name]) {
         const demoLocationValues: InsertLocation = {
-          businessId: demoBizId, name: loc.name, slug: loc.slug, isMain: loc.isMain, isActive: true,
+          businessId: demoBizId, name: loc.name, slug: loc.slug, isActive: true,
         };
         const [r] = await db.insert(locations).values(demoLocationValues).returning();
         locMap[loc.name] = r.id;
@@ -693,10 +695,10 @@ export const localAuthRouter = createRouter({
 
     const mainLocId = locMap["HQ / Main Branch"];
     const malindiLocId = locMap["Malindi Branch"];
-    const demoAccounts = [
+    const demoAccounts: Array<Pick<InsertAccount, "name" | "type" | "locationId">> = [
       { name: "Cash Drawer", type: "cash", locationId: mainLocId },
       { name: "M-PESA Till", type: "mpesa", locationId: mainLocId },
-      { name: "Bank (KCB)", type: "bank", locationId: mainLocId },
+      { name: "Bank (KCB)", type: "bank_account", locationId: mainLocId },
       { name: "Cash Drawer (Malindi)", type: "cash", locationId: malindiLocId },
       { name: "M-PESA Till (Malindi)", type: "mpesa", locationId: malindiLocId },
     ];

@@ -18,7 +18,21 @@ import { shouldStartStandaloneServer } from "./lib/server-runtime";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
-app.use("*", cors({ origin: env.appUrl, credentials: true }));
+function resolveCorsOrigin(origin: string | undefined): string | undefined {
+  if (!origin) return env.appUrl;
+  if (origin === env.appUrl) return origin;
+
+  try {
+    const url = new URL(origin);
+    if (url.hostname === "localhost" || url.hostname === "127.0.0.1") return origin;
+    if (url.hostname === "finaflow.test" || url.hostname.endsWith(".finaflow.test")) return origin;
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+app.use("*", cors({ origin: resolveCorsOrigin, credentials: true }));
 app.use("*", securityHeaders);
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 
@@ -77,7 +91,9 @@ async function runTrialLifecycleJob() {
   }
 }
 
-const runStandaloneServer = shouldStartStandaloneServer(import.meta.env);
+const runStandaloneServer = shouldStartStandaloneServer({
+  DEV: process.env.NODE_ENV === "development",
+});
 
 let trialLifecycleTimer: NodeJS.Timeout | null = null;
 if (runStandaloneServer) {

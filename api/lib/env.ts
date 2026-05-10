@@ -16,7 +16,7 @@ export const env = {
   kimiAuthUrl: required("KIMI_AUTH_URL"),
   kimiOpenUrl: required("KIMI_OPEN_URL"),
   ownerUnionId: process.env.OWNER_UNION_ID ?? "",
-  appUrl: process.env.APP_URL || "http://localhost:5173",
+  appUrl: process.env.APP_URL || "http://localhost:3000",
   bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || "12", 10),
   nhifRate: parseFloat(process.env.NHIF_RATE || "2.75"),
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10),
