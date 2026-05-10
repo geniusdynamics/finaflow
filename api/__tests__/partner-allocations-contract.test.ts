@@ -7,6 +7,11 @@ import {
   generateAllocationCode,
   assertInviteStatusCanTransition,
 } from "../lib/partner-allocations";
+import {
+  generateAllocationInviteInputSchema,
+  claimAllocationInviteInputSchema,
+  revokeAllocationInputSchema,
+} from "../partner-router";
 
 describe("partner allocation contracts", () => {
   it("exports fixed rights profiles", () => {
@@ -27,5 +32,19 @@ describe("partner allocation contracts", () => {
 
   it("allows active to consumed transition", () => {
     expect(() => assertInviteStatusCanTransition("active", "consumed")).not.toThrow();
+  });
+});
+
+describe("partner allocation api contracts", () => {
+  it("accepts owner invite generation payload", () => {
+    expect(generateAllocationInviteInputSchema.parse({ businessId: 1, rightsProfile: "view_only" })).toBeTruthy();
+  });
+
+  it("accepts partner claim payload", () => {
+    expect(claimAllocationInviteInputSchema.parse({ code: "ALLOCAB12CD34" })).toBeTruthy();
+  });
+
+  it("rejects invalid revoke payload", () => {
+    expect(() => revokeAllocationInputSchema.parse({ allocationId: 0 })).toThrow();
   });
 });
