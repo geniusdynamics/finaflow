@@ -20,15 +20,23 @@ Business cashflow management platform built for African small and medium enterpr
 ### Dashboard Overview
 ![Dashboard Overview](resources/cashflow%20dash.png)
 
+### Accounts Management
+![Accounts Management](resources/accounts.png)
+
 ### Bills & Payables
 ![Bills & Payables](resources/bills.png)
 
 ### Expenses Management
 ![Expenses Management](resources/expenses.png)
 
-### Accounts & Transactions
-![Accounts & Transactions](resources/accounts.png)
+### Transactions
 ![Transactions](resources/transactions.png)
+
+### Reports & Analytics
+![Reports & Analytics](resources/reports.png)
+
+### Budget Planning
+![Budget Planning](resources/budget.png)
 
 
 | Layer | Technology |
