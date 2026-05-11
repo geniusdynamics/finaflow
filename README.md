@@ -15,7 +15,21 @@ Business cashflow management platform built for African small and medium enterpr
 - **Role-based Access Control** — Granular permissions (32 permissions, 5 roles)
 - **Subscriptions** — Account subscription management with usage enforcement
 
-## Tech Stack
+## Screenshots
+
+### Dashboard Overview
+![Dashboard Overview](resources/cashflow%20dash.png)
+
+### Bills & Payables
+![Bills & Payables](resources/bills.png)
+
+### Expenses Management
+![Expenses Management](resources/expenses.png)
+
+### Accounts & Transactions
+![Accounts & Transactions](resources/accounts.png)
+![Transactions](resources/transactions.png)
+
 
 | Layer | Technology |
 |---|---|
