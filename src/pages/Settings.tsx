@@ -343,7 +343,7 @@ export function Settings() {
                             onClick={() => {
                               const confirmMsg = isUpgrade
                                 ? `Upgrade to ${plan.label} (${plan.price})?`
-                                : `Downgrade to ${plan.label} (${plan.price})?\n\nDowngrading may limit existing branches and users.`;
+                                : `Subscribe to ${plan.label} (${plan.price})?\n\nChanging your plan may affect existing branches and users.`;
                               if (confirm(confirmMsg)) {
                                 changePlan.mutate({ plan: planKey });
                               }
@@ -351,7 +351,7 @@ export function Settings() {
                             disabled={changePlan.isPending}
                           >
                             {isUpgrade ? <ArrowUpCircle className="mr-1 h-3 w-3" /> : <ArrowDownCircle className="mr-1 h-3 w-3" />}
-                            {changePlan.isPending ? "..." : isUpgrade ? "Upgrade" : "Downgrade"}
+                            {changePlan.isPending ? "..." : isUpgrade ? "Upgrade" : "Subscribe"}
                           </Button>
                         )}
                       </div>
