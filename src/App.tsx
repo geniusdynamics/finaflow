@@ -24,6 +24,7 @@ const Locations = lazy(() => import("./pages/Locations").then(m => ({ default: m
 const Settings = lazy(() => import("./pages/Settings").then(m => ({ default: m.Settings })));
 const Feedback = lazy(() => import("./pages/Feedback").then(m => ({ default: m.Feedback })));
 const Businesses = lazy(() => import("./pages/Businesses"));
+const BusinessDetails = lazy(() => import("./pages/BusinessDetails").then(m => ({ default: m.BusinessDetails })));
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard").then(m => ({ default: m.PartnerDashboard })));
 
 function SuspendedPage({ children }: { children: React.ReactNode }) {
