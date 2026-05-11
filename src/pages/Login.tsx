@@ -340,4 +340,48 @@ export default function Login() {
                     <div><Label className="text-xs text-[#8D8A87]">Full Name</Label><Input value={signupForm.name} onChange={e => setSignupForm(p => ({ ...p, name: e.target.value }))} placeholder="Your name" required /></div>
                     <div><Label className="text-xs text-[#8D8A87]">Username</Label><Input value={signupForm.username} onChange={e => setSignupForm(p => ({ ...p, username: e.target.value }))} placeholder="Choose username" required /></div>
                   </div>
-                  <div><Label className="text-xs text-[#8D8A
+                  <div><Label className="text-xs text-[#8D8A87]">Email</Label><Input type="email" value={signupForm.email} onChange={e => setSignupForm(p => ({ ...p, email: e.target.value }))} placeholder="you@business.com" required /></div>
+                  <div><Label className="text-xs text-[#8D8A87]">Phone <span className="font-normal">(optional)</span></Label><Input type="tel" value={signupForm.phone} onChange={e => setSignupForm(p => ({ ...p, phone: e.target.value }))} placeholder="+254 7XX XXX XXX" /></div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><Label className="text-xs text-[#8D8A87]">Password</Label><Input type="password" value={signupForm.password} onChange={e => setSignupForm(p => ({ ...p, password: e.target.value }))} placeholder="Min 6 chars" required /></div>
+                    <div><Label className="text-xs text-[#8D8A87]">Confirm</Label><Input type="password" value={signupForm.confirmPassword} onChange={e => setSignupForm(p => ({ ...p, confirmPassword: e.target.value }))} placeholder="Repeat password" required /></div>
+                  </div>
+                  <div><Label className="text-xs text-[#8D8A87]">Business / Firm Name <span className="font-normal">(optional)</span></Label><Input value={signupForm.businessName} onChange={e => setSignupForm(p => ({ ...p, businessName: e.target.value }))} placeholder={signupForm.userType === "partner" ? "e.g. ABC Accounting" : "e.g. Karafuu Business"} /></div>
+                  <div className="flex items-center gap-2 rounded-lg bg-[#F5EDE6] p-3">
+                    <input id="demo" type="checkbox" checked={signupForm.createDemo} onChange={e => setSignupForm(p => ({ ...p, createDemo: e.target.checked }))} className="h-4 w-4 rounded border-[#8D8A87]" />
+                    <label htmlFor="demo" className="text-xs text-[#2D2A26]">Start with <strong>Demo Mode</strong> -- preloaded with sample data</label>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-[#8D8A87] flex items-center gap-1">
+                      <Gift className="h-3 w-3 text-[#D4A854]" />Referral Code (optional)
+                    </Label>
+                    <Input value={signupForm.referralCode} onChange={e => setSignupForm(p => ({ ...p, referralCode: e.target.value.toUpperCase() }))} placeholder="e.g. FINAABC123" className="font-mono uppercase" />
+                  </div>
+                  <Button type="submit" className="w-full bg-[#C73E1D]" disabled={registerMutation.isPending || accountNameStatus === "checking"}>
+                    {signupForm.userType === "partner" ? <Briefcase className="mr-2 h-4 w-4" /> : <Store className="mr-2 h-4 w-4" />}
+                    {registerMutation.isPending ? "Creating..." : signupForm.userType === "partner" ? "Join as Partner" : "Create Account"}
+                  </Button>
+                  <p className="text-center text-xs text-[#8D8A87]">
+                    Already have an account? <button type="button" onClick={() => setMode("accountLookup")} className="font-medium text-[#C73E1D] underline">Sign in</button>
+                  </p>
+                </form>
+              )}
+            </CardContent>
+          </Card>
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            {[
+              { icon: Store, text: "Multi-location tracking" },
+              { icon: Briefcase, text: "Staff & payroll" },
+              { icon: Landmark, text: "M-PESA integration" },
+              { icon: CheckCircle, text: "KRA-ready reports" },
+            ].map((f, i) => (
+              <div key={i} className="flex items-center gap-2 rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-xs text-[#2D2A26]">
+                <f.icon className="h-3.5 w-3.5 text-[#C73E1D]" />{f.text}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

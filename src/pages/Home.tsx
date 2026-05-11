@@ -160,18 +160,18 @@ export default function Home() {
         {/* Navigation */}
         <nav className="sticky top-0 z-50 border-b border-[#E8E0D8] bg-white/95 backdrop-blur">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-            <div className="flex items-center gap-2">
+            <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#C73E1D]">
                 <Landmark className="h-4 w-4 text-white" />
               </div>
               <span className="font-serif text-xl font-bold text-[#2D2A26]">Finaflow</span>
-            </div>
+            </Link>
             <div className="hidden items-center gap-6 text-sm text-[#2D2A26] md:flex">
               <a href="#showcase" className="hover:text-[#C73E1D]">Product</a>
               <a href="#features" className="hover:text-[#C73E1D]">Features</a>
               <a href="#pricing" className="hover:text-[#C73E1D]">Pricing</a>
               <Link to="/login" className="font-medium hover:text-[#C73E1D]">Sign In</Link>
-              <Link to="/login"><Button className="bg-[#C73E1D] hover:bg-[#C73E1D]/90 text-sm">Get Started</Button></Link>
+              <Link to="/login?type=standard"><Button className="bg-[#C73E1D] hover:bg-[#C73E1D]/90 text-sm">Get Started</Button></Link>
             </div>
             <button className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -182,8 +182,8 @@ export default function Home() {
               <a href="#showcase" className="block py-1">Product</a>
               <a href="#features" className="block py-1">Features</a>
               <a href="#pricing" className="block py-1">Pricing</a>
-              <Link to="/login" className="block py-1 font-medium">Sign In</Link>
-              <Link to="/login" className="block py-1 font-medium text-[#C73E1D]">Get Started</Link>
+              <Link to="/login?type=standard" className="block py-1 font-medium">Sign In</Link>
+              <Link to="/login?type=standard" className="block py-1 font-medium text-[#C73E1D]">Get Started</Link>
             </div>
           )}
         </nav>
@@ -208,13 +208,13 @@ export default function Home() {
                   Built specifically for African SMEs who want real-time financial clarity without the complexity.
                 </p>
                 <div className="mt-8 flex flex-wrap gap-3">
-                  <Link to="/login">
+                  <Link to="/login?type=standard">
                     <Button className="bg-[#C73E1D] px-8 py-6 text-base hover:bg-[#C73E1D]/90">
                       Get Started Free
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
                   </Link>
-                  <Link to="/login">
+                  <Link to="/login?type=partner">
                     <Button variant="outline" className="border-[#C73E1D] px-8 py-6 text-base text-[#C73E1D]">
                       <HeartHandshake className="mr-2 h-4 w-4" />
                       Join as Partner
@@ -412,7 +412,7 @@ export default function Home() {
                         </li>
                       ))}
                     </ul>
-                    <Link to="/login" className="mt-4 block">
+                    <Link to="/login?type=standard" className="mt-4 block">
                       <Button className={`w-full ${t.highlight ? "bg-[#C73E1D]" : "bg-[#2D2A26]"}`} size="sm">{t.cta}</Button>
                     </Link>
                   </CardContent>
@@ -434,7 +434,7 @@ export default function Home() {
               No caps. No quotas. Just recurring income from the businesses you already serve.
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Link to="/login"><Button className="bg-[#D4A854] px-8 text-white hover:bg-[#D4A854]/90">Join as Partner</Button></Link>
+              <Link to="/login?type=partner"><Button className="bg-[#D4A854] px-8 text-white hover:bg-[#D4A854]/90">Join as Partner</Button></Link>
               <a href="#pricing" className="inline-flex items-center gap-1 text-sm text-[#8D8A87] hover:text-[#2D2A26]">
                 View pricing <ChevronRight className="h-3 w-3" />
               </a>
@@ -455,7 +455,7 @@ export default function Home() {
               <p className="text-xs text-[#8D8A87]">{"\u00A9"} 2026 Finaflow. Built for African Businesses.</p>
               <div className="flex gap-4 text-xs text-[#8D8A87]">
                 <Link to="/login" className="hover:text-[#2D2A26]">Sign In</Link>
-                <Link to="/login" className="hover:text-[#2D2A26]">Sign Up</Link>
+                <Link to="/login?type=standard" className="hover:text-[#2D2A26]">Sign Up</Link>
               </div>
             </div>
           </div>
