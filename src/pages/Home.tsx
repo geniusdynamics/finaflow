@@ -18,10 +18,10 @@ export default function Home() {
   ];
 
   const tiers = [
-    { name: "Free", price: "0", branches: 1, users: 1, features: ["1 branch", "1 user", "100 transactions/mo", "Basic sales & expenses", "M-PESA import"], cta: "Get Started", highlight: false },
-    { name: "Starter", price: "500", branches: 1, users: 3, features: ["1 branch", "3 users", "Unlimited transactions", "Recurring bills", "Email support"], cta: "Start Trial", highlight: false },
-    { name: "Growth", price: "1,500", branches: 5, users: 5, features: ["5 branches", "5 users", "Unlimited transactions", "Full payroll", "Priority support"], cta: "Start Trial", highlight: true },
-    { name: "Pro", price: "3,000", branches: "∞", users: "∞", features: ["Unlimited branches", "Unlimited users", "API access", "Webhooks", "White-label option"], cta: "Contact Sales", highlight: false },
+    { name: "Free", price: "0", businesses: 1, branches: 1, users: 1, transactions: "100 / month", payroll: "No", support: "Community", features: ["1 business", "1 branch", "1 user", "100 transactions/mo", "Basic sales & expenses", "M-PESA import"], cta: "Get Started", highlight: false },
+    { name: "Starter", price: "500", businesses: 1, branches: 1, users: 3, transactions: "5,000 / month", payroll: "No", support: "Email", features: ["1 business", "1 branch", "3 users", "Unlimited transactions", "Recurring bills", "Email support"], cta: "Start Trial", highlight: false },
+    { name: "Growth", price: "1,500", businesses: 3, branches: 5, users: 5, transactions: "20,000 / month", payroll: "Yes", support: "Priority", features: ["3 businesses", "5 branches", "5 users", "Unlimited transactions", "Full payroll", "Priority support"], cta: "Start Trial", highlight: true },
+    { name: "Pro", price: "3,000", businesses: 10, branches: "∞", users: "∞", transactions: "Unlimited", payroll: "Yes", support: "Dedicated", features: ["10 businesses", "Unlimited branches", "Unlimited users", "API access", "Webhooks", "White-label option"], cta: "Contact Sales", highlight: false },
   ];
 
   return (
@@ -148,7 +148,33 @@ export default function Home() {
                         <span className="text-xs text-[#8D8A87]">/mo</span>
                       </div>
                     </div>
-                    <ul className="mt-3 space-y-1.5">
+                    <div className="mt-3 space-y-1.5 border-t border-[#E8E0D8] pt-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#8D8A87]">Businesses</span>
+                        <span className="font-semibold text-[#2D2A26]">{t.businesses === 99 ? "∞" : t.businesses}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#8D8A87]">Branches</span>
+                        <span className="font-semibold text-[#2D2A26]">{t.branches === 99 ? "∞" : t.branches}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#8D8A87]">Users</span>
+                        <span className="font-semibold text-[#2D2A26]">{t.users === 99 ? "∞" : t.users}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#8D8A87]">Transactions</span>
+                        <span className="font-semibold text-[#2D2A26]">{t.transactions}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#8D8A87]">Payroll</span>
+                        <span className="font-semibold text-[#2D2A26]">{t.payroll}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#8D8A87]">Support</span>
+                        <span className="font-semibold text-[#2D2A26]">{t.support}</span>
+                      </div>
+                    </div>
+                    <ul className="mt-3 space-y-1.5 border-t border-[#E8E0D8] pt-3">
                       {t.features.map((f, j) => (
                         <li key={j} className="flex items-center gap-1.5 text-xs text-[#2D2A26]">
                           <CheckCircle className="h-3 w-3 shrink-0 text-[#2E7D32]" />{f}
