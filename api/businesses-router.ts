@@ -1,17 +1,24 @@
+// ABOUTME: Serves business membership, subscription, document, and lifecycle mutations for the active account and business context.
+// ABOUTME: Keeps business creation, plan changes, and access switching aligned with shared subscription and audit rules.
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery, businessManage, ownerQuery, checkBranchLimit, checkUserLimit } from "./middleware";
+import { createRouter, publicQuery, authedQuery, businessManage } from "./middleware";
 import { getDb } from "./queries/connection";
-import { businesses, userBusinesses, users, locations, dailySales, expenses, bills, accounts, businessDocuments } from "@db/schema";
-import { eq, and, isNull, sql, count, inArray } from "drizzle-orm";
+import { businesses, userBusinesses, users, locations, dailySales, expenses, bills, accounts, businessDocuments, businessLogos, customerAccounts, type InsertCustomerAccount } from "@db/schema";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import { logAudit } from "./lib/audit";
-
-const PLAN_TIERS: Record<string, { maxBranches: number; maxUsers: number; label: string }> = {
-  free: { maxBranches: 1, maxUsers: 1, label: "Free" },
-  starter: { maxBranches: 1, maxUsers: 3, label: "Starter" },
-  growth: { maxBranches: 5, maxUsers: 5, label: "Growth" },
-  pro: { maxBranches: 99, maxUsers: 99, label: "Pro" },
-  partner: { maxBranches: 99, maxUsers: 99, label: "Partner" },
-};
+import { base64SizeBytes, resolveMimeType, sanitizeDownloadFileName } from "./lib/business-documents";
+import { assertAllowedLogoMimeType, assertLogoMaxSize } from "./lib/logo-validation";
+import { assertCanCreateBusiness } from "./lib/subscription-enforcement";
+import {
+  countBusinessesForAccount,
+  extendBusinessTrial,
+  getPlanConfig,
+  getSubscriptionState,
+  hasPaymentMethodOnFile,
+  quotaLabel,
+  syncTrialState,
+} from "./lib/subscriptions";
 
 function generateReferralCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -24,6 +31,60 @@ function generateAccountId(name: string): string {
   const base = name.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().substring(0, 20);
   const suffix = Math.random().toString(36).substring(2, 6).toUpperCase();
   return `${base}${suffix}`;
+}
+
+export const getDocumentsDetailedInputSchema = z.object({
+  businessId: z.number().int().positive(),
+});
+
+export const downloadDocumentInputSchema = z.object({
+  documentId: z.number().int().positive(),
+});
+
+export const uploadLogoInputSchema = z.object({
+  businessId: z.number().int().positive(),
+  fileName: z.string().min(1).max(255),
+  mimeType: z.string().min(1).max(100),
+  fileData: z.string().min(1),
+  width: z.number().int().positive().nullable().optional(),
+  height: z.number().int().positive().nullable().optional(),
+  sizeBytes: z.number().int().positive(),
+});
+
+export const getActiveLogoInputSchema = z.object({
+  businessId: z.number().int().positive(),
+});
+
+export const deleteLogoInputSchema = z.object({
+  businessId: z.number().int().positive(),
+});
+
+export function mapDownloadPayload(row: {
+  fileName: string;
+  mimeType?: string | null;
+  fileData: string;
+}) {
+  return {
+    fileName: sanitizeDownloadFileName(row.fileName),
+    mimeType: resolveMimeType(row.mimeType),
+    fileData: row.fileData,
+  };
+}
+
+async function assertBusinessMembership(params: {
+  userId: number;
+  businessId: number;
+}): Promise<void> {
+  const db = getDb();
+  const access = await db.select({ id: userBusinesses.id }).from(userBusinesses).where(and(
+    eq(userBusinesses.userId, params.userId),
+    eq(userBusinesses.businessId, params.businessId),
+    eq(userBusinesses.isActive, true),
+  )).limit(1);
+
+  if (access.length === 0) {
+    throw new Error("You do not have access to this business");
+  }
 }
 
 export const businessesRouter = createRouter({
@@ -72,40 +133,40 @@ export const businessesRouter = createRouter({
     const db = getDb();
     const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
     if (!businessId) return null;
-    const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
+    const biz = await syncTrialState(db, businessId);
     if (!biz) return null;
-
-    // Auto-downgrade expired trials
-    if (biz.subscriptionStatus === "trial" && biz.subscriptionExpiry && new Date() > new Date(biz.subscriptionExpiry)) {
-      await db.update(businesses).set({
-        plan: "free",
-        maxBranches: 1,
-        maxUsers: 1,
-        subscriptionStatus: "expired",
-        subscriptionExpiry: null,
-      }).where(eq(businesses.id, businessId));
-      biz.plan = "free";
-      biz.subscriptionStatus = "expired";
-    }
 
     const branchCount = await db.select({ count: sql<number>`COUNT(*)` }).from(locations).where(and(eq(locations.businessId, businessId), isNull(locations.deletedAt)));
     const userCount = await db.select({ count: sql<number>`COUNT(*)` }).from(userBusinesses).where(and(eq(userBusinesses.businessId, businessId), eq(userBusinesses.isActive, true)));
+    const businessesCount = await countBusinessesForAccount(db, biz.accountId);
+    const paymentMethodOnFile = await hasPaymentMethodOnFile(
+      db,
+      biz.accountRefId ?? ctx.user?.accountRefId ?? ctx.user?.currentBusiness?.accountRefId ?? null,
+      businessId,
+    );
+    const subscriptionState = getSubscriptionState(biz.features);
 
-    // Get referrer info
     let referredBy: { name: string; accountId: string } | null = null;
     if (biz.referredByBusinessId) {
       const [ref] = await db.select({ name: businesses.name, accountId: businesses.accountId }).from(businesses).where(eq(businesses.id, biz.referredByBusinessId)).limit(1);
       referredBy = ref ?? null;
     }
 
-    // Get plan label
-    const planInfo = PLAN_TIERS[biz.plan ?? "free"] ?? PLAN_TIERS.free;
+    const planInfo = getPlanConfig(biz.plan ?? "free");
+    const transactionQuota = biz.maxTransactionsPerMonth ?? planInfo.transactionQuota;
 
     return {
       plan: biz.plan,
       planLabel: planInfo.label,
       maxBranches: biz.maxBranches ?? planInfo.maxBranches,
       maxUsers: biz.maxUsers ?? planInfo.maxUsers,
+      maxBusinesses: planInfo.maxBusinesses,
+      currentBusinesses: businessesCount,
+      transactionQuota,
+      transactionQuotaLabel: quotaLabel(transactionQuota),
+      payrollAvailable: planInfo.payrollEnabled,
+      supportTier: planInfo.supportTier,
+      priceLabel: planInfo.priceLabel,
       currentBranches: branchCount[0]?.count ?? 0,
       currentUsers: userCount[0]?.count ?? 0,
       isDemo: biz.isDemo,
@@ -120,6 +181,11 @@ export const businessesRouter = createRouter({
       trialDaysRemaining: biz.subscriptionStatus === "trial" && biz.subscriptionExpiry
         ? Math.max(0, Math.ceil((new Date(biz.subscriptionExpiry).getTime() - Date.now()) / 86400000))
         : 0,
+      trialExtensionUsedAt: subscriptionState.trialExtendedAt,
+      canExtendTrial: biz.subscriptionStatus === "trial" && !subscriptionState.trialExtendedAt,
+      trialReminderSentAt: subscriptionState.trialReminderSentAt,
+      trialDowngradedAt: subscriptionState.trialDowngradedAt,
+      hasPaymentMethodOnFile: paymentMethodOnFile,
     };
   }),
 
@@ -133,7 +199,7 @@ export const businessesRouter = createRouter({
       const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
       if (!biz) throw new Error("Business not found");
 
-      const targetTier = PLAN_TIERS[input.plan];
+      const targetTier = getPlanConfig(input.plan);
       if (!targetTier) throw new Error("Invalid plan");
 
       // When downgrading, enforce limits
@@ -162,7 +228,8 @@ export const businessesRouter = createRouter({
         plan: input.plan,
         maxBranches: targetTier.maxBranches,
         maxUsers: targetTier.maxUsers,
-        subscriptionStatus: input.plan === "free" ? "active" : "active",
+        maxTransactionsPerMonth: targetTier.transactionQuota,
+        subscriptionStatus: "active",
         subscriptionExpiry: null,
       }).where(eq(businesses.id, businessId));
 
@@ -176,6 +243,30 @@ export const businessesRouter = createRouter({
       });
 
       return { success: true, plan: input.plan, message: `Plan changed to ${targetTier.label}` };
+    }),
+
+  extendTrial: authedQuery
+    .mutation(async ({ ctx }) => {
+      const db = getDb();
+      const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
+      if (!businessId) throw new Error("No active business selected");
+
+      const result = await extendBusinessTrial(db, businessId);
+
+      await logAudit({
+        userId: ctx.user!.id,
+        businessId,
+        action: "UPDATE",
+        resource: "businesses",
+        resourceId: businessId,
+        details: { action: "extend_trial", subscriptionExpiry: result.subscriptionExpiry },
+      });
+
+      return {
+        success: true,
+        message: `Trial extended to ${result.subscriptionExpiry}`,
+        ...result,
+      };
     }),
 
   create: businessManage
@@ -197,52 +288,47 @@ export const businessesRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const userBiz = await db.select().from(userBusinesses).where(and(eq(userBusinesses.userId, ctx.user!.id), eq(userBusinesses.isActive, true)));
-      if (userBiz.length >= 1 && input.plan === "free") {
-        throw new Error("Free tier allows only 1 business. Upgrade to create more.");
+      const accountId = ctx.user?.accountId ?? ctx.user?.currentBusiness?.accountId;
+      const accountRefId = ctx.user?.accountRefId ?? ctx.user?.currentBusiness?.accountRefId ?? null;
+      if (!accountId) {
+        throw new Error("No active account selected");
       }
 
-      let accountId = input.accountId?.toUpperCase().trim();
-      if (accountId) {
-        const existing = await db.select().from(businesses).where(eq(businesses.accountId, accountId)).limit(1);
-        if (existing.length > 0) throw new Error("Account ID already taken. Choose another.");
-      } else {
-        accountId = generateAccountId(input.name);
-        let attempts = 0;
-        while (attempts < 5) {
-          const check = await db.select().from(businesses).where(eq(businesses.accountId, accountId)).limit(1);
-          if (check.length === 0) break;
-          accountId = generateAccountId(input.name);
-          attempts++;
-        }
-      }
+      await assertCanCreateBusiness(db, accountId, accountRefId);
 
-      const [result] = await db.insert(businesses).values({
-        ...input,
-        accountId,
-        referralCode: generateReferralCode(),
-        maxBranches: input.plan === "free" ? 1 : input.plan === "starter" ? 1 : input.plan === "growth" ? 5 : 99,
-        maxUsers: input.plan === "free" ? 1 : input.plan === "starter" ? 3 : input.plan === "growth" ? 5 : 99,
-      } as any);
-      const businessId = Number(result.insertId);
-      await db.insert(userBusinesses).values({ userId: ctx.user!.id, businessId, role: "owner", isActive: true } as any);
-      await db.update(users).set({ currentBusinessId: businessId }).where(eq(users.id, ctx.user!.id));
+      const planConfig = getPlanConfig(input.plan);
+      let businessId = 0;
+      await db.transaction(async (tx) => {
+        const [result] = await tx.insert(businesses).values({
+          ...input,
+          accountId,
+          accountRefId,
+          referralCode: generateReferralCode(),
+          maxBranches: planConfig.maxBranches,
+          maxUsers: planConfig.maxUsers,
+        } as any).returning();
+        businessId = result.id;
+        
+        await tx.insert(userBusinesses).values({ userId: ctx.user!.id, businessId, role: "owner", isActive: true } as any);
+        await tx.update(users).set({ currentBusinessId: businessId }).where(eq(users.id, ctx.user!.id));
 
-      // Create default location
-      const [locResult] = await db.insert(locations).values({
-        businessId,
-        name: "Main Branch",
-        slug: "main",
-        isActive: true,
-      } as any);
-      const locationId = Number(locResult.insertId);
+        // Create default location with a more unique slug to avoid global unique constraint conflicts
+        const locationSlug = `main-${businessId}`;
+        const [locResult] = await tx.insert(locations).values({
+          businessId,
+          name: "Main Branch",
+          slug: locationSlug,
+          isActive: true,
+        } as any).returning();
+        const locationId = locResult.id;
 
-      // Create default accounts for this location
-      await db.insert(accounts).values([
-        { name: "Cash Drawer", type: "cash", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
-        { name: "M-PESA Till", type: "mpesa", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
-        { name: "Bank Account", type: "bank_account", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
-      ]);
+        // Create default accounts for this location
+        await tx.insert(accounts).values([
+          { name: "Cash Drawer", type: "cash", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
+          { name: "M-PESA Till", type: "mpesa", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
+          { name: "Bank Account", type: "bank_account", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
+        ]);
+      });
 
       return { id: businessId, accountId, success: true };
     }),
@@ -255,36 +341,58 @@ export const businessesRouter = createRouter({
       if (existing.length > 0) return { id: existing[0].id, accountId: existing[0].accountId, success: true, message: "Demo already exists" };
 
       const accountId = generateAccountId("Demo");
-      const [result] = await db.insert(businesses).values({
+      const planConfig = getPlanConfig("pro");
+      const accountValues: InsertCustomerAccount = {
         accountId,
         name: "Demo Business",
-        slug: `demo-${ctx.user!.id}-${Date.now()}`,
         plan: "pro",
-        maxBranches: 99,
+        maxBusinesses: planConfig.maxBusinesses,
         maxUsers: 99,
-        isDemo: true,
+        maxTransactionsPerMonth: planConfig.transactionQuota,
+        subscriptionStatus: "active",
+        subscriptionExpiry: null,
+        features: {},
         isActive: true,
-        referralCode: generateReferralCode(),
-      } as any);
-      const businessId = Number(result.insertId);
-      await db.insert(userBusinesses).values({ userId: ctx.user!.id, businessId, role: "owner", isActive: true } as any);
-      await db.update(users).set({ currentBusinessId: businessId }).where(eq(users.id, ctx.user!.id));
+      };
+      const [accountRow] = await db.insert(customerAccounts)
+        .values(accountValues)
+        .returning({ id: customerAccounts.id });
+      
+      let businessId = 0;
+      await db.transaction(async (tx) => {
+        const [result] = await tx.insert(businesses).values({
+          accountId,
+          accountRefId: accountRow.id,
+          name: "Demo Business",
+          slug: `demo-${ctx.user!.id}-${Date.now()}`,
+          plan: "pro",
+          maxBranches: 99,
+          maxUsers: 99,
+          isDemo: true,
+          isActive: true,
+          referralCode: generateReferralCode(),
+        } as any).returning();
+        businessId = result.id;
+        
+        await tx.insert(userBusinesses).values({ userId: ctx.user!.id, businessId, role: "owner", isActive: true } as any);
+        await tx.update(users).set({ currentBusinessId: businessId }).where(eq(users.id, ctx.user!.id));
 
-      // Create default location
-      const [locResult] = await db.insert(locations).values({
-        businessId,
-        name: "Main Branch",
-        slug: "main",
-        isActive: true,
-      } as any);
-      const locationId = Number(locResult.insertId);
+        // Create default location
+        const [locResult] = await tx.insert(locations).values({
+          businessId,
+          name: "Main Branch",
+          slug: `demo-main-${businessId}`,
+          isActive: true,
+        } as any).returning();
+        const locationId = locResult.id;
 
-      // Create default accounts
-      await db.insert(accounts).values([
-        { name: "Cash Drawer", type: "cash", locationId, openingBalance: "50000.00", currentBalance: "50000.00", isActive: true } as any,
-        { name: "M-PESA Till", type: "mpesa", locationId, openingBalance: "75000.00", currentBalance: "75000.00", isActive: true } as any,
-        { name: "Bank Account", type: "bank_account", locationId, openingBalance: "200000.00", currentBalance: "200000.00", isActive: true } as any,
-      ]);
+        // Create default accounts
+        await tx.insert(accounts).values([
+          { name: "Cash Drawer", type: "cash", locationId, openingBalance: "50000.00", currentBalance: "50000.00", isActive: true } as any,
+          { name: "M-PESA Till", type: "mpesa", locationId, openingBalance: "75000.00", currentBalance: "75000.00", isActive: true } as any,
+          { name: "Bank Account", type: "bank_account", locationId, openingBalance: "200000.00", currentBalance: "200000.00", isActive: true } as any,
+        ]);
+      });
 
       return { id: businessId, accountId, success: true, message: "Demo created" };
     }),
@@ -375,8 +483,19 @@ export const businessesRouter = createRouter({
       const junction = await db.select().from(userBusinesses)
         .where(and(eq(userBusinesses.userId, ctx.user!.id), eq(userBusinesses.businessId, input.businessId), eq(userBusinesses.isActive, true))).limit(1);
       if (junction.length === 0) throw new Error("You do not have access to this business");
-      await db.update(users).set({ currentBusinessId: input.businessId }).where(eq(users.id, ctx.user!.id));
-      return { success: true };
+      const [business] = await db.select().from(businesses)
+        .where(and(eq(businesses.id, input.businessId), isNull(businesses.deletedAt)))
+        .limit(1);
+      if (!business) throw new Error("Business not found");
+      await db.update(users).set({
+        currentBusinessId: input.businessId,
+        accountRefId: business.accountRefId ?? ctx.user?.accountRefId ?? null,
+      }).where(eq(users.id, ctx.user!.id));
+      return {
+        success: true,
+        accountId: business.accountId,
+        accountRefId: business.accountRefId ?? ctx.user?.accountRefId ?? null,
+      };
     }),
 
   addMember: businessManage
@@ -390,9 +509,21 @@ export const businessesRouter = createRouter({
       if ((currentUsers[0]?.count ?? 0) >= maxUsers) {
         throw new Error(`User limit reached (${maxUsers}). Upgrade plan to add more users.`);
       }
-      await db.insert(userBusinesses).values({
-        userId: input.userId, businessId: input.businessId, role: input.role, isActive: true,
-      } as any).onDuplicateKeyUpdate({ set: { role: input.role, isActive: true } });
+      const existingMember = await db.select({ id: userBusinesses.id }).from(userBusinesses)
+        .where(and(eq(userBusinesses.userId, input.userId), eq(userBusinesses.businessId, input.businessId)))
+        .limit(1);
+      if (existingMember[0]) {
+        await db.update(userBusinesses)
+          .set({ role: input.role, isActive: true })
+          .where(eq(userBusinesses.id, existingMember[0].id));
+      } else {
+        await db.insert(userBusinesses).values({
+          userId: input.userId,
+          businessId: input.businessId,
+          role: input.role,
+          isActive: true,
+        } as typeof userBusinesses.$inferInsert);
+      }
       return { success: true };
     }),
 
@@ -499,8 +630,8 @@ export const businessesRouter = createRouter({
         mimeType: input.mimeType || null,
         notes: input.notes || null,
         uploadedBy: ctx.user!.id,
-      } as any);
-      return { success: true, id: Number(doc.insertId) };
+      } as any).returning();
+      return { success: true, id: doc.id };
     }),
 
   getDocuments: businessManage
@@ -519,12 +650,195 @@ export const businessesRouter = createRouter({
         .where(and(eq(businessDocuments.businessId, input.businessId), isNull(businessDocuments.deletedAt)));
     }),
 
+  getDocumentsDetailed: businessManage
+    .input(getDocumentsDetailedInputSchema)
+    .query(async ({ input, ctx }) => {
+      const db = getDb();
+      const userId = ctx.user!.id;
+      const access = await db.select().from(userBusinesses).where(and(
+        eq(userBusinesses.userId, userId),
+        eq(userBusinesses.businessId, input.businessId),
+        eq(userBusinesses.isActive, true),
+      )).limit(1);
+
+      if (access.length === 0) {
+        throw new Error("You do not have access to this business");
+      }
+
+      const rows = await db.select({
+        id: businessDocuments.id,
+        fileName: businessDocuments.fileName,
+        documentType: businessDocuments.documentType,
+        mimeType: businessDocuments.mimeType,
+        uploadedBy: businessDocuments.uploadedBy,
+        createdAt: businessDocuments.createdAt,
+        fileData: businessDocuments.fileData,
+      }).from(businessDocuments).where(and(
+        eq(businessDocuments.businessId, input.businessId),
+        isNull(businessDocuments.deletedAt),
+      ));
+
+      return rows.map((row) => ({
+        id: row.id,
+        fileName: row.fileName,
+        documentType: row.documentType,
+        mimeType: resolveMimeType(row.mimeType),
+        uploadedBy: row.uploadedBy,
+        createdAt: row.createdAt,
+        fileSizeBytes: base64SizeBytes(row.fileData),
+      }));
+    }),
+
+  downloadDocument: businessManage
+    .input(downloadDocumentInputSchema)
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const userId = ctx.user!.id;
+      const [doc] = await db.select().from(businessDocuments).where(and(
+        eq(businessDocuments.id, input.documentId),
+        isNull(businessDocuments.deletedAt),
+      )).limit(1);
+
+      if (!doc) {
+        throw new Error("Document not found");
+      }
+
+      const access = await db.select().from(userBusinesses).where(and(
+        eq(userBusinesses.userId, userId),
+        eq(userBusinesses.businessId, doc.businessId),
+        eq(userBusinesses.isActive, true),
+      )).limit(1);
+
+      if (access.length === 0) {
+        throw new Error("You do not have access to this business");
+      }
+
+      await logAudit({
+        userId,
+        businessId: doc.businessId,
+        action: "DOWNLOAD",
+        resource: "business_documents",
+        resourceId: doc.id,
+        details: { fileName: doc.fileName, mimeType: doc.mimeType },
+      });
+
+      return mapDownloadPayload(doc);
+    }),
+
   deleteDocument: businessManage
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
       await db.update(businessDocuments).set({ deletedAt: new Date() })
         .where(eq(businessDocuments.id, input.id));
+      return { success: true };
+    }),
+
+  uploadLogo: businessManage
+    .input(uploadLogoInputSchema)
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const userId = ctx.user!.id;
+      await assertBusinessMembership({ userId, businessId: input.businessId });
+      assertAllowedLogoMimeType(input.mimeType);
+      assertLogoMaxSize(input.sizeBytes);
+
+      const uploadedLogo = await db.transaction(async (tx) => {
+        await tx.update(businessLogos).set({
+          isActive: false,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(businessLogos.businessId, input.businessId),
+          eq(businessLogos.isActive, true),
+          isNull(businessLogos.deletedAt),
+        ));
+
+        const [logo] = await tx.insert(businessLogos).values({
+          businessId: input.businessId,
+          fileName: input.fileName,
+          mimeType: input.mimeType,
+          fileData: input.fileData,
+          width: input.width ?? null,
+          height: input.height ?? null,
+          sizeBytes: input.sizeBytes,
+          isActive: true,
+          uploadedBy: userId,
+        } as any).returning();
+
+        await logAudit({
+          userId,
+          businessId: input.businessId,
+          action: "CREATE",
+          resource: "business_logos",
+          resourceId: logo.id,
+          details: {
+            operation: "upload_logo",
+            fileName: input.fileName,
+            mimeType: input.mimeType,
+            sizeBytes: input.sizeBytes,
+          },
+        });
+
+        return logo;
+      });
+
+      return { success: true, id: uploadedLogo.id };
+    }),
+
+  getActiveLogo: businessManage
+    .input(getActiveLogoInputSchema)
+    .query(async ({ input, ctx }) => {
+      const db = getDb();
+      await assertBusinessMembership({ userId: ctx.user!.id, businessId: input.businessId });
+
+      const [row] = await db.select().from(businessLogos).where(and(
+        eq(businessLogos.businessId, input.businessId),
+        eq(businessLogos.isActive, true),
+        isNull(businessLogos.deletedAt),
+      )).limit(1);
+
+      return row ?? null;
+    }),
+
+  deleteLogo: businessManage
+    .input(deleteLogoInputSchema)
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const userId = ctx.user!.id;
+      await assertBusinessMembership({ userId, businessId: input.businessId });
+
+      await db.transaction(async (tx) => {
+        const [activeLogo] = await tx.select().from(businessLogos).where(and(
+          eq(businessLogos.businessId, input.businessId),
+          eq(businessLogos.isActive, true),
+          isNull(businessLogos.deletedAt),
+        )).limit(1);
+
+        if (!activeLogo) {
+          throw new Error("Active logo not found");
+        }
+
+        await tx.update(businessLogos).set({
+          isActive: false,
+          deletedAt: new Date(),
+          updatedAt: new Date(),
+        }).where(eq(businessLogos.id, activeLogo.id));
+
+        await logAudit({
+          userId,
+          businessId: input.businessId,
+          action: "DELETE",
+          resource: "business_logos",
+          resourceId: activeLogo.id,
+          details: {
+            operation: "delete_logo",
+            fileName: activeLogo.fileName,
+            mimeType: activeLogo.mimeType,
+            sizeBytes: activeLogo.sizeBytes,
+          },
+        });
+      });
+
       return { success: true };
     }),
 });

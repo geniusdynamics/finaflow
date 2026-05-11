@@ -82,19 +82,20 @@ export function Users() {
   const [editOpen, setEditOpen] = useState<number | null>(null);
   const [passOpen, setPassOpen] = useState<number | null>(null);
 
-  const { data: users, refetch } = trpc.permissions.listUsers.useQuery();
+  const { data: users } = trpc.permissions.listUsers.useQuery();
   const { data: locations } = trpc.locations.list.useQuery();
 
+  const utils = trpc.useUtils();
   const createUser = trpc.users.create.useMutation({
-    onSuccess: () => { toast.success("User created"); setOpen(false); resetForm(); refetch(); },
+    onSuccess: () => { toast.success("User created"); setOpen(false); resetForm(); utils.permissions.listUsers.invalidate(); },
     onError: (err) => toast.error(err.message || "Failed to create user"),
   });
   const updateUser = trpc.users.update.useMutation({
-    onSuccess: () => { toast.success("User updated"); setEditOpen(null); refetch(); },
+    onSuccess: () => { toast.success("User updated"); setEditOpen(null); utils.permissions.listUsers.invalidate(); },
     onError: (err) => toast.error(err.message || "Failed to update user"),
   });
   const deleteUser = trpc.users.delete.useMutation({
-    onSuccess: () => { toast.success("User deactivated"); refetch(); },
+    onSuccess: () => { toast.success("User deactivated"); utils.permissions.listUsers.invalidate(); },
     onError: (err) => toast.error(err.message || "Failed to delete user"),
   });
   const changePassword = trpc.users.changePassword.useMutation({
@@ -103,14 +104,14 @@ export function Users() {
   });
 
   const addMember = trpc.businesses.addMember.useMutation({
-    onSuccess: () => { toast.success("User assigned to business"); refetch(); refetchBusinesses(); },
+    onSuccess: () => { toast.success("User assigned to business"); utils.permissions.listUsers.invalidate(); utils.businesses.list.invalidate(); },
     onError: (err) => toast.error(err.message || "Failed to assign"),
   });
   const removeMember = trpc.businesses.removeMember.useMutation({
-    onSuccess: () => { toast.success("User removed from business"); refetch(); refetchBusinesses(); },
+    onSuccess: () => { toast.success("User removed from business"); utils.permissions.listUsers.invalidate(); utils.businesses.list.invalidate(); },
     onError: (err) => toast.error(err.message || "Failed to remove"),
   });
-  const { data: allBusinesses, refetch: refetchBusinesses } = trpc.businesses.list.useQuery();
+  const { data: allBusinesses } = trpc.businesses.list.useQuery();
   const { data: userBizList } = trpc.permissions.listUsers.useQuery(); // Reuse for user list
 
   const [selectedBizForUser, setSelectedBizForUser] = useState<number | null>(null);
@@ -157,9 +158,9 @@ export function Users() {
   };
 
   // ── Permissions matrix state ──
-  const { data: matrixData, refetch: refetchMatrix } = trpc.permissions.getRoleMatrix.useQuery();
+  const { data: matrixData } = trpc.permissions.getRoleMatrix.useQuery();
   const saveRoleTemplate = trpc.permissions.createRoleTemplate.useMutation({
-    onSuccess: () => { toast.success("Permissions saved"); refetchMatrix(); },
+    onSuccess: () => { toast.success("Permissions saved"); utils.permissions.getRoleMatrix.invalidate(); },
     onError: (err) => toast.error(err.message || "Failed to save permissions"),
   });
 

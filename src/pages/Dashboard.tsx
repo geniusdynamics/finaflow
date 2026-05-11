@@ -45,7 +45,7 @@ export function Dashboard() {
               Dashboard
             </h1>
             <p className="mt-1 text-sm text-[#8D8A87]">
-              Overview of your restaurant cashflow
+              Overview of your business cashflow
             </p>
           </div>
           <div className="flex items-center gap-2">

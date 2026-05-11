@@ -2,8 +2,36 @@ import { z } from "zod";
 import { createRouter, authedQuery, userManage } from "./middleware";
 import { getDb } from "./queries/connection";
 import { users, userBusinesses } from "@db/schema";
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { hashPassword } from "./lib/password";
+
+type CreateUserInput = {
+  username: string;
+  name: string;
+  role: "owner" | "admin" | "manager" | "employee" | "viewer";
+  email?: string;
+  phone?: string;
+  locationId?: number;
+};
+
+export function buildCreateUserValues(
+  input: CreateUserInput,
+  accountId: string,
+  currentBusinessId: number | null,
+  passwordHash: string
+) {
+  return {
+    username: input.username,
+    passwordHash,
+    name: input.name,
+    email: input.email,
+    phone: input.phone,
+    role: input.role,
+    locationId: input.locationId,
+    accountId,
+    currentBusinessId,
+  };
+}
 
 export const usersRouter = createRouter({
   list: authedQuery.query(async () => {
@@ -37,6 +65,7 @@ export const usersRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const accountId = ctx.user?.currentBusiness?.accountId || null;
+      const currentBusinessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? null;
       if (!accountId) throw new Error("Account context required to create user");
       const existing = await db.select().from(users)
         .where(and(eq(users.username, input.username), eq(users.accountId, accountId)))
@@ -44,17 +73,21 @@ export const usersRouter = createRouter({
       if (existing.length > 0) throw new Error("Username already taken in this account");
 
       const passwordHash = await hashPassword(input.password);
-      const [result] = await db.insert(users).values({
-        username: input.username,
-        passwordHash,
-        name: input.name,
-        email: input.email,
-        phone: input.phone,
-        role: input.role,
-        locationId: input.locationId,
-      } as any);
+      const values = buildCreateUserValues(input, accountId, currentBusinessId, passwordHash);
+      const [result] = await db.transaction(async (tx) => {
+        const [createdUser] = await tx.insert(users).values(values as any).returning();
+        if (currentBusinessId) {
+          await tx.insert(userBusinesses).values({
+            userId: createdUser.id,
+            businessId: currentBusinessId,
+            role: input.role,
+            isActive: true,
+          } as any);
+        }
+        return [createdUser];
+      });
 
-      return { id: Number(result.insertId), success: true };
+      return { id: result.id, success: true };
     }),
 
   update: userManage

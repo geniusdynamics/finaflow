@@ -1,4 +1,5 @@
 import { authRouter } from "./auth-router";
+import { accountSubscriptionsRouter } from "./account-subscriptions-router";
 import { localAuthRouter } from "./local-auth-router";
 import { locationsRouter } from "./locations-router";
 import { accountsRouter } from "./accounts-router";
@@ -29,6 +30,7 @@ import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
+  accountSubscriptions: accountSubscriptionsRouter,
   auth: authRouter,
   localAuth: localAuthRouter,
   locations: locationsRouter,

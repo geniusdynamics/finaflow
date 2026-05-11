@@ -1,13 +1,22 @@
-import { useState, useMemo } from "react";
+// ABOUTME: Renders the financial reporting dashboard with P&L, cash flow, budget tracking, and export tools.
+// ABOUTME: Coordinates report queries and interactive chart views for the selected period and branch context.
+import { useMemo, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
-import { formatKES } from "@/lib/utils";
+import { cn, formatKES } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { BarChart3, TrendingUp, TrendingDown, PieChart, ArrowUpRight, ArrowDownRight, AlertTriangle, Target, Wallet, Receipt, Landmark, Plus, Trash2, Download, FileSpreadsheet, Smartphone, CalendarDays } from "lucide-react";
+import { BarChart3, TrendingUp, TrendingDown, PieChart, ArrowUpRight, ArrowDownRight, AlertTriangle, Target, Wallet, Receipt, Landmark, Plus, Download, FileSpreadsheet, Smartphone } from "lucide-react";
 import { toast } from "sonner";
+import { BudgetActualExpensesPieChart } from "@/features/reports/BudgetActualExpensesPieChart";
+import { InflowOutflowPieChart } from "@/features/reports/InflowOutflowPieChart";
+import {
+  buildBudgetActualChartData,
+  buildInflowOutflowChartData,
+  getVisibleBudgetRows,
+} from "@/features/reports/chart-data";
 
 export function Reports() {
   const now = new Date();
@@ -16,6 +25,8 @@ export function Reports() {
   const [branchFilter, setBranchFilter] = useState<string>("");
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [cogsOpen, setCogsOpen] = useState(false);
+  const [selectedFlowKey, setSelectedFlowKey] = useState<"inflow" | "outflow" | null>(null);
+  const [selectedBudgetCategoryId, setSelectedBudgetCategoryId] = useState<number | null>(null);
 
   const { data: locations } = trpc.locations.list.useQuery();
   const { data: pl } = trpc.reports.plStatement.useQuery({ year, month, locationId: branchFilter ? +branchFilter : undefined });
@@ -29,9 +40,6 @@ export function Reports() {
 
   const setBudget = trpc.reports.setBudget.useMutation({
     onSuccess: () => { toast.success("Budget set"); utils.reports.budgetVsActual.invalidate(); setBudgetOpen(false); },
-  });
-  const deleteBudget = trpc.reports.deleteBudget.useMutation({
-    onSuccess: () => { toast.success("Budget removed"); utils.reports.budgetVsActual.invalidate(); },
   });
   const setCogsT = trpc.reports.setCogsTarget.useMutation({
     onSuccess: () => { toast.success("COGS target updated"); utils.reports.cogsAnalysis.invalidate(); setCogsOpen(false); },
@@ -123,6 +131,52 @@ export function Reports() {
 
   const maxMonthVal = useMemo(() => Math.max(...(plMonthly?.map(m => parseFloat(m.netProfit)) ?? [0]), 0), [plMonthly]);
   const minMonthVal = useMemo(() => Math.min(...(plMonthly?.map(m => parseFloat(m.netProfit)) ?? [0]), 0), [plMonthly]);
+  const inflowOutflowData = useMemo(
+    () =>
+      buildInflowOutflowChartData({
+        revenue: pl?.revenue ?? "0",
+        cogs: pl?.cogs ?? "0",
+        expenses: pl?.expenses ?? "0",
+        payroll: pl?.payroll ?? "0",
+      }),
+    [pl],
+  );
+  const budgetActualData = useMemo(
+    () =>
+      bva
+        ? buildBudgetActualChartData(bva)
+        : {
+            segments: [],
+            legendItems: [],
+            totalBudgeted: "0.00",
+            totalActual: "0.00",
+            totalVariance: "0.00",
+            isEmpty: true,
+          },
+    [bva],
+  );
+  const activeSelectedBudgetCategoryId = useMemo(
+    () =>
+      budgetActualData.legendItems.some(item => item.key === selectedBudgetCategoryId)
+        ? selectedBudgetCategoryId
+        : null,
+    [budgetActualData.legendItems, selectedBudgetCategoryId],
+  );
+  const visibleBudgetRows = useMemo(
+    () => getVisibleBudgetRows(bva?.categories ?? [], activeSelectedBudgetCategoryId),
+    [activeSelectedBudgetCategoryId, bva],
+  );
+
+  const resetChartSelections = () => {
+    setSelectedFlowKey(null);
+    setSelectedBudgetCategoryId(null);
+  };
+  const budgetSectionTotals = bva ?? {
+    categories: [],
+    totalBudgeted: budgetActualData.totalBudgeted,
+    totalActual: budgetActualData.totalActual,
+    totalVariance: budgetActualData.totalVariance,
+  };
 
   return (
     <Layout>
@@ -134,13 +188,13 @@ export function Reports() {
             <p className="mt-1 text-sm text-[#8D8A87]">P&L, Budget vs Actual, COGS, Cash Flow Forecasting</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <select value={year} onChange={e => setYear(+e.target.value)} className="rounded border px-3 py-2 text-sm">
+            <select value={year} onChange={e => { setYear(+e.target.value); resetChartSelections(); }} className="rounded border px-3 py-2 text-sm">
               {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
             </select>
-            <select value={month} onChange={e => setMonth(+e.target.value)} className="rounded border px-3 py-2 text-sm">
+            <select value={month} onChange={e => { setMonth(+e.target.value); resetChartSelections(); }} className="rounded border px-3 py-2 text-sm">
               {Array.from({ length: 12 }, (_, i) => <option key={i + 1} value={i + 1}>{new Date(2000, i).toLocaleDateString("en-KE", { month: "short" })}</option>)}
             </select>
-            <select value={branchFilter} onChange={e => setBranchFilter(e.target.value)} className="rounded border px-3 py-2 text-sm">
+            <select value={branchFilter} onChange={e => { setBranchFilter(e.target.value); resetChartSelections(); }} className="rounded border px-3 py-2 text-sm">
               <option value="">All Branches</option>
               {locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
@@ -321,15 +375,41 @@ export function Reports() {
           </Dialog>
         </CardHeader>
           <CardContent>
-            {bva && bva.categories.length > 0 ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-xs text-[#8D8A87]">
-                  <span>Total Budgeted: <span className="font-mono font-semibold">{formatKES(bva.totalBudgeted)}</span></span>
-                  <span>Total Actual: <span className="font-mono font-semibold">{formatKES(bva.totalActual)}</span></span>
-                  <span>Variance: <span className={`font-mono font-semibold ${parseFloat(bva.totalVariance) >= 0 ? "text-[#2E7D32]" : "text-[#D32F2F]"}`}>{formatKES(bva.totalVariance)}</span></span>
+            <div className="space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-3 text-xs text-[#8D8A87]">
+                  <span>Total Budgeted: <span className="font-mono font-semibold">{formatKES(budgetSectionTotals.totalBudgeted)}</span></span>
+                  <span>Total Actual: <span className="font-mono font-semibold">{formatKES(budgetSectionTotals.totalActual)}</span></span>
+                  <span>Variance: <span className={`font-mono font-semibold ${parseFloat(budgetSectionTotals.totalVariance) >= 0 ? "text-[#2E7D32]" : "text-[#D32F2F]"}`}>{formatKES(budgetSectionTotals.totalVariance)}</span></span>
                 </div>
-                {bva.categories.map(cat => (
-                  <div key={cat.categoryId} className="space-y-1">
+                {activeSelectedBudgetCategoryId !== null ? (
+                  <Button size="sm" variant="ghost" onClick={() => setSelectedBudgetCategoryId(null)}>
+                    Clear filter
+                  </Button>
+                ) : null}
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                <InflowOutflowPieChart
+                  data={inflowOutflowData}
+                  selectedKey={selectedFlowKey}
+                  onSelect={setSelectedFlowKey}
+                />
+                <BudgetActualExpensesPieChart
+                  data={budgetActualData}
+                  selectedCategoryId={activeSelectedBudgetCategoryId}
+                  onSelectCategory={setSelectedBudgetCategoryId}
+                />
+              </div>
+              {visibleBudgetRows.length > 0 ? (
+                visibleBudgetRows.map(cat => (
+                  <div
+                    key={cat.categoryId}
+                    className={cn(
+                      "space-y-1 rounded-xl p-2 transition-all",
+                      cat.isSelected && "bg-[#FAF3F7]",
+                      cat.isDimmed && "opacity-60",
+                    )}
+                  >
                     <div className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
                         <span className="h-2 w-2 rounded-full" style={{ backgroundColor: cat.categoryColor ?? "#C73E1D" }} />
@@ -348,11 +428,11 @@ export function Reports() {
                       }} />
                     </div>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-[#8D8A87]">No budgets set for this period. Click "Set Budget" to start tracking.</p>
-            )}
+                ))
+              ) : (
+                <p className="text-sm text-[#8D8A87]">No budgets set for this period. Click "Set Budget" to start tracking.</p>
+              )}
+            </div>
           </CardContent>
         </Card>
 

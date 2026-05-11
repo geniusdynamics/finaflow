@@ -80,7 +80,7 @@ export const notificationsRouter = createRouter({
             locationId: bill.locationId,
             entityType: "bill",
             entityId: bill.id,
-          } as any);
+          } as any).returning();
           created++;
         }
       }

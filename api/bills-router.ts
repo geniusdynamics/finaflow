@@ -1,9 +1,28 @@
 import { z } from "zod";
-import { createRouter, billQuery, billCreate, billPay, getCurrentBusinessLocationIds } from "./middleware";
+import { createRouter, billQuery, billCreate, billPay, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
 import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { d } from "./lib/decimal";
+import { notFutureDateString } from "./lib/future-date";
+
+export const billPaymentInputSchema = z.object({
+  billId: z.number(),
+  paymentMethod: z.enum(["cash", "mpesa", "bank_transfer", "card"]),
+  amount: z.string(),
+  paymentDate: notFutureDateString("Payment date"),
+  reference: z.string().optional(),
+  notes: z.string().optional(),
+  accountId: z.number().optional(),
+});
+
+export const batchBillPaymentInputSchema = z.object({
+  billIds: z.array(z.number()),
+  paymentMethod: z.enum(["cash", "mpesa", "bank_transfer", "card"]),
+  paymentDate: notFutureDateString("Payment date"),
+  accountId: z.number(),
+  reference: z.string().optional(),
+});
 
 export const billsRouter = createRouter({
   list: billQuery
@@ -12,6 +31,7 @@ export const billsRouter = createRouter({
       const db = getDb();
       const conditions = [isNull(bills.deletedAt)];
       if (input?.locationId) {
+        await requireAuthorizedLocation(ctx, input.locationId);
         conditions.push(eq(bills.locationId, input.locationId));
       } else {
         const locIds = await getCurrentBusinessLocationIds(ctx);
@@ -31,10 +51,16 @@ export const billsRouter = createRouter({
       amount: z.string(), issueDate: z.string(), dueDate: z.string(),
       attachments: z.array(z.object({ imageData: z.string(), mimeType: z.string().default("image/jpeg"), caption: z.string().optional() })).optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
       let billNumber = input.billNumber;
       let billId: number;
+
+      await requireAuthorizedLocation(ctx, input.locationId);
+
+      if (input.supplierId) {
+        await requireAuthorizedBusinessEntity(ctx, suppliers, input.supplierId);
+      }
 
       await db.transaction(async (tx) => {
         if (!billNumber) {
@@ -49,15 +75,15 @@ export const billsRouter = createRouter({
           billNumber, description: input.description,
           amount: input.amount, balanceDue: input.amount,
           issueDate: new Date(input.issueDate), dueDate: new Date(input.dueDate),
-        } as any);
-        billId = Number(result.insertId);
+        } as any).returning();
+        billId = result.id;
 
         if (input.attachments && input.attachments.length > 0) {
           for (const att of input.attachments) {
             await tx.insert(attachments).values({
               recordType: "bill", recordId: billId,
               imageData: att.imageData, mimeType: att.mimeType, caption: att.caption,
-            } as any);
+            } as any).returning();
           }
         }
 
@@ -75,21 +101,23 @@ export const billsRouter = createRouter({
     }),
 
   recordPayment: billPay
-    .input(z.object({
-      billId: z.number(), paymentMethod: z.enum(["cash", "mpesa", "bank_transfer", "card"]),
-      amount: z.string(), paymentDate: z.string(), reference: z.string().optional(),
-      notes: z.string().optional(), accountId: z.number().optional(),
-    }))
+    .input(billPaymentInputSchema)
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const enteredBy = (ctx as any).user?.id ?? 1;
 
-      const bill = await db.select().from(bills).where(eq(bills.id, input.billId)).limit(1);
-      if (!bill[0]) throw new Error("Bill not found");
+      const bill = await requireAuthorizedEntity(ctx, bills, input.billId);
+      
+      if (input.accountId) {
+        const acct = await requireAuthorizedEntity(ctx, accounts, input.accountId);
+        if (acct.locationId !== bill.locationId) {
+          throw new Error("Account must belong to the same location as the bill");
+        }
+      }
 
       const paymentAmount = d(input.amount);
-      const currentPaid = d(bill[0].amountPaid);
-      const totalAmount = d(bill[0].amount);
+      const currentPaid = d(bill.amountPaid);
+      const totalAmount = d(bill.amount);
       const newPaid = currentPaid.plus(paymentAmount);
       const newBalance = d(Math.max(0, totalAmount.minus(currentPaid).minus(paymentAmount).toNumber()));
       const status = newBalance.lte(0) ? "paid" as const : "partial" as const;
@@ -104,15 +132,15 @@ export const billsRouter = createRouter({
           amount: input.amount, paymentDate: new Date(input.paymentDate),
           reference: input.reference, notes: input.notes,
           accountId: input.accountId, enteredBy,
-        } as any);
-        paymentId = Number(result.insertId);
+        } as any).returning();
+        paymentId = result.id;
 
-        if (bill[0].supplierId) {
-          const sup = await tx.select().from(suppliers).where(eq(suppliers.id, bill[0].supplierId)).limit(1);
+        if (bill.supplierId) {
+          const sup = await tx.select().from(suppliers).where(eq(suppliers.id, bill.supplierId)).limit(1);
           if (sup[0]) {
             const newPaidSup = d(sup[0].totalPaid).plus(paymentAmount);
             const newBalSup = d(Math.max(0, d(sup[0].currentBalance).minus(paymentAmount).toNumber()));
-            await tx.update(suppliers).set({ totalPaid: newPaidSup.toFixed(2), currentBalance: newBalSup.toFixed(2) }).where(eq(suppliers.id, bill[0].supplierId));
+            await tx.update(suppliers).set({ totalPaid: newPaidSup.toFixed(2), currentBalance: newBalSup.toFixed(2) }).where(eq(suppliers.id, bill.supplierId));
           }
         }
 
@@ -126,7 +154,7 @@ export const billsRouter = createRouter({
               amount: input.amount, balanceAfter: newBal.toFixed(2),
               entryDate: new Date(input.paymentDate), createdBy: enteredBy,
               refNo: bill[0].billNumber ?? `BILL-${String(bill[0].id).padStart(4, "0")}`,
-            } as any);
+            } as any).returning();
             await tx.update(accounts).set({ currentBalance: newBal.toFixed(2) }).where(eq(accounts.id, input.accountId));
           }
         }
@@ -137,28 +165,31 @@ export const billsRouter = createRouter({
 
   delete: billCreate
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      await requireAuthorizedEntity(ctx, bills, input.id);
       await db.update(bills).set({ deletedAt: new Date() }).where(eq(bills.id, input.id));
       return { success: true };
     }),
 
   getItems: billQuery
     .input(z.object({ billId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
+      await requireAuthorizedEntity(ctx, bills, input.billId);
       return db.select().from(billItems).where(and(eq(billItems.billId, input.billId), isNull(billItems.deletedAt)));
     }),
 
   addItem: billCreate
     .input(z.object({ billId: z.number(), itemName: z.string().min(1), quantity: z.string(), unitPrice: z.string(), totalPrice: z.string(), categoryId: z.number().optional(), notes: z.string().optional() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      await requireAuthorizedEntity(ctx, bills, input.billId);
       const [result] = await db.insert(billItems).values({
         billId: input.billId, itemName: input.itemName,
         quantity: input.quantity, unitPrice: input.unitPrice,
         totalPrice: input.totalPrice, categoryId: input.categoryId, notes: input.notes,
-      } as any);
+      } as any).returning();
 
       const existing = await db.select().from(masterItems).where(eq(masterItems.name, input.itemName)).limit(1);
       if (existing.length > 0) {
@@ -170,15 +201,19 @@ export const billsRouter = createRouter({
         await db.insert(masterItems).values({
           name: input.itemName, lastUnitPrice: input.unitPrice,
           lastCategoryId: input.categoryId, usageCount: 1,
-        } as any);
+        } as any).returning();
       }
-      return { id: Number(result.insertId), success: true };
+      return { id: result.id, success: true };
     }),
 
   deleteItem: billCreate
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const items = await db.select().from(billItems).where(eq(billItems.id, input.id)).limit(1);
+      if (items.length > 0) {
+        await requireAuthorizedEntity(ctx, bills, Number(items[0].billId));
+      }
       await db.update(billItems).set({ deletedAt: new Date() }).where(eq(billItems.id, input.id));
       return { success: true };
     }),
@@ -204,10 +239,17 @@ export const billsRouter = createRouter({
 
   listRecurring: billQuery
     .input(z.object({ locationId: z.number().optional() }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
       const conditions = [isNull(recurringBillTemplates.deletedAt), eq(recurringBillTemplates.isActive, true)];
-      if (input?.locationId) conditions.push(eq(recurringBillTemplates.locationId, input.locationId));
+      if (input?.locationId) {
+        await requireAuthorizedLocation(ctx, input.locationId);
+        conditions.push(eq(recurringBillTemplates.locationId, input.locationId));
+      } else {
+        const locIds = await getCurrentBusinessLocationIds(ctx);
+        if (locIds.length === 0) return [];
+        conditions.push(sql`${recurringBillTemplates.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`);
+      }
       return db.select().from(recurringBillTemplates).where(and(...conditions)).orderBy(recurringBillTemplates.nextDueDate);
     }),
 
@@ -220,24 +262,23 @@ export const billsRouter = createRouter({
       dayOfMonth: z.number().min(1).max(31).optional(),
       nextDueDate: z.string(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      await requireAuthorizedLocation(ctx, input.locationId);
       const [result] = await db.insert(recurringBillTemplates).values({
         locationId: input.locationId, supplierId: input.supplierId,
         description: input.description, amount: input.amount,
         frequency: input.frequency, dayOfWeek: input.dayOfWeek,
         dayOfMonth: input.dayOfMonth, nextDueDate: new Date(input.nextDueDate), isActive: true,
-      } as any);
-      return { id: Number(result.insertId), success: true };
+      } as any).returning();
+      return { id: result.id, success: true };
     }),
 
   generateRecurring: billCreate
     .input(z.object({ templateId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const template = await db.select().from(recurringBillTemplates).where(eq(recurringBillTemplates.id, input.templateId)).limit(1);
-      if (!template[0]) throw new Error("Template not found");
-      const t = template[0];
+      const t = await requireAuthorizedEntity(ctx, recurringBillTemplates, input.templateId);
 
       let billId: number;
 
@@ -251,8 +292,8 @@ export const billsRouter = createRouter({
           locationId: t.locationId, supplierId: t.supplierId,
           billNumber, description: t.description, amount: t.amount, balanceDue: t.amount,
           issueDate: new Date(), dueDate: t.nextDueDate,
-        } as any);
-        billId = Number(result.insertId);
+        } as any).returning();
+        billId = result.id;
 
         const nextDue = new Date(t.nextDueDate);
         switch (t.frequency) {
@@ -279,23 +320,31 @@ export const billsRouter = createRouter({
 
   deleteRecurring: billCreate
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      await requireAuthorizedEntity(ctx, recurringBillTemplates, input.id);
       await db.update(recurringBillTemplates).set({ deletedAt: new Date(), isActive: false }).where(eq(recurringBillTemplates.id, input.id));
       return { success: true };
     }),
 
   batchPay: billPay
-    .input(z.object({ billIds: z.array(z.number()), paymentMethod: z.enum(["cash", "mpesa", "bank_transfer", "card"]), paymentDate: z.string(), accountId: z.number(), reference: z.string().optional() }))
+    .input(batchBillPaymentInputSchema)
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const enteredBy = (ctx as any).user?.id ?? 1;
       const results: { billId: number; amount: string; status: string }[] = [];
 
-      const acct = await db.select().from(accounts).where(eq(accounts.id, input.accountId)).limit(1);
-      if (!acct[0]) throw new Error("Account not found");
+      const acct = await requireAuthorizedEntity(ctx, accounts, input.accountId);
 
-      let runningBalance = d(acct[0].currentBalance);
+      // Verify all bills belong to the account's location before doing anything
+      for (const billId of input.billIds) {
+        const bill = await requireAuthorizedEntity(ctx, bills, billId);
+        if (bill.locationId !== acct.locationId) {
+          throw new Error(`Bill ${billId} belongs to a different location than the selected account`);
+        }
+      }
+
+      let runningBalance = d(acct.currentBalance);
 
       await db.transaction(async (tx) => {
         for (const billId of input.billIds) {
@@ -316,7 +365,7 @@ export const billsRouter = createRouter({
             billId, paymentMethod: input.paymentMethod,
             amount: paymentAmount.toFixed(2), paymentDate: new Date(input.paymentDate),
             reference: input.reference, accountId: input.accountId, enteredBy,
-          } as any);
+          } as any).returning();
 
           if (bill[0].supplierId) {
             const sup = await tx.select().from(suppliers).where(eq(suppliers.id, bill[0].supplierId)).limit(1);
@@ -330,11 +379,11 @@ export const billsRouter = createRouter({
           runningBalance = runningBalance.minus(paymentAmount);
           await tx.insert(ledgerEntries).values({
             accountId: input.accountId, transactionType: "bill_payment",
-            transactionId: Number(payResult.insertId), entryType: "debit",
+            transactionId: payResult.id, entryType: "debit",
             amount: paymentAmount.toFixed(2), balanceAfter: runningBalance.toFixed(2),
             entryDate: new Date(input.paymentDate), createdBy: enteredBy,
             refNo: bill[0].billNumber ?? `BILL-${String(bill[0].id).padStart(4, "0")}`,
-          } as any);
+          } as any).returning();
 
           results.push({ billId, amount: paymentAmount.toFixed(2), status });
         }
@@ -361,8 +410,8 @@ export const billsRouter = createRouter({
       const [result] = await db.insert(attachments).values({
         recordType: "bill", recordId: input.recordId,
         imageData: input.imageData, mimeType: input.mimeType, caption: input.caption,
-      } as any);
-      return { id: Number(result.insertId), success: true };
+      } as any).returning();
+      return { id: result.id, success: true };
     }),
 
   deleteAttachment: billCreate

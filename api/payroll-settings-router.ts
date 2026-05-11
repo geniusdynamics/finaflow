@@ -34,7 +34,7 @@ export const payrollSettingsRouter = createRouter({
       if (existing.length > 0) {
         await db.update(payrollSettings).set(updates).where(eq(payrollSettings.id, existing[0].id));
       } else {
-        await db.insert(payrollSettings).values({ locationId, ...updates } as any);
+        await db.insert(payrollSettings).values({ locationId, ...updates } as any).returning();
       }
       return { success: true };
     }),

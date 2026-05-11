@@ -1,8 +1,11 @@
+// ABOUTME: Exposes branch listing and maintenance mutations within the active business context.
+// ABOUTME: Applies shared subscription enforcement before new locations are added to a business.
 import { z } from "zod";
 import { createRouter, authedQuery, settingsManage, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
 import { locations } from "@db/schema";
 import { eq, and, isNull, sql, desc } from "drizzle-orm";
+import { assertCanCreateLocation } from "./lib/subscription-enforcement";
 
 export const locationsRouter = createRouter({
   list: authedQuery.query(async ({ ctx }) => {
@@ -26,12 +29,20 @@ export const locationsRouter = createRouter({
       const db = getDb();
       const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
       if (!businessId) throw new Error("No active business selected");
+
+      await assertCanCreateLocation(
+        db,
+        businessId,
+        ctx.user?.accountId ?? ctx.user?.currentBusiness?.accountId ?? "",
+        ctx.user?.accountRefId ?? ctx.user?.currentBusiness?.accountRefId ?? null,
+      );
+
       const [result] = await db.insert(locations).values({
         name: input.name, slug: input.slug, address: input.address,
         phone: input.phone, email: input.email,
         businessId,
-      } as any);
-      return { id: Number(result.insertId), success: true };
+      } as any).returning();
+      return { id: result.id, success: true };
     }),
 
   update: settingsManage

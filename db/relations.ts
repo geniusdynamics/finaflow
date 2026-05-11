@@ -1,5 +1,9 @@
+// ABOUTME: Declares Drizzle relation mappings between tables for typed joins and relational queries.
+// ABOUTME: Keeps account, user, business, and financial table relationships centralized in one place.
 import { relations } from "drizzle-orm";
 import {
+  businesses,
+  customerAccounts,
   users,
   locations,
   accounts,
@@ -17,11 +21,29 @@ import {
   payrollAdvances,
   mpesaTransactions,
   ledgerEntries,
+  paymentMethods,
 } from "./schema";
 
-export const usersRelations = relations(users, ({ many }) => ({
+export const customerAccountsRelations = relations(customerAccounts, ({ many }) => ({
+  users: many(users),
+  businesses: many(businesses),
+  paymentMethods: many(paymentMethods),
+}));
+
+export const usersRelations = relations(users, ({ one, many }) => ({
+  account: one(customerAccounts, {
+    fields: [users.accountRefId],
+    references: [customerAccounts.id],
+  }),
   sales: many(dailySales),
   expenses: many(expenses),
+}));
+
+export const businessesRelations = relations(businesses, ({ one }) => ({
+  account: one(customerAccounts, {
+    fields: [businesses.accountRefId],
+    references: [customerAccounts.id],
+  }),
 }));
 
 export const locationsRelations = relations(locations, ({ many }) => ({
@@ -153,5 +175,12 @@ export const ledgerEntriesRelations = relations(ledgerEntries, ({ one }) => ({
   account: one(accounts, {
     fields: [ledgerEntries.accountId],
     references: [accounts.id],
+  }),
+}));
+
+export const paymentMethodsRelations = relations(paymentMethods, ({ one }) => ({
+  account: one(customerAccounts, {
+    fields: [paymentMethods.accountRefId],
+    references: [customerAccounts.id],
   }),
 }));

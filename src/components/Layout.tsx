@@ -7,7 +7,7 @@ import {
   CreditCard, CalendarDays, Smartphone, Menu, X, LogOut,
   Building2, ChevronRight, FileSpreadsheet, BookOpen,
   Wallet, ShieldCheck, Settings, MessageSquare, Briefcase,
-  Building, Bell, TrendingUp, Plug, Handshake,
+  Building, Bell, TrendingUp, Plug, Handshake, Key,
 } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
@@ -17,14 +17,11 @@ const allNavItems = [
   { path: "/daily-sales", label: "Daily Sales", icon: Receipt, perms: [PERMISSIONS.SALES_VIEW] },
   { path: "/expenses", label: "Expenses", icon: TrendingDown, perms: [PERMISSIONS.EXPENSES_VIEW] },
   { path: "/suppliers", label: "Suppliers", icon: Users, perms: [PERMISSIONS.SUPPLIERS_VIEW] },
-  { path: "/supplier-prices", label: "Price Intelligence", icon: TrendingUp, perms: [PERMISSIONS.SUPPLIERS_VIEW] },
   { path: "/bills", label: "Bills", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW] },
   { path: "/accounts", label: "Accounts", icon: CreditCard, perms: [PERMISSIONS.ACCOUNTS_VIEW] },
   { path: "/locations", label: "Branches", icon: Building2, perms: [PERMISSIONS.SETTINGS_MANAGE] },
-  { path: "/payment-methods", label: "Payment Methods", icon: CreditCard, perms: [PERMISSIONS.SETTINGS_MANAGE] },
   { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW] },
   { path: "/mpesa", label: "M-PESA", icon: Smartphone, perms: [PERMISSIONS.MPESA_VIEW] },
-  { path: "/daily-ledger", label: "Daily Ledger", icon: BookOpen, perms: [PERMISSIONS.MPESA_VIEW] },
   { path: "/daily-payments", label: "Daily Payments", icon: Wallet, perms: [PERMISSIONS.BILLS_VIEW] },
   { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.BILLS_VIEW] },
   { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
@@ -32,7 +29,6 @@ const allNavItems = [
   { path: "/feedback", label: "Feedback", icon: MessageSquare, perms: [PERMISSIONS.FEEDBACK_MANAGE] },
   { path: "/settings", label: "Settings", icon: Settings, perms: [PERMISSIONS.SETTINGS_MANAGE] },
   { path: "/businesses", label: "Businesses", icon: Briefcase, perms: [PERMISSIONS.BUSINESS_MANAGE] },
-  { path: "/integrations", label: "Integrations", icon: Plug, perms: [PERMISSIONS.API_KEYS_MANAGE] },
   { path: "/partner", label: "Partner", icon: Handshake, perms: [PERMISSIONS.PARTNER_VIEW] },
 ];
 
@@ -171,8 +167,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       className={`flex w-full items-center gap-2 px-3 py-2 text-sm text-left hover:bg-[#F5EDE6] ${b.id === user?.currentBusinessId ? "text-[#C73E1D] font-medium" : "text-[#2D2A26]"}`}
                     >
                       <Building className="h-4 w-4" />
-                      {b.name}
-                      {b.isDemo && <span className="ml-auto rounded bg-[#8D8A87]/10 px-1.5 py-0 text-[10px] text-[#8D8A87]">DEMO</span>}
+                      <span className="flex-1">{b.name}</span>
+                      {b.isDemo && <span className="rounded bg-[#8D8A87]/10 px-1.5 py-0 text-[10px] text-[#8D8A87]">DEMO</span>}
+                      {(b as any).allocationSource && (
+                        <span className="rounded bg-[#0288D1]/10 px-1.5 py-0.5 text-[10px] text-[#0288D1]">
+                          Allocated
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>

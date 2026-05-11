@@ -1,0 +1,37 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: finaflow
+      POSTGRES_PASSWORD: finaflow_dev
+      POSTGRES_DB: finaflow_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finaflow -d finaflow_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgresql://finaflow:finaflow_dev@db:5432/finaflow_dev
+      APP_ID: ${APP_ID:-finaflow_local}
+      APP_SECRET: ${APP_SECRET:-dev_secret_change_in_production}
+      KIMI_AUTH_URL: ${KIMI_AUTH_URL:-http://localhost:3000/auth}
+      KIMI_OPEN_URL: ${KIMI_OPEN_URL:-http://localhost:3000/open}
+      APP_URL: ${APP_URL:-http://localhost:5173}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

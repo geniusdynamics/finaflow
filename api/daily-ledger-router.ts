@@ -89,8 +89,8 @@ export const dailyLedgerRouter = createRouter({
           transactionCount: txnAgg[0]?.count ?? 0,
           notes: input.notes,
           enteredBy: userId,
-        } as any);
-        return { id: Number(result.insertId), closingBalance, success: true };
+        } as any).returning();
+        return { id: result.id, closingBalance, success: true };
       }
     }),
 });

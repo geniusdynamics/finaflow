@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Receipt, Camera, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Receipt, Camera, Trash2, ChevronDown, ChevronUp, Filter, X } from "lucide-react";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -23,14 +24,77 @@ export function DailySales() {
   const [open, setOpen] = useState(false);
   const [expandedSale, setExpandedSale] = useState<number | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  
+  // Filter states
+  const [filterBranch, setFilterBranch] = useState<string>("all");
+  const [filterPeriod, setFilterPeriod] = useState<string>("all");
+  const [customDateFrom, setCustomDateFrom] = useState("");
+  const [customDateTo, setCustomDateTo] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
 
+  const utils = trpc.useUtils();
   const { data: locations } = trpc.locations.list.useQuery();
-  const { data: sales, refetch } = trpc.dailySales.list.useQuery();
+  
+  // Calculate date range based on period filter
+  const getDateRange = () => {
+    const today = new Date();
+    let dateFrom = "";
+    let dateTo = "";
+    
+    switch (filterPeriod) {
+      case "today":
+        dateFrom = dateTo = getLocalDateString(today);
+        break;
+      case "week": {
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - today.getDay()); // Start of week (Sunday)
+        dateFrom = getLocalDateString(weekStart);
+        dateTo = getLocalDateString(today);
+        break;
+      }
+      case "month": {
+        const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+        dateFrom = getLocalDateString(monthStart);
+        dateTo = getLocalDateString(today);
+        break;
+      }
+      case "year": {
+        const yearStart = new Date(today.getFullYear(), 0, 1);
+        dateFrom = getLocalDateString(yearStart);
+        dateTo = getLocalDateString(today);
+        break;
+      }
+      case "custom":
+        dateFrom = customDateFrom;
+        dateTo = customDateTo;
+        break;
+      default:
+        // "all" - no date filter
+        break;
+    }
+    
+    return { dateFrom, dateTo };
+  };
+  
+  const { dateFrom, dateTo } = getDateRange();
+  
+  const { data: sales, refetch } = trpc.dailySales.list.useQuery({
+    locationId: filterBranch !== "all" ? parseInt(filterBranch) : undefined,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
+  });
+  
   const { data: settings } = trpc.settings.list.useQuery();
   const { data: allPaymentMethods } = trpc.paymentMethods.list.useQuery();
 
   const createSale = trpc.dailySales.create.useMutation({
-    onSuccess: () => { setOpen(false); resetForm(); refetch(); toast.success("Sales recorded"); },
+    onSuccess: async () => {
+      setOpen(false);
+      resetForm();
+      await utils.dailySales.list.invalidate();
+      await refetch();
+      toast.success("Sales recorded");
+    },
     onError: (err) => toast.error(err.message),
   });
 
@@ -107,6 +171,19 @@ export function DailySales() {
 
   const grossTotal = Object.values(paymentAmounts).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
   const netTotal = grossTotal - (parseFloat(discountAmount) || 0) - (parseFloat(voidAmount) || 0);
+  
+  // Calculate summary stats for filtered data
+  const totalSales = sales?.reduce((sum, s) => sum + parseFloat(s.netSales || "0"), 0) || 0;
+  const totalRecords = sales?.length || 0;
+  
+  const clearFilters = () => {
+    setFilterBranch("all");
+    setFilterPeriod("all");
+    setCustomDateFrom("");
+    setCustomDateTo("");
+  };
+  
+  const hasActiveFilters = filterBranch !== "all" || filterPeriod !== "all";
 
   return (
     <Layout>
@@ -116,10 +193,20 @@ export function DailySales() {
             <h1 className="font-serif text-2xl font-bold text-[#2D2A26]">Daily Sales</h1>
             <p className="mt-1 text-sm text-[#8D8A87]">Record sales with configurable payment methods per branch</p>
           </div>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-[#C73E1D] hover:bg-[#C73E1D]/90"><Plus className="mr-2 h-4 w-4" /> Record Sales</Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              onClick={() => setShowFilters(!showFilters)}
+              className={hasActiveFilters ? "border-[#C73E1D] text-[#C73E1D]" : ""}
+            >
+              <Filter className="mr-2 h-4 w-4" /> 
+              {showFilters ? "Hide Filters" : "Show Filters"}
+              {hasActiveFilters && <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#C73E1D] text-xs text-white">!</span>}
+            </Button>
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-[#C73E1D] hover:bg-[#C73E1D]/90"><Plus className="mr-2 h-4 w-4" /> Record Sales</Button>
+              </DialogTrigger>
             <DialogContent className="max-h-[90vh] overflow-y-auto bg-white">
               <DialogHeader><DialogTitle className="font-serif text-xl text-[#2D2A26]">Record Daily Sales</DialogTitle></DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -204,7 +291,123 @@ export function DailySales() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
+
+        {/* Filter Panel */}
+        {showFilters && (
+          <Card className="border-[#E8E0D8] bg-white">
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-serif text-lg font-semibold text-[#2D2A26]">Filters</h3>
+                  {hasActiveFilters && (
+                    <Button variant="ghost" size="sm" onClick={clearFilters} className="text-[#C73E1D] hover:text-[#C73E1D]/90">
+                      <X className="mr-1 h-4 w-4" /> Clear All
+                    </Button>
+                  )}
+                </div>
+                
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  {/* Branch Filter */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-[#2D2A26]">Branch</Label>
+                    <Select value={filterBranch} onValueChange={setFilterBranch}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All Branches" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Branches</SelectItem>
+                        {locations?.map(loc => (
+                          <SelectItem key={loc.id} value={loc.id.toString()}>
+                            {loc.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Period Filter */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium text-[#2D2A26]">Period</Label>
+                    <Select value={filterPeriod} onValueChange={setFilterPeriod}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="All Time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Time</SelectItem>
+                        <SelectItem value="today">Today</SelectItem>
+                        <SelectItem value="week">This Week</SelectItem>
+                        <SelectItem value="month">This Month</SelectItem>
+                        <SelectItem value="year">This Year</SelectItem>
+                        <SelectItem value="custom">Custom Range</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Custom Date Range - Show when "custom" is selected */}
+                  {filterPeriod === "custom" && (
+                    <>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-[#2D2A26]">From Date</Label>
+                        <Input 
+                          type="date" 
+                          value={customDateFrom} 
+                          onChange={e => setCustomDateFrom(e.target.value)}
+                          max={customDateTo || undefined}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium text-[#2D2A26]">To Date</Label>
+                        <Input 
+                          type="date" 
+                          value={customDateTo} 
+                          onChange={e => setCustomDateTo(e.target.value)}
+                          min={customDateFrom || undefined}
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Summary Stats */}
+                <div className="flex flex-wrap gap-4 border-t border-[#E8E0D8] pt-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-[#8D8A87]">Total Records:</span>
+                    <span className="font-mono text-sm font-semibold text-[#2D2A26]">{totalRecords}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-[#8D8A87]">Total Sales:</span>
+                    <span className="font-mono text-sm font-semibold text-[#2E7D32]">{formatKES(totalSales.toFixed(2))}</span>
+                  </div>
+                  {filterBranch !== "all" && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-[#8D8A87]">Branch:</span>
+                      <span className="text-sm font-medium text-[#2D2A26]">
+                        {locations?.find(l => l.id.toString() === filterBranch)?.name || "Unknown"}
+                      </span>
+                    </div>
+                  )}
+                  {filterPeriod !== "all" && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-[#8D8A87]">Period:</span>
+                      <span className="text-sm font-medium text-[#2D2A26]">
+                        {filterPeriod === "today" && "Today"}
+                        {filterPeriod === "week" && "This Week"}
+                        {filterPeriod === "month" && "This Month"}
+                        {filterPeriod === "year" && "This Year"}
+                        {filterPeriod === "custom" && customDateFrom && customDateTo && 
+                          `${formatDate(customDateFrom)} - ${formatDate(customDateTo)}`}
+                        {filterPeriod === "custom" && (!customDateFrom || !customDateTo) && 
+                          "Select date range"}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Card View */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">

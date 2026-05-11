@@ -4,7 +4,6 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { Toaster } from "@/components/ui/sonner";
 import { PageSkeleton } from "@/components/Skeleton";
-import AuthLayout from "@/components/AuthLayout";
 
 const Home = lazy(() => import("./pages/Home"));
 const Login = lazy(() => import("./pages/Login"));
@@ -19,17 +18,13 @@ const Payroll = lazy(() => import("./pages/Payroll").then(m => ({ default: m.Pay
 const Mpesa = lazy(() => import("./pages/Mpesa").then(m => ({ default: m.Mpesa })));
 const Calendar = lazy(() => import("./pages/Calendar").then(m => ({ default: m.Calendar })));
 const Reports = lazy(() => import("./pages/Reports").then(m => ({ default: m.Reports })));
-const DailyLedger = lazy(() => import("./pages/DailyLedger").then(m => ({ default: m.DailyLedger })));
 const DailyPayments = lazy(() => import("./pages/DailyPayments").then(m => ({ default: m.DailyPayments })));
 const Users = lazy(() => import("./pages/Users").then(m => ({ default: m.Users })));
 const Locations = lazy(() => import("./pages/Locations").then(m => ({ default: m.Locations })));
 const Settings = lazy(() => import("./pages/Settings").then(m => ({ default: m.Settings })));
 const Feedback = lazy(() => import("./pages/Feedback").then(m => ({ default: m.Feedback })));
-const Businesses = lazy(() => import("./pages/Businesses").then(m => ({ default: m.Businesses })));
+const Businesses = lazy(() => import("./pages/Businesses"));
 const BusinessDetails = lazy(() => import("./pages/BusinessDetails").then(m => ({ default: m.BusinessDetails })));
-const PaymentMethods = lazy(() => import("./pages/PaymentMethods").then(m => ({ default: m.PaymentMethods })));
-const SupplierPrices = lazy(() => import("./pages/SupplierPrices").then(m => ({ default: m.SupplierPrices })));
-const Integrations = lazy(() => import("./pages/Integrations").then(m => ({ default: m.Integrations })));
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard").then(m => ({ default: m.PartnerDashboard })));
 
 function SuspendedPage({ children }: { children: React.ReactNode }) {
@@ -37,11 +32,7 @@ function SuspendedPage({ children }: { children: React.ReactNode }) {
 }
 
 function ProtectedPage({ children }: { children: React.ReactNode }) {
-  return (
-    <ProtectedRoute>
-      <AuthLayout>{children}</AuthLayout>
-    </ProtectedRoute>
-  );
+  return <ProtectedRoute>{children}</ProtectedRoute>;
 }
 
 export default function App() {
@@ -59,7 +50,6 @@ export default function App() {
         <Route path="/locations" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Locations /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/payroll" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Payroll /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/mpesa" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Mpesa /></ProtectedPage></Suspense></ErrorBoundary>} />
-        <Route path="/daily-ledger" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><DailyLedger /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/daily-payments" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><DailyPayments /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/calendar" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Calendar /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/reports" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Reports /></ProtectedPage></Suspense></ErrorBoundary>} />
@@ -68,9 +58,6 @@ export default function App() {
         <Route path="/feedback" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Feedback /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/businesses" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Businesses /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/businesses/:id/details" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><BusinessDetails /></ProtectedPage></Suspense></ErrorBoundary>} />
-        <Route path="/payment-methods" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><PaymentMethods /></ProtectedPage></Suspense></ErrorBoundary>} />
-        <Route path="/supplier-prices" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><SupplierPrices /></ProtectedPage></Suspense></ErrorBoundary>} />
-        <Route path="/integrations" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Integrations /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/partner" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><PartnerDashboard /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="*" element={<Suspense fallback={<PageSkeleton />}><NotFound /></Suspense>} />
       </Routes>

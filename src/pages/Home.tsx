@@ -18,10 +18,10 @@ export default function Home() {
   ];
 
   const tiers = [
-    { name: "Free", price: "0", branches: 1, users: 1, features: ["1 branch", "1 user", "100 transactions/mo", "Basic sales & expenses", "M-PESA import"], cta: "Get Started", highlight: false },
-    { name: "Starter", price: "500", branches: 1, users: 3, features: ["1 branch", "3 users", "Unlimited transactions", "Recurring bills", "Email support"], cta: "Start Trial", highlight: false },
-    { name: "Growth", price: "1,500", branches: 5, users: 5, features: ["5 branches", "5 users", "Unlimited transactions", "Full payroll", "Priority support"], cta: "Start Trial", highlight: true },
-    { name: "Pro", price: "3,000", branches: "∞", users: "∞", features: ["Unlimited branches", "Unlimited users", "API access", "Webhooks", "White-label option"], cta: "Contact Sales", highlight: false },
+    { name: "Free", price: "0", businesses: 1, branches: 1, users: 1, transactions: "100 / month", payroll: "No", support: "Community", features: ["1 business", "1 branch", "1 user", "100 transactions/mo", "Basic sales & expenses", "M-PESA import"], cta: "Get Started", highlight: false },
+    { name: "Starter", price: "500", businesses: 1, branches: 1, users: 3, transactions: "5,000 / month", payroll: "No", support: "Email", features: ["1 business", "1 branch", "3 users", "Unlimited transactions", "Recurring bills", "Email support"], cta: "Start Trial", highlight: false },
+    { name: "Growth", price: "1,500", businesses: 3, branches: 5, users: 5, transactions: "20,000 / month", payroll: "Yes", support: "Priority", features: ["3 businesses", "5 branches", "5 users", "Unlimited transactions", "Full payroll", "Priority support"], cta: "Start Trial", highlight: true },
+    { name: "Pro", price: "3,000", businesses: 10, branches: "∞", users: "∞", transactions: "Unlimited", payroll: "Yes", support: "Dedicated", features: ["10 businesses", "Unlimited branches", "Unlimited users", "API access", "Webhooks", "White-label option"], cta: "Contact Sales", highlight: false },
   ];
 
   return (
@@ -29,7 +29,7 @@ export default function Home() {
       <Helmet>
         <title>Finaflow — Business Financial Tracking Platform</title>
         <meta name="description" content="Finaflow helps businesses track cashflow, manage payroll, process bills, and generate financial reports in real-time." />
-        <meta property="og:title" content="Finaflow — Financial Tracking for Kenyan Businesses" />
+        <meta property="og:title" content="Finaflow — Financial Tracking for African Businesses" />
         <meta property="og:description" content="Comprehensive business financial management platform with M-PESA integration, payroll, and reporting." />
         <meta property="og:type" content="website" />
         <script type="application/ld+json">
@@ -38,7 +38,7 @@ export default function Home() {
             "@type": "SoftwareApplication",
             "name": "Finaflow",
             "applicationCategory": "BusinessApplication",
-            "description": "Business financial tracking platform for Kenyan restaurants",
+            "description": "Business financial tracking platform for African businesses",
             "offers": { "@type": "Offer", "price": "0", "priceCurrency": "KES" },
           })}
         </script>
@@ -78,10 +78,10 @@ export default function Home() {
                 <Zap className="h-3 w-3" /> Now with Partner & Reseller Program
               </div>
               <h1 className="font-serif text-4xl font-bold leading-tight text-[#2D2A26] md:text-5xl">
-                Restaurant finances,<br />finally <span className="text-[#C73E1D]">made simple</span>
+                Business finances,<br />finally <span className="text-[#C73E1D]">made simple</span>
               </h1>
               <p className="mt-4 text-lg text-[#8D8A87]">
-                Track sales, manage expenses, run payroll, and reconcile M-PESA — all in one place. Built for Kenyan restaurants with multiple branches.
+                Track sales, manage expenses, run payroll, and reconcile M-PESA — all in one place. Built for African Businesses.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Link to="/login"><Button className="bg-[#C73E1D] hover:bg-[#C73E1D]/90 px-6">Get Started Free</Button></Link>
@@ -142,10 +142,39 @@ export default function Home() {
                   <CardContent className="p-4">
                     <h3 className="text-sm font-semibold text-[#2D2A26]">{t.name}</h3>
                     <div className="mt-2">
-                      <span className="font-serif text-3xl font-bold text-[#2D2A26]">{t.price}</span>
-                      <span className="text-xs text-[#8D8A87]">/mo</span>
+                      <div className="flex flex-wrap items-end gap-2" aria-label={`${t.name} plan price reduced to zero`}>
+                        <span className="font-serif text-2xl font-bold text-[#8D8A87] line-through decoration-2">{t.price}</span>
+                        <span className="font-serif text-3xl font-bold text-[#2D2A26]">0</span>
+                        <span className="text-xs text-[#8D8A87]">/mo</span>
+                      </div>
                     </div>
-                    <ul className="mt-3 space-y-1.5">
+                    <div className="mt-3 space-y-1.5 border-t border-[#E8E0D8] pt-3">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#8D8A87]">Businesses</span>
+                        <span className="font-semibold text-[#2D2A26]">{t.businesses === 99 ? "∞" : t.businesses}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#8D8A87]">Branches</span>
+                        <span className="font-semibold text-[#2D2A26]">{t.branches === 99 ? "∞" : t.branches}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#8D8A87]">Users</span>
+                        <span className="font-semibold text-[#2D2A26]">{t.users === 99 ? "∞" : t.users}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#8D8A87]">Transactions</span>
+                        <span className="font-semibold text-[#2D2A26]">{t.transactions}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#8D8A87]">Payroll</span>
+                        <span className="font-semibold text-[#2D2A26]">{t.payroll}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[#8D8A87]">Support</span>
+                        <span className="font-semibold text-[#2D2A26]">{t.support}</span>
+                      </div>
+                    </div>
+                    <ul className="mt-3 space-y-1.5 border-t border-[#E8E0D8] pt-3">
                       {t.features.map((f, j) => (
                         <li key={j} className="flex items-center gap-1.5 text-xs text-[#2D2A26]">
                           <CheckCircle className="h-3 w-3 shrink-0 text-[#2E7D32]" />{f}
@@ -165,7 +194,7 @@ export default function Home() {
           <div className="mx-auto max-w-3xl px-4 text-center">
             <h2 className="font-serif text-3xl font-bold text-[#2D2A26]">Are you an accountant or consultant?</h2>
             <p className="mt-3 text-sm text-[#8D8A87]">
-              Join our Partner Program and earn <strong className="text-[#D4A854]">20% revenue share</strong> from every restaurant client you onboard.
+              Join our Partner Program and earn <strong className="text-[#D4A854]">20% revenue share</strong> from every business client you onboard.
             </p>
             <div className="mt-6 flex justify-center gap-3">
               <Link to="/login"><Button className="bg-[#D4A854] text-white hover:bg-[#D4A854]/90">Join as Partner</Button></Link>
@@ -182,7 +211,7 @@ export default function Home() {
                 </div>
                 <span className="font-serif text-sm font-bold text-[#2D2A26]">Finaflow</span>
               </div>
-              <p className="text-xs text-[#8D8A87]">© 2026 Finaflow. Built for Kenyan restaurants.</p>
+              <p className="text-xs text-[#8D8A87]">© 2026 Finaflow. Built for African Businesses.</p>
               <div className="flex gap-4 text-xs text-[#8D8A87]">
                 <Link to="/login" className="hover:text-[#2D2A26]">Sign In</Link>
                 <Link to="/login" className="hover:text-[#2D2A26]">Sign Up</Link>

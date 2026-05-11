@@ -23,6 +23,10 @@ function fileToBase64(file: File): Promise<string> {
 
 type PeriodFilter = "overall" | "today" | "this_week" | "this_month" | "this_year" | "custom";
 
+export function formatLocationBalance(balance: string | number | null | undefined): string {
+  return formatKES(balance ?? 0);
+}
+
 function getPeriodDates(period: PeriodFilter, customFrom?: string, customTo?: string) {
   const now = new Date();
   const today = getLocalDateString(now);
@@ -112,6 +116,7 @@ export function Expenses() {
   });
   const [catForm, setCatForm] = useState({ name: "", description: "", color: "#C73E1D" });
   const [attachments, setAttachments] = useState<{ imageData: string; mimeType: string; caption: string }[]>([]);
+  const todayDate = getLocalDateString();
 
   const photosEnabled = settings?.photosExpenses !== "false";
   const selectedSupplier = suppliers?.find(s => s.id.toString() === form.supplierId);
@@ -140,6 +145,7 @@ export function Expenses() {
     if (!form.categoryId) { toast.error("Please select a category"); return; }
     if (!form.amount || parseFloat(form.amount) <= 0) { toast.error("Please enter a valid amount"); return; }
     if (!form.description.trim()) { toast.error("Please enter a description"); return; }
+    if (form.expenseDate > todayDate) { toast.error("Expense date cannot be in the future"); return; }
     createExpense.mutate({
       locationId: +form.locationId, categoryId: +form.categoryId, supplierId: form.supplierId ? +form.supplierId : undefined,
       amount: form.amount, description: form.description, expenseDate: form.expenseDate,
@@ -261,7 +267,7 @@ export function Expenses() {
                   )}
                 </div>
                 <div><Label>Description</Label><Input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} required /></div>
-                <div><Label>Date</Label><Input type="date" value={form.expenseDate} onChange={e => setForm(p => ({ ...p, expenseDate: e.target.value }))} required /></div>
+                <div><Label>Date</Label><Input type="date" value={form.expenseDate} max={todayDate} onChange={e => setForm(p => ({ ...p, expenseDate: e.target.value }))} required /></div>
                 {photosEnabled && (
                   <div className="space-y-2">
                     <Label className="flex items-center gap-2"><Camera className="h-4 w-4" /> Attach Photos</Label>
@@ -328,7 +334,7 @@ export function Expenses() {
                   <div>
                     <p className="text-sm font-medium text-[#2D2A26]">{loc.name}</p>
                     <div className="mt-1 flex gap-4">
-                      <span className="text-xs text-[#8D8A87]">Balance: <span className="font-mono font-semibold text-[#2E7D32]">{formatKES(locBalance.toFixed(2))}</span></span>
+                        <span className="text-xs text-[#8D8A87]">Balance: <span className="font-mono font-semibold text-[#2E7D32]">{formatLocationBalance(locBalance)}</span></span>
                       <span className="text-xs text-[#8D8A87]">Income: <span className="font-mono font-semibold text-[#D4A854]">{formatKES(locIncome)}</span></span>
                     </div>
                   </div>
@@ -463,6 +469,11 @@ export function Expenses() {
                             {linkedBill && (
                               <span className="inline-flex items-center gap-1 rounded-full bg-[#ED6C02]/10 px-1.5 py-0 text-[10px] text-[#ED6C02]">
                                 <FileText className="h-2.5 w-2.5" />{linkedBill.billNumber ?? `BILL-${String(linkedBill.id).padStart(4,"0")}`}
+                              </span>
+                            )}
+                            {exp.mpesaTxnId && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-[#2E7D32]/10 px-1.5 py-0 text-[10px] text-[#2E7D32]">
+                                M-PESA: {exp.mpesaTxnId}
                               </span>
                             )}
                           </div>

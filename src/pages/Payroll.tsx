@@ -27,9 +27,9 @@ export function Payroll() {
   const [assignEmpOpen, setAssignEmpOpen] = useState(false);
 
   const { data: locations } = trpc.locations.list.useQuery();
-  const { data: employees, refetch: refetchEmployees } = trpc.employees.list.useQuery();
-  const { data: periods, refetch: refetchPeriods } = trpc.payroll.periods.useQuery();
-  const { data: periodEntries, refetch: refetchEntries } = trpc.payroll.entries.useQuery(
+  const { data: employees } = trpc.employees.list.useQuery();
+  const { data: periods } = trpc.payroll.periods.useQuery();
+  const { data: periodEntries } = trpc.payroll.entries.useQuery(
     { periodId: selectedPeriod ?? 0 },
     { enabled: selectedPeriod !== null }
   );
@@ -39,24 +39,25 @@ export function Payroll() {
     { enabled: empViewOpen !== null }
   );
 
-  const createPeriod = trpc.payroll.createPeriod.useMutation({ onSuccess: () => { setPeriodOpen(false); refetchPeriods(); } });
-  const createEmployee = trpc.employees.create.useMutation({ onSuccess: () => { setEmpOpen(false); refetchEmployees(); } });
-  const updateEmployee = trpc.employees.update.useMutation({ onSuccess: () => { setEmpEditOpen(null); refetchEmployees(); } });
+  const utils = trpc.useUtils();
+  const createPeriod = trpc.payroll.createPeriod.useMutation({ onSuccess: () => { setPeriodOpen(false); utils.payroll.periods.invalidate(); } });
+  const createEmployee = trpc.employees.create.useMutation({ onSuccess: () => { setEmpOpen(false); utils.employees.list.invalidate(); } });
+  const updateEmployee = trpc.employees.update.useMutation({ onSuccess: () => { setEmpEditOpen(null); utils.employees.list.invalidate(); } });
   const processPayroll = trpc.payroll.processPayroll.useMutation({
-    onSuccess: (data) => { toast.success(`Payroll processed: ${data.entries.length} entries, ${formatKES(data.totalNetPay)}`); refetchPeriods(); refetchEntries(); },
+    onSuccess: (data) => { toast.success(`Payroll processed: ${data.entries.length} entries, ${formatKES(data.totalNetPay)}`); utils.payroll.periods.invalidate(); utils.payroll.entries.invalidate(); },
     onError: (err) => toast.error(err.message),
   });
   const markPaid = trpc.payroll.markPaid.useMutation({
-    onSuccess: () => { setPayPeriod(null); toast.success("Payroll marked as paid"); refetchPeriods(); refetchEntries(); },
+    onSuccess: () => { setPayPeriod(null); toast.success("Payroll marked as paid"); utils.payroll.periods.invalidate(); utils.payroll.entries.invalidate(); },
     onError: (err) => toast.error(err.message),
   });
-  const requestAdvance = trpc.payroll.requestAdvance.useMutation({ onSuccess: () => { setAdvanceOpen(false); refetchEmployees(); } });
+  const requestAdvance = trpc.payroll.requestAdvance.useMutation({ onSuccess: () => { setAdvanceOpen(false); utils.employees.list.invalidate(); } });
   const addToPeriod = trpc.payroll.addEmployeeToPeriod.useMutation({
-    onSuccess: () => { setAssignEmpOpen(false); toast.success("Employee added to period"); refetchEntries(); refetchPeriods(); },
+    onSuccess: () => { setAssignEmpOpen(false); toast.success("Employee added to period"); utils.payroll.entries.invalidate(); utils.payroll.periods.invalidate(); },
     onError: (err) => toast.error(err.message),
   });
   const removeFromPeriod = trpc.payroll.removeEmployeeFromPeriod.useMutation({
-    onSuccess: () => { toast.success("Employee removed from period"); refetchEntries(); refetchPeriods(); },
+    onSuccess: () => { toast.success("Employee removed from period"); utils.payroll.entries.invalidate(); utils.payroll.periods.invalidate(); },
     onError: (err) => toast.error(err.message),
   });
 
@@ -277,7 +278,7 @@ export function Payroll() {
                           </DialogContent>
                         </Dialog>
                       )}
-                      <Button size="sm" variant="outline" onClick={() => { setSelectedPeriod(period.id); setTimeout(() => refetchEntries(), 50); }} className={selectedPeriod === period.id ? "border-[#C73E1D] text-[#C73E1D]" : ""}><Eye className="h-3 w-3" /></Button>
+                      <Button size="sm" variant="outline" onClick={() => { setSelectedPeriod(period.id); setTimeout(() => utils.payroll.entries.invalidate(), 50); }} className={selectedPeriod === period.id ? "border-[#C73E1D] text-[#C73E1D]" : ""}><Eye className="h-3 w-3" /></Button>
                     </div>
                   </td>
                 </tr>

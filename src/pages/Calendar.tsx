@@ -12,7 +12,7 @@ export function Calendar() {
   const today = getLocalDateString();
   const futureDate = getLocalDateString(new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000));
 
-  const { data: sales } = trpc.dailySales.list.useQuery();
+  const { data: sales } = trpc.dailySales.list.useQuery({});
   const { data: expenses } = trpc.expenses.list.useQuery({});
   const { data: billCalendar } = trpc.dashboard.billCalendar.useQuery({ dateFrom: today, dateTo: futureDate });
   const { data: payrollPeriods } = trpc.payroll.periods.useQuery({});

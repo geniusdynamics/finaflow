@@ -4,7 +4,7 @@ import * as jose from "jose";
 import * as cookie from "cookie";
 import { env } from "../lib/env";
 import { getSessionCookieOptions } from "../lib/cookies";
-import { Session } from "@contracts/constants";
+import { Paths, Session } from "@contracts/constants";
 import { Errors } from "@contracts/errors";
 import { signSessionToken, verifySessionToken } from "./session";
 import { users as kimiUsers } from "./platform";
@@ -84,7 +84,7 @@ export function createOAuthCallbackHandler() {
       // Clear state cookie after verification
       setCookie(c, "oauth_state", "", { httpOnly: true, sameSite: "lax", maxAge: 0, path: "/" });
 
-      const redirectUri = c.req.query("redirect_uri") || env.appUrl;
+      const redirectUri = c.req.query("redirect_uri") || `${new URL(c.req.url).origin}${Paths.oauthCallback}`;
       const tokenResp = await exchangeAuthCode(code, redirectUri);
       const { userId } = await verifyAccessToken(tokenResp.access_token);
       const userProfile = await kimiUsers.getProfile(tokenResp.access_token);

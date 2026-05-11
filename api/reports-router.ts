@@ -247,8 +247,8 @@ export const reportsRouter = createRouter({
         await db.update(budgets).set({ amount: input.amount, notes: input.notes }).where(eq(budgets.id, existing[0].id));
         return { id: existing[0].id, success: true };
       } else {
-        const [result] = await db.insert(budgets).values({ locationId: input.locationId, categoryId: input.categoryId, year: input.year, month: input.month, amount: input.amount, notes: input.notes } as any);
-        return { id: Number(result.insertId), success: true };
+        const [result] = await db.insert(budgets).values({ locationId: input.locationId, categoryId: input.categoryId, year: input.year, month: input.month, amount: input.amount, notes: input.notes } as any).returning();
+        return { id: result.id, success: true };
       }
     }),
 
@@ -279,8 +279,8 @@ export const reportsRouter = createRouter({
         await db.update(cogsTargets).set({ targetFoodCostPercent: input.targetFoodCostPercent, alertThresholdPercent: input.alertThresholdPercent }).where(eq(cogsTargets.id, existing[0].id));
         return { success: true };
       } else {
-        const [result] = await db.insert(cogsTargets).values({ locationId: input.locationId, targetFoodCostPercent: input.targetFoodCostPercent, alertThresholdPercent: input.alertThresholdPercent } as any);
-        return { id: Number(result.insertId), success: true };
+        const [result] = await db.insert(cogsTargets).values({ locationId: input.locationId, targetFoodCostPercent: input.targetFoodCostPercent, alertThresholdPercent: input.alertThresholdPercent } as any).returning();
+        return { id: result.id, success: true };
       }
     }),
 });

@@ -14,12 +14,13 @@ export function Locations() {
   const [form, setForm] = useState({ name: "", slug: "", address: "", phone: "", email: "" });
   const [editForm, setEditForm] = useState({ name: "", slug: "", address: "", phone: "", email: "", isActive: true, defaultMpesaAccountId: "", defaultCashAccountId: "" });
 
-  const { data: locations, refetch } = trpc.locations.list.useQuery();
+  const { data: locations } = trpc.locations.list.useQuery();
   const { data: accounts } = trpc.accounts.list.useQuery();
 
-  const createLoc = trpc.locations.create.useMutation({ onSuccess: () => { setOpen(false); setForm({ name: "", slug: "", address: "", phone: "", email: "" }); refetch(); } });
-  const updateLoc = trpc.locations.update.useMutation({ onSuccess: () => { setEditOpen(null); refetch(); } });
-  const deleteLoc = trpc.locations.delete.useMutation({ onSuccess: () => refetch() });
+  const utils = trpc.useUtils();
+  const createLoc = trpc.locations.create.useMutation({ onSuccess: () => { setOpen(false); setForm({ name: "", slug: "", address: "", phone: "", email: "" }); utils.locations.list.invalidate(); } });
+  const updateLoc = trpc.locations.update.useMutation({ onSuccess: () => { setEditOpen(null); utils.locations.list.invalidate(); } });
+  const deleteLoc = trpc.locations.delete.useMutation({ onSuccess: () => utils.locations.list.invalidate() });
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +33,7 @@ export function Locations() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-serif text-2xl font-bold text-[#2D2A26]">Branches & Locations</h1>
-            <p className="mt-1 text-sm text-[#8D8A87]">Manage restaurant branches, HQ, and default wallets</p>
+            <p className="mt-1 text-sm text-[#8D8A87]">Manage business branches, HQ, and default wallets</p>
           </div>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>

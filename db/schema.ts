@@ -1,3 +1,5 @@
+// ABOUTME: Defines the PostgreSQL schema and typed Drizzle table models used by the API.
+// ABOUTME: Keeps database structure, constraints, and inferred TypeScript types in one shared module.
 import {
   pgTable,
   pgEnum,
@@ -13,10 +15,10 @@ import {
   json,
   index,
   uniqueIndex,
-  primaryKey,
 } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["owner", "admin", "manager", "employee", "viewer"]);
+export const userTypeEnum = pgEnum("user_type", ["standard", "partner"]);
 export const typeEnum = pgEnum("type", ["cash", "mpesa", "bank_account"]);
 export const transactionTypeEnum = pgEnum("transactionType", [
     "sale", "expense", "bill_payment", "supplier_payment",
@@ -37,7 +39,33 @@ export const payrollStatusEnum = pgEnum("payrollStatus", ["open", "processing", 
 export const advanceStatusEnum = pgEnum("advanceStatus", ["pending", "approved", "partially_repaid", "repaid", "cancelled"]);
 export const leadStatusEnum = pgEnum("leadStatus", ["new", "contacted", "converted", "declined"]);
 export const orderStatusEnum = pgEnum("orderStatus", ["draft", "sent", "delivered", "billed", "cancelled"]);
+export const allocationRightsEnum = pgEnum("allocation_rights", ["view_only", "create_view", "manage"]);
+export const allocationInviteStatusEnum = pgEnum("allocation_invite_status", ["active", "consumed", "revoked", "expired"]);
+export const partnerAllocationStatusEnum = pgEnum("partner_allocation_status", ["active", "revoked"]);
 
+
+export const customerAccounts = pgTable("customer_accounts", {
+  id: serial("id").primaryKey(),
+  accountId: varchar("accountId", { length: 100 }).notNull(),
+  name: varchar("name", { length: 255 }).notNull(),
+  plan: varchar("plan", { length: 20 }).default("free").notNull(),
+  maxBusinesses: integer("maxBusinesses").default(1).notNull(),
+  maxUsers: integer("maxUsers").default(1).notNull(),
+  maxTransactionsPerMonth: integer("maxTransactionsPerMonth").default(100).notNull(),
+  features: json("features"),
+  subscriptionStatus: varchar("subscriptionStatus", { length: 20 }).default("active").notNull(),
+  subscriptionExpiry: date("subscriptionExpiry"),
+  isActive: boolean("isActive").default(true).notNull(),
+  migratedAt: timestamp("migratedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  accountIdIdx: uniqueIndex("idx_customer_accounts_accountId").on(table.accountId),
+}));
+
+export type CustomerAccount = typeof customerAccounts.$inferSelect;
+export type InsertCustomerAccount = typeof customerAccounts.$inferInsert;
 
 // Users table (supports both OAuth and local auth)
 export const users = pgTable("users", {
@@ -49,10 +77,12 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 320 }),
   avatar: text("avatar"),
   role: roleEnum("role").default("viewer").notNull(),
+  userType: userTypeEnum("userType").default("standard").notNull(),
   phone: varchar("phone", { length: 20 }),
   locationId: bigint("locationId", { mode: "number" }),
   currentBusinessId: bigint("currentBusinessId", { mode: "number" }),
   accountId: varchar("accountId", { length: 100 }),
+  accountRefId: bigint("accountRefId", { mode: "number" }).references(() => customerAccounts.id),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -101,8 +131,8 @@ export const locations = pgTable("locations", {
   isActive: boolean("isActive").default(true).notNull(),
   defaultMpesaAccountId: bigint("defaultMpesaAccountId", { mode: "number" }),
   defaultCashAccountId: bigint("defaultCashAccountId", { mode: "number" }),
-  nextBillNumber: bigint("nextBillNumber", { mode: "number" }).default("1").notNull(),
-  nextExpenseNumber: bigint("nextExpenseNumber", { mode: "number" }).default("1").notNull(),
+  nextBillNumber: bigint("nextBillNumber", { mode: "number" }).default(1).notNull(),
+  nextExpenseNumber: bigint("nextExpenseNumber", { mode: "number" }).default(1).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -226,6 +256,8 @@ export type Expense = typeof expenses.$inferSelect;
 // Suppliers
 export const suppliers = pgTable("suppliers", {
   id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }),
   name: varchar("name", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 20 }),
   email: varchar("email", { length: 255 }),
@@ -241,7 +273,11 @@ export const suppliers = pgTable("suppliers", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  businessIdx: index("business_idx").on(table.businessId),
+  locationIdx: index("location_idx").on(table.locationId),
+  deletedIdx: index("deleted_idx").on(table.deletedAt),
+}));
 
 export type Supplier = typeof suppliers.$inferSelect;
 
@@ -487,7 +523,8 @@ export type AuditLog = typeof auditLog.$inferSelect;
 // Businesses (multi-tenancy)
 export const businesses = pgTable("businesses", {
   id: serial("id").primaryKey(),
-  accountId: varchar("accountId", { length: 100 }).notNull().unique(),
+  accountId: varchar("accountId", { length: 100 }).notNull(),
+  accountRefId: bigint("accountRefId", { mode: "number" }).references(() => customerAccounts.id),
   name: varchar("name", { length: 255 }).notNull(),
   slug: varchar("slug", { length: 100 }).notNull().unique(),
   businessType: varchar("businessType", { length: 50 }),
@@ -525,6 +562,30 @@ export const businesses = pgTable("businesses", {
 
 export type Business = typeof businesses.$inferSelect;
 
+// Business logos (letterheads and brand assets)
+export const businessLogos = pgTable("business_logos", {
+  id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  mimeType: varchar("mimeType", { length: 100 }).notNull(),
+  fileData: text("fileData").notNull(),
+  width: integer("width"),
+  height: integer("height"),
+  sizeBytes: integer("sizeBytes").notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  uploadedBy: bigint("uploadedBy", { mode: "number" }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  bizLogoBusinessIdx: index("idx_business_logos_businessId").on(table.businessId),
+  bizLogoIsActiveIdx: index("idx_business_logos_isActive").on(table.isActive),
+  bizLogoUploadedByIdx: index("idx_business_logos_uploadedBy").on(table.uploadedBy),
+  bizLogoDeletedAtIdx: index("idx_business_logos_deletedAt").on(table.deletedAt),
+}));
+
+export type BusinessLogo = typeof businessLogos.$inferSelect;
+
 // Business documents (registration certs, KRA, licenses, etc.)
 export const businessDocuments = pgTable("business_documents", {
   id: serial("id").primaryKey(),
@@ -553,6 +614,60 @@ export const userBusinesses = pgTable("user_businesses", {
 });
 
 export type UserBusiness = typeof userBusinesses.$inferSelect;
+
+// One-time invite codes from owners that allow partners to claim allocated business access.
+export const allocationInvites = pgTable("allocation_invites", {
+  id: serial("id").primaryKey(),
+  code: varchar("code", { length: 20 }).notNull(),
+  ownerAccountId: bigint("ownerAccountId", { mode: "number" }).notNull(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  rightsProfile: allocationRightsEnum("rightsProfile").notNull(),
+  status: allocationInviteStatusEnum("status").default("active").notNull(),
+  createdBy: bigint("createdBy", { mode: "number" }).notNull(),
+  consumedByPartnerAccountId: bigint("consumedByPartnerAccountId", { mode: "number" }),
+  consumedByPartnerUserId: bigint("consumedByPartnerUserId", { mode: "number" }),
+  consumedAt: timestamp("consumedAt"),
+  revokedAt: timestamp("revokedAt"),
+  expiresAt: timestamp("expiresAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  codeUnique: uniqueIndex("uq_allocation_invites_code").on(table.code),
+  ownerAccountIdx: index("idx_allocation_invites_ownerAccountId").on(table.ownerAccountId),
+  businessIdx: index("idx_allocation_invites_businessId").on(table.businessId),
+  statusIdx: index("idx_allocation_invites_status").on(table.status),
+  deletedAtIdx: index("idx_allocation_invites_deletedAt").on(table.deletedAt),
+}));
+
+export type AllocationInvite = typeof allocationInvites.$inferSelect;
+
+// Active/revoked lifecycle records for partner allocations after invite claim.
+export const partnerAllocations = pgTable("partner_allocations", {
+  id: serial("id").primaryKey(),
+  ownerAccountId: bigint("ownerAccountId", { mode: "number" }).notNull(),
+  ownerBusinessId: bigint("ownerBusinessId", { mode: "number" }).notNull(),
+  partnerAccountId: bigint("partnerAccountId", { mode: "number" }).notNull(),
+  partnerUserId: bigint("partnerUserId", { mode: "number" }).notNull(),
+  rightsProfile: allocationRightsEnum("rightsProfile").notNull(),
+  inviteId: bigint("inviteId", { mode: "number" }).notNull(),
+  status: partnerAllocationStatusEnum("status").default("active").notNull(),
+  revokedAt: timestamp("revokedAt"),
+  createdBy: bigint("createdBy", { mode: "number" }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  ownerAccountIdx: index("idx_partner_allocations_ownerAccountId").on(table.ownerAccountId),
+  ownerBusinessIdx: index("idx_partner_allocations_ownerBusinessId").on(table.ownerBusinessId),
+  partnerAccountIdx: index("idx_partner_allocations_partnerAccountId").on(table.partnerAccountId),
+  partnerUserIdx: index("idx_partner_allocations_partnerUserId").on(table.partnerUserId),
+  inviteIdx: uniqueIndex("uq_partner_allocations_inviteId").on(table.inviteId),
+  statusIdx: index("idx_partner_allocations_status").on(table.status),
+  deletedAtIdx: index("idx_partner_allocations_deletedAt").on(table.deletedAt),
+}));
+
+export type PartnerAllocation = typeof partnerAllocations.$inferSelect;
 
 // Generic attachments (photos for daily_sales, expenses, bills)
 export const attachments = pgTable("attachments", {
@@ -608,6 +723,7 @@ export type FeedbackResponse = typeof feedbackResponses.$inferSelect;
 export const paymentMethods = pgTable("payment_methods", {
   id: serial("id").primaryKey(),
   businessId: bigint("businessId", { mode: "number" }),
+  accountRefId: bigint("accountRefId", { mode: "number" }).references(() => customerAccounts.id),
   name: varchar("name", { length: 100 }).notNull(),
   code: varchar("code", { length: 50 }).notNull(),
   color: varchar("color", { length: 20 }).default("#C73E1D"),
