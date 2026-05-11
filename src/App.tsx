@@ -18,7 +18,6 @@ const Payroll = lazy(() => import("./pages/Payroll").then(m => ({ default: m.Pay
 const Mpesa = lazy(() => import("./pages/Mpesa").then(m => ({ default: m.Mpesa })));
 const Calendar = lazy(() => import("./pages/Calendar").then(m => ({ default: m.Calendar })));
 const Reports = lazy(() => import("./pages/Reports").then(m => ({ default: m.Reports })));
-const DailyLedger = lazy(() => import("./pages/DailyLedger").then(m => ({ default: m.DailyLedger })));
 const DailyPayments = lazy(() => import("./pages/DailyPayments").then(m => ({ default: m.DailyPayments })));
 const Users = lazy(() => import("./pages/Users").then(m => ({ default: m.Users })));
 const Locations = lazy(() => import("./pages/Locations").then(m => ({ default: m.Locations })));
@@ -52,7 +51,6 @@ export default function App() {
         <Route path="/locations" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Locations /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/payroll" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Payroll /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/mpesa" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Mpesa /></ProtectedPage></Suspense></ErrorBoundary>} />
-        <Route path="/daily-ledger" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><DailyLedger /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/daily-payments" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><DailyPayments /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/calendar" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Calendar /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/reports" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Reports /></ProtectedPage></Suspense></ErrorBoundary>} />
