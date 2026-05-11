@@ -7,7 +7,7 @@ import {
   CreditCard, CalendarDays, Smartphone, Menu, X, LogOut,
   Building2, ChevronRight, FileSpreadsheet, BookOpen,
   Wallet, ShieldCheck, Settings, MessageSquare, Briefcase,
-  Building, Bell, TrendingUp, Plug, Handshake,
+  Building, Bell, TrendingUp, Plug, Handshake, Key,
 } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
@@ -171,8 +171,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
                       className={`flex w-full items-center gap-2 px-3 py-2 text-sm text-left hover:bg-[#F5EDE6] ${b.id === user?.currentBusinessId ? "text-[#C73E1D] font-medium" : "text-[#2D2A26]"}`}
                     >
                       <Building className="h-4 w-4" />
-                      {b.name}
-                      {b.isDemo && <span className="ml-auto rounded bg-[#8D8A87]/10 px-1.5 py-0 text-[10px] text-[#8D8A87]">DEMO</span>}
+                      <span className="flex-1">{b.name}</span>
+                      {b.isDemo && <span className="rounded bg-[#8D8A87]/10 px-1.5 py-0 text-[10px] text-[#8D8A87]">DEMO</span>}
+                      {(b as any).allocationSource && (
+                        <span className="rounded bg-[#0288D1]/10 px-1.5 py-0.5 text-[10px] text-[#0288D1]">
+                          Allocated
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
