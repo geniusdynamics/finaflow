@@ -18,7 +18,7 @@ const accountPalette = ["#2E7D32", "#388E3C", "#43A047", "#C77D2D", "#D4A854", "
 
 export function Accounts() {
   const { user } = useAuth();
-  const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.SETTINGS_MANAGE);
+  const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.ACCOUNTS_MANAGE);
   const [tab, setTab] = useState<"accounts" | "payment-methods">("accounts");
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState<number | null>(null);

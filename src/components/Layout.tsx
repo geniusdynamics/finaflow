@@ -13,7 +13,7 @@ import { useState, useCallback, useEffect } from "react";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 
 const allNavItems = [
-  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, perms: [PERMISSIONS.SALES_VIEW] },
+  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, perms: [PERMISSIONS.DASHBOARD_VIEW] },
   { path: "/daily-sales", label: "Daily Sales", icon: Receipt, perms: [PERMISSIONS.SALES_VIEW] },
   { path: "/expenses", label: "Expenses", icon: TrendingDown, perms: [PERMISSIONS.EXPENSES_VIEW] },
   { path: "/suppliers", label: "Suppliers", icon: Users, perms: [PERMISSIONS.SUPPLIERS_VIEW] },
@@ -23,7 +23,7 @@ const allNavItems = [
   { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW] },
   { path: "/mpesa", label: "M-PESA", icon: Smartphone, perms: [PERMISSIONS.MPESA_VIEW] },
   { path: "/daily-payments", label: "Daily Payments", icon: Wallet, perms: [PERMISSIONS.BILLS_VIEW] },
-  { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.BILLS_VIEW] },
+  { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
   { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
   { path: "/users", label: "Users & Roles", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },
   { path: "/feedback", label: "Feedback", icon: MessageSquare, perms: [PERMISSIONS.FEEDBACK_MANAGE] },
