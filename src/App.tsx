@@ -26,8 +26,6 @@ const Settings = lazy(() => import("./pages/Settings").then(m => ({ default: m.S
 const Feedback = lazy(() => import("./pages/Feedback").then(m => ({ default: m.Feedback })));
 const Businesses = lazy(() => import("./pages/Businesses"));
 const BusinessDetails = lazy(() => import("./pages/BusinessDetails").then(m => ({ default: m.BusinessDetails })));
-const PaymentMethods = lazy(() => import("./pages/PaymentMethods").then(m => ({ default: m.PaymentMethods })));
-const SupplierPrices = lazy(() => import("./pages/SupplierPrices").then(m => ({ default: m.SupplierPrices })));
 const Integrations = lazy(() => import("./pages/Integrations").then(m => ({ default: m.Integrations })));
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard").then(m => ({ default: m.PartnerDashboard })));
 
@@ -63,8 +61,6 @@ export default function App() {
         <Route path="/feedback" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Feedback /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/businesses" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Businesses /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/businesses/:id/details" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><BusinessDetails /></ProtectedPage></Suspense></ErrorBoundary>} />
-        <Route path="/payment-methods" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><PaymentMethods /></ProtectedPage></Suspense></ErrorBoundary>} />
-        <Route path="/supplier-prices" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><SupplierPrices /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/integrations" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><Integrations /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="/partner" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ProtectedPage><PartnerDashboard /></ProtectedPage></Suspense></ErrorBoundary>} />
         <Route path="*" element={<Suspense fallback={<PageSkeleton />}><NotFound /></Suspense>} />
