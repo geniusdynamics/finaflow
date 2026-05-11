@@ -13,8 +13,7 @@
 
 ## Portless
 - Install: `npm install -g portless`
-- Dev URL: `https://finaflow.test` (Portless uses `.test` TLD — IANA-reserved, no collision risk)
-- The proxy auto-syncs `/etc/hosts` so `.test` resolves on your machine
+- Dev URL: `https://finaflow.localhost` — `.localhost` resolves natively in all browsers
 - **Windows prerequisite**: Portless needs `openssl.exe` on PATH for TLS. After installing OpenSSL:
   - Binary: `C:\Program Files\OpenSSL-Win64\bin\openssl.exe`
   - Config: `C:\Program Files\OpenSSL-Win64\bin\cnf\openssl.cnf`

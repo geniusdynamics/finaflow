@@ -48,7 +48,7 @@ export const suppliersRouter = createRouter({
       const cb = input.currentBalance ?? "0.00";
       const [result] = await db.insert(suppliers).values({
         businessId,
-        locationId: targetLocationId,
+        locationId: targetLocationId ?? null,
         name: input.name, phone: input.phone, email: input.email,
         contactPerson: input.contactPerson, kraPin: input.kraPin,
         paymentTermsDays: input.paymentTermsDays, creditLimit: input.creditLimit ?? null,
@@ -135,9 +135,8 @@ export const suppliersRouter = createRouter({
       await requireAuthorizedLocation(ctx, input.locationId);
       const sup = await requireAuthorizedBusinessEntity(ctx, suppliers, input.supplierId);
 
-      // Auto-generate bill number if not provided
       let billNumber = input.billNumber;
-      let billId: number;
+      let billId = 0;
 
       await db.transaction(async (tx) => {
         if (!billNumber) {

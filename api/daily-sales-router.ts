@@ -30,7 +30,11 @@ export const dailySalesRouter = createRouter({
       if (input.dateTo) conditions.push(sql`${dailySales.saleDate} <= ${input.dateTo}`);
 
       const offset = (input.page - 1) * input.pageSize;
-      const sales = await db.select().from(dailySales).where(and(...conditions)).orderBy(desc(dailySales.saleDate)).limit(input.pageSize).offset(offset);
+      const sales = await db.select().from(dailySales)
+        .where(and(...conditions))
+        .orderBy(desc(dailySales.saleDate), desc(dailySales.id))
+        .limit(input.pageSize)
+        .offset(offset);
 
       // Batch load payments
       const saleIds = sales.map((s) => s.id);
@@ -53,7 +57,7 @@ export const dailySalesRouter = createRouter({
       await requireAuthorizedLocation(ctx, input.locationId);
       const sales = await db.select().from(dailySales).where(
         and(eq(dailySales.locationId, input.locationId), isNull(dailySales.deletedAt))
-      ).orderBy(desc(dailySales.saleDate));
+      ).orderBy(desc(dailySales.saleDate), desc(dailySales.id));
       const saleIds = sales.map((s) => s.id);
       const allPayments = saleIds.length > 0
         ? await db.select().from(dailySalePayments).where(inArray(dailySalePayments.dailySaleId, saleIds))

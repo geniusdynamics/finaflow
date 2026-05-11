@@ -18,6 +18,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 export const roleEnum = pgEnum("role", ["owner", "admin", "manager", "employee", "viewer"]);
+export const userTypeEnum = pgEnum("user_type", ["standard", "partner"]);
 export const typeEnum = pgEnum("type", ["cash", "mpesa", "bank_account"]);
 export const transactionTypeEnum = pgEnum("transactionType", [
     "sale", "expense", "bill_payment", "supplier_payment",
@@ -76,6 +77,7 @@ export const users = pgTable("users", {
   email: varchar("email", { length: 320 }),
   avatar: text("avatar"),
   role: roleEnum("role").default("viewer").notNull(),
+  userType: userTypeEnum("userType").default("standard").notNull(),
   phone: varchar("phone", { length: 20 }),
   locationId: bigint("locationId", { mode: "number" }),
   currentBusinessId: bigint("currentBusinessId", { mode: "number" }),

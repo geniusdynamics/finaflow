@@ -93,11 +93,17 @@ export default function Login() {
     setAccountNameMessage("Checking availability...");
     try {
       const result = await availabilityCheck.mutateAsync({ accountName: cleaned });
-      setAccountNameStatus(result.available ? "available" : "taken");
-      setAccountNameMessage(result.message);
-    } catch {
+      if (result && typeof result === "object" && "available" in result) {
+        setAccountNameStatus(result.available ? "available" : "taken");
+        setAccountNameMessage(result.message);
+      } else {
+        setAccountNameStatus("idle");
+        setAccountNameMessage("");
+      }
+    } catch (err) {
+      console.warn("[availability] check failed, name may still be available", err);
       setAccountNameStatus("idle");
-      setAccountNameMessage("");
+      setAccountNameMessage("Could not verify — will check when you register");
     }
   }, [availabilityCheck]);
 

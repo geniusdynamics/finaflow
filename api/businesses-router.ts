@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { createRouter, publicQuery, authedQuery, businessManage } from "./middleware";
 import { getDb } from "./queries/connection";
-import { businesses, userBusinesses, users, locations, dailySales, expenses, bills, accounts, businessDocuments, businessLogos } from "@db/schema";
+import { businesses, userBusinesses, users, locations, dailySales, expenses, bills, accounts, businessDocuments, businessLogos, customerAccounts, type InsertCustomerAccount } from "@db/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { logAudit } from "./lib/audit";
 import { base64SizeBytes, resolveMimeType, sanitizeDownloadFileName } from "./lib/business-documents";
@@ -297,33 +297,38 @@ export const businessesRouter = createRouter({
       await assertCanCreateBusiness(db, accountId, accountRefId);
 
       const planConfig = getPlanConfig(input.plan);
-      const [result] = await db.insert(businesses).values({
-        ...input,
-        accountId,
-        accountRefId,
-        referralCode: generateReferralCode(),
-        maxBranches: planConfig.maxBranches,
-        maxUsers: planConfig.maxUsers,
-      } as any).returning();
-      const businessId = result.id;
-      await db.insert(userBusinesses).values({ userId: ctx.user!.id, businessId, role: "owner", isActive: true } as any).returning();
-      await db.update(users).set({ currentBusinessId: businessId }).where(eq(users.id, ctx.user!.id));
+      let businessId = 0;
+      await db.transaction(async (tx) => {
+        const [result] = await tx.insert(businesses).values({
+          ...input,
+          accountId,
+          accountRefId,
+          referralCode: generateReferralCode(),
+          maxBranches: planConfig.maxBranches,
+          maxUsers: planConfig.maxUsers,
+        } as any).returning();
+        businessId = result.id;
+        
+        await tx.insert(userBusinesses).values({ userId: ctx.user!.id, businessId, role: "owner", isActive: true } as any);
+        await tx.update(users).set({ currentBusinessId: businessId }).where(eq(users.id, ctx.user!.id));
 
-      // Create default location
-      const [locResult] = await db.insert(locations).values({
-        businessId,
-        name: "Main Branch",
-        slug: "main",
-        isActive: true,
-      } as any).returning();
-      const locationId = locResult.id;
+        // Create default location with a more unique slug to avoid global unique constraint conflicts
+        const locationSlug = `main-${businessId}`;
+        const [locResult] = await tx.insert(locations).values({
+          businessId,
+          name: "Main Branch",
+          slug: locationSlug,
+          isActive: true,
+        } as any).returning();
+        const locationId = locResult.id;
 
-      // Create default accounts for this location
-      await db.insert(accounts).values([
-        { name: "Cash Drawer", type: "cash", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
-        { name: "M-PESA Till", type: "mpesa", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
-        { name: "Bank Account", type: "bank_account", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
-      ]).returning();
+        // Create default accounts for this location
+        await tx.insert(accounts).values([
+          { name: "Cash Drawer", type: "cash", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
+          { name: "M-PESA Till", type: "mpesa", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
+          { name: "Bank Account", type: "bank_account", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
+        ]);
+      });
 
       return { id: businessId, accountId, success: true };
     }),
@@ -336,36 +341,58 @@ export const businessesRouter = createRouter({
       if (existing.length > 0) return { id: existing[0].id, accountId: existing[0].accountId, success: true, message: "Demo already exists" };
 
       const accountId = generateAccountId("Demo");
-      const [result] = await db.insert(businesses).values({
+      const planConfig = getPlanConfig("pro");
+      const accountValues: InsertCustomerAccount = {
         accountId,
         name: "Demo Business",
-        slug: `demo-${ctx.user!.id}-${Date.now()}`,
         plan: "pro",
-        maxBranches: 99,
+        maxBusinesses: planConfig.maxBusinesses,
         maxUsers: 99,
-        isDemo: true,
+        maxTransactionsPerMonth: planConfig.transactionQuota,
+        subscriptionStatus: "active",
+        subscriptionExpiry: null,
+        features: {},
         isActive: true,
-        referralCode: generateReferralCode(),
-      } as any).returning();
-      const businessId = result.id;
-      await db.insert(userBusinesses).values({ userId: ctx.user!.id, businessId, role: "owner", isActive: true } as any).returning();
-      await db.update(users).set({ currentBusinessId: businessId }).where(eq(users.id, ctx.user!.id));
+      };
+      const [accountRow] = await db.insert(customerAccounts)
+        .values(accountValues)
+        .returning({ id: customerAccounts.id });
+      
+      let businessId = 0;
+      await db.transaction(async (tx) => {
+        const [result] = await tx.insert(businesses).values({
+          accountId,
+          accountRefId: accountRow.id,
+          name: "Demo Business",
+          slug: `demo-${ctx.user!.id}-${Date.now()}`,
+          plan: "pro",
+          maxBranches: 99,
+          maxUsers: 99,
+          isDemo: true,
+          isActive: true,
+          referralCode: generateReferralCode(),
+        } as any).returning();
+        businessId = result.id;
+        
+        await tx.insert(userBusinesses).values({ userId: ctx.user!.id, businessId, role: "owner", isActive: true } as any);
+        await tx.update(users).set({ currentBusinessId: businessId }).where(eq(users.id, ctx.user!.id));
 
-      // Create default location
-      const [locResult] = await db.insert(locations).values({
-        businessId,
-        name: "Main Branch",
-        slug: "main",
-        isActive: true,
-      } as any).returning();
-      const locationId = locResult.id;
+        // Create default location
+        const [locResult] = await tx.insert(locations).values({
+          businessId,
+          name: "Main Branch",
+          slug: `demo-main-${businessId}`,
+          isActive: true,
+        } as any).returning();
+        const locationId = locResult.id;
 
-      // Create default accounts
-      await db.insert(accounts).values([
-        { name: "Cash Drawer", type: "cash", locationId, openingBalance: "50000.00", currentBalance: "50000.00", isActive: true } as any,
-        { name: "M-PESA Till", type: "mpesa", locationId, openingBalance: "75000.00", currentBalance: "75000.00", isActive: true } as any,
-        { name: "Bank Account", type: "bank_account", locationId, openingBalance: "200000.00", currentBalance: "200000.00", isActive: true } as any,
-      ]).returning();
+        // Create default accounts
+        await tx.insert(accounts).values([
+          { name: "Cash Drawer", type: "cash", locationId, openingBalance: "50000.00", currentBalance: "50000.00", isActive: true } as any,
+          { name: "M-PESA Till", type: "mpesa", locationId, openingBalance: "75000.00", currentBalance: "75000.00", isActive: true } as any,
+          { name: "Bank Account", type: "bank_account", locationId, openingBalance: "200000.00", currentBalance: "200000.00", isActive: true } as any,
+        ]);
+      });
 
       return { id: businessId, accountId, success: true, message: "Demo created" };
     }),

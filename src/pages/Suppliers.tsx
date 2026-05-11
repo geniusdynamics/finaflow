@@ -21,7 +21,12 @@ export function Suppliers() {
     { enabled: selectedSupplier !== null }
   );
   const createSupplier = trpc.suppliers.create.useMutation({
-    onSuccess: () => { setOpen(false); utils.suppliers.list.invalidate(); toast.success("Supplier added"); },
+    onSuccess: async () => {
+      setOpen(false);
+      await utils.suppliers.list.invalidate();
+      await refetch();
+      toast.success("Supplier added");
+    },
     onError: (err) => toast.error(err.message),
   });
   const updateBalance = trpc.suppliers.updateBalance.useMutation({

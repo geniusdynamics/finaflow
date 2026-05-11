@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { createRouter, authedQuery, ownerQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { allocationInvites, businesses, partnerAllocations, partnerCommissions, userBusinesses } from "@db/schema";
+import { allocationInvites, businesses, partnerAllocations, partnerCommissions, userBusinesses, users } from "@db/schema";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { logAudit } from "./lib/audit";
 import { RIGHTS_PROFILES, generateAllocationCode } from "./lib/partner-allocations";
@@ -213,10 +213,30 @@ export const partnerRouter = createRouter({
       throw new Error("No owner account context available");
     }
 
-    return db.select().from(partnerAllocations).where(and(
+    const allocations = await db.select({
+      id: partnerAllocations.id,
+      ownerAccountId: partnerAllocations.ownerAccountId,
+      ownerBusinessId: partnerAllocations.ownerBusinessId,
+      partnerAccountId: partnerAllocations.partnerAccountId,
+      partnerUserId: partnerAllocations.partnerUserId,
+      rightsProfile: partnerAllocations.rightsProfile,
+      status: partnerAllocations.status,
+      createdAt: partnerAllocations.createdAt,
+      revokedAt: partnerAllocations.revokedAt,
+      businessName: businesses.name,
+      partnerUserName: users.name,
+      partnerUserEmail: users.email,
+    })
+    .from(partnerAllocations)
+    .leftJoin(businesses, eq(partnerAllocations.ownerBusinessId, businesses.id))
+    .leftJoin(users, eq(partnerAllocations.partnerUserId, users.id))
+    .where(and(
       eq(partnerAllocations.ownerAccountId, ownerAccountId),
       isNull(partnerAllocations.deletedAt),
-    )).orderBy(desc(partnerAllocations.createdAt));
+    ))
+    .orderBy(desc(partnerAllocations.createdAt));
+
+    return allocations;
   }),
 
   listPartnerAllocations: authedQuery.query(async ({ ctx }) => {
@@ -226,11 +246,29 @@ export const partnerRouter = createRouter({
       return [];
     }
 
-    return db.select().from(partnerAllocations).where(and(
+    const allocations = await db.select({
+      id: partnerAllocations.id,
+      ownerAccountId: partnerAllocations.ownerAccountId,
+      ownerBusinessId: partnerAllocations.ownerBusinessId,
+      partnerAccountId: partnerAllocations.partnerAccountId,
+      partnerUserId: partnerAllocations.partnerUserId,
+      rightsProfile: partnerAllocations.rightsProfile,
+      status: partnerAllocations.status,
+      createdAt: partnerAllocations.createdAt,
+      revokedAt: partnerAllocations.revokedAt,
+      businessName: businesses.name,
+      businessAccountId: businesses.accountId,
+    })
+    .from(partnerAllocations)
+    .leftJoin(businesses, eq(partnerAllocations.ownerBusinessId, businesses.id))
+    .where(and(
       eq(partnerAllocations.partnerAccountId, partnerAccountId),
       eq(partnerAllocations.partnerUserId, ctx.user!.id),
       isNull(partnerAllocations.deletedAt),
-    )).orderBy(desc(partnerAllocations.createdAt));
+    ))
+    .orderBy(desc(partnerAllocations.createdAt));
+
+    return allocations;
   }),
 
   // Partner dashboard: list all client businesses

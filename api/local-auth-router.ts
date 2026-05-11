@@ -12,7 +12,7 @@ import {
   type InsertCustomerAccount,
   type InsertUser,
 } from "@db/schema";
-import { eq, and, isNull, sql } from "drizzle-orm";
+import { eq, and, or, isNull, sql } from "drizzle-orm";
 import * as jose from "jose";
 import { env } from "./lib/env";
 import { hashPassword, verifyPassword } from "./lib/password";
@@ -190,7 +190,10 @@ export const localAuthRouter = createRouter({
 
       const userRows = await db.select().from(users).where(and(
         eq(users.username, input.username),
-        eq(users.accountId, accountId),
+        or(
+          eq(users.accountId, accountId),
+          eq(users.accountRefId, account?.id ?? -1),
+        ),
         isNull(users.deletedAt),
         eq(users.isActive, true),
       )).limit(1);
@@ -364,9 +367,15 @@ export const localAuthRouter = createRouter({
       const accountId = normalizeAccountId(input.accountName);
       if (accountId.length < 2) throw new TRPCError({ code: "BAD_REQUEST", message: "Account name must be at least 2 characters" });
       const retryAccount = await findCustomerAccount(db, accountId);
-
       const retryUserRows = await db.select().from(users)
-        .where(and(eq(users.username, input.username), eq(users.accountId, accountId), isNull(users.deletedAt)))
+        .where(and(
+          eq(users.username, input.username),
+          or(
+            eq(users.accountId, accountId),
+            eq(users.accountRefId, retryAccount?.id ?? -1),
+          ),
+          isNull(users.deletedAt),
+        ))
         .limit(1);
       const retryUser = retryUserRows[0];
       if (retryUser && retryUser.passwordHash && retryUser.email === input.email && await verifyPassword(input.password, retryUser.passwordHash)) {
@@ -492,7 +501,14 @@ export const localAuthRouter = createRouter({
             .returning({ id: customerAccounts.id, accountId: customerAccounts.accountId });
 
           const existingUsername = await tx.select().from(users)
-            .where(and(eq(users.username, input.username), eq(users.accountId, accountId), isNull(users.deletedAt)))
+            .where(and(
+              eq(users.username, input.username),
+              or(
+                eq(users.accountId, accountId),
+                eq(users.accountRefId, existingAccount[0]?.id ?? -1),
+              ),
+              isNull(users.deletedAt),
+            ))
             .limit(1);
           if (existingUsername.length > 0) {
             const existingLinks = await tx.select().from(userBusinesses)
@@ -520,6 +536,7 @@ export const localAuthRouter = createRouter({
             email: input.email,
             passwordHash,
             role: "owner",
+            userType: input.userType,
             isActive: true,
             phone: input.phone || null,
             accountId,
@@ -650,6 +667,29 @@ export const localAuthRouter = createRouter({
     const db = getDb();
     const results: SeedDefaultsResult = {};
 
+    // Ensure customer_accounts entry exists for DEMO
+    let demoAccountRefId: number;
+    let demoAccount = await findCustomerAccount(db, "DEMO");
+    if (!demoAccount) {
+      const [newAccount] = await db.insert(customerAccounts).values({
+        accountId: "DEMO",
+        name: "Finaflow Demo Account",
+        plan: "pro",
+        maxBusinesses: 99,
+        maxUsers: 99,
+        maxTransactionsPerMonth: 999999,
+        subscriptionStatus: "active",
+        features: {},
+        isActive: true,
+      }).returning({ id: customerAccounts.id });
+      demoAccount = await findCustomerAccount(db, "DEMO");
+      demoAccountRefId = newAccount.id;
+      results.customerAccount = "created";
+    } else {
+      demoAccountRefId = demoAccount.id;
+      results.customerAccount = "existing";
+    }
+
     const demoBiz = await db.select().from(businesses)
       .where(and(eq(businesses.accountId, "DEMO"), isNull(businesses.deletedAt)))
       .limit(1);
@@ -657,6 +697,7 @@ export const localAuthRouter = createRouter({
     if (demoBiz.length === 0) {
       const demoBusinessValues: InsertBusiness = {
         accountId: "DEMO",
+        accountRefId: demoAccountRefId,
         name: "Finaflow Demo Business",
         slug: "finaflow-demo",
         plan: "pro",
@@ -671,7 +712,10 @@ export const localAuthRouter = createRouter({
       results.demoBusiness = "created";
     } else {
       demoBizId = demoBiz[0].id;
-      await db.update(businesses).set({ isDemo: true, isActive: true, deletedAt: null }).where(eq(businesses.id, demoBizId));
+      await db.update(businesses).set({
+        isDemo: true, isActive: true, deletedAt: null,
+        accountRefId: demoBiz[0].accountRefId ?? demoAccountRefId,
+      }).where(eq(businesses.id, demoBizId));
       results.demoBusiness = "existing";
     }
 
@@ -759,7 +803,11 @@ export const localAuthRouter = createRouter({
         await db.update(userBusinesses).set({ isActive: true, role: u.role })
           .where(eq(userBusinesses.id, junction[0].id));
       }
-      await db.update(users).set({ currentBusinessId: demoBizId }).where(eq(users.id, userId));
+      await db.update(users).set({
+        currentBusinessId: demoBizId,
+        accountId: "DEMO",
+        accountRefId: demoAccountRefId,
+      }).where(eq(users.id, userId));
     }
 
     results.users = { created: createdUsers, updated: updatedUsers };

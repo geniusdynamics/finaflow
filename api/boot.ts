@@ -25,7 +25,7 @@ function resolveCorsOrigin(origin: string | undefined): string | undefined {
   try {
     const url = new URL(origin);
     if (url.hostname === "localhost" || url.hostname === "127.0.0.1") return origin;
-    if (url.hostname === "finaflow.test" || url.hostname.endsWith(".finaflow.test")) return origin;
+    if (url.hostname === "finaflow.localhost" || url.hostname.endsWith(".finaflow.localhost")) return origin;
     return undefined;
   } catch {
     return undefined;
