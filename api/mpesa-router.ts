@@ -7,28 +7,49 @@ import { eq, and, isNull, desc, sql } from "drizzle-orm";
 export const mpesaRouter = createRouter({
   list: mpesaQuery
     .input(z.object({
-      locationId: z.number().optional(), dateFrom: z.string().optional(),
-      dateTo: z.string().optional(), unlinkedOnly: z.boolean().optional(),
-    }).optional())
+      locationId: z.number().optional(), 
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(), 
+      unlinkedOnly: z.boolean().optional(),
+    }))
     .query(async ({ input, ctx }) => {
       const db = getDb();
       const conditions = [isNull(mpesaTransactions.deletedAt)];
+      
+      // Filter by location - either specific location or all business locations
       if (input?.locationId) {
         conditions.push(eq(mpesaTransactions.locationId, input.locationId));
       } else {
         const locIds = await getCurrentBusinessLocationIds(ctx);
-        if (locIds.length === 0) return [];
+        console.log('[MPESA LIST] Business location IDs:', locIds);
+        if (locIds.length === 0) {
+          console.log('[MPESA LIST] No locations found for current business');
+          return [];
+        }
         conditions.push(sql`${mpesaTransactions.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`);
       }
+      
+      // Date filtering - always apply if dates are provided
       if (input?.dateFrom && input?.dateTo) {
+        console.log('[MPESA LIST] Date filter:', input.dateFrom, 'to', input.dateTo);
         conditions.push(sql`${mpesaTransactions.txnDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`);
+      } else {
+        console.log('[MPESA LIST] No date filter applied. dateFrom:', input?.dateFrom, 'dateTo:', input?.dateTo);
       }
+      
       if (input?.unlinkedOnly) conditions.push(eq(mpesaTransactions.isLinked, false));
-      return db.select().from(mpesaTransactions).where(and(...conditions)).orderBy(desc(mpesaTransactions.txnDate), desc(mpesaTransactions.txnTime));
+      
+      const results = await db.select().from(mpesaTransactions).where(and(...conditions)).orderBy(desc(mpesaTransactions.txnDate), desc(mpesaTransactions.txnTime));
+      console.log('[MPESA LIST] Found', results.length, 'transactions');
+      return results;
     }),
 
   stats: mpesaQuery
-    .input(z.object({ locationId: z.number().optional(), dateFrom: z.string().optional(), dateTo: z.string().optional() }).optional())
+    .input(z.object({ 
+      locationId: z.number().optional(), 
+      dateFrom: z.string().optional(), 
+      dateTo: z.string().optional() 
+    }))
     .query(async ({ input, ctx }) => {
       const db = getDb();
       const conditions = [isNull(mpesaTransactions.deletedAt)];
@@ -40,7 +61,10 @@ export const mpesaRouter = createRouter({
           conditions.push(sql`${mpesaTransactions.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`);
         }
       }
-      if (input?.dateFrom && input?.dateTo) conditions.push(sql`${mpesaTransactions.txnDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`);
+      if (input?.dateFrom && input?.dateTo) {
+        console.log('[MPESA STATS] Date filter:', input.dateFrom, 'to', input.dateTo);
+        conditions.push(sql`${mpesaTransactions.txnDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`);
+      }
       const rows = await db.select({
         totalIn: sql<string>`COALESCE(SUM(CASE WHEN ${mpesaTransactions.amount} > 0 THEN ${mpesaTransactions.amount} ELSE 0 END), 0)`,
         totalOut: sql<string>`COALESCE(SUM(CASE WHEN ${mpesaTransactions.amount} < 0 THEN ABS(${mpesaTransactions.amount}) ELSE 0 END), 0)`,
@@ -69,27 +93,60 @@ export const mpesaRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const importedBy = (ctx as any).user?.id ?? 1;
+      const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
+      
+      console.log('[MPESA IMPORT] Starting import for locationId:', input.locationId, 'businessId:', businessId);
+      
+      // Validate that the location belongs to the current business
+      const location = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
+      if (location.length === 0) {
+        throw new Error("Location not found");
+      }
+      if (location[0].businessId !== businessId) {
+        throw new Error(`Location does not belong to your current business. Location businessId: ${location[0].businessId}, Current businessId: ${businessId}`);
+      }
+      
       const { parseMpesaSmsBulk } = await import("./mpesa-parser");
       const parsed = parseMpesaSmsBulk(input.smsText);
+      console.log('[MPESA IMPORT] Parsed', parsed.length, 'transactions');
+      
       let imported = 0, skipped = 0;
       const errors: string[] = [];
 
       for (const txn of parsed) {
         const existing = await db.select().from(mpesaTransactions).where(eq(mpesaTransactions.txnId, txn.txnId)).limit(1);
-        if (existing.length > 0) { skipped++; continue; }
+        if (existing.length > 0) { 
+          console.log('[MPESA IMPORT] Skipping duplicate:', txn.txnId);
+          skipped++; 
+          continue; 
+        }
         try {
+          const txnDateStr = txn.date; // Should be YYYY-MM-DD format
+          console.log('[MPESA IMPORT] Importing:', txn.txnId, 'date:', txnDateStr, 'amount:', txn.amount);
+          
           await db.insert(mpesaTransactions).values({
-            locationId: input.locationId, txnId: txn.txnId,
-            txnDate: new Date(txn.date), txnTime: txn.time, txnType: txn.txnType,
+            locationId: input.locationId, 
+            txnId: txn.txnId,
+            txnDate: txnDateStr, // Store as string in YYYY-MM-DD format
+            txnTime: txn.time, 
+            txnType: txn.txnType,
             partyName: txn.partyName,
             amount: txn.direction === "out" ? `-${txn.amount}` : txn.amount,
-            txnFee: txn.txnFee, balance: txn.balance,
+            txnFee: txn.txnFee, 
+            balance: txn.balance,
             description: txn.partyIdentifier ? `${txn.partyName} (${txn.partyIdentifier})` : txn.partyName,
-            rawText: txn.rawText, isLinked: false, importedBy,
+            rawText: txn.rawText, 
+            isLinked: false, 
+            importedBy,
           } as any).returning();
           imported++;
-        } catch (e) { errors.push(`${txn.txnId}: ${(e as Error).message}`); }
+        } catch (e) { 
+          console.error('[MPESA IMPORT] Error importing', txn.txnId, ':', e);
+          errors.push(`${txn.txnId}: ${(e as Error).message}`); 
+        }
       }
+      
+      console.log('[MPESA IMPORT] Complete. Imported:', imported, 'Skipped:', skipped, 'Errors:', errors.length);
       return { imported, skipped, totalParsed: parsed.length, errors, success: true };
     }),
 

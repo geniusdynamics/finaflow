@@ -26,6 +26,30 @@ export function Accounts() {
   const [depositOpen, setDepositOpen] = useState<number | null>(null);
   const [selectedAccount, setSelectedAccount] = useState<number | null>(null);
 
+  // Payment Methods state - must be declared before queries that use them
+  const [pmOpen, setPmOpen] = useState(false);
+  const [pmEditId, setPmEditId] = useState<number | null>(null);
+  const [tagOpen, setTagOpen] = useState(false);
+  const [pmForm, setPmForm] = useState({ name: "", code: "", color: "#C73E1D", sortOrder: "0" });
+  const [tagLocId, setTagLocId] = useState<string>("");
+  const [assignAccountMap, setAssignAccountMap] = useState<Record<number, string>>({});
+
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [transferForm, setTransferForm] = useState({
+    fromAccountId: "", description: "", date: getLocalDateString(),
+    toAccounts: [{ accountId: "", amount: "", description: "" }],
+  });
+  const totalTransferOut = transferForm.toAccounts.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
+  const todayDate = getLocalDateString();
+
+  const [form, setForm] = useState({
+    locationId: "", name: "", type: "cash" as "cash" | "mpesa" | "bank_account",
+    accountCode: "", accountNumber: "", openingBalance: "0.00", isPaymentMethod: true,
+  });
+  const [editForm, setEditForm] = useState({ name: "", accountCode: "", accountNumber: "", isPaymentMethod: true, isActive: true });
+  const [drawingForm, setDrawingForm] = useState({ amount: "", description: "", date: getLocalDateString() });
+  const [depositForm, setDepositForm] = useState({ amount: "", description: "", date: getLocalDateString() });
+
   const { data: locations } = trpc.locations.list.useQuery();
   const { data: accounts } = trpc.accounts.list.useQuery();
   const {
@@ -89,30 +113,6 @@ export function Accounts() {
   const removeFromLoc = trpc.paymentMethods.removeFromLocation.useMutation({
     onSuccess: () => { utils.paymentMethods.byLocation.invalidate(); toast.success("Removed"); },
   });
-
-  const [transferOpen, setTransferOpen] = useState(false);
-  const [transferForm, setTransferForm] = useState({
-    fromAccountId: "", description: "", date: getLocalDateString(),
-    toAccounts: [{ accountId: "", amount: "", description: "" }],
-  });
-  const totalTransferOut = transferForm.toAccounts.reduce((s, a) => s + (parseFloat(a.amount) || 0), 0);
-  const todayDate = getLocalDateString();
-
-  // Payment Methods state
-  const [pmOpen, setPmOpen] = useState(false);
-  const [pmEditId, setPmEditId] = useState<number | null>(null);
-  const [tagOpen, setTagOpen] = useState(false);
-  const [pmForm, setPmForm] = useState({ name: "", code: "", color: "#C73E1D", sortOrder: "0" });
-  const [tagLocId, setTagLocId] = useState<string>("");
-  const [assignAccountMap, setAssignAccountMap] = useState<Record<number, string>>({});
-
-  const [form, setForm] = useState({
-    locationId: "", name: "", type: "cash" as "cash" | "mpesa" | "bank_account",
-    accountCode: "", accountNumber: "", openingBalance: "0.00", isPaymentMethod: true,
-  });
-  const [editForm, setEditForm] = useState({ name: "", accountCode: "", accountNumber: "", isPaymentMethod: true, isActive: true });
-  const [drawingForm, setDrawingForm] = useState({ amount: "", description: "", date: getLocalDateString() });
-  const [depositForm, setDepositForm] = useState({ amount: "", description: "", date: getLocalDateString() });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

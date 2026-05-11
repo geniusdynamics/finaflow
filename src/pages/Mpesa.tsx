@@ -49,12 +49,16 @@ export function Mpesa() {
   const { data: suppliers } = trpc.suppliers.list.useQuery();
   const { data: accounts } = trpc.accounts.list.useQuery();
   const mpesaAccounts = accounts?.filter(a => a.type === "mpesa" && a.isActive && !a.deletedAt) ?? [];
-  const { data: transactions, refetch } = trpc.mpesa.list.useQuery(
-    dateFrom && dateTo ? { dateFrom, dateTo } : {}
-  );
-  const { data: stats } = trpc.mpesa.stats.useQuery(
-    dateFrom && dateTo ? { dateFrom, dateTo } : {}
-  );
+  
+  // Always pass the date parameters to ensure proper filtering
+  const { data: transactions, refetch } = trpc.mpesa.list.useQuery({
+    dateFrom,
+    dateTo,
+  });
+  const { data: stats } = trpc.mpesa.stats.useQuery({
+    dateFrom,
+    dateTo,
+  });
   const { data: feeAnalysis } = trpc.dashboard.feeAnalysis.useQuery({});
   const { data: ledgers, refetch: refetchLedger } = trpc.dailyLedger.list.useQuery(
     { dateFrom, dateTo, accountId: selectedWallet ? +selectedWallet : undefined }
@@ -208,6 +212,10 @@ export function Mpesa() {
                 <option value="">Select location</option>
                 {locations?.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
+              {locations && locations.length === 0 && (
+                <p className="text-xs text-[#D32F2F]">No locations found for your current business. Please create a location first in Settings.</p>
+              )}
+              <p className="text-xs text-[#8D8A87]">Transactions will be imported to the selected location and will only be visible when viewing this business.</p>
             </div>
             <div className="space-y-2">
               <Label>Paste M-PESA SMS Messages</Label>
@@ -410,7 +418,12 @@ export function Mpesa() {
                     );
                   })}
                   {(!transactions || transactions.length === 0) && (
-                    <tr><td colSpan={8} className="py-8 text-center text-sm text-[#8D8A87]"><Smartphone className="mx-auto mb-2 h-8 w-8 opacity-30" /> No M-PESA transactions imported yet.</td></tr>
+                    <tr><td colSpan={8} className="py-8 text-center">
+                      <Smartphone className="mx-auto mb-2 h-8 w-8 opacity-30 text-[#8D8A87]" />
+                      <p className="text-sm text-[#8D8A87]">No M-PESA transactions found for the selected date range.</p>
+                      <p className="mt-1 text-xs text-[#8D8A87]">Import SMS messages above or adjust your date filter.</p>
+                      <p className="mt-2 text-xs text-[#8D8A87]">Note: Transactions are filtered by your current business. If you imported transactions to a different business, switch businesses to view them.</p>
+                    </td></tr>
                   )}
                 </tbody>
               </table>
