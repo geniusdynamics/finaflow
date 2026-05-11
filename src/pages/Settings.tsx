@@ -318,7 +318,7 @@ export function Settings() {
                       <div key={planKey} className={`rounded-lg border p-3 ${isCurrent ? "border-[#C73E1D] ring-1 ring-[#C73E1D]" : "border-[#E8E0D8]"}`}>
                         <div className="flex items-center justify-between">
                           <p className="font-semibold text-sm text-[#2D2A26]">{plan.label}</p>
-                          {isCurrent && <span className="rounded-full bg-[#C73E1D]/10 px-2 py-0.5 text-[10px] text-[#C73E1D]">Current</span>}
+                          {isCurrent && <span className="rounded-full bg-[#2E7D32]/10 px-2 py-0.5 text-[10px] text-[#2E7D32]">Subscribed</span>}
                         </div>
                         <p className="mt-1 text-xs text-[#8D8A87]">{plan.price}</p>
                         <div className="mt-2 space-y-1 text-[10px] text-[#8D8A87]">
@@ -339,7 +339,7 @@ export function Settings() {
                         {!isCurrent && (
                           <Button
                             size="sm"
-                            className={`mt-3 w-full ${isUpgrade ? "bg-[#C73E1D]" : "bg-[#8D8A87]"}`}
+                            className={`mt-3 w-full ${isUpgrade ? "bg-[#C73E1D]" : "bg-[#2E7D32]"}`}
                             onClick={() => {
                               const confirmMsg = isUpgrade
                                 ? `Upgrade to ${plan.label} (${plan.price})?`
