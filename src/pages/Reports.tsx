@@ -1,6 +1,6 @@
 // ABOUTME: Renders the financial reporting dashboard with P&L, cash flow, budget tracking, and export tools.
 // ABOUTME: Coordinates report queries and interactive chart views for the selected period and branch context.
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { cn, formatKES } from "@/lib/utils";
@@ -28,15 +28,22 @@ export function Reports() {
   const [selectedFlowKey, setSelectedFlowKey] = useState<"inflow" | "outflow" | null>(null);
   const [selectedBudgetCategoryId, setSelectedBudgetCategoryId] = useState<number | null>(null);
 
-  const { data: locations } = trpc.locations.list.useQuery();
-  const { data: pl } = trpc.reports.plStatement.useQuery({ year, month, locationId: branchFilter ? +branchFilter : undefined });
-  const { data: plMonthly } = trpc.reports.plMonthly.useQuery({ year, locationId: branchFilter ? +branchFilter : undefined });
-  const { data: comparative } = trpc.reports.plComparative.useQuery({ locationId: branchFilter ? +branchFilter : undefined });
-  const { data: bva } = trpc.reports.budgetVsActual.useQuery({ year, month, locationId: branchFilter ? +branchFilter : undefined });
-  const { data: cashFlow } = trpc.reports.cashFlowForecast.useQuery({ locationId: branchFilter ? +branchFilter : undefined });
-  const { data: cogs } = trpc.reports.cogsAnalysis.useQuery({ year, month, locationId: branchFilter ? +branchFilter : undefined });
-  const { data: categories } = trpc.expenses.categories.useQuery();
-  const { data: cogsTarget } = trpc.reports.getCogsTarget.useQuery({ locationId: branchFilter ? +branchFilter : undefined });
+  const { data: locations, error: locationsErr } = trpc.locations.list.useQuery();
+  const plQuery = trpc.reports.plStatement.useQuery({ year, month, locationId: branchFilter ? +branchFilter : undefined });
+  const plMonthlyQuery = trpc.reports.plMonthly.useQuery({ year, locationId: branchFilter ? +branchFilter : undefined });
+  const comparativeQuery = trpc.reports.plComparative.useQuery({ locationId: branchFilter ? +branchFilter : undefined });
+  const bvaQuery = trpc.reports.budgetVsActual.useQuery({ year, month, locationId: branchFilter ? +branchFilter : undefined });
+  const cashFlowQuery = trpc.reports.cashFlowForecast.useQuery({ locationId: branchFilter ? +branchFilter : undefined });
+  const cogsQuery = trpc.reports.cogsAnalysis.useQuery({ year, month, locationId: branchFilter ? +branchFilter : undefined });
+  const { data: categories, error: categoriesErr } = trpc.expenses.categories.useQuery();
+  const cogsTargetQuery = trpc.reports.getCogsTarget.useQuery({ locationId: branchFilter ? +branchFilter : undefined });
+  const pl = plQuery.data;
+  const plMonthly = plMonthlyQuery.data;
+  const comparative = comparativeQuery.data;
+  const bva = bvaQuery.data;
+  const cashFlow = cashFlowQuery.data;
+  const cogs = cogsQuery.data;
+  const cogsTarget = cogsTargetQuery.data;
 
   const setBudget = trpc.reports.setBudget.useMutation({
     onSuccess: () => { toast.success("Budget set"); utils.reports.budgetVsActual.invalidate(); setBudgetOpen(false); },
@@ -48,9 +55,18 @@ export function Reports() {
 
   const [budgetForm, setBudgetForm] = useState({ categoryId: "", amount: "" });
   const [cogsForm, setCogsForm] = useState({
-    target: cogsTarget?.targetFoodCostPercent ?? "35",
-    alert: cogsTarget?.alertThresholdPercent ?? "38",
+    target: "35",
+    alert: "38",
   });
+
+  const queriesLoading = plQuery.isLoading || bvaQuery.isLoading || cogsQuery.isLoading || cashFlowQuery.isLoading;
+  const queriesError = plQuery.error ?? bvaQuery.error ?? cogsQuery.error ?? cashFlowQuery.error;
+
+  useEffect(() => {
+    if (cogsTarget) {
+      setCogsForm({ target: cogsTarget.targetFoodCostPercent, alert: cogsTarget.alertThresholdPercent });
+    }
+  }, [cogsTarget]);
 
   // Data for export
   const { data: salesData } = trpc.dailySales.list.useQuery({
@@ -201,7 +217,22 @@ export function Reports() {
           </div>
         </div>
 
+        {/* Loading / Error Banner */}
+        {queriesError && (
+          <div className="rounded-lg border border-[#D32F2F]/30 bg-[#D32F2F]/5 p-4 text-sm text-[#D32F2F]" role="alert">
+            <p className="font-medium">Some report data could not be loaded</p>
+            <p className="mt-1 text-[#8D8A87]">{queriesError.message}</p>
+          </div>
+        )}
+
         {/* P&L Summary Cards */}
+        {queriesLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-[#C73E1D] border-t-transparent" />
+            <span className="ml-3 text-sm text-[#8D8A87]">Loading report data...</span>
+          </div>
+        )}
+        {!queriesLoading && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Card className="border-[#E8E0D8]"><CardContent className="p-4">
             <div className="flex items-center gap-2"><Receipt className="h-4 w-4 text-[#2E7D32]"/><span className="text-xs uppercase text-[#8D8A87]">Revenue</span></div>
@@ -229,6 +260,7 @@ export function Reports() {
             <p className="text-xs text-[#8D8A87]">Margin: {pl?.netMargin ?? "0"}%</p>
           </CardContent></Card>
         </div>
+        )}
 
         {/* Comparative: This Month vs Last */}
         {comparative && (
