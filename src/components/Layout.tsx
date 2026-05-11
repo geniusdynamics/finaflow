@@ -29,7 +29,6 @@ const allNavItems = [
   { path: "/feedback", label: "Feedback", icon: MessageSquare, perms: [PERMISSIONS.FEEDBACK_MANAGE] },
   { path: "/settings", label: "Settings", icon: Settings, perms: [PERMISSIONS.SETTINGS_MANAGE] },
   { path: "/businesses", label: "Businesses", icon: Briefcase, perms: [PERMISSIONS.BUSINESS_MANAGE] },
-  { path: "/integrations", label: "Integrations", icon: Plug, perms: [PERMISSIONS.API_KEYS_MANAGE] },
   { path: "/partner", label: "Partner", icon: Handshake, perms: [PERMISSIONS.PARTNER_VIEW] },
 ];
 
