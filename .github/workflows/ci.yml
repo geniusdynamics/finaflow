@@ -47,8 +47,6 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/finaflow_test
           APP_ID: test_app
           APP_SECRET: test_secret_key_ci_pipeline_2025
-          KIMI_AUTH_URL: http://localhost:3000/auth
-          KIMI_OPEN_URL: http://localhost:3000/open
 
   build:
     runs-on: ubuntu-latest

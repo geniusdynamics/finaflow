@@ -1,3 +1,5 @@
+// ABOUTME: Hono server bootstrap that wires up CORS, security, rate limiting, CSRF, and tRPC request handling.
+// ABOUTME: Also schedules background jobs (trial lifecycle) and handles graceful shutdown.
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
@@ -6,8 +8,6 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
-import { createOAuthCallbackHandler } from "./kimi/auth";
-import { Paths } from "@contracts/constants";
 import { securityHeaders } from "./lib/security-headers";
 import { csrfProtection } from "./lib/csrf";
 import { apiLimiter, loginLimiter } from "./lib/rate-limit";
@@ -35,8 +35,6 @@ function resolveCorsOrigin(origin: string | undefined): string | undefined {
 app.use("*", cors({ origin: resolveCorsOrigin, credentials: true }));
 app.use("*", securityHeaders);
 app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
-
-app.get(Paths.oauthCallback, createOAuthCallbackHandler());
 
 app.get("/health", async (c) => {
   try {

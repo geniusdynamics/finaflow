@@ -137,7 +137,6 @@ Key configuration is documented in `.env.example`. Essential variables:
 | `DATABASE_URL` | PostgreSQL connection string |
 | `APP_ID` | Application identifier |
 | `APP_SECRET` | JWT signing secret |
-| `KIMI_AUTH_URL` | OAuth server URL |
 | `BCRYPT_ROUNDS` | Password hashing cost factor |
 
 ## Contributing
