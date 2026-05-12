@@ -1,3 +1,5 @@
+// ABOUTME: Loads and validates required environment variables, providing a typed env object.
+// ABOUTME: Throws on startup if any required variable is missing.
 import "dotenv/config";
 
 function required(name: string): string {
@@ -13,9 +15,6 @@ export const env = {
   appSecret: required("APP_SECRET"),
   isProduction: process.env.NODE_ENV === "production",
   databaseUrl: required("DATABASE_URL"),
-  kimiAuthUrl: required("KIMI_AUTH_URL"),
-  kimiOpenUrl: required("KIMI_OPEN_URL"),
-  ownerUnionId: process.env.OWNER_UNION_ID ?? "",
   appUrl: process.env.APP_URL || "http://localhost:3000",
   bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || "12", 10),
   nhifRate: parseFloat(process.env.NHIF_RATE || "2.75"),

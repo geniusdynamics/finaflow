@@ -1,6 +1,7 @@
+// ABOUTME: Creates the tRPC context by authenticating requests via cookie JWT (finaflow_token) or Bearer token fallback.
+// ABOUTME: Resolves user identity, business assignments, and partner allocation rights for authorisation downstream.
 import type { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 import type { User } from "@db/schema";
-import { authenticateRequest } from "./kimi/auth";
 import { verifyLocalToken } from "./local-auth-router";
 import { getDb } from "./queries/connection";
 import { users, businesses, userBusinesses, partnerAllocations } from "@db/schema";
@@ -84,7 +85,7 @@ export async function createContext(
       }
     }
   } catch {
-    // Cookie auth failed, try Bearer token fallback, then OAuth
+    // Cookie auth failed, try Bearer token fallback
   }
 
   // Try Bearer token fallback
@@ -118,28 +119,7 @@ export async function createContext(
       }
     }
   } catch {
-    // Bearer auth failed, try OAuth
-  }
-
-  // Try OAuth (Kimi)
-  try {
-    const oauthUser = await authenticateRequest(opts.req.headers);
-    if (oauthUser) {
-      const db = getDb();
-      const junctions = await db.select().from(userBusinesses)
-        .where(and(eq(userBusinesses.userId, oauthUser.id), eq(userBusinesses.isActive, true)));
-      const bizIds = junctions.map(j => j.businessId);
-      let currentBusiness: typeof businesses.$inferSelect | null = null;
-      if (oauthUser.currentBusinessId) {
-        const biz = await db.select().from(businesses)
-          .where(and(eq(businesses.id, oauthUser.currentBusinessId), isNull(businesses.deletedAt))).limit(1);
-        currentBusiness = biz[0] ?? null;
-      }
-      const allocationAccess = await resolveAllocationAccess(oauthUser.id, currentBusiness?.id ?? null);
-      ctx.user = { ...oauthUser, currentBusiness, businessIds: bizIds, ...allocationAccess };
-    }
-  } catch {
-    // Authentication is optional
+    // Bearer auth failed
   }
 
   return ctx;
