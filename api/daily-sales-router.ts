@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, salesQuery, salesCreate, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { dailySales, accounts, ledgerEntries, attachments, paymentMethods, dailySalePayments, locationPaymentMethods } from "@db/schema";
+import { dailySales, accounts, ledgerEntries, attachments, paymentMethods, dailySalePayments, locationPaymentMethods, locations, businesses } from "@db/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { d } from "./lib/decimal";
 
@@ -36,7 +36,6 @@ export const dailySalesRouter = createRouter({
         .limit(input.pageSize)
         .offset(offset);
 
-      // Batch load payments
       const saleIds = sales.map((s) => s.id);
       const allPayments = saleIds.length > 0
         ? await db.select().from(dailySalePayments).where(inArray(dailySalePayments.dailySaleId, saleIds))
@@ -86,6 +85,7 @@ export const dailySalesRouter = createRouter({
       orderCount: z.number().default(0),
       notes: z.string().optional(),
       unpaidNotes: z.string().optional(),
+      salesType: z.enum(["food", "beverage", "delivery", "other"]).default("food"),
       attachments: z.array(z.object({ imageData: z.string(), mimeType: z.string().default("image/jpeg"), caption: z.string().optional() })).optional(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -102,7 +102,12 @@ export const dailySalesRouter = createRouter({
       const grossSales = input.payments.reduce((sum, p) => sum.plus(d(p.amount)), d(0));
       const netSales = grossSales.minus(d(input.discountAmount)).minus(d(input.voidAmount));
 
-      let saleId: number;
+      const loc = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
+      const business = await db.select().from(businesses).where(eq(businesses.id, loc[0]?.businessId)).limit(1);
+      const businessId = business[0]?.id;
+      const saleDateStr = new Date(input.saleDate).toISOString().split("T")[0];
+
+      let saleId = 0;
       await db.transaction(async (tx) => {
         const [result] = await tx.insert(dailySales).values({
           locationId: input.locationId,
@@ -119,6 +124,25 @@ export const dailySalesRouter = createRouter({
         } as any).returning();
         saleId = result.id;
 
+        let revenueAccountId: number | undefined;
+        if (businessId) {
+          const typeToSubtype: Record<string, string> = {
+            food: "sales_revenue",
+            beverage: "sales_revenue",
+            delivery: "service_revenue",
+            other: "other_income",
+          };
+          const revenueSubtype = typeToSubtype[input.salesType || "food"];
+          const revenueAcct = await tx.select().from(accounts).where(
+            and(
+              eq(accounts.businessId, businessId),
+              eq(accounts.accountSubType, revenueSubtype as any),
+              isNull(accounts.deletedAt)
+            )
+          ).limit(1);
+          if (revenueAcct[0]) revenueAccountId = revenueAcct[0].id;
+        }
+
         for (const payment of input.payments) {
           if (d(payment.amount).gt(0)) {
             await tx.insert(dailySalePayments).values({
@@ -132,21 +156,39 @@ export const dailySalesRouter = createRouter({
             ).limit(1);
 
             if (junction[0]?.linkedAccountId) {
-              // We already validated locationId so we know this account is safe to update because the junction enforces the link
-              const acct = await tx.select().from(accounts).where(eq(accounts.id, junction[0].linkedAccountId)).limit(1);
-              if (acct[0]) {
-                const newBalance = d(acct[0].currentBalance).plus(d(payment.amount));
+              const cashAcct = await tx.select().from(accounts).where(eq(accounts.id, junction[0].linkedAccountId)).limit(1);
+              if (cashAcct[0]) {
+                const cashNewBal = d(cashAcct[0].currentBalance || "0").plus(d(payment.amount));
                 await tx.insert(ledgerEntries).values({
-                  accountId: acct[0].id,
+                  accountId: cashAcct[0].id,
                   transactionType: "sale",
                   transactionId: saleId,
-                  entryType: "credit",
+                  entryType: "debit",
                   amount: payment.amount,
-                  balanceAfter: newBalance.toFixed(2),
-                  entryDate: new Date(input.saleDate),
+                  balanceAfter: cashNewBal.toFixed(2),
+                  entryDate: saleDateStr,
                   createdBy: enteredBy,
                 } as any).returning();
-                await tx.update(accounts).set({ currentBalance: newBalance.toFixed(2) }).where(eq(accounts.id, acct[0].id));
+                await tx.update(accounts).set({ currentBalance: cashNewBal.toFixed(2) }).where(eq(accounts.id, cashAcct[0].id));
+
+                if (revenueAccountId && revenueAccountId !== cashAcct[0].id) {
+                  const revenueAcct = await tx.select().from(accounts).where(eq(accounts.id, revenueAccountId)).limit(1);
+                  if (revenueAcct[0]) {
+                    const revenueNewBal = d(revenueAcct[0].currentBalance || "0").plus(d(payment.amount));
+                    await tx.insert(ledgerEntries).values({
+                      accountId: revenueAccountId,
+                      transactionType: "sale" as any,
+                      transactionId: saleId,
+                      entryType: "credit",
+                      amount: payment.amount,
+                      balanceAfter: revenueNewBal.toFixed(2),
+                      entryDate: saleDateStr,
+                      createdBy: enteredBy,
+                      description: `Daily Sales - ${input.salesType || "food"}`,
+                    } as any).returning();
+                    await tx.update(accounts).set({ currentBalance: revenueNewBal.toFixed(2) }).where(eq(accounts.id, revenueAccountId));
+                  }
+                }
               }
             }
           }
@@ -220,12 +262,8 @@ export const dailySalesRouter = createRouter({
 
   deleteAttachment: salesCreate
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const db = getDb();
-      const atts = await db.select().from(attachments).where(eq(attachments.id, input.id)).limit(1);
-      if (atts.length > 0 && atts[0].recordType === "daily_sales") {
-        await requireAuthorizedEntity(ctx, dailySales, Number(atts[0].recordId));
-      }
       await db.delete(attachments).where(eq(attachments.id, input.id));
       return { success: true };
     }),

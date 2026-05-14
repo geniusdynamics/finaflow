@@ -1,0 +1,8 @@
+{
+  "id": "0004_expense_category_accounting_class_assignment",
+  "prevId": "0003_recurring_bill_accounting_classification",
+  "version": "7",
+  "when": 1778768400000,
+  "migrationFolderHash": "expense_category_accounting_class_assignment",
+  "tables": {}
+}

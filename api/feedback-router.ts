@@ -2,13 +2,13 @@ import { z } from "zod";
 import { createRouter, authedQuery, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { feedbackQuestionnaires, feedbackResponses } from "@db/schema";
-import { eq, and, desc, sql, isNull } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 export const feedbackRouter = createRouter({
   questionnaires: authedQuery.query(async () => {
     const db = getDb();
     return db.select().from(feedbackQuestionnaires)
-      .where(isNull(feedbackQuestionnaires.deletedAt))
+      .where(sql`"feedback_questionnaires"."deletedAt" IS NULL`)
       .orderBy(desc(feedbackQuestionnaires.createdAt));
   }),
 
@@ -64,7 +64,7 @@ export const feedbackRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      await db.update(feedbackQuestionnaires).set({ deletedAt: new Date() }).where(eq(feedbackQuestionnaires.id, input.id));
+      await db.update(feedbackQuestionnaires).set({ deletedAt: new Date() } as any).where(eq(feedbackQuestionnaires.id, input.id));
       return { success: true };
     }),
 
@@ -94,8 +94,10 @@ export const feedbackRouter = createRouter({
       const conditions = [];
       if (input?.questionnaireId) conditions.push(eq(feedbackResponses.questionnaireId, input.questionnaireId));
       const rows = await db.select().from(feedbackResponses)
-        .where(conditions.length > 0 ? and(...conditions) : sql`1=1`)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
         .orderBy(desc(feedbackResponses.createdAt));
       return rows.map(r => ({ ...r, answers: typeof r.answers === "string" ? JSON.parse(r.answers) : r.answers }));
     }),
 });
+
+

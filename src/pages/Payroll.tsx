@@ -108,7 +108,7 @@ export function Payroll() {
               <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
                 <DialogContent className="bg-white max-h-[90vh] overflow-y-auto">
                   <DialogHeader><DialogTitle className="font-serif text-xl flex items-center gap-2"><Shield className="h-5 w-5 text-[#C73E1D]"/>Payroll Settings</DialogTitle></DialogHeader>
-                  <form onSubmit={e => { e.preventDefault(); updatePayrollSet.mutate({ ...settingsForm, nhifRate: settingsForm.nhifRate, nssfTier1Employee: settingsForm.nssfTier1Employee, nssfTier2Employee: settingsForm.nssfTier2Employee, personalRelief: settingsForm.personalRelief, insuranceRelief: settingsForm.insuranceRelief, locationId: selectedPeriodData?.locationId }); }} className="space-y-3">
+                  <form onSubmit={e => { e.preventDefault(); updatePayrollSet.mutate({ ...settingsForm, nhifRate: settingsForm.nhifRate, nssfTier1Employee: settingsForm.nssfTier1Employee, nssfTier2Employee: settingsForm.nssfTier2Employee, personalRelief: settingsForm.personalRelief, insuranceRelief: settingsForm.insuranceRelief, locationId: selectedPeriodData?.locationId ?? 0 }); }} className="space-y-3">
                     <p className="text-xs text-[#8D8A87]">Configure statutory deduction rates for Kenya.</p>
                     <div className="grid grid-cols-2 gap-3">
                       <div><Label>NHIF Rate (%)</Label><Input value={settingsForm.nhifRate} onChange={e => setSettingsForm(p => ({ ...p, nhifRate: e.target.value }))} /></div>

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, payrollQuery, payrollProcess, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { employees, payrollPeriods, payrollEntries, payrollAdvances, accounts, ledgerEntries, bills, billPayments, billItems } from "@db/schema";
+import { employees, payrollPeriods, payrollEntries, payrollAdvances, accounts, ledgerEntries, bills, billPayments, billItems, locations, businesses } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { computePaye, computeNhif, computeNssf, computeHousingLevy } from "./lib/tax";
@@ -194,7 +194,7 @@ export const payrollRouter = createRouter({
         }
 
         for (const e of existingEntries) {
-          totalNetPay = totalNetPay.plus(d(e.netPay));
+          totalNetPay = totalNetPay.plus(d(e.netPay || "0"));
         }
 
         if (!billId) {
@@ -224,7 +224,7 @@ export const payrollRouter = createRouter({
             quantity: "1.000",
             unitPrice: entry.netPay,
             totalPrice: entry.netPay,
-            notes: `Basic: ${entry.basicPay}, Deductions: ${entry.deductions}, Advances: ${entry.advancesDeducted}, PAYE: ${entry.payeDeducted ?? "0"}`,
+            notes: `Basic: ${entry.basicPay}, Deductions: ${entry.deductions}, Advances: ${entry.advancesDeducted ?? "0"}, PAYE: ${entry.payeDeducted ?? "0"}`,
           } as any).returning();
         }
 
@@ -242,6 +242,7 @@ export const payrollRouter = createRouter({
     .input(z.object({ periodId: z.number(), accountId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const userId = (ctx as any).user?.id ?? 1;
       const period = await requireAuthorizedEntity(ctx, payrollPeriods, input.periodId);
       const acct = await requireAuthorizedEntity(ctx, accounts, input.accountId);
       
@@ -249,33 +250,167 @@ export const payrollRouter = createRouter({
         throw new Error("Account and Period must belong to the same location");
       }
 
+      const loc = await db.select().from(locations).where(eq(locations.id, period.locationId)).limit(1);
+      const business = await db.select().from(businesses).where(eq(businesses.id, loc[0]?.businessId)).limit(1);
+      const businessId = business[0]?.id;
+
       await db.transaction(async (tx) => {
         const entries = await tx.select().from(payrollEntries).where(
           and(eq(payrollEntries.periodId, input.periodId), isNull(payrollEntries.deletedAt))
         );
-        const totalPayroll = entries.reduce((sum, e) => sum.plus(d(e.netPay)), d(0));
+        
+        let totalNetPay = d(0);
+        let totalPaye = d(0);
+        let totalNssf = d(0);
+        let totalNhif = d(0);
+        let totalHousingLevy = d(0);
 
-        const newBalance = d(acct.currentBalance).minus(totalPayroll);
+        for (const entry of entries) {
+          totalNetPay = totalNetPay.plus(d(entry.netPay || "0"));
+          totalPaye = totalPaye.plus(d(entry.payeDeducted || "0"));
+          totalNssf = totalNssf.plus(d(entry.nssfDeducted || "0"));
+          totalNhif = totalNhif.plus(d(entry.nhifDeducted || "0"));
+          totalHousingLevy = totalHousingLevy.plus(d(entry.deductions || "0")).minus(d(entry.payeDeducted || "0")).minus(d(entry.nhifDeducted || "0")).minus(d(entry.nssfDeducted || "0"));
+        }
+
+        const totalGross = totalNetPay.plus(totalPaye).plus(totalNssf).plus(totalNhif).plus(totalHousingLevy);
+        const cashNewBalance = d(acct.currentBalance || "0").minus(totalNetPay);
+        const paymentDateStr = new Date().toISOString().split("T")[0];
+
         await tx.insert(ledgerEntries).values({
-          accountId: input.accountId, transactionType: "payroll",
-          transactionId: input.periodId, entryType: "debit",
-          amount: totalPayroll.toFixed(2), balanceAfter: newBalance.toFixed(2), entryDate: new Date(),
-          createdBy: (ctx as any).user?.id,
+          accountId: input.accountId,
+          transactionType: "payroll" as any,
+          transactionId: input.periodId,
+          entryType: "credit",
+          amount: totalNetPay.toFixed(2),
+          balanceAfter: cashNewBalance.toFixed(2),
+          entryDate: paymentDateStr,
+          createdBy: userId,
+          description: `Payroll: ${period.periodName}`,
         } as any).returning();
-        await tx.update(accounts).set({ currentBalance: newBalance.toFixed(2) }).where(eq(accounts.id, input.accountId));
+        await tx.update(accounts).set({ currentBalance: cashNewBalance.toFixed(2) }).where(eq(accounts.id, input.accountId));
+
+        if (businessId && totalGross.gt(0)) {
+          const salaryExpenseAcct = await tx.query.accounts.findFirst({
+            where: and(
+              eq(accounts.accountCode, "6300"),
+              eq(accounts.businessId, businessId),
+              isNull(accounts.deletedAt)
+            ),
+          });
+          if (salaryExpenseAcct) {
+            const expenseNewBal = d(salaryExpenseAcct.currentBalance || "0").plus(totalGross);
+            await tx.insert(ledgerEntries).values({
+              accountId: salaryExpenseAcct.id,
+              transactionType: "payroll" as any,
+              transactionId: input.periodId,
+              entryType: "debit",
+              amount: totalGross.toFixed(2),
+              balanceAfter: expenseNewBal.toFixed(2),
+              entryDate: paymentDateStr,
+              createdBy: userId,
+              description: `Salaries & Wages: ${period.periodName}`,
+            } as any).returning();
+            await tx.update(accounts).set({ currentBalance: expenseNewBal.toFixed(2) }).where(eq(accounts.id, salaryExpenseAcct.id));
+          }
+        }
+
+        if (businessId && totalPaye.gt(0)) {
+          const payeAcct = await tx.select().from(accounts).where(
+            and(eq(accounts.businessId, businessId), eq(accounts.accountSubType, "accrued_expense" as any), isNull(accounts.deletedAt))
+          ).limit(1);
+          if (payeAcct[0]) {
+            const payeNewBal = d(payeAcct[0].currentBalance || "0").plus(totalPaye);
+            await tx.insert(ledgerEntries).values({
+              accountId: payeAcct[0].id,
+              transactionType: "payroll" as any,
+              transactionId: input.periodId,
+              entryType: "credit",
+              amount: totalPaye.toFixed(2),
+              balanceAfter: payeNewBal.toFixed(2),
+              entryDate: paymentDateStr,
+              createdBy: userId,
+              description: `PAYE Payable: ${period.periodName}`,
+            } as any).returning();
+            await tx.update(accounts).set({ currentBalance: payeNewBal.toFixed(2) }).where(eq(accounts.id, payeAcct[0].id));
+          }
+        }
+
+        if (businessId && totalNssf.gt(0)) {
+          const nssfAcct = await tx.select().from(accounts).where(
+            and(eq(accounts.businessId, businessId), eq(accounts.accountSubType, "accrued_expense" as any), isNull(accounts.deletedAt))
+          ).limit(1);
+          if (nssfAcct[0]) {
+            const nssfNewBal = d(nssfAcct[0].currentBalance || "0").plus(totalNssf);
+            await tx.insert(ledgerEntries).values({
+              accountId: nssfAcct[0].id,
+              transactionType: "payroll" as any,
+              transactionId: input.periodId,
+              entryType: "credit",
+              amount: totalNssf.toFixed(2),
+              balanceAfter: nssfNewBal.toFixed(2),
+              entryDate: paymentDateStr,
+              createdBy: userId,
+              description: `NSSF Payable: ${period.periodName}`,
+            } as any).returning();
+            await tx.update(accounts).set({ currentBalance: nssfNewBal.toFixed(2) }).where(eq(accounts.id, nssfAcct[0].id));
+          }
+        }
+
+        if (businessId && totalNhif.gt(0)) {
+          const nhifAcct = await tx.select().from(accounts).where(
+            and(eq(accounts.businessId, businessId), eq(accounts.accountSubType, "accrued_expense" as any), isNull(accounts.deletedAt))
+          ).limit(1);
+          if (nhifAcct[0]) {
+            const nhifNewBal = d(nhifAcct[0].currentBalance || "0").plus(totalNhif);
+            await tx.insert(ledgerEntries).values({
+              accountId: nhifAcct[0].id,
+              transactionType: "payroll" as any,
+              transactionId: input.periodId,
+              entryType: "credit",
+              amount: totalNhif.toFixed(2),
+              balanceAfter: nhifNewBal.toFixed(2),
+              entryDate: paymentDateStr,
+              createdBy: userId,
+              description: `NHIF Payable: ${period.periodName}`,
+            } as any).returning();
+            await tx.update(accounts).set({ currentBalance: nhifNewBal.toFixed(2) }).where(eq(accounts.id, nhifAcct[0].id));
+          }
+        }
+
+        if (businessId && totalHousingLevy.gt(0)) {
+          const hlAcct = await tx.select().from(accounts).where(
+            and(eq(accounts.businessId, businessId), eq(accounts.accountSubType, "accrued_expense" as any), isNull(accounts.deletedAt))
+          ).limit(1);
+          if (hlAcct[0]) {
+            const hlNewBal = d(hlAcct[0].currentBalance || "0").plus(totalHousingLevy);
+            await tx.insert(ledgerEntries).values({
+              accountId: hlAcct[0].id,
+              transactionType: "payroll" as any,
+              transactionId: input.periodId,
+              entryType: "credit",
+              amount: totalHousingLevy.toFixed(2),
+              balanceAfter: hlNewBal.toFixed(2),
+              entryDate: paymentDateStr,
+              createdBy: userId,
+              description: `Housing Levy Payable: ${period.periodName}`,
+            } as any).returning();
+            await tx.update(accounts).set({ currentBalance: hlNewBal.toFixed(2) }).where(eq(accounts.id, hlAcct[0].id));
+          }
+        }
 
         if (period.generatedBillId) {
           await tx.update(bills).set({
-            status: "paid", amountPaid: totalPayroll.toFixed(2), balanceDue: "0.00"
-          }).where(eq(bills.id, period[0].generatedBillId));
+            status: "paid", amountPaid: totalNetPay.toFixed(2), balanceDue: "0.00"
+          }).where(eq(bills.id, period.generatedBillId));
           await tx.insert(billPayments).values({
-            billId: period[0].generatedBillId,
+            billId: period.generatedBillId,
             paymentMethod: "bank_transfer",
-            amount: totalPayroll.toFixed(2),
+            amount: totalNetPay.toFixed(2),
             paymentDate: new Date(),
             accountId: input.accountId,
-            reference: `Payroll ${period[0].periodName}`,
-            enteredBy: (ctx as any).user?.id,
+            reference: `Payroll ${period.periodName}`,
+            enteredBy: userId,
           } as any).returning();
         }
 
@@ -304,9 +439,9 @@ export const payrollRouter = createRouter({
 
       await db.transaction(async (tx) => {
         const advances = await tx.select().from(payrollAdvances).where(
-        and(eq(payrollAdvances.employeeId, emp.id), eq(payrollAdvances.status, "approved"),
-        sql`${payrollAdvances.payrollPeriodId} = ${input.periodId} OR ${payrollAdvances.payrollPeriodId} IS NULL`,
-        isNull(payrollAdvances.deletedAt))
+          and(eq(payrollAdvances.employeeId, emp.id), eq(payrollAdvances.status, "approved"),
+          sql`${payrollAdvances.payrollPeriodId} = ${input.periodId} OR ${payrollAdvances.payrollPeriodId} IS NULL`,
+          isNull(payrollAdvances.deletedAt))
         );
         const advanceDeduction = advances.reduce((sum, a) => sum.plus(d(a.balanceRemaining)), d(0));
         const basicPay = d(emp.basicSalary);
@@ -316,118 +451,83 @@ export const payrollRouter = createRouter({
         const housingLevy = d(computeHousingLevy(grossNum));
         const taxableIncome = d(Math.max(0, grossNum - nssfVal.employee - housingLevy.toNumber()));
         const nhif = d(computeNhif(grossNum));
-          const paye = d(computePaye(taxableIncome.toNumber()));
+        const paye = d(computePaye(taxableIncome.toNumber()));
         const grossDeductions = advanceDeduction.plus(nssf).plus(nhif).plus(housingLevy).plus(paye);
         const netPay = d(Math.max(0, basicPay.minus(grossDeductions).toNumber()));
 
         const [result] = await tx.insert(payrollEntries).values({
-        periodId: input.periodId, employeeId: emp.id,
-        basicPay: emp.basicSalary, advancesDeducted: advanceDeduction.toFixed(2),
-        deductions: grossDeductions.toFixed(2), netPay: netPay.toFixed(2),
+          periodId: input.periodId, employeeId: emp.id,
+          basicPay: emp.basicSalary, advancesDeducted: advanceDeduction.toFixed(2),
+          deductions: grossDeductions.toFixed(2), netPay: netPay.toFixed(2),
           payeDeducted: paye.toFixed(2),
-            nhifDeducted: nhif.toFixed(2),
+          nhifDeducted: nhif.toFixed(2),
           nssfDeducted: nssf.toFixed(2),
         } as any).returning();
 
         for (const adv of advances) {
           const newBal = d(Math.max(0, d(adv.balanceRemaining).minus(netPay.mul(0.3)).toNumber()));
-            const newStatus = newBal.lte(0) ? "repaid" : "partially_repaid";
-            await tx.update(payrollAdvances).set({ balanceRemaining: newBal.toFixed(2), status: newStatus }).where(eq(payrollAdvances.id, adv.id));
-          }
+          const newStatus = newBal.lte(0) ? "repaid" : "partially_repaid";
+          await tx.update(payrollAdvances).set({ balanceRemaining: newBal.toFixed(2), status: newStatus }).where(eq(payrollAdvances.id, adv.id));
+        }
 
         const allEntries = await tx.select().from(payrollEntries).where(
           and(eq(payrollEntries.periodId, input.periodId), isNull(payrollEntries.deletedAt))
         );
-        const totalNetPay = allEntries.reduce((sum, e) => sum.plus(d(e.netPay)), d(0));
+        const period = await tx.select().from(payrollPeriods).where(eq(payrollPeriods.id, input.periodId)).limit(1);
 
-        if (period.generatedBillId) {
-          await tx.update(bills).set({ amount: totalNetPay.toFixed(2), balanceDue: totalNetPay.toFixed(2) }).where(eq(bills.id, period.generatedBillId));
+        if (period[0]?.generatedBillId) {
+          await tx.update(billItems).set({ deletedAt: new Date() }).where(eq(billItems.billId, period[0].generatedBillId));
+          for (const entry of allEntries) {
+            await tx.insert(billItems).values({
+              billId: period[0].generatedBillId,
+              itemName: emp.fullName,
+              quantity: "1.000",
+              unitPrice: netPay.toFixed(2),
+              totalPrice: netPay.toFixed(2),
+              notes: `Basic: ${emp.basicSalary}, Deductions: ${grossDeductions.toFixed(2)}`,
+            } as any).returning();
+          }
         }
-        await tx.update(payrollPeriods).set({ totalNetPay: totalNetPay.toFixed(2) }).where(eq(payrollPeriods.id, input.periodId));
       });
 
       return { success: true };
+    }),
+
+  requestAdvance: payrollProcess
+    .input(z.object({
+      employeeId: z.number(),
+      amount: z.string(),
+      requestDate: z.string(),
+      notes: z.string().optional(),
+      payrollPeriodId: z.number().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      await requireAuthorizedEntity(ctx, employees, input.employeeId);
+      const [result] = await db.insert(payrollAdvances).values({
+        employeeId: input.employeeId,
+        amount: input.amount,
+        balanceRemaining: input.amount,
+        requestDate: new Date(input.requestDate),
+        payrollPeriodId: input.payrollPeriodId ?? null,
+        notes: input.notes ?? null,
+        status: "approved",
+      } as any).returning();
+      return { id: result.id, success: true };
     }),
 
   removeEmployeeFromPeriod: payrollProcess
     .input(z.object({ periodId: z.number(), employeeId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const period = await requireAuthorizedEntity(ctx, payrollPeriods, input.periodId);
+      await requireAuthorizedEntity(ctx, payrollPeriods, input.periodId);
       await requireAuthorizedEntity(ctx, employees, input.employeeId);
-
-      await db.transaction(async (tx) => {
-        await tx.update(payrollEntries).set({ deletedAt: new Date() }).where(
-          and(eq(payrollEntries.periodId, input.periodId), eq(payrollEntries.employeeId, input.employeeId))
-        );
-        const allEntries = await tx.select().from(payrollEntries).where(
-          and(eq(payrollEntries.periodId, input.periodId), isNull(payrollEntries.deletedAt))
-        );
-        const totalNetPay = allEntries.reduce((sum, e) => sum.plus(d(e.netPay)), d(0));
-
-        if (period.generatedBillId) {
-          await tx.update(bills).set({ amount: totalNetPay.toFixed(2), balanceDue: totalNetPay.toFixed(2) }).where(eq(bills.id, period.generatedBillId));
-        }
-        await tx.update(payrollPeriods).set({ totalNetPay: totalNetPay.toFixed(2) }).where(eq(payrollPeriods.id, input.periodId));
-      });
-      return { success: true };
-    }),
-
-  listAdvances: payrollQuery
-    .input(z.object({ employeeId: z.number().optional(), status: z.string().optional() }).optional())
-    .query(async ({ input, ctx }) => {
-      const db = getDb();
-      const conditions = [isNull(payrollAdvances.deletedAt)];
-      if (input?.employeeId) {
-        await requireAuthorizedEntity(ctx, employees, input.employeeId);
-        conditions.push(eq(payrollAdvances.employeeId, input.employeeId));
-      } else {
-        const locIds = await getCurrentBusinessLocationIds(ctx);
-        if (locIds.length === 0) return [];
-        // We need to join with employees to filter by locationId since payrollAdvances lacks it
-        const emps = await db.select({ id: employees.id }).from(employees).where(
-          sql`${employees.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`
-        );
-        const empIds = emps.map(e => e.id);
-        if (empIds.length === 0) return [];
-        conditions.push(sql`${payrollAdvances.employeeId} IN (${sql.join(empIds.map(id => sql`${id}`), sql`, `)})`);
+      const existing = await db.select().from(payrollEntries).where(
+        and(eq(payrollEntries.periodId, input.periodId), eq(payrollEntries.employeeId, input.employeeId), isNull(payrollEntries.deletedAt))
+      ).limit(1);
+      if (existing.length > 0) {
+        await db.update(payrollEntries).set({ deletedAt: new Date() }).where(eq(payrollEntries.id, existing[0].id));
       }
-      if (input?.status) conditions.push(eq(payrollAdvances.status, input.status as any));
-      return db.select().from(payrollAdvances).where(and(...conditions)).orderBy(desc(payrollAdvances.requestDate));
-    }),
-
-  requestAdvance: payrollQuery
-    .input(z.object({
-      employeeId: z.number(), amount: z.string(), requestDate: z.string(),
-      repaymentPeriods: z.number().default(1), notes: z.string().optional(),
-      payrollPeriodId: z.number().optional(),
-    }))
-    .mutation(async ({ input, ctx }) => {
-      const db = getDb();
-      await requireAuthorizedEntity(ctx, employees, input.employeeId);
-      if (input.payrollPeriodId) {
-        await requireAuthorizedEntity(ctx, payrollPeriods, input.payrollPeriodId);
-      }
-      const [result] = await db.insert(payrollAdvances).values({
-        employeeId: input.employeeId, amount: input.amount, balanceRemaining: input.amount,
-        requestDate: new Date(input.requestDate), repaymentPeriods: input.repaymentPeriods,
-        notes: input.notes, status: "pending", payrollPeriodId: input.payrollPeriodId,
-      } as any).returning();
-      return { id: result.id, success: true };
-    }),
-
-  approveAdvance: payrollProcess
-    .input(z.object({ id: z.number() }))
-    .mutation(async ({ input, ctx }) => {
-      const db = getDb();
-      // Since payrollAdvances lacks locationId, we fetch it first, then check the employee
-      const advance = await db.select().from(payrollAdvances).where(and(eq(payrollAdvances.id, input.id), isNull(payrollAdvances.deletedAt))).limit(1);
-      if (advance.length === 0) throw new Error("Advance not found");
-      await requireAuthorizedEntity(ctx, employees, advance[0].employeeId);
-
-      await db.update(payrollAdvances).set({
-        status: "approved", approvedBy: (ctx as any).user?.id,
-      }).where(eq(payrollAdvances.id, input.id));
       return { success: true };
     }),
 });

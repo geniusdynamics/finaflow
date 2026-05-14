@@ -126,7 +126,7 @@ export const dashboardRouter = createRouter({
       }
       const locIdSql = sql.join(locationFilter.map(id => sql`${id}`), sql`, `);
 
-      const billsConditions = [isNull(bills.deletedAt), sql`DATE(${bills.dueDate}) <= ${date}`, sql`${bills.status} IN ('pending','partial','overdue')`, sql`${bills.locationId} IN (${locIdSql})`];
+      const billsConditions = [isNull(bills.deletedAt), sql`DATE(${bills.dueDate}) = ${date}`, sql`${bills.status} IN ('pending','partial','overdue')`, sql`${bills.locationId} IN (${locIdSql})`];
       const billPaymentsToday = await db.select().from(bills).where(and(...billsConditions)).orderBy(desc(bills.dueDate));
 
       const expConditions = [sql`DATE(${expenses.expenseDate}) = ${date}`, isNull(expenses.deletedAt), sql`${expenses.locationId} IN (${locIdSql})`];

@@ -313,7 +313,7 @@ export function Settings() {
                   {allPlans.map((planKey) => {
                     const plan = PLAN_DETAILS[planKey];
                     const isCurrent = subscription?.plan === planKey;
-                    const isUpgrade = allPlans.indexOf(planKey) > allPlans.indexOf(subscription?.plan ?? "free");
+                    const isUpgrade = allPlans.indexOf(planKey) > allPlans.indexOf((subscription?.plan as PlanKey) ?? "free");
                     return (
                       <div key={planKey} className={`rounded-lg border p-3 ${isCurrent ? "border-[#C73E1D] ring-1 ring-[#C73E1D]" : "border-[#E8E0D8]"}`}>
                         <div className="flex items-center justify-between">

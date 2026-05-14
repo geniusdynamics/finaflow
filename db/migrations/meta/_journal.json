@@ -15,6 +15,27 @@
       "when": 1778400422424,
       "tag": "0001_odd_susan_delgado",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778677778095,
+      "tag": "0002_unusual_vulture",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1778768400000,
+      "tag": "0003_recurring_bill_accounting_classification",
+      "breakpoints": false
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1778768400000,
+      "tag": "0004_expense_category_accounting_class_assignment",
+      "breakpoints": false
     }
   ]
 }

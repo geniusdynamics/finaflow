@@ -48,7 +48,17 @@ export function Bills() {
   const createRecurring = trpc.bills.createRecurring.useMutation({ onSuccess: () => { setRecurringOpen(false); utils.bills.listRecurring.invalidate(); } });
   const generateRecurring = trpc.bills.generateRecurring.useMutation({ onSuccess: () => utils.bills.list.invalidate() });
   const deleteRecurring = trpc.bills.deleteRecurring.useMutation({ onSuccess: () => { utils.bills.listRecurring.invalidate(); utils.bills.list.invalidate(); } });
-  const recordPayment = trpc.bills.recordPayment.useMutation({ onSuccess: () => { setPaymentOpen(null); utils.bills.list.invalidate(); } });
+  const recordPayment = trpc.bills.recordPayment.useMutation({ 
+    onSuccess: () => { 
+      setPaymentOpen(null); 
+      utils.bills.list.invalidate();
+      utils.bills.getSupplierSummary.invalidate();
+      toast.success("Payment recorded successfully");
+    },
+    onError: (e) => {
+      toast.error(`Payment failed: ${e.message}`);
+    }
+  });
   const addItem = trpc.bills.addItem.useMutation({ onSuccess: () => { utils.bills.getItems.invalidate(); utils.bills.list.invalidate(); } });
   const deleteItem = trpc.bills.deleteItem.useMutation({ onSuccess: () => { utils.bills.getItems.invalidate(); utils.bills.list.invalidate(); } });
   const deleteBill = trpc.bills.delete.useMutation({ onSuccess: () => utils.bills.list.invalidate() });

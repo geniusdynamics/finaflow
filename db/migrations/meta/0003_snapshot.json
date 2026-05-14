@@ -1,0 +1,8 @@
+{
+  "id": "0003_recurring_bill_accounting_classification",
+  "prevId": "0002_unusual_vulture",
+  "version": "7",
+  "when": 1778768400000,
+  "migrationFolderHash": "recurring_bill_accounting_classification",
+  "tables": {}
+}

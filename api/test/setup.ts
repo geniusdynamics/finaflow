@@ -65,6 +65,10 @@ async function ensureTestDatabase(): Promise<void> {
         tableName: "customer_accounts",
         migrationPath: path.resolve(import.meta.dirname, "../../db/migrations/0001_account_level_subscriptions.sql"),
       },
+      {
+        tableName: "customer_accounts",
+        migrationPath: path.resolve(import.meta.dirname, "../../db/migrations/0002_add_user_type.sql"),
+      },
     ];
 
     for (const { tableName, migrationPath } of migrationFiles) {
@@ -72,7 +76,10 @@ async function ensureTestDatabase(): Promise<void> {
         continue;
       }
 
-      const sql = fs.readFileSync(migrationPath, "utf8").replaceAll("--> statement-breakpoint", "");
+      let sql = fs.readFileSync(migrationPath, "utf8").replaceAll("--> statement-breakpoint", "");
+      if (!migrationPath.includes("0002_add_user_type")) {
+        sql = sql.replace(/CREATE TYPE\s+"public"\./g, 'CREATE TYPE IF NOT EXISTS "public".');
+      }
       await testPool.query(sql);
     }
   } finally {

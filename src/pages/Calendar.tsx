@@ -1,13 +1,32 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, Receipt, TrendingDown, FileText, Landmark, AlertTriangle, Clock } from "lucide-react";
+import { CalendarDays, Receipt, TrendingDown, FileText, Landmark, AlertTriangle, Clock, Wallet } from "lucide-react";
+import { DailyPayments } from "./DailyPayments";
 
 export function Calendar() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sectionParam = searchParams.get("section");
+  const [section, setSection] = useState<"calendar" | "payments">(
+    sectionParam === "payments" ? "payments" : "calendar"
+  );
   const [view, setView] = useState<"all" | "bills" | "sales" | "payroll">("all");
   const [daysAhead, setDaysAhead] = useState(90);
+
+  useEffect(() => {
+    const sp = searchParams.get("section");
+    if (sp === "payments") {
+      setSection("payments");
+    }
+  }, [searchParams]);
+
+  const handleSectionChange = (newSection: "calendar" | "payments") => {
+    setSection(newSection);
+    setSearchParams(newSection === "calendar" ? {} : { section: newSection });
+  };
 
   const today = getLocalDateString();
   const futureDate = getLocalDateString(new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000));
@@ -51,6 +70,18 @@ export function Calendar() {
   return (
     <Layout>
       <div className="space-y-6">
+        {/* Outer section tabs */}
+        <div className="flex items-center gap-2 border-b border-[#E8E0D8]">
+          <button onClick={() => handleSectionChange("calendar")} className={`px-4 py-2 text-sm font-medium ${section === "calendar" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <CalendarDays className="mr-1 inline h-4 w-4"/>Cashflow Calendar
+          </button>
+          <button onClick={() => handleSectionChange("payments")} className={`px-4 py-2 text-sm font-medium ${section === "payments" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <Wallet className="mr-1 inline h-4 w-4"/>Daily Payments
+          </button>
+        </div>
+
+        {section === "calendar" && (
+        <>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="font-serif text-2xl font-bold text-[#2D2A26]">Cashflow Calendar</h1>
@@ -213,6 +244,10 @@ export function Calendar() {
             </div>
           )}
         </div>
+        </>
+        )}
+
+        {section === "payments" && <DailyPayments embedded />}
       </div>
     </Layout>
   );

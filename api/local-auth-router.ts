@@ -596,11 +596,12 @@ export const localAuthRouter = createRouter({
           ];
           await tx.insert(accounts).values(defaultAccountValues);
 
-          return { userId: userRow.id, businessId: businessRow.id, accountRefId: accountRow.id };
+          return { userId: userRow.id, businessId: businessRow.id, locationId: locationRow.id, accountRefId: accountRow.id };
         });
 
         userId = registration.userId;
         businessId = registration.businessId;
+        const locationId = registration.locationId;
         accountRefId = registration.accountRefId;
       } catch (error: unknown) {
         console.error("[register] signup failed", error);
@@ -630,6 +631,13 @@ export const localAuthRouter = createRouter({
           code: "INTERNAL_SERVER_ERROR",
           message: "We could not complete sign up right now. Please try again.",
         });
+      }
+
+      if (businessId && locationId) {
+        const { seedAccountingData } = await import("../db/seed-accounting");
+        await seedAccountingData(businessId, locationId).catch((err) =>
+          console.error("[register] seedAccountingData failed", err)
+        );
       }
 
       const token = await signLocalToken({ userId, username: input.username });
@@ -760,6 +768,14 @@ export const localAuthRouter = createRouter({
       }
     }
     results.accounts = "ensured";
+
+    if (demoBizId) {
+      const locs = await db.select({ id: locations.id }).from(locations).where(eq(locations.businessId, demoBizId)).limit(1);
+      const { seedAccountingData } = await import("../db/seed-accounting");
+      await seedAccountingData(demoBizId, locs[0]?.id).catch((err) =>
+        console.error("[seedDefaults] seedAccountingData failed", err)
+      );
+    }
 
     const defaultUsers = [
       { username: "owner", password: "finaflow2024", name: "Business Owner", role: "owner" as const },

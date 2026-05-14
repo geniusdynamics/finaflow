@@ -198,9 +198,9 @@ export function PartnerDashboard() {
                         <tr key={c.id} className="hover:bg-[#F5EDE6]/50">
                           <td className="py-2 text-xs text-[#8D8A87]">{c.month}/{c.year}</td>
                           <td className="py-2 text-sm">{(c as any).businessName}</td>
-                          <td className="py-2 text-right font-mono text-sm">{formatKES(c.subscriptionAmount)}</td>
+                          <td className="py-2 text-right font-mono text-sm">{formatKES(c.subscriptionAmount ?? "")}</td>
                           <td className="py-2 text-right text-xs">{c.commissionPercent}%</td>
-                          <td className="py-2 text-right font-mono text-sm font-semibold text-[#D4A854]">{formatKES(c.commissionAmount)}</td>
+                          <td className="py-2 text-right font-mono text-sm font-semibold text-[#D4A854]">{formatKES(c.commissionAmount ?? "")}</td>
                           <td className="py-2 text-center"><span className={`rounded-full px-2 py-0.5 text-xs ${c.status === "paid" ? "bg-[#2E7D32]/10 text-[#2E7D32]" : "bg-[#ED6C02]/10 text-[#ED6C02]"}`}>{c.status}</span></td>
                         </tr>
                       ))}</tbody>

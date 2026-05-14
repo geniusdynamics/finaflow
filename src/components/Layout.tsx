@@ -22,7 +22,6 @@ const allNavItems = [
   { path: "/locations", label: "Branches", icon: Building2, perms: [PERMISSIONS.SETTINGS_MANAGE] },
   { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW] },
   { path: "/mpesa", label: "M-PESA", icon: Smartphone, perms: [PERMISSIONS.MPESA_VIEW] },
-  { path: "/daily-payments", label: "Daily Payments", icon: Wallet, perms: [PERMISSIONS.BILLS_VIEW] },
   { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
   { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
   { path: "/users", label: "Users & Roles", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },

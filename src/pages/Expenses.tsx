@@ -67,6 +67,10 @@ export function Expenses() {
   const { data: categories, refetch: refetchCats, isLoading: catsLoading, error: catsError } = trpc.expenses.categories.useQuery();
   const { data: suppliers } = trpc.suppliers.list.useQuery();
   const { data: accounts } = trpc.accounts.list.useQuery();
+  const { data: coa } = trpc.chartOfAccounts.list.useQuery(
+    { businessId: user?.currentBusinessId ?? 0 },
+    { enabled: !!user?.currentBusinessId }
+  );
   const { data: bills } = trpc.bills.list.useQuery();
   const { data: settings } = trpc.settings.list.useQuery();
 
@@ -93,7 +97,7 @@ export function Expenses() {
     onError: (err) => toast.error(err.message || "Failed to add expense"),
   });
   const createCat = trpc.expenses.createCategory.useMutation({
-    onSuccess: () => { toast.success("Category added"); setCatOpen(false); setCatForm({ name: "", description: "", color: "#C73E1D" }); refetchCats(); },
+    onSuccess: () => { toast.success("Category added"); setCatOpen(false); setCatForm({ name: "", description: "", color: "#C73E1D", defaultAccountId: "" }); refetchCats(); },
     onError: (err) => toast.error(err.message || "Failed to add category"),
   });
   const updateCat = trpc.expenses.updateCategory.useMutation({
@@ -114,7 +118,7 @@ export function Expenses() {
     expenseDate: getLocalDateString(), paymentMethod: "cash" as const,
     accountId: "", billId: "",
   });
-  const [catForm, setCatForm] = useState({ name: "", description: "", color: "#C73E1D" });
+  const [catForm, setCatForm] = useState({ name: "", description: "", color: "#C73E1D", defaultAccountId: "" });
   const [attachments, setAttachments] = useState<{ imageData: string; mimeType: string; caption: string }[]>([]);
   const todayDate = getLocalDateString();
 
@@ -125,7 +129,7 @@ export function Expenses() {
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    const newAttachments = [];
+    const newAttachments: { imageData: string; mimeType: string; caption: string }[] = [];
     for (const file of Array.from(files)) {
       if (file.size > 5 * 1024 * 1024) { toast.error(`${file.name} is too large (max 5MB)`); continue; }
       const base64 = await fileToBase64(file);
@@ -157,7 +161,8 @@ export function Expenses() {
   const handleCat = (e: React.FormEvent) => {
     e.preventDefault();
     if (!catForm.name.trim()) { toast.error("Category name is required"); return; }
-    createCat.mutate(catForm);
+    if (!catForm.defaultAccountId) { toast.error("Please select a default expense account"); return; }
+    createCat.mutate({ name: catForm.name, description: catForm.description, color: catForm.color, defaultAccountId: +catForm.defaultAccountId });
   };
 
   const totalExpenses = expenses?.reduce((sum, e) => sum + parseFloat(e.amount), 0) ?? 0;
@@ -235,10 +240,10 @@ export function Expenses() {
                     </select>
                   </div>
                 </div>
-                <div><Label>Account</Label>
+                <div><Label>Funding Source</Label>
                   <select value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
                     <option value="">Auto-detect</option>
-                    {accounts?.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {loc ? `· ${loc}` : ""}</option>; })}
+                    {accounts?.filter(a => a.isPaymentMethod)?.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name}{loc ? ` (${loc})` : ""}</option>; })}
                   </select>
                 </div>
                 <div><Label>Supplier</Label>
@@ -396,6 +401,13 @@ export function Expenses() {
                     <div><Label>Name</Label><Input value={catForm.name} onChange={e => setCatForm(p => ({ ...p, name: e.target.value }))} required /></div>
                     <div><Label>Description</Label><Input value={catForm.description} onChange={e => setCatForm(p => ({ ...p, description: e.target.value }))} /></div>
                     <div><Label>Color</Label><div className="flex items-center gap-2"><input type="color" value={catForm.color} onChange={e => setCatForm(p => ({ ...p, color: e.target.value }))} className="h-10 w-10 rounded border p-0.5" /><span className="text-xs text-[#8D8A87]">{catForm.color}</span></div></div>
+                    <div>
+                      <Label>Default Expense Account</Label>
+                      <select value={catForm.defaultAccountId} onChange={e => setCatForm(p => ({ ...p, defaultAccountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required>
+                        <option value="">Select expense account...</option>
+                        {coa?.expense?.map(a => <option key={a.id} value={a.id}>{a.accountCode} - {a.name}</option>)}
+                      </select>
+                    </div>
                     <Button type="submit" className="w-full bg-[#2E7D32]" disabled={createCat.isPending}>{createCat.isPending ? "Adding..." : "Add Category"}</Button>
                   </form>
                 </DialogContent>

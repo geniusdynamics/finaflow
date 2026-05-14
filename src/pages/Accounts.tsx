@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
@@ -11,15 +12,34 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { Plus, Wallet, CreditCard, Smartphone, Landmark, BookOpen, ArrowDownLeft, ArrowUpRight, Pencil, Trash2, ArrowRightLeft, BarChart3, AlertTriangle, Tag, CheckCircle } from "lucide-react";
+import { Plus, Wallet, CreditCard, Smartphone, Landmark, BookOpen, ArrowDownLeft, ArrowUpRight, Pencil, Trash2, ArrowRightLeft, BarChart3, AlertTriangle, Tag, CheckCircle, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { ChartOfAccounts } from "./ChartOfAccounts";
+import { JournalEntries } from "./JournalEntries";
 
 const accountPalette = ["#2E7D32", "#388E3C", "#43A047", "#C77D2D", "#D4A854", "#B8872E", "#9E9D24", "#5D4037"];
 
 export function Accounts() {
   const { user } = useAuth();
   const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.ACCOUNTS_MANAGE);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sectionParam = searchParams.get("section");
+  const [section, setSection] = useState<"accounts" | "chart-of-accounts" | "journal-entries">(
+    sectionParam === "chart-of-accounts" || sectionParam === "journal-entries" ? sectionParam : "accounts"
+  );
   const [tab, setTab] = useState<"accounts" | "payment-methods">("accounts");
+
+  useEffect(() => {
+    const sp = searchParams.get("section");
+    if (sp === "chart-of-accounts" || sp === "journal-entries") {
+      setSection(sp);
+    }
+  }, [searchParams]);
+
+  const handleSectionChange = (newSection: "accounts" | "chart-of-accounts" | "journal-entries") => {
+    setSection(newSection);
+    setSearchParams(newSection === "accounts" ? {} : { section: newSection });
+  };
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState<number | null>(null);
   const [drawingOpen, setDrawingOpen] = useState<number | null>(null);
@@ -164,6 +184,21 @@ export function Accounts() {
   return (
     <Layout>
       <div className="space-y-6">
+        {/* Outer section tabs */}
+        <div className="flex items-center gap-2 border-b border-[#E8E0D8]">
+          <button onClick={() => handleSectionChange("accounts")} className={`px-4 py-2 text-sm font-medium ${section === "accounts" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <Wallet className="mr-1 inline h-4 w-4"/>Accounts &amp; Payments
+          </button>
+          <button onClick={() => handleSectionChange("chart-of-accounts")} className={`px-4 py-2 text-sm font-medium ${section === "chart-of-accounts" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <BookOpen className="mr-1 inline h-4 w-4"/>Chart of Accounts
+          </button>
+          <button onClick={() => handleSectionChange("journal-entries")} className={`px-4 py-2 text-sm font-medium ${section === "journal-entries" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <FileText className="mr-1 inline h-4 w-4"/>Journal Entries
+          </button>
+        </div>
+
+        {section === "accounts" && (
+        <>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-serif text-2xl font-bold text-[#2D2A26]">Accounts &amp; Payments</h1>
@@ -667,6 +702,12 @@ export function Accounts() {
             </div>
           </>
         )}
+        </>
+        )}
+
+        {section === "chart-of-accounts" && <ChartOfAccounts embedded />}
+
+        {section === "journal-entries" && <JournalEntries embedded />}
       </div>
     </Layout>
   );

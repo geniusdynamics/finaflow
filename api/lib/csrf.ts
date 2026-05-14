@@ -1,4 +1,4 @@
-import { Context, Next } from "hono";
+import type { Context, Next } from "hono";
 import { createId } from "@paralleldrive/cuid2";
 import { serialize } from "cookie";
 

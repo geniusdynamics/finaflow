@@ -23,7 +23,7 @@ export const typeEnum = pgEnum("type", ["cash", "mpesa", "bank_account"]);
 export const transactionTypeEnum = pgEnum("transactionType", [
     "sale", "expense", "bill_payment", "supplier_payment",
     "payroll", "advance", "transfer", "opening_balance", "mpesa_topup",
-    "drawing", "deposit",
+    "drawing", "deposit", "journal", "depreciation", "asset_disposal",
   ]);
 export const entryTypeEnum = pgEnum("entryType", ["debit", "credit"]);
 export const paymentMethodEnum = pgEnum("paymentMethod", ["cash", "mpesa", "bank_transfer"]);
@@ -43,6 +43,48 @@ export const allocationRightsEnum = pgEnum("allocation_rights", ["view_only", "c
 export const allocationInviteStatusEnum = pgEnum("allocation_invite_status", ["active", "consumed", "revoked", "expired"]);
 export const partnerAllocationStatusEnum = pgEnum("partner_allocation_status", ["active", "revoked"]);
 
+// Accounting enums for Chart of Accounts and Financial Reporting
+export const accountTypeEnum = pgEnum("accountType", [
+  "asset", "liability", "equity", "revenue", "expense"
+]);
+
+export const accountSubTypeEnum = pgEnum("accountSubType", [
+  // Assets
+  "cash", "bank", "accounts_receivable", "inventory", "prepaid_expense",
+  "fixed_asset", "accumulated_depreciation", "intangible_asset", "other_asset",
+  // Liabilities
+  "accounts_payable", "accrued_expense", "current_loan", "long_term_loan",
+  // Equity
+  "capital", "retained_earnings", "drawings", "current_year_earnings",
+  // Revenue
+  "sales_revenue", "service_revenue", "subscription_revenue", "other_income",
+  // Expenses
+  "cogs", "operating_expense", "admin_expense", "marketing_expense", "depreciation_expense"
+]);
+
+export const itemTypeEnum = pgEnum("itemType", [
+  "inventory", "fixed_asset", "service", "non_inventory"
+]);
+
+export const depreciationMethodEnum = pgEnum("depreciationMethod", [
+  "straight_line", "declining_balance"
+]);
+
+export const accountingClassEnum = pgEnum("accountingClass", [
+  "cogs", "operating_expense", "admin_expense", "marketing", "depreciation", "other"
+]);
+
+export const revenueCategoryTypeEnum = pgEnum("revenueCategoryType", [
+  "product_sales", "service_revenue", "subscription", "membership", "other"
+]);
+
+// Type exports for accounting enums
+export type AccountType = typeof accountTypeEnum.enumValues[number];
+export type AccountSubType = typeof accountSubTypeEnum.enumValues[number];
+export type ItemType = typeof itemTypeEnum.enumValues[number];
+export type DepreciationMethod = typeof depreciationMethodEnum.enumValues[number];
+export type AccountingClass = typeof accountingClassEnum.enumValues[number];
+export type RevenueCategoryType = typeof revenueCategoryTypeEnum.enumValues[number];
 
 export const customerAccounts = pgTable("customer_accounts", {
   id: serial("id").primaryKey(),
@@ -144,19 +186,31 @@ export type Location = typeof locations.$inferSelect;
 export const accounts = pgTable("accounts", {
   id: serial("id").primaryKey(),
   locationId: bigint("locationId", { mode: "number" }).notNull(),
+  businessId: bigint("businessId", { mode: "number" }),
   name: varchar("name", { length: 100 }).notNull(),
   type: typeEnum("type").notNull(),
   accountCode: varchar("accountCode", { length: 20 }),
   accountNumber: varchar("accountNumber", { length: 100 }),
+  description: text("description"),
+  accountType: accountTypeEnum("accountType"),
+  accountSubType: accountSubTypeEnum("accountSubType"),
   openingBalance: numeric("openingBalance", { precision: 15, scale: 2 }).default("0.00").notNull(),
   currentBalance: numeric("currentBalance", { precision: 15, scale: 2 }).default("0.00").notNull(),
   currency: varchar("currency", { length: 3 }).default("KES").notNull(),
   isPaymentMethod: boolean("isPaymentMethod").default(false).notNull(),
+  isContra: boolean("isContra").default(false),
+  parentAccountId: bigint("parentAccountId", { mode: "number" }),
+  externalId: varchar("externalId", { length: 255 }),
+  externalSystem: varchar("externalSystem", { length: 50 }),
+  lastSyncedAt: timestamp("lastSyncedAt"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  accountTypeIdx: index("idx_accounts_type").on(table.accountType),
+  businessIdx: index("idx_accounts_business").on(table.businessId),
+}));
 
 export type Account = typeof accounts.$inferSelect;
 
@@ -215,14 +269,22 @@ export type DailySale = typeof dailySales.$inferSelect;
 // Expense categories
 export const expenseCategories = pgTable("expense_categories", {
   id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }),
+  locationId: bigint("locationId", { mode: "number" }),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
   color: varchar("color", { length: 20 }).default("#C73E1D"),
+  accountingClass: accountingClassEnum("accountingClass").default("operating_expense"),
+  defaultAccountId: bigint("defaultAccountId", { mode: "number" }),
+  externalAccountCode: varchar("externalAccountCode", { length: 50 }),
+  externalSystem: varchar("externalSystem", { length: 50 }),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  businessIdx: index("idx_expense_category_business").on(table.businessId),
+}));
 
 export type ExpenseCategory = typeof expenseCategories.$inferSelect;
 
@@ -230,6 +292,7 @@ export type ExpenseCategory = typeof expenseCategories.$inferSelect;
 export const expenses = pgTable("expenses", {
   id: serial("id").primaryKey(),
   locationId: bigint("locationId", { mode: "number" }).notNull(),
+  businessId: bigint("businessId", { mode: "number" }),
   categoryId: bigint("categoryId", { mode: "number" }).notNull(),
   supplierId: bigint("supplierId", { mode: "number" }),
   expenseNumber: varchar("expenseNumber", { length: 50 }),
@@ -245,6 +308,12 @@ export const expenses = pgTable("expenses", {
   expenseRef: varchar("expenseRef", { length: 50 }),
   isReimbursable: boolean("isReimbursable").default(false),
   reimbursedTo: bigint("reimbursedTo", { mode: "number" }),
+  isFixedAsset: boolean("isFixedAsset").default(false),
+  fixedAssetItemId: bigint("fixedAssetItemId", { mode: "number" }),
+  usefulLifeMonths: integer("usefulLifeMonths"),
+  depreciationMethod: depreciationMethodEnum("depreciationMethod"),
+  salvageValue: numeric("salvageValue", { precision: 15, scale: 2 }),
+  journalEntryId: bigint("journalEntryId", { mode: "number" }),
   enteredBy: bigint("enteredBy", { mode: "number" }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -285,6 +354,7 @@ export type Supplier = typeof suppliers.$inferSelect;
 export const bills = pgTable("bills", {
   id: serial("id").primaryKey(),
   locationId: bigint("locationId", { mode: "number" }).notNull(),
+  businessId: bigint("businessId", { mode: "number" }),
   supplierId: bigint("supplierId", { mode: "number" }),
   billNumber: varchar("billNumber", { length: 100 }),
   description: text("description").notNull(),
@@ -294,6 +364,7 @@ export const bills = pgTable("bills", {
   issueDate: date("issueDate").notNull(),
   dueDate: date("dueDate").notNull(),
   status: billStatusEnum("status").default("pending").notNull(),
+  journalEntryId: bigint("journalEntryId", { mode: "number" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -343,6 +414,7 @@ export const billPayments = pgTable("bill_payments", {
   reference: varchar("reference", { length: 100 }),
   notes: text("notes"),
   accountId: bigint("accountId", { mode: "number" }),
+  journalEntryId: bigint("journalEntryId", { mode: "number" }),
   enteredBy: bigint("enteredBy", { mode: "number" }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -355,7 +427,10 @@ export type BillPayment = typeof billPayments.$inferSelect;
 export const recurringBillTemplates = pgTable("recurring_bill_templates", {
   id: serial("id").primaryKey(),
   locationId: bigint("locationId", { mode: "number" }).notNull(),
+  businessId: bigint("businessId", { mode: "number" }),
   supplierId: bigint("supplierId", { mode: "number" }),
+  categoryId: bigint("categoryId", { mode: "number" }),
+  liabilityAccountId: bigint("liabilityAccountId", { mode: "number" }),
   description: text("description").notNull(),
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
   frequency: frequencyEnum("frequency").notNull(),
@@ -1059,3 +1134,175 @@ export const refreshTokens = pgTable("refresh_tokens", {
 }));
 
 export type RefreshToken = typeof refreshTokens.$inferSelect;
+
+// Journal Entries - Double-Entry Bookkeeping
+export const journalEntries = pgTable("journal_entries", {
+  id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }),
+  entryNumber: varchar("entryNumber", { length: 50 }).unique(),
+  entryDate: date("entryDate").notNull(),
+  description: text("description").notNull(),
+  reference: varchar("reference", { length: 100 }),
+  sourceType: varchar("sourceType", { length: 50 }),
+  sourceId: bigint("sourceId", { mode: "number" }),
+  isPosted: boolean("isPosted").default(false),
+  postedBy: bigint("postedBy", { mode: "number" }),
+  postedAt: timestamp("postedAt"),
+  isReversed: boolean("isReversed").default(false),
+  reversedBy: bigint("reversedBy", { mode: "number" }),
+  reversalOf: bigint("reversalOf", { mode: "number" }),
+  externalId: varchar("externalId", { length: 255 }),
+  externalSystem: varchar("externalSystem", { length: 50 }),
+  createdBy: bigint("createdBy", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  entryNumberIdx: uniqueIndex("idx_journal_entry_number").on(table.entryNumber),
+  entryDateIdx: index("idx_journal_entry_date").on(table.entryDate),
+  sourceIdx: index("idx_journal_entry_source").on(table.sourceType, table.sourceId),
+  businessIdx: index("idx_journal_entry_business").on(table.businessId),
+}));
+
+export type JournalEntry = typeof journalEntries.$inferSelect;
+export type InsertJournalEntry = typeof journalEntries.$inferInsert;
+
+// Journal Lines - Individual debit/credit entries
+export const journalLines = pgTable("journal_lines", {
+  id: serial("id").primaryKey(),
+  journalEntryId: bigint("journalEntryId", { mode: "number" }).notNull(),
+  accountId: bigint("accountId", { mode: "number" }).notNull(),
+  debit: numeric("debit", { precision: 15, scale: 2 }).default("0.00"),
+  credit: numeric("credit", { precision: 15, scale: 2 }).default("0.00"),
+  description: text("description"),
+  lineNumber: integer("lineNumber"),
+  createdAt: timestamp("createdAt").defaultNow(),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  journalIdx: index("idx_journal_line_entry").on(table.journalEntryId),
+  accountIdx: index("idx_journal_line_account").on(table.accountId),
+}));
+
+export type JournalLine = typeof journalLines.$inferSelect;
+export type InsertJournalLine = typeof journalLines.$inferInsert;
+
+// Items - Inventory, Fixed Assets, and Services
+export const items = pgTable("items", {
+  id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }),
+  locationId: bigint("locationId", { mode: "number" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  sku: varchar("sku", { length: 50 }).unique(),
+  itemType: itemTypeEnum("itemType").notNull(),
+  incomeAccountId: bigint("incomeAccountId", { mode: "number" }),
+  expenseAccountId: bigint("expenseAccountId", { mode: "number" }),
+  assetAccountId: bigint("assetAccountId", { mode: "number" }),
+  isFixedAsset: boolean("isFixedAsset").default(false),
+  purchaseDate: date("purchaseDate"),
+  purchasePrice: numeric("purchasePrice", { precision: 15, scale: 2 }),
+  usefulLifeMonths: integer("usefulLifeMonths"),
+  depreciationMethod: depreciationMethodEnum("depreciationMethod"),
+  salvageValue: numeric("salvageValue", { precision: 15, scale: 2 }).default("0.00"),
+  accumulatedDepreciation: numeric("accumulatedDepreciation", { precision: 15, scale: 2 }).default("0.00"),
+  currentBookValue: numeric("currentBookValue", { precision: 15, scale: 2 }),
+  disposalDate: date("disposalDate"),
+  disposalValue: numeric("disposalValue", { precision: 15, scale: 2 }),
+  notes: text("notes"),
+  unitCost: numeric("unitCost", { precision: 15, scale: 2 }),
+  unitPrice: numeric("unitPrice", { precision: 15, scale: 2 }),
+  currentStock: numeric("currentStock", { precision: 15, scale: 2 }).default("0"),
+  reorderLevel: numeric("reorderLevel", { precision: 15, scale: 2 }),
+  taxRate: numeric("taxRate", { precision: 5, scale: 2 }),
+  externalId: varchar("externalId", { length: 255 }),
+  externalSystem: varchar("externalSystem", { length: 50 }),
+  lastSyncedAt: timestamp("lastSyncedAt"),
+  isActive: boolean("isActive").default(true),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  skuIdx: uniqueIndex("idx_items_sku").on(table.sku),
+  businessIdx: index("idx_items_business").on(table.businessId),
+  itemTypeIdx: index("idx_items_type").on(table.itemType),
+}));
+
+export type Item = typeof items.$inferSelect;
+export type InsertItem = typeof items.$inferInsert;
+
+// Fixed Asset Depreciation Tracking
+export const fixedAssetDepreciation = pgTable("fixed_asset_depreciation", {
+  id: serial("id").primaryKey(),
+  itemId: bigint("itemId", { mode: "number" }).notNull(),
+  journalEntryId: bigint("journalEntryId", { mode: "number" }),
+  periodYear: integer("periodYear").notNull(),
+  periodMonth: integer("periodMonth").notNull(),
+  depreciationAmount: numeric("depreciationAmount", { precision: 15, scale: 2 }).notNull(),
+  accumulatedAfter: numeric("accumulatedAfter", { precision: 15, scale: 2 }).notNull(),
+  bookValueAfter: numeric("bookValueAfter", { precision: 15, scale: 2 }).notNull(),
+  isPosted: boolean("isPosted").default(false),
+  createdAt: timestamp("createdAt").defaultNow(),
+}, (table) => ({
+  itemIdx: index("idx_depreciation_item").on(table.itemId),
+  periodIdx: index("idx_depreciation_period").on(table.periodYear, table.periodMonth),
+  itemPeriodIdx: uniqueIndex("idx_depreciation_item_period").on(table.itemId, table.periodYear, table.periodMonth),
+}));
+
+export type FixedAssetDepreciation = typeof fixedAssetDepreciation.$inferSelect;
+
+// Revenue Categories - For FinaBill invoicing
+export const revenueCategories = pgTable("revenue_categories", {
+  id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }),
+  name: varchar("name", { length: 100 }).notNull(),
+  description: text("description"),
+  incomeAccountId: bigint("incomeAccountId", { mode: "number" }),
+  accountCode: varchar("accountCode", { length: 20 }),
+  categoryType: revenueCategoryTypeEnum("categoryType").default("other"),
+  externalId: varchar("externalId", { length: 255 }),
+  externalSystem: varchar("externalSystem", { length: 50 }),
+  isActive: boolean("isActive").default(true),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  businessIdx: index("idx_revenue_category_business").on(table.businessId),
+}));
+
+export type RevenueCategory = typeof revenueCategories.$inferSelect;
+export type InsertRevenueCategory = typeof revenueCategories.$inferInsert;
+
+// Financial Reports Storage
+export const financialReports = pgTable("financial_reports", {
+  id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }),
+  reportType: varchar("reportType", { length: 50 }).notNull(),
+  periodStart: date("periodStart").notNull(),
+  periodEnd: date("periodEnd").notNull(),
+  reportData: json("reportData").notNull(),
+  reportMetadata: json("reportMetadata"),
+  generatedBy: bigint("generatedBy", { mode: "number" }),
+  generatedAt: timestamp("generatedAt").defaultNow(),
+}, (table) => ({
+  businessIdx: index("idx_financial_report_business").on(table.businessId),
+  typePeriodIdx: index("idx_financial_report_type_period").on(table.reportType, table.periodStart, table.periodEnd),
+}));
+
+export type FinancialReport = typeof financialReports.$inferSelect;
+
+// External System Sync Configuration
+export const externalSyncConfig = pgTable("external_sync_config", {
+  id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  systemName: varchar("systemName", { length: 50 }).notNull(),
+  config: json("config").notNull(),
+  lastSyncAt: timestamp("lastSyncAt"),
+  syncStatus: varchar("syncStatus", { length: 20 }).default("idle"),
+  isActive: boolean("isActive").default(true),
+  createdAt: timestamp("createdAt").defaultNow(),
+  updatedAt: timestamp("updatedAt").defaultNow().$onUpdate(() => new Date()),
+}, (table) => ({
+  businessSystemIdx: uniqueIndex("idx_sync_config_business_system").on(table.businessId, table.systemName),
+}));
+
+export type ExternalSyncConfig = typeof externalSyncConfig.$inferSelect;

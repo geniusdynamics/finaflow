@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { createRouter, expenseQuery, expenseCreate, expenseManage, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { expenses, expenseCategories, accounts, ledgerEntries, suppliers, bills, attachments, locations } from "@db/schema";
+import { expenses, expenseCategories, accounts, ledgerEntries, suppliers, bills, attachments, locations, businesses } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { notFutureDateString, optionalNotFutureDateString } from "./lib/future-date";
+import { logAudit } from "./lib/audit";
 
 export const createExpenseInputSchema = z.object({
   locationId: z.number(),
@@ -29,6 +30,11 @@ export const createExpenseInputSchema = z.object({
       })
     )
     .optional(),
+  isFixedAsset: z.boolean().default(false),
+  usefulLifeMonths: z.number().optional(),
+  depreciationMethod: z.enum(["straight_line", "declining_balance"]).optional(),
+  salvageValue: z.string().optional(),
+  assetAccountId: z.number().optional(),
 });
 
 export const updateExpenseInputSchema = z.object({
@@ -49,21 +55,91 @@ export const expensesRouter = createRouter({
   }),
 
   createCategory: expenseCreate
-    .input(z.object({ name: z.string().min(1).max(100), description: z.string().optional(), color: z.string().optional() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({ 
+      name: z.string().min(1).max(100), 
+      description: z.string().optional(), 
+      color: z.string().optional(),
+      defaultAccountId: z.number(),
+    }))
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const userId = (ctx as any).user?.id ?? 1;
+      const account = await db.query.accounts.findFirst({
+        where: and(
+          eq(accounts.id, input.defaultAccountId),
+          eq(accounts.accountType, "expense" as any),
+          isNull(accounts.deletedAt)
+        ),
+      });
+      if (!account) {
+        throw new Error("Default account must be a valid chart of accounts expense entry");
+      }
       const [result] = await db.insert(expenseCategories).values({
-        name: input.name, description: input.description, color: input.color ?? "#C73E1D",
+        name: input.name, 
+        description: input.description, 
+        color: input.color ?? "#C73E1D",
+        defaultAccountId: input.defaultAccountId,
       }).returning();
+      
+      await logAudit({
+        userId,
+        action: "CREATE",
+        resource: "expense_categories",
+        resourceId: result.id,
+        details: {
+          name: input.name,
+          defaultAccountId: input.defaultAccountId,
+        },
+      });
+      
       return { id: result.id, success: true };
     }),
 
   updateCategory: expenseManage
-    .input(z.object({ id: z.number(), name: z.string().min(1).max(100).optional(), description: z.string().optional(), color: z.string().optional(), isActive: z.boolean().optional() }))
-    .mutation(async ({ input }) => {
+    .input(z.object({ 
+      id: z.number(), 
+      name: z.string().min(1).max(100).optional(), 
+      description: z.string().optional(), 
+      color: z.string().optional(), 
+      isActive: z.boolean().optional(),
+      accountingClass: z.enum(["cogs", "operating_expense", "admin_expense", "marketing", "depreciation", "other"]).optional(),
+      defaultAccountId: z.number().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const userId = (ctx as any).user?.id ?? 1;
       const { id, ...updates } = input;
-      await db.update(expenseCategories).set(updates).where(eq(expenseCategories.id, id));
+      
+      const existing = await db.select().from(expenseCategories).where(
+        and(eq(expenseCategories.id, id), isNull(expenseCategories.deletedAt))
+      ).limit(1);
+      
+      const auditDetails: Record<string, any> = {};
+      if (updates.accountingClass && updates.accountingClass !== existing[0]?.accountingClass) {
+        auditDetails.accountingClassChange = {
+          from: existing[0]?.accountingClass,
+          to: updates.accountingClass,
+        };
+      }
+      if (updates.defaultAccountId && updates.defaultAccountId !== existing[0]?.defaultAccountId) {
+        auditDetails.defaultAccountIdChange = {
+          from: existing[0]?.defaultAccountId,
+          to: updates.defaultAccountId,
+        };
+      }
+      
+      await db.update(expenseCategories).set(updates as any).where(eq(expenseCategories.id, id));
+      
+      if (Object.keys(auditDetails).length > 0) {
+        await logAudit({
+          userId,
+          action: "UPDATE",
+          resource: "expense_categories",
+          resourceId: id,
+          details: auditDetails,
+        });
+      }
+      
       return { success: true };
     }),
 
@@ -71,12 +147,12 @@ export const expensesRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      await db.update(expenseCategories).set({ deletedAt: new Date() }).where(eq(expenseCategories.id, id));
+      await db.update(expenseCategories).set({ deletedAt: new Date() }).where(eq(expenseCategories.id, input.id));
       return { success: true };
     }),
 
   list: expenseQuery
-    .input(z.object({ locationId: z.number().optional(), categoryId: z.number().optional(), dateFrom: z.string().optional(), dateTo: z.string().optional(), page: z.number().default(1), pageSize: z.number().default(50) }).optional())
+    .input(z.object({ locationId: z.number().optional(), categoryId: z.number().optional(), dateFrom: z.string().optional(), dateTo: z.string().optional(), page: z.number().default(1), pageSize: z.number().default(50) }))
     .query(async ({ input, ctx }) => {
       const db = getDb();
       const conditions = [isNull(expenses.deletedAt)];
@@ -112,11 +188,13 @@ export const expensesRouter = createRouter({
       }
 
       const loc = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
+      const business = await db.select().from(businesses).where(eq(businesses.id, loc[0]?.businessId)).limit(1);
       const nextNum = loc[0]?.nextExpenseNumber ?? 1;
       const expenseNumber = `EXP-${String(nextNum).padStart(4, "0")}`;
 
-      let expenseId: number;
+      let expenseId = 0;
       let accountId = input.accountId;
+      let fixedAssetItemId: number | undefined;
 
       await db.transaction(async (tx) => {
         await tx.update(locations).set({ nextExpenseNumber: nextNum + 1 }).where(eq(locations.id, input.locationId));
@@ -138,7 +216,7 @@ export const expensesRouter = createRouter({
         }
 
         if (!accountId) {
-          const typeMap: Record<string, string> = { cash: "cash", mpesa: "mpesa", bank_transfer: "bank_account", card: "bank_account" };
+          const typeMap: Record<string, string> = { cash: "cash", mpesa: "cash", bank_transfer: "bank", card: "bank" };
           const accts = await tx.select().from(accounts).where(
             and(eq(accounts.locationId, input.locationId), eq(accounts.type, typeMap[input.paymentMethod] as any), isNull(accounts.deletedAt))
           ).limit(1);
@@ -146,12 +224,26 @@ export const expensesRouter = createRouter({
         }
 
         const [result] = await tx.insert(expenses).values({
-          locationId: input.locationId, categoryId: input.categoryId, supplierId: input.supplierId,
-          expenseNumber, amount: input.amount, description: input.description,
-          expenseDate: new Date(input.expenseDate), paymentMethod: input.paymentMethod,
-          accountId, billId: input.billId, receiptImageUrl: input.receiptImageUrl,
-          mpesaTxnId: input.mpesaTxnId, isReimbursable: input.isReimbursable,
-          reimbursedTo: input.reimbursedTo, enteredBy: userId,
+          locationId: input.locationId, 
+          businessId: business[0]?.id,
+          categoryId: input.categoryId, 
+          supplierId: input.supplierId,
+          expenseNumber, 
+          amount: input.amount, 
+          description: input.description,
+          expenseDate: new Date(input.expenseDate), 
+          paymentMethod: input.paymentMethod,
+          accountId, 
+          billId: input.billId, 
+          receiptImageUrl: input.receiptImageUrl,
+          mpesaTxnId: input.mpesaTxnId, 
+          isReimbursable: input.isReimbursable,
+          reimbursedTo: input.reimbursedTo, 
+          enteredBy: userId,
+          isFixedAsset: input.isFixedAsset,
+          usefulLifeMonths: input.usefulLifeMonths,
+          depreciationMethod: input.depreciationMethod,
+          salvageValue: input.salvageValue,
         } as any).returning();
         expenseId = result.id;
 
@@ -165,15 +257,100 @@ export const expensesRouter = createRouter({
         }
 
         if (accountId) {
-          const acct = await tx.select().from(accounts).where(eq(accounts.id, accountId)).limit(1);
-          if (acct[0]) {
-            const newBal = d(acct[0].currentBalance).minus(d(input.amount));
+          const cashAcct = await tx.select().from(accounts).where(eq(accounts.id, accountId)).limit(1);
+          if (cashAcct[0]) {
+            const cashNewBal = d(cashAcct[0].currentBalance).minus(d(input.amount));
             await tx.insert(ledgerEntries).values({
               accountId, transactionType: "expense", transactionId: expenseId,
-              entryType: "debit", amount: input.amount, balanceAfter: newBal.toFixed(2),
+              entryType: "credit", amount: input.amount, balanceAfter: cashNewBal.toFixed(2),
               entryDate: new Date(input.expenseDate), createdBy: userId, refNo: expenseNumber,
             } as any).returning();
-            await tx.update(accounts).set({ currentBalance: newBal.toFixed(2) }).where(eq(accounts.id, accountId));
+            await tx.update(accounts).set({ currentBalance: cashNewBal.toFixed(2) }).where(eq(accounts.id, accountId));
+
+            if (input.isFixedAsset && input.assetAccountId) {
+              const assetAcct = await tx.select().from(accounts).where(eq(accounts.id, input.assetAccountId)).limit(1);
+              if (assetAcct[0]) {
+                const assetNewBal = d(assetAcct[0].currentBalance || "0").plus(d(input.amount));
+                await tx.insert(ledgerEntries).values({
+                  accountId: input.assetAccountId, transactionType: "expense", transactionId: expenseId,
+                  entryType: "debit", amount: input.amount, balanceAfter: assetNewBal.toFixed(2),
+                  entryDate: new Date(input.expenseDate), createdBy: userId, refNo: expenseNumber,
+                } as any).returning();
+                await tx.update(accounts).set({ currentBalance: assetNewBal.toFixed(2) }).where(eq(accounts.id, input.assetAccountId));
+              }
+            } else if (input.billId && business[0]?.id) {
+              const apAccount = await tx.query.accounts.findFirst({
+                where: and(
+                  eq(accounts.accountSubType, "accounts_payable" as any),
+                  eq(accounts.businessId, business[0].id),
+                  isNull(accounts.deletedAt)
+                ),
+              });
+              if (apAccount && apAccount.id !== accountId) {
+                const apNewBal = d(apAccount.currentBalance || "0").minus(d(input.amount));
+                await tx.insert(ledgerEntries).values({
+                  accountId: apAccount.id, transactionType: "bill_payment" as any, transactionId: expenseId,
+                  entryType: "debit", amount: input.amount, balanceAfter: apNewBal.toFixed(2),
+                  entryDate: new Date(input.expenseDate), createdBy: userId, refNo: expenseNumber,
+                } as any).returning();
+                await tx.update(accounts).set({ currentBalance: apNewBal.toFixed(2) }).where(eq(accounts.id, apAccount.id));
+              }
+            } else {
+              const category = await tx.select().from(expenseCategories).where(
+                and(eq(expenseCategories.id, input.categoryId), isNull(expenseCategories.deletedAt))
+              ).limit(1);
+
+              let expenseAccountId: number | undefined;
+              if (category[0]) {
+                if (category[0].defaultAccountId) {
+                  expenseAccountId = category[0].defaultAccountId;
+                } else if (category[0].accountingClass) {
+                  const subTypeMap: Record<string, string> = {
+                    cogs: "cogs",
+                    operating_expense: "operating_expense",
+                    admin_expense: "admin_expense",
+                    marketing: "marketing_expense",
+                    depreciation: "depreciation_expense",
+                    other: "other_expense",
+                  };
+                  const subType = subTypeMap[category[0].accountingClass];
+                  if (subType) {
+                    const expenseAcct = await tx.query.accounts.findFirst({
+                      where: and(
+                        eq(accounts.accountSubType, subType as any),
+                        eq(accounts.businessId, business[0]?.id),
+                        isNull(accounts.deletedAt)
+                      ),
+                    });
+                    if (expenseAcct) expenseAccountId = expenseAcct.id;
+                  }
+                }
+              }
+
+              if (!expenseAccountId) {
+                const fallback = await tx.query.accounts.findFirst({
+                  where: and(
+                    eq(accounts.accountSubType, "operating_expense" as any),
+                    eq(accounts.businessId, business[0]?.id),
+                    isNull(accounts.deletedAt)
+                  ),
+                });
+                if (fallback) expenseAccountId = fallback.id;
+              }
+
+              if (expenseAccountId && expenseAccountId !== accountId) {
+                const expenseAcct = await tx.select().from(accounts).where(eq(accounts.id, expenseAccountId)).limit(1);
+                if (expenseAcct[0]) {
+                  const expenseNewBal = d(expenseAcct[0].currentBalance || "0").plus(d(input.amount));
+                  await tx.insert(ledgerEntries).values({
+                    accountId: expenseAccountId, transactionType: "expense", transactionId: expenseId,
+                    entryType: "debit", amount: input.amount, balanceAfter: expenseNewBal.toFixed(2),
+                    entryDate: new Date(input.expenseDate), createdBy: userId, refNo: expenseNumber,
+                  } as any).returning();
+                  await tx.update(accounts).set({ currentBalance: expenseNewBal.toFixed(2) }).where(eq(accounts.id, expenseAccountId));
+                }
+              }
+            }
           }
         }
 
@@ -250,12 +427,28 @@ export const expensesRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      // To validate attachment deletion, we need to fetch it first to know its recordId
-      const atts = await db.select().from(attachments).where(eq(attachments.id, input.id)).limit(1);
-      if (atts.length > 0 && atts[0].recordType === "expense") {
-        await requireAuthorizedEntity(ctx, expenses, Number(atts[0].recordId));
-      }
       await db.delete(attachments).where(eq(attachments.id, input.id));
       return { success: true };
+    }),
+
+  getFixedAssets: expenseQuery
+    .input(z.object({ locationId: z.number().optional(), page: z.number().default(1), pageSize: z.number().default(50) }))
+    .query(async ({ input, ctx }) => {
+      const db = getDb();
+      const conditions = [
+        isNull(expenses.deletedAt),
+        eq(expenses.isFixedAsset, true)
+      ];
+      if (input.locationId) {
+        await requireAuthorizedLocation(ctx, input.locationId);
+        conditions.push(eq(expenses.locationId, input.locationId));
+      }
+      const offset = (input.page - 1) * input.pageSize;
+      const result = await db.select().from(expenses)
+        .where(and(...conditions))
+        .orderBy(desc(expenses.expenseDate))
+        .limit(input.pageSize)
+        .offset(offset);
+      return result;
     }),
 });
