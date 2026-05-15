@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, billQuery, billCreate, billPay, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, businesses, expenseCategories } from "@db/schema";
+import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, businesses, expenseCategories, expenses } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { notFutureDateString } from "./lib/future-date";
@@ -338,52 +338,40 @@ export const billsRouter = createRouter({
               ).limit(1);
 
           if (existingAp[0]) {
-            const billBalanceDue = d(bill.balanceDue || "0");
-            const apDebitAmount = d.min(paymentAmount, billBalanceDue);
-            const prepaymentAmount = paymentAmount.gt(billBalanceDue) ? paymentAmount.minus(billBalanceDue) : d(0);
+            const apNewBal = d(existingAp[0].currentBalance || "0").minus(paymentAmount);
             const paymentDateStr = new Date(input.paymentDate).toISOString().split("T")[0];
-
-            if (apDebitAmount.gt(0)) {
-              const apNewBal = d(existingAp[0].currentBalance || "0").minus(apDebitAmount);
-              await tx.insert(ledgerEntries).values({
-                accountId: existingAp[0].id,
-                transactionType: "bill_payment" as any,
-                transactionId: paymentId,
-                entryType: "debit",
-                amount: apDebitAmount.toFixed(2),
-                balanceAfter: apNewBal.toFixed(2),
-                entryDate: paymentDateStr,
-                createdBy: enteredBy,
-                description: `Bill Payment: ${input.reference || bill.description}`,
-              } as any).returning();
-              await tx.update(accounts).set({ currentBalance: apNewBal.toFixed(2) }).where(eq(accounts.id, existingAp[0].id));
-            }
-
-            if (prepaymentAmount.gt(0)) {
-              const prepayAcct = await tx.query.accounts.findFirst({
-                where: and(
-                  eq(accounts.accountCode, "1550"),
-                  eq(accounts.businessId, bill.businessId),
-                  isNull(accounts.deletedAt)
-                ),
-              });
-              if (prepayAcct) {
-                const prepayNewBal = d(prepayAcct.currentBalance || "0").plus(prepaymentAmount);
-                await tx.insert(ledgerEntries).values({
-                  accountId: prepayAcct.id,
-                  transactionType: "bill_payment" as any,
-                  transactionId: paymentId,
-                  entryType: "debit",
-                  amount: prepaymentAmount.toFixed(2),
-                  balanceAfter: prepayNewBal.toFixed(2),
-                  entryDate: paymentDateStr,
-                  createdBy: enteredBy,
-                  description: `Supplier Overpayment (${input.reference || bill.description})`,
-                } as any).returning();
-                await tx.update(accounts).set({ currentBalance: prepayNewBal.toFixed(2) }).where(eq(accounts.id, prepayAcct.id));
-              }
-            }
+            await tx.insert(ledgerEntries).values({
+              accountId: existingAp[0].id,
+              transactionType: "bill_payment" as any,
+              transactionId: paymentId,
+              entryType: "debit",
+              amount: input.amount,
+              balanceAfter: apNewBal.toFixed(2),
+              entryDate: paymentDateStr,
+              createdBy: enteredBy,
+              description: `Bill Payment: ${input.reference || bill.description}`,
+            } as any).returning();
+            await tx.update(accounts).set({ currentBalance: apNewBal.toFixed(2) }).where(eq(accounts.id, existingAp[0].id));
           }
+
+          const categoryId = bill.categoryId ?? 1;
+          const expenseNumber = `EXP-BP-${String(paymentId).padStart(6, "0")}`;
+          const paymentDateStr = new Date(input.paymentDate).toISOString().split("T")[0];
+          await tx.insert(expenses).values({
+            locationId: bill.locationId,
+            businessId: bill.businessId,
+            categoryId,
+            supplierId: bill.supplierId,
+            expenseNumber,
+            billId: input.billId,
+            amount: input.amount,
+            description: `Bill Payment: ${input.reference || bill.description}`,
+            expenseDate: new Date(input.paymentDate),
+            paymentMethod: input.paymentMethod,
+            accountId: cashAccountId ?? null,
+            enteredBy,
+            refNo: bill.billNumber ?? `BILL-${String(bill.id).padStart(4, "0")}`,
+          } as any).returning();
         }
       });
 
