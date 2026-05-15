@@ -43,20 +43,20 @@ async function seed() {
 
   console.log("Created accounts");
 
-  // Create expense categories
+  // Create expense categories (defaultAccountId is required; run seed-accounting.ts first for proper COA linking)
   await db.insert(expenseCategories).values([
-    { name: "Food Supplies", description: "Ingredients and raw materials", color: "#C73E1D" },
-    { name: "Beverages", description: "Drinks and beverages stock", color: "#D4A854" },
-    { name: "Utilities", description: "Electricity, water, internet", color: "#2D7D46" },
-    { name: "Rent", description: "Property lease payments", color: "#4A5568" },
-    { name: "Salaries & Wages", description: "Staff payroll", color: "#3182CE" },
-    { name: "Marketing", description: "Advertising and promotions", color: "#805AD5" },
-    { name: "Maintenance & Repairs", description: "Equipment fixes", color: "#DD6B20" },
-    { name: "Transport & Delivery", description: "Logistics costs", color: "#38B2AC" },
-    { name: "Licenses & Permits", description: "County health permits", color: "#718096" },
-    { name: "Fuel", description: "Petrol and diesel", color: "#E53E3E" },
-    { name: "Airtime/Data", description: "Mobile communication", color: "#319795" },
-    { name: "Miscellaneous", description: "Uncategorized expenses", color: "#A0AEC0" },
+    { name: "Food Supplies", description: "Ingredients and raw materials", color: "#C73E1D", defaultAccountId: 1 },
+    { name: "Beverages", description: "Drinks and beverages stock", color: "#D4A854", defaultAccountId: 1 },
+    { name: "Utilities", description: "Electricity, water, internet", color: "#2D7D46", defaultAccountId: 1 },
+    { name: "Rent", description: "Property lease payments", color: "#4A5568", defaultAccountId: 1 },
+    { name: "Salaries & Wages", description: "Staff payroll", color: "#3182CE", defaultAccountId: 1 },
+    { name: "Marketing", description: "Advertising and promotions", color: "#805AD5", defaultAccountId: 1 },
+    { name: "Maintenance & Repairs", description: "Equipment fixes", color: "#DD6B20", defaultAccountId: 1 },
+    { name: "Transport & Delivery", description: "Logistics costs", color: "#38B2AC", defaultAccountId: 1 },
+    { name: "Licenses & Permits", description: "County health permits", color: "#718096", defaultAccountId: 1 },
+    { name: "Fuel", description: "Petrol and diesel", color: "#E53E3E", defaultAccountId: 1 },
+    { name: "Airtime/Data", description: "Mobile communication", color: "#319795", defaultAccountId: 1 },
+    { name: "Miscellaneous", description: "Uncategorized expenses", color: "#A0AEC0", defaultAccountId: 1 },
   ]);
 
   console.log("Created expense categories");

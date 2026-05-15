@@ -64,6 +64,9 @@ export const accountsRouter = createRouter({
       accountNumber: z.string().max(100).optional(),
       openingBalance: z.string().optional(),
       isPaymentMethod: z.boolean().optional(),
+      accountType: z.enum(["asset", "liability", "equity", "revenue", "expense"]).optional(),
+      accountSubType: z.string().optional(),
+      isContra: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
@@ -80,6 +83,9 @@ export const accountsRouter = createRouter({
         accountCode: input.accountCode, accountNumber: input.accountNumber,
         openingBalance: ob, currentBalance: ob,
         isPaymentMethod: input.isPaymentMethod ?? false,
+        accountType: input.accountType as any,
+        accountSubType: input.accountSubType as any,
+        isContra: input.isContra ?? false,
       }).returning();
       return { id: result.id, success: true };
     }),
@@ -92,6 +98,9 @@ export const accountsRouter = createRouter({
       accountNumber: z.string().max(100).optional(),
       isPaymentMethod: z.boolean().optional(),
       isActive: z.boolean().optional(),
+      accountType: z.enum(["asset", "liability", "equity", "revenue", "expense"]).optional(),
+      accountSubType: z.string().optional(),
+      isContra: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();

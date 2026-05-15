@@ -275,7 +275,7 @@ export const expenseCategories = pgTable("expense_categories", {
   description: text("description"),
   color: varchar("color", { length: 20 }).default("#C73E1D"),
   accountingClass: accountingClassEnum("accountingClass").default("operating_expense"),
-  defaultAccountId: bigint("defaultAccountId", { mode: "number" }),
+  defaultAccountId: bigint("defaultAccountId", { mode: "number" }).notNull(),
   externalAccountCode: varchar("externalAccountCode", { length: 50 }),
   externalSystem: varchar("externalSystem", { length: 50 }),
   isActive: boolean("isActive").default(true).notNull(),
@@ -284,6 +284,7 @@ export const expenseCategories = pgTable("expense_categories", {
   deletedAt: timestamp("deletedAt"),
 }, (table) => ({
   businessIdx: index("idx_expense_category_business").on(table.businessId),
+  defaultAccountIdx: index("idx_expense_categories_default_account").on(table.defaultAccountId),
 }));
 
 export type ExpenseCategory = typeof expenseCategories.$inferSelect;

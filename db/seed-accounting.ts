@@ -120,16 +120,35 @@ export async function seedAccountingData(businessId: number, locationId?: number
 
   for (const cat of defaultExpenseCategories) {
     const existing = await db.query.expenseCategories.findFirst({
-      where: eq(expenseCategories.name, cat.name),
+      where: and(eq(expenseCategories.name, cat.name), eq(expenseCategories.businessId, businessId)),
     });
     if (!existing) {
-      await db.insert(expenseCategories).values(cat);
+      const mapping = expenseCategoryMappings[cat.name];
+      let defaultAccountId: number | undefined;
+      if (mapping) {
+        const account = await db.query.accounts.findFirst({
+          where: and(
+            eq(accounts.accountCode, mapping.defaultAccountCode),
+            eq(accounts.businessId, businessId)
+          ),
+        });
+        if (account) {
+          defaultAccountId = account.id;
+        }
+      }
+      await db.insert(expenseCategories).values({
+        ...cat,
+        businessId,
+        locationId,
+        accountingClass: (mapping?.accountingClass || "operating_expense") as any,
+        defaultAccountId: defaultAccountId || 1,
+      } as any);
     }
   }
 
   for (const [categoryName, mapping] of Object.entries(expenseCategoryMappings)) {
     const category = await db.query.expenseCategories.findFirst({
-      where: eq(expenseCategories.name, categoryName),
+      where: and(eq(expenseCategories.name, categoryName), eq(expenseCategories.businessId, businessId)),
     });
 
     if (category) {
@@ -140,9 +159,8 @@ export async function seedAccountingData(businessId: number, locationId?: number
         ),
       });
 
-      if (account) {
+      if (account && category.defaultAccountId !== account.id) {
         await db.update(expenseCategories).set({
-          accountingClass: mapping.accountingClass as any,
           defaultAccountId: account.id,
         } as any).where(eq(expenseCategories.id, category.id));
       }

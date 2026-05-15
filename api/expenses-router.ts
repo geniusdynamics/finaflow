@@ -47,10 +47,15 @@ export const updateExpenseInputSchema = z.object({
 });
 
 export const expensesRouter = createRouter({
-  categories: expenseQuery.query(async () => {
+  categories: expenseQuery.query(async ({ ctx }) => {
     const db = getDb();
+    const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
+    if (!businessId) return [];
     return db.select().from(expenseCategories)
-      .where(isNull(expenseCategories.deletedAt))
+      .where(and(
+        isNull(expenseCategories.deletedAt),
+        sql`((${isNull(expenseCategories.businessId)}) OR (${eq(expenseCategories.businessId, businessId)}))`
+      ))
       .orderBy(expenseCategories.name);
   }),
 
@@ -59,6 +64,7 @@ export const expensesRouter = createRouter({
       name: z.string().min(1).max(100), 
       description: z.string().optional(), 
       color: z.string().optional(),
+      accountingClass: z.enum(["cogs", "operating_expense", "admin_expense", "marketing", "depreciation", "other"]).optional(),
       defaultAccountId: z.number(),
     }))
     .mutation(async ({ input, ctx }) => {
@@ -78,6 +84,7 @@ export const expensesRouter = createRouter({
         name: input.name, 
         description: input.description, 
         color: input.color ?? "#C73E1D",
+        accountingClass: (input.accountingClass || "operating_expense") as any,
         defaultAccountId: input.defaultAccountId,
       }).returning();
       
@@ -300,45 +307,16 @@ export const expensesRouter = createRouter({
                 and(eq(expenseCategories.id, input.categoryId), isNull(expenseCategories.deletedAt))
               ).limit(1);
 
-              let expenseAccountId: number | undefined;
-              if (category[0]) {
-                if (category[0].defaultAccountId) {
-                  expenseAccountId = category[0].defaultAccountId;
-                } else if (category[0].accountingClass) {
-                  const subTypeMap: Record<string, string> = {
-                    cogs: "cogs",
-                    operating_expense: "operating_expense",
-                    admin_expense: "admin_expense",
-                    marketing: "marketing_expense",
-                    depreciation: "depreciation_expense",
-                    other: "other_expense",
-                  };
-                  const subType = subTypeMap[category[0].accountingClass];
-                  if (subType) {
-                    const expenseAcct = await tx.query.accounts.findFirst({
-                      where: and(
-                        eq(accounts.accountSubType, subType as any),
-                        eq(accounts.businessId, business[0]?.id),
-                        isNull(accounts.deletedAt)
-                      ),
-                    });
-                    if (expenseAcct) expenseAccountId = expenseAcct.id;
-                  }
-                }
+              if (!category[0] || !category[0].defaultAccountId) {
+                throw new Error(
+                  "Expense category is not linked to a chart of accounts expense entry. " +
+                  "Please update the category settings to select a default expense account."
+                );
               }
 
-              if (!expenseAccountId) {
-                const fallback = await tx.query.accounts.findFirst({
-                  where: and(
-                    eq(accounts.accountSubType, "operating_expense" as any),
-                    eq(accounts.businessId, business[0]?.id),
-                    isNull(accounts.deletedAt)
-                  ),
-                });
-                if (fallback) expenseAccountId = fallback.id;
-              }
+              const expenseAccountId = category[0].defaultAccountId;
 
-              if (expenseAccountId && expenseAccountId !== accountId) {
+              if (expenseAccountId !== accountId) {
                 const expenseAcct = await tx.select().from(accounts).where(eq(accounts.id, expenseAccountId)).limit(1);
                 if (expenseAcct[0]) {
                   const expenseNewBal = d(expenseAcct[0].currentBalance || "0").plus(d(input.amount));

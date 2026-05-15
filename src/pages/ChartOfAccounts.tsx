@@ -50,11 +50,11 @@ export function ChartOfAccounts({ embedded }: { embedded?: boolean }) {
   };
 
   const accountTypeLabels: Record<string, { label: string; icon: any; color: string }> = {
-    asset: { label: "Assets", icon: TrendingUp, color: "text-[#2E7D32]" },
-    liability: { label: "Liabilities", icon: TrendingDown, color: "text-[#D32F2F]" },
-    equity: { label: "Equity", icon: DollarSign, color: "text-[#D4A854]" },
-    revenue: { label: "Revenue", icon: TrendingUp, color: "text-[#2E7D32]" },
-    expense: { label: "Expenses", icon: TrendingDown, color: "text-[#D32F2F]" },
+    asset: { label: "1000 - Assets", icon: TrendingUp, color: "text-[#2E7D32]" },
+    liability: { label: "2000 - Liabilities", icon: TrendingDown, color: "text-[#D32F2F]" },
+    equity: { label: "3000 - Equity", icon: DollarSign, color: "text-[#D4A854]" },
+    revenue: { label: "4000 - Revenue", icon: TrendingUp, color: "text-[#2E7D32]" },
+    expense: { label: "5000 - Expenses", icon: TrendingDown, color: "text-[#D32F2F]" },
   };
 
   const content = (
@@ -173,7 +173,7 @@ export function ChartOfAccounts({ embedded }: { embedded?: boolean }) {
                                   {account.accountCode || "-"}
                                 </td>
                                 <td className="py-2">
-                                  <div className="font-medium">{account.name}</div>
+                                  <div className="font-medium">{account.accountCode || "---"} - {account.name}</div>
                                   {account.description && (
                                     <div className="text-xs text-[#8D8A87]">{account.description}</div>
                                   )}

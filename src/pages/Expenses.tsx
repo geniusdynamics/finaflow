@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
@@ -97,7 +97,7 @@ export function Expenses() {
     onError: (err) => toast.error(err.message || "Failed to add expense"),
   });
   const createCat = trpc.expenses.createCategory.useMutation({
-    onSuccess: () => { toast.success("Category added"); setCatOpen(false); setCatForm({ name: "", description: "", color: "#C73E1D", defaultAccountId: "" }); refetchCats(); },
+    onSuccess: () => { toast.success("Category added"); setCatOpen(false); setCatForm({ name: "", description: "", color: "#C73E1D", accountingClass: "operating_expense", defaultAccountId: "" }); refetchCats(); },
     onError: (err) => toast.error(err.message || "Failed to add category"),
   });
   const updateCat = trpc.expenses.updateCategory.useMutation({
@@ -118,13 +118,20 @@ export function Expenses() {
     expenseDate: getLocalDateString(), paymentMethod: "cash" as const,
     accountId: "", billId: "",
   });
-  const [catForm, setCatForm] = useState({ name: "", description: "", color: "#C73E1D", defaultAccountId: "" });
+  const [catForm, setCatForm] = useState({ name: "", description: "", color: "#C73E1D", accountingClass: "operating_expense", defaultAccountId: "" });
   const [attachments, setAttachments] = useState<{ imageData: string; mimeType: string; caption: string }[]>([]);
   const todayDate = getLocalDateString();
 
   const photosEnabled = settings?.photosExpenses !== "false";
   const selectedSupplier = suppliers?.find(s => s.id.toString() === form.supplierId);
   const selectedBill = bills?.find(b => b.id.toString() === form.billId);
+
+  // When a bill is selected, auto-fill the supplier from that bill
+  useEffect(() => {
+    if (form.billId && selectedBill && selectedBill.supplierId) {
+      setForm(p => ({ ...p, supplierId: String(selectedBill.supplierId) }));
+    }
+  }, [form.billId]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -162,7 +169,11 @@ export function Expenses() {
     e.preventDefault();
     if (!catForm.name.trim()) { toast.error("Category name is required"); return; }
     if (!catForm.defaultAccountId) { toast.error("Please select a default expense account"); return; }
-    createCat.mutate({ name: catForm.name, description: catForm.description, color: catForm.color, defaultAccountId: +catForm.defaultAccountId });
+    createCat.mutate({
+      name: catForm.name, description: catForm.description, color: catForm.color,
+      accountingClass: catForm.accountingClass as any,
+      defaultAccountId: +catForm.defaultAccountId,
+    });
   };
 
   const totalExpenses = expenses?.reduce((sum, e) => sum + parseFloat(e.amount), 0) ?? 0;
@@ -221,11 +232,12 @@ export function Expenses() {
                       <option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                     </select>
                   </div>
-                  <div><Label>Category</Label>
-                    <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required>
+                  <div><Label>Category {form.billId && <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span>}</Label>
+                    <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required={!form.billId} disabled={!!form.billId}>
                       <option value="">{catsLoading ? "Loading..." : categories?.length ? "Select" : "No categories"}</option>
                       {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
+                    {form.billId && <p className="mt-1 text-xs text-[#2E7D32]">Category is determined by the linked bill.</p>}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -246,9 +258,9 @@ export function Expenses() {
                     {accounts?.filter(a => a.isPaymentMethod)?.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name}{loc ? ` (${loc})` : ""}</option>; })}
                   </select>
                 </div>
-                <div><Label>Supplier</Label>
-                  <select value={form.supplierId} onChange={e => setForm(p => ({ ...p, supplierId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
-                    <option value="">Optional</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <div><Label>Supplier {form.billId ? <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span> : ""}</Label>
+                  <select value={form.supplierId} onChange={e => setForm(p => ({ ...p, supplierId: e.target.value, billId: "" }))} className="w-full rounded border px-3 py-2 text-sm" disabled={!!form.billId}>
+                    <option value="">{form.billId ? "Auto-filled from bill" : "Optional"}</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
                 {selectedSupplier && (
@@ -260,8 +272,8 @@ export function Expenses() {
                 )}
                 <div><Label>Link to Bill <span className="text-[#8D8A87] font-normal">(optional)</span></Label>
                   <select value={form.billId} onChange={e => setForm(p => ({ ...p, billId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
-                    <option value="">No bill</option>
-                    {bills?.filter(b => b.status !== "paid" && b.status !== "cancelled").map(b => (
+                    <option value="">{form.supplierId ? "No bill (for this supplier)" : "No bill"}</option>
+                    {bills?.filter(b => b.status !== "paid" && b.status !== "cancelled" && (!form.supplierId || b.supplierId?.toString() === form.supplierId)).map(b => (
                       <option key={b.id} value={b.id}>{b.billNumber ?? `BILL-${String(b.id).padStart(4,"0")}`} · {b.description} · Bal: {formatKES(b.balanceDue)}</option>
                     ))}
                   </select>
@@ -402,10 +414,21 @@ export function Expenses() {
                     <div><Label>Description</Label><Input value={catForm.description} onChange={e => setCatForm(p => ({ ...p, description: e.target.value }))} /></div>
                     <div><Label>Color</Label><div className="flex items-center gap-2"><input type="color" value={catForm.color} onChange={e => setCatForm(p => ({ ...p, color: e.target.value }))} className="h-10 w-10 rounded border p-0.5" /><span className="text-xs text-[#8D8A87]">{catForm.color}</span></div></div>
                     <div>
+                      <Label>Classification</Label>
+                      <select value={catForm.accountingClass} onChange={e => setCatForm(p => ({ ...p, accountingClass: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
+                        <option value="operating_expense">Operating Expense</option>
+                        <option value="admin_expense">Administrative Expense</option>
+                        <option value="cogs">Cost of Goods Sold</option>
+                        <option value="marketing">Marketing Expense</option>
+                        <option value="depreciation">Depreciation</option>
+                        <option value="other">Other Expense</option>
+                      </select>
+                    </div>
+                    <div>
                       <Label>Default Expense Account</Label>
                       <select value={catForm.defaultAccountId} onChange={e => setCatForm(p => ({ ...p, defaultAccountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required>
                         <option value="">Select expense account...</option>
-                        {coa?.expense?.map(a => <option key={a.id} value={a.id}>{a.accountCode} - {a.name}</option>)}
+                        {coa?.grouped?.expense?.map(a => <option key={a.id} value={a.id}>{a.accountCode} - {a.name}</option>)}
                       </select>
                     </div>
                     <Button type="submit" className="w-full bg-[#2E7D32]" disabled={createCat.isPending}>{createCat.isPending ? "Adding..." : "Add Category"}</Button>
@@ -428,6 +451,13 @@ export function Expenses() {
                 <span>{c.name}</span>
                 {editCat === c.id ? (
                   <>
+                    <select value={c.accountingClass ?? "operating_expense"} onChange={e => updateCat.mutate({ id: c.id, accountingClass: e.target.value as any })} className="w-28 rounded border px-1 py-0.5 text-[10px]">
+                      <option value="operating_expense">Operating</option>
+                      <option value="admin_expense">Admin</option>
+                      <option value="cogs">COGS</option>
+                      <option value="marketing">Marketing</option>
+                      <option value="other">Other</option>
+                    </select>
                     <input type="color" value={c.color ?? "#C73E1D"} onChange={e => updateCat.mutate({ id: c.id, color: e.target.value })} className="h-5 w-5 rounded p-0" />
                     <button onClick={() => setEditCat(null)}><X className="h-3 w-3" /></button>
                   </>
