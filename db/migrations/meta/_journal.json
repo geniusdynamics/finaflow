@@ -36,6 +36,13 @@
       "when": 1778768400000,
       "tag": "0004_expense_category_accounting_class_assignment",
       "breakpoints": false
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1778838878442,
+      "tag": "0005_strange_warbird",
+      "breakpoints": true
     }
   ]
 }
