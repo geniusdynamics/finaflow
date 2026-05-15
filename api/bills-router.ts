@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, billQuery, billCreate, billPay, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, businesses, expenseCategories } from "@db/schema";
+import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, businesses, expenseCategories, expenses } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { notFutureDateString } from "./lib/future-date";
@@ -383,6 +383,24 @@ export const billsRouter = createRouter({
                 await tx.update(accounts).set({ currentBalance: prepayNewBal.toFixed(2) }).where(eq(accounts.id, prepayAcct.id));
               }
             }
+
+            const categoryId = bill.categoryId ?? 1;
+            const expenseNumber = `EXP-BP-${String(paymentId).padStart(6, "0")}`;
+            await tx.insert(expenses).values({
+              locationId: bill.locationId,
+              businessId: bill.businessId,
+              categoryId,
+              supplierId: bill.supplierId,
+              expenseNumber,
+              billId: input.billId,
+              amount: input.amount,
+              description: `Bill Payment: ${input.reference || bill.description}`,
+              expenseDate: new Date(input.paymentDate),
+              paymentMethod: input.paymentMethod,
+              accountId: cashAccountId ?? null,
+              enteredBy,
+              refNo: bill.billNumber ?? `BILL-${String(bill.id).padStart(4, "0")}`,
+            } as any).returning();
           }
         }
       });

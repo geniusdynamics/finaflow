@@ -18,6 +18,7 @@
     "test:coverage": "vitest run --coverage",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:migrate:run": "tsx scripts/run-migrations.ts",
     "db:push": "drizzle-kit push"
   },
   "portless": {

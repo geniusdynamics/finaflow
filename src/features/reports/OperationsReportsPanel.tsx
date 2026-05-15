@@ -312,7 +312,7 @@ export function OperationsReportsPanel() {
                   <Download className="ml-auto h-4 w-4 text-gray-500" />
                 </button>
                 <button onClick={exportExpenses} className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-left hover:bg-[#F5EDE6] transition-colors">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10"><ExpensesIcon className="h-5 w-5 text-red-600" /></div>
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-500/10"><Receipt className="h-5 w-5 text-red-600" /></div>
                   <div>
                     <p className="text-sm font-medium text-gray-900">Export Expenses</p>
                     <p className="text-xs text-gray-500">{expenseData?.length ?? 0} records</p>
@@ -338,7 +338,6 @@ export function OperationsReportsPanel() {
               </div>
             </CardContent>
           </Card>
-        </div>
         </div>
       )}
 
