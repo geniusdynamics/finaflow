@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Receipt, Tag, Pencil, X, AlertCircle, Camera, FileText, Download, Printer, Wallet, TrendingUp, Filter } from "lucide-react";
+import { Plus, Trash2, Receipt, Tag, Pencil, X, AlertCircle, Camera, FileText, Download, Printer, Wallet, TrendingUp, Filter, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -56,6 +56,7 @@ export function Expenses() {
   const [open, setOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
   const [editCat, setEditCat] = useState<number | null>(null);
+  const [tab, setTab] = useState<"expenses" | "categories">("expenses");
 
   // Filters
   const [branchFilter, setBranchFilter] = useState<string>("");
@@ -213,6 +214,18 @@ export function Expenses() {
   return (
     <Layout>
       <div className="space-y-6">
+        {/* Section tabs */}
+        <div className="flex items-center gap-2 border-b border-[#E8E0D8]">
+          <button onClick={() => setTab("expenses")} className={`px-4 py-2 text-sm font-medium ${tab === "expenses" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <Receipt className="mr-1 inline h-4 w-4"/>Expenses
+          </button>
+          <button onClick={() => setTab("categories")} className={`px-4 py-2 text-sm font-medium ${tab === "categories" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <BookOpen className="mr-1 inline h-4 w-4"/>Categories
+          </button>
+        </div>
+
+        {tab === "expenses" && (
+        <>
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -341,18 +354,23 @@ export function Expenses() {
         </div>
 
         {/* Per-Branch Breakdown */}
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-2">
           {locations?.map(loc => {
             const locBalance = accountBalances?.byLocation[loc.id] ?? 0;
             const locIncome = prevDayIncome?.byBranch.find(b => b.locationId === loc.id)?.total ?? "0";
             return (
               <Card key={loc.id} className="border-[#E8E0D8] bg-white">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-[#2D2A26]">{loc.name}</p>
-                    <div className="mt-1 flex gap-4">
-                        <span className="text-xs text-[#8D8A87]">Balance: <span className="font-mono font-semibold text-[#2E7D32]">{formatLocationBalance(locBalance)}</span></span>
-                      <span className="text-xs text-[#8D8A87]">Income: <span className="font-mono font-semibold text-[#D4A854]">{formatKES(locIncome)}</span></span>
+                <CardContent className="p-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#F5EDE6] text-xs font-bold text-[#C73E1D]">
+                      {loc.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#2D2A26]">{loc.name}</p>
+                      <div className="flex gap-3 text-[10px] text-[#8D8A87]">
+                        <span>Bal: <span className="font-mono font-semibold text-[#2E7D32]">{formatLocationBalance(locBalance)}</span></span>
+                        <span>Inc: <span className="font-mono font-semibold text-[#D4A854]">{formatKES(locIncome)}</span></span>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -398,6 +416,11 @@ export function Expenses() {
           </CardContent>
         </Card>
 
+        </>
+        )}
+
+        {tab === "categories" && (
+        <>
         {/* Categories - Tag Style */}
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -471,7 +494,11 @@ export function Expenses() {
             ))}
           </div>
         </div>
+        </>
+        )}
 
+        {tab === "expenses" && (
+        <>
         {/* Expenses Table */}
         <Card className="border-[#E8E0D8]">
           <CardHeader className="pb-3">
@@ -548,6 +575,8 @@ export function Expenses() {
             </div>
           </CardContent>
         </Card>
+        </>
+        )}
       </div>
     </Layout>
   );

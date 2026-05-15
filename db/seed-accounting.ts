@@ -9,6 +9,7 @@ const defaultAccounts = [
   { accountCode: "1300", name: "Accounts Receivable", accountType: "asset", accountSubType: "accounts_receivable", type: "bank_account" as const, openingBalance: "0.00" },
   { accountCode: "1400", name: "Inventory", accountType: "asset", accountSubType: "inventory", type: "bank_account" as const, openingBalance: "0.00" },
   { accountCode: "1500", name: "Prepaid Expenses", accountType: "asset", accountSubType: "prepaid_expense", type: "bank_account" as const, openingBalance: "0.00" },
+  { accountCode: "1550", name: "Supplier Prepayments", accountType: "asset", accountSubType: "accounts_receivable", type: "bank_account" as const, openingBalance: "0.00" },
   { accountCode: "1600", name: "Office Equipment", accountType: "asset", accountSubType: "fixed_asset", type: "bank_account" as const, openingBalance: "0.00" },
   { accountCode: "1610", name: "Accumulated Depreciation - Office Equipment", accountType: "asset", accountSubType: "accumulated_depreciation", type: "bank_account" as const, isContra: true, openingBalance: "0.00" },
   { accountCode: "1700", name: "Furniture & Fixtures", accountType: "asset", accountSubType: "fixed_asset", type: "bank_account" as const, openingBalance: "0.00" },

@@ -51,7 +51,16 @@ export function Reports() {
           </button>
         </div>
 
-        {tab === "operations" ? <OperationsReportsPanel /> : <FinancialReportsPanel year={year} />}
+        {tab === "operations" && (
+          <div className="mt-6">
+            <OperationsReportsPanel />
+          </div>
+        )}
+        {tab === "financial" && (
+          <div className="mt-6">
+            <FinancialReportsPanel year={year} />
+          </div>
+        )}
       </div>
     </Layout>
   );

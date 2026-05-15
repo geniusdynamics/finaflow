@@ -1,9 +1,13 @@
 // ABOUTME: Renders the shared report page header with filter controls and tab navigation.
 // ABOUTME: Contains only route-level state management and common UI elements for the reports dashboard.
+import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { ReportsToolbar } from "./ReportsToolbar";
+import { BookOpen, Receipt } from "lucide-react";
 
 export function ReportsPageShell() {
+  const [tab, setTab] = useState<"operations" | "financial">("operations");
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -18,10 +22,10 @@ export function ReportsPageShell() {
 
         {/* Tabs for Reports */}
         <div className="flex items-center gap-2 border-b border-[#E8E0D8]">
-          <button className="px-4 py-2 text-sm font-medium border-b-2 border-[#C73E1D] text-[#C73E1D]">
+          <button onClick={() => setTab("operations")} className={`px-4 py-2 text-sm font-medium ${tab === "operations" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
             <Receipt className="mr-1 inline h-4 w-4" /> Operations
           </button>
-          <button className="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-[#8D8A87] hover:text-[#2D2A26]">
+          <button onClick={() => setTab("financial")} className={`px-4 py-2 text-sm font-medium ${tab === "financial" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
             <BookOpen className="mr-1 inline h-4 w-4" /> Financial Reports
           </button>
         </div>

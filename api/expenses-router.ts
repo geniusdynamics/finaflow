@@ -293,14 +293,36 @@ export const expensesRouter = createRouter({
                   isNull(accounts.deletedAt)
                 ),
               });
-              if (apAccount && apAccount.id !== accountId) {
-                const apNewBal = d(apAccount.currentBalance || "0").minus(d(input.amount));
+              const billRecord = await tx.select().from(bills).where(eq(bills.id, input.billId)).limit(1);
+              const billBalanceDue = d(billRecord[0]?.balanceDue || "0");
+              const apDebitAmount = d.min(d(input.amount), billBalanceDue);
+              const prepaymentAmount = d(input.amount).gt(billBalanceDue) ? d(input.amount).minus(billBalanceDue) : d(0);
+              if (apAccount && apAccount.id !== accountId && apDebitAmount.gt(0)) {
+                const apNewBal = d(apAccount.currentBalance || "0").minus(apDebitAmount);
                 await tx.insert(ledgerEntries).values({
                   accountId: apAccount.id, transactionType: "bill_payment" as any, transactionId: expenseId,
-                  entryType: "debit", amount: input.amount, balanceAfter: apNewBal.toFixed(2),
+                  entryType: "debit", amount: apDebitAmount.toFixed(2), balanceAfter: apNewBal.toFixed(2),
                   entryDate: new Date(input.expenseDate), createdBy: userId, refNo: expenseNumber,
                 } as any).returning();
                 await tx.update(accounts).set({ currentBalance: apNewBal.toFixed(2) }).where(eq(accounts.id, apAccount.id));
+              }
+              if (prepaymentAmount.gt(0)) {
+                const prepayAcct = await tx.query.accounts.findFirst({
+                  where: and(
+                    eq(accounts.accountCode, "1550"),
+                    eq(accounts.businessId, business[0].id),
+                    isNull(accounts.deletedAt)
+                  ),
+                });
+                if (prepayAcct) {
+                  const prepayNewBal = d(prepayAcct.currentBalance || "0").plus(prepaymentAmount);
+                  await tx.insert(ledgerEntries).values({
+                    accountId: prepayAcct.id, transactionType: "bill_payment" as any, transactionId: expenseId,
+                    entryType: "debit", amount: prepaymentAmount.toFixed(2), balanceAfter: prepayNewBal.toFixed(2),
+                    entryDate: new Date(input.expenseDate), createdBy: userId, refNo: expenseNumber,
+                  } as any).returning();
+                  await tx.update(accounts).set({ currentBalance: prepayNewBal.toFixed(2) }).where(eq(accounts.id, prepayAcct.id));
+                }
               }
             } else {
               const category = await tx.select().from(expenseCategories).where(

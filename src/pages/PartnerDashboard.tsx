@@ -3,8 +3,7 @@ import { trpc } from "@/providers/trpc";
 import { formatKES } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Building, DollarSign, TrendingUp, Gift, Link2, Copy, CheckCircle, Users, RefreshCw, Key } from "lucide-react";
+import { Building, DollarSign, TrendingUp, Gift, Link2, Copy, CheckCircle, Users, RefreshCw, Key, Eye, KeyRound, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { AllocationsTab } from "@/components/partner/AllocationsTab";
@@ -27,6 +26,7 @@ export function PartnerDashboard() {
   });
   const utils = trpc.useUtils();
 
+  const [tab, setTab] = useState<"overview" | "allocations" | "commissions">("overview");
   const [copied, setCopied] = useState(false);
 
   const referralCode = referrals?.referralCode ?? tier?.referralCode ?? null;
@@ -88,17 +88,20 @@ export function PartnerDashboard() {
         </div>
 
         {/* Tabs for different sections */}
-        <Tabs defaultValue="overview" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="allocations">
-              <Key className="mr-2 h-4 w-4" />
-              Allocations
-            </TabsTrigger>
-            <TabsTrigger value="commissions">Commissions</TabsTrigger>
-          </TabsList>
+        <div className="flex items-center gap-2 border-b border-[#E8E0D8]">
+          <button onClick={() => setTab("overview")} className={`px-4 py-2 text-sm font-medium ${tab === "overview" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <Eye className="mr-1 inline h-4 w-4" />Overview
+          </button>
+          <button onClick={() => setTab("allocations")} className={`px-4 py-2 text-sm font-medium ${tab === "allocations" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <Key className="mr-1 inline h-4 w-4" />Allocations
+          </button>
+          <button onClick={() => setTab("commissions")} className={`px-4 py-2 text-sm font-medium ${tab === "commissions" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <TrendingDown className="mr-1 inline h-4 w-4" />Commissions
+          </button>
+        </div>
 
-          <TabsContent value="overview" className="space-y-6 mt-6">
+        {tab === "overview" && (
+          <div className="space-y-6 mt-6">
             {/* Referral Section */}
             <Card className="border-[#E8E0D8] bg-white">
               <CardHeader className="pb-3">
@@ -180,13 +183,17 @@ export function PartnerDashboard() {
                 {(!clients || clients.length === 0) && <p className="py-8 text-center text-sm text-[#8D8A87]">No client businesses yet.</p>}
               </CardContent>
             </Card>
-          </TabsContent>
+          </div>
+        )}
 
-          <TabsContent value="allocations" className="mt-6">
+        {tab === "allocations" && (
+          <div className="mt-6">
             <AllocationsTab />
-          </TabsContent>
+          </div>
+        )}
 
-          <TabsContent value="commissions" className="space-y-6 mt-6">
+        {tab === "commissions" && (
+          <div className="space-y-6 mt-6">
             {/* Commission History */}
             {commissions && commissions.length > 0 ? (
               <Card className="border-[#E8E0D8]"><CardHeader className="pb-3"><CardTitle className="font-serif text-lg flex items-center gap-2"><TrendingUp className="h-5 w-5 text-[#D4A854]"/> Commission History</CardTitle></CardHeader>
@@ -216,8 +223,8 @@ export function PartnerDashboard() {
                 </CardContent>
               </Card>
             )}
-          </TabsContent>
-        </Tabs>
+          </div>
+        )}
       </div>
     </Layout>
   );

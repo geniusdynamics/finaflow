@@ -3,7 +3,6 @@
 import { useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileText, Scale, BookOpen, Building2 } from "lucide-react";
 import { formatKES } from "@/lib/utils";
 
@@ -52,23 +51,24 @@ export function FinancialReportsPanel({ year }: FinancialReportsPanelProps) {
 
   return (
     <div className="space-y-6">
-      <Tabs value={financialTab} onValueChange={setFinancialTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="income" className="text-xs">
-            <FileText className="h-3 w-3 mr-1" />Income
-          </TabsTrigger>
-          <TabsTrigger value="balance" className="text-xs">
-            <Scale className="h-3 w-3 mr-1" />Balance
-          </TabsTrigger>
-          <TabsTrigger value="trial" className="text-xs">
-            <BookOpen className="h-3 w-3 mr-1" />Trial
-          </TabsTrigger>
-          <TabsTrigger value="assets" className="text-xs">
-            <Building2 className="h-3 w-3 mr-1" />Assets
-          </TabsTrigger>
-        </TabsList>
+      {/* Sub-tabs for financial reports */}
+      <div className="flex items-center gap-2 border-b border-[#E8E0D8]">
+        <button onClick={() => setFinancialTab("income")} className={`px-4 py-2 text-sm font-medium ${financialTab === "income" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+          <FileText className="mr-1 inline h-4 w-4" />Income
+        </button>
+        <button onClick={() => setFinancialTab("balance")} className={`px-4 py-2 text-sm font-medium ${financialTab === "balance" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+          <Scale className="mr-1 inline h-4 w-4" />Balance
+        </button>
+        <button onClick={() => setFinancialTab("trial")} className={`px-4 py-2 text-sm font-medium ${financialTab === "trial" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+          <BookOpen className="mr-1 inline h-4 w-4" />Trial
+        </button>
+        <button onClick={() => setFinancialTab("assets")} className={`px-4 py-2 text-sm font-medium ${financialTab === "assets" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+          <Building2 className="mr-1 inline h-4 w-4" />Assets
+        </button>
+      </div>
 
-        <TabsContent value="income" className="space-y-4">
+      {financialTab === "income" && (
+        <div className="space-y-4 mt-6">
           <Card className="border-gray-200">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="font-serif text-lg">Income Statement (P&L)</CardTitle>
@@ -118,9 +118,11 @@ export function FinancialReportsPanel({ year }: FinancialReportsPanelProps) {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="balance" className="space-y-4">
+      {financialTab === "balance" && (
+        <div className="space-y-4 mt-6">
           <Card className="border-gray-200">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="font-serif text-lg">Balance Sheet</CardTitle>
@@ -188,9 +190,11 @@ export function FinancialReportsPanel({ year }: FinancialReportsPanelProps) {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="trial" className="space-y-4">
+      {financialTab === "trial" && (
+        <div className="space-y-4 mt-6">
           <Card className="border-gray-200">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="font-serif text-lg">Trial Balance</CardTitle>
@@ -247,9 +251,11 @@ export function FinancialReportsPanel({ year }: FinancialReportsPanelProps) {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
+      )}
 
-        <TabsContent value="assets" className="space-y-4">
+      {financialTab === "assets" && (
+        <div className="space-y-4 mt-6">
           <Card className="border-gray-200">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="font-serif text-lg">Fixed Asset Register</CardTitle>
@@ -324,8 +330,8 @@ export function FinancialReportsPanel({ year }: FinancialReportsPanelProps) {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
+        </div>
+      )}
     </div>
   );
 }

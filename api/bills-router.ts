@@ -338,20 +338,51 @@ export const billsRouter = createRouter({
               ).limit(1);
 
           if (existingAp[0]) {
-            const apNewBal = d(existingAp[0].currentBalance || "0").minus(paymentAmount);
+            const billBalanceDue = d(bill.balanceDue || "0");
+            const apDebitAmount = d.min(paymentAmount, billBalanceDue);
+            const prepaymentAmount = paymentAmount.gt(billBalanceDue) ? paymentAmount.minus(billBalanceDue) : d(0);
             const paymentDateStr = new Date(input.paymentDate).toISOString().split("T")[0];
-            await tx.insert(ledgerEntries).values({
-              accountId: existingAp[0].id,
-              transactionType: "bill_payment" as any,
-              transactionId: paymentId,
-              entryType: "debit",
-              amount: input.amount,
-              balanceAfter: apNewBal.toFixed(2),
-              entryDate: paymentDateStr,
-              createdBy: enteredBy,
-              description: `Bill Payment: ${input.reference || bill.description}`,
-            } as any).returning();
-            await tx.update(accounts).set({ currentBalance: apNewBal.toFixed(2) }).where(eq(accounts.id, existingAp[0].id));
+
+            if (apDebitAmount.gt(0)) {
+              const apNewBal = d(existingAp[0].currentBalance || "0").minus(apDebitAmount);
+              await tx.insert(ledgerEntries).values({
+                accountId: existingAp[0].id,
+                transactionType: "bill_payment" as any,
+                transactionId: paymentId,
+                entryType: "debit",
+                amount: apDebitAmount.toFixed(2),
+                balanceAfter: apNewBal.toFixed(2),
+                entryDate: paymentDateStr,
+                createdBy: enteredBy,
+                description: `Bill Payment: ${input.reference || bill.description}`,
+              } as any).returning();
+              await tx.update(accounts).set({ currentBalance: apNewBal.toFixed(2) }).where(eq(accounts.id, existingAp[0].id));
+            }
+
+            if (prepaymentAmount.gt(0)) {
+              const prepayAcct = await tx.query.accounts.findFirst({
+                where: and(
+                  eq(accounts.accountCode, "1550"),
+                  eq(accounts.businessId, bill.businessId),
+                  isNull(accounts.deletedAt)
+                ),
+              });
+              if (prepayAcct) {
+                const prepayNewBal = d(prepayAcct.currentBalance || "0").plus(prepaymentAmount);
+                await tx.insert(ledgerEntries).values({
+                  accountId: prepayAcct.id,
+                  transactionType: "bill_payment" as any,
+                  transactionId: paymentId,
+                  entryType: "debit",
+                  amount: prepaymentAmount.toFixed(2),
+                  balanceAfter: prepayNewBal.toFixed(2),
+                  entryDate: paymentDateStr,
+                  createdBy: enteredBy,
+                  description: `Supplier Overpayment (${input.reference || bill.description})`,
+                } as any).returning();
+                await tx.update(accounts).set({ currentBalance: prepayNewBal.toFixed(2) }).where(eq(accounts.id, prepayAcct.id));
+              }
+            }
           }
         }
       });
