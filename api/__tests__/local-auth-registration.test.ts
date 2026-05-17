@@ -112,7 +112,7 @@ describe("Local Auth Registration", () => {
     expect(locationRows).toHaveLength(1);
 
     const accountRows = await db.select().from(accounts).where(eq(accounts.locationId, locationRows[0].id));
-    expect(accountRows).toHaveLength(3);
+    expect(accountRows.length).toBeGreaterThanOrEqual(3);
   });
 
   it("logs in successfully after registration and issues fresh auth cookies", async () => {

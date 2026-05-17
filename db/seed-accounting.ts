@@ -21,6 +21,7 @@ const defaultAccounts = [
   { accountCode: "2100", name: "Accrued Expenses", accountType: "liability", accountSubType: "accrued_expense", type: "bank_account" as const, openingBalance: "0.00" },
   { accountCode: "2110", name: "Rent Payable", accountType: "liability", accountSubType: "accrued_expense", type: "bank_account" as const, openingBalance: "0.00" },
   { accountCode: "2120", name: "Insurance Premiums Payable", accountType: "liability", accountSubType: "accrued_expense", type: "bank_account" as const, openingBalance: "0.00" },
+  { accountCode: "2100", name: "Salaries Payable", accountType: "liability", accountSubType: "accrued_expense", type: "bank_account" as const, openingBalance: "0.00" },
   { accountCode: "2130", name: "Subscriptions Payable", accountType: "liability", accountSubType: "accrued_expense", type: "bank_account" as const, openingBalance: "0.00" },
   { accountCode: "2140", name: "Utilities Payable", accountType: "liability", accountSubType: "accrued_expense", type: "bank_account" as const, openingBalance: "0.00" },
   { accountCode: "2200", name: "PAYE Payable", accountType: "liability", accountSubType: "accrued_expense", type: "bank_account" as const, openingBalance: "0.00" },
@@ -57,7 +58,7 @@ const defaultAccounts = [
   { accountCode: "7300", name: "Insurance Expense", accountType: "expense", accountSubType: "admin_expense", type: "bank_account" as const, openingBalance: "0.00" },
   { accountCode: "8000", name: "Marketing Expenses", accountType: "expense", accountSubType: "marketing_expense", type: "bank_account" as const, openingBalance: "0.00" },
   { accountCode: "9000", name: "Depreciation Expense", accountType: "expense", accountSubType: "depreciation_expense", type: "bank_account" as const, openingBalance: "0.00" },
-  { accountCode: "9900", name: "Other Expenses", accountType: "expense", accountSubType: "other_expense", type: "bank_account" as const, openingBalance: "0.00" },
+  { accountCode: "9900", name: "Other Expenses", accountType: "expense", accountSubType: "operating_expense", type: "bank_account" as const, openingBalance: "0.00" },
 ];
 
 const defaultExpenseCategories = [

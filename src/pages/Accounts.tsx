@@ -20,6 +20,9 @@ import { JournalEntries } from "./JournalEntries";
 const accountPalette = ["#2E7D32", "#388E3C", "#43A047", "#C77D2D", "#D4A854", "#B8872E", "#9E9D24", "#5D4037"];
 
 export function Accounts() {
+  type CoaAccountType = "asset" | "liability" | "equity" | "revenue" | "expense";
+  type OperationalSubType = "" | "cash" | "bank";
+
   const { user } = useAuth();
   const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.ACCOUNTS_MANAGE);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -65,9 +68,9 @@ export function Accounts() {
   const [form, setForm] = useState({
     locationId: "", name: "", type: "cash" as "cash" | "mpesa" | "bank_account",
     accountCode: "", accountNumber: "", openingBalance: "0.00", isPaymentMethod: true,
-    accountType: "", accountSubType: "", isContra: false, linkToCoa: false,
+    accountType: "asset" as CoaAccountType, accountSubType: "" as OperationalSubType, isContra: false, linkToCoa: false,
   });
-  const [editForm, setEditForm] = useState({ name: "", accountCode: "", accountNumber: "", isPaymentMethod: true, isActive: true, accountType: "", accountSubType: "", isContra: false, linkToCoa: false });
+  const [editForm, setEditForm] = useState({ name: "", accountCode: "", accountNumber: "", isPaymentMethod: true, isActive: true, accountType: "asset" as CoaAccountType, accountSubType: "" as OperationalSubType, isContra: false, linkToCoa: false });
   const [drawingForm, setDrawingForm] = useState({ amount: "", description: "", date: getLocalDateString() });
   const [depositForm, setDepositForm] = useState({ amount: "", description: "", date: getLocalDateString() });
 
@@ -279,35 +282,23 @@ export function Accounts() {
                     </div>
                     <div className="flex items-center gap-2 pt-2">
                       <input type="checkbox" id="linkToCoa" checked={form.linkToCoa} onChange={e => setForm(p => ({ ...p, linkToCoa: e.target.checked }))} className="rounded" />
-                      <Label htmlFor="linkToCoa" className="text-sm font-medium">Link to Chart of Accounts entry</Label>
+                      <Label htmlFor="linkToCoa" className="text-sm font-medium">Use chart-compatible asset classification</Label>
                     </div>
                     {form.linkToCoa && (
                       <>
+                        <p className="text-xs text-[#8D8A87]">The general Accounts page only supports cash-equivalent asset links. Use the Chart of Accounts page for advanced liability, equity, revenue, or expense setup.</p>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2"><Label>Account Type</Label>
-                            <select value={form.accountType} onChange={e => setForm(p => ({ ...p, accountType: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
-                              <option value="">Select type...</option>
+                            <select value="asset" onChange={() => undefined} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" disabled>
                               <option value="asset">Asset</option>
-                              <option value="liability">Liability</option>
-                              <option value="equity">Equity</option>
-                              <option value="revenue">Revenue</option>
-                              <option value="expense">Expense</option>
                             </select>
                           </div>
                           <div className="space-y-2"><Label>Sub-Type</Label>
-                            <select value={form.accountSubType} onChange={e => setForm(p => ({ ...p, accountSubType: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
-                              <option value="">Select sub-type...</option>
-                              {form.accountType === "asset" && <><option value="cash">Cash</option><option value="bank">Bank</option><option value="accounts_receivable">Accounts Receivable</option><option value="inventory">Inventory</option><option value="fixed_asset">Fixed Asset</option><option value="prepaid_expense">Prepaid Expense</option></>}
-                              {form.accountType === "liability" && <><option value="accounts_payable">Accounts Payable</option><option value="accrued_expense">Accrued Expense</option><option value="current_loan">Current Loan</option><option value="long_term_loan">Long-term Loan</option></>}
-                              {form.accountType === "equity" && <><option value="capital">Capital</option><option value="retained_earnings">Retained Earnings</option><option value="drawings">Drawings</option></>}
-                              {form.accountType === "revenue" && <><option value="sales_revenue">Sales Revenue</option><option value="service_revenue">Service Revenue</option><option value="other_income">Other Income</option></>}
-                              {form.accountType === "expense" && <><option value="cogs">Cost of Goods Sold</option><option value="operating_expense">Operating Expense</option><option value="admin_expense">Administrative Expense</option><option value="marketing_expense">Marketing Expense</option><option value="depreciation_expense">Depreciation Expense</option><option value="other_expense">Other Expense</option></>}
+                            <select value={form.accountSubType} onChange={e => setForm(p => ({ ...p, accountSubType: e.target.value as OperationalSubType }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
+                              <option value="">Select asset sub-type...</option>
+                              {form.type === "bank_account" ? <option value="bank">Bank</option> : <option value="cash">Cash</option>}
                             </select>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input type="checkbox" id="isContra" checked={form.isContra} onChange={e => setForm(p => ({ ...p, isContra: e.target.checked }))} className="rounded" />
-                          <Label htmlFor="isContra" className="text-sm">Contra Account</Label>
                         </div>
                       </>
                     )}
@@ -568,7 +559,7 @@ export function Accounts() {
                     </div>
                     <Dialog open={editOpen === account.id} onOpenChange={(v) => setEditOpen(v ? account.id : null)}>
                       <DialogTrigger asChild>
-                        <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setEditOpen(account.id); setEditForm({ name: account.name, accountCode: account.accountCode ?? "", accountNumber: account.accountNumber ?? "", isPaymentMethod: account.isPaymentMethod, isActive: account.isActive, accountType: account.accountType ?? "", accountSubType: account.accountSubType ?? "", isContra: account.isContra ?? false, linkToCoa: !!(account.accountType) }); }}>
+                        <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setEditOpen(account.id); setEditForm({ name: account.name, accountCode: account.accountCode ?? "", accountNumber: account.accountNumber ?? "", isPaymentMethod: account.isPaymentMethod, isActive: account.isActive, accountType: "asset", accountSubType: account.type === "bank_account" ? "bank" : "cash", isContra: false, linkToCoa: !!(account.accountType) }); }}>
                           <Pencil className="h-3 w-3 text-[#8D8A87]" />
                         </Button>
                       </DialogTrigger>
@@ -586,35 +577,23 @@ export function Accounts() {
                           </div>
                           <div className="flex items-center gap-2 pt-2">
                             <input type="checkbox" id="editLinkToCoa" checked={editForm.linkToCoa} onChange={e => setEditForm(p => ({ ...p, linkToCoa: e.target.checked }))} className="rounded" />
-                            <Label htmlFor="editLinkToCoa" className="text-sm font-medium">Link to Chart of Accounts entry</Label>
+                            <Label htmlFor="editLinkToCoa" className="text-sm font-medium">Use chart-compatible asset classification</Label>
                           </div>
                           {editForm.linkToCoa && (
                             <>
+                              <p className="text-xs text-[#8D8A87]">This page only supports asset-side links for cash and bank operational accounts.</p>
                               <div className="grid gap-4 sm:grid-cols-2">
                                 <div className="space-y-2"><Label>Account Type</Label>
-                                  <select value={editForm.accountType} onChange={e => setEditForm(p => ({ ...p, accountType: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
-                                    <option value="">Select type...</option>
+                                  <select value="asset" onChange={() => undefined} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" disabled>
                                     <option value="asset">Asset</option>
-                                    <option value="liability">Liability</option>
-                                    <option value="equity">Equity</option>
-                                    <option value="revenue">Revenue</option>
-                                    <option value="expense">Expense</option>
                                   </select>
                                 </div>
                                 <div className="space-y-2"><Label>Sub-Type</Label>
-                                  <select value={editForm.accountSubType} onChange={e => setEditForm(p => ({ ...p, accountSubType: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
-                                    <option value="">Select sub-type...</option>
-                                    {editForm.accountType === "asset" && <><option value="cash">Cash</option><option value="bank">Bank</option><option value="accounts_receivable">Accounts Receivable</option><option value="inventory">Inventory</option><option value="fixed_asset">Fixed Asset</option><option value="prepaid_expense">Prepaid Expense</option></>}
-                                    {editForm.accountType === "liability" && <><option value="accounts_payable">Accounts Payable</option><option value="accrued_expense">Accrued Expense</option><option value="current_loan">Current Loan</option><option value="long_term_loan">Long-term Loan</option></>}
-                                    {editForm.accountType === "equity" && <><option value="capital">Capital</option><option value="retained_earnings">Retained Earnings</option><option value="drawings">Drawings</option></>}
-                                    {editForm.accountType === "revenue" && <><option value="sales_revenue">Sales Revenue</option><option value="service_revenue">Service Revenue</option><option value="other_income">Other Income</option></>}
-                                    {editForm.accountType === "expense" && <><option value="cogs">Cost of Goods Sold</option><option value="operating_expense">Operating Expense</option><option value="admin_expense">Administrative Expense</option><option value="marketing_expense">Marketing Expense</option><option value="depreciation_expense">Depreciation Expense</option><option value="other_expense">Other Expense</option></>}
+                                  <select value={editForm.accountSubType} onChange={e => setEditForm(p => ({ ...p, accountSubType: e.target.value as OperationalSubType }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
+                                    <option value="">Select asset sub-type...</option>
+                                    {account.type === "bank_account" ? <option value="bank">Bank</option> : <option value="cash">Cash</option>}
                                   </select>
                                 </div>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <input type="checkbox" id="editIsContra" checked={editForm.isContra} onChange={e => setEditForm(p => ({ ...p, isContra: e.target.checked }))} className="rounded" />
-                                <Label htmlFor="editIsContra" className="text-sm">Contra Account</Label>
                               </div>
                             </>
                           )}

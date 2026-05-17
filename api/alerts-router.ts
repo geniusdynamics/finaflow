@@ -52,7 +52,7 @@ export const alertsRouter = createRouter({
     for (const config of configs) {
       if (config.accountId) {
         const acct = await db.select().from(accounts).where(eq(accounts.id, config.accountId)).limit(1);
-        if (acct[0] && parseFloat(acct[0].currentBalance) < parseFloat(config.minBalance)) {
+        if (acct[0] && parseFloat(acct[0].currentBalance) < parseFloat(config.minBalance ?? "0")) {
           const loc = config.locationId ? await db.select().from(locations).where(eq(locations.id, config.locationId)).limit(1) : [];
           alerts.push({
             type: "low_balance",

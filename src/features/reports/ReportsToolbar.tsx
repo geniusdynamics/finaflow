@@ -23,7 +23,7 @@ export function ReportsToolbar() {
         </SelectTrigger>
         <SelectContent>
           {Array.from({ length: 12 }, (_, i) => (
-            <SelectItem key={i + 1} value={i + 1}>
+            <SelectItem key={i + 1} value={String(i + 1)}>
               {new Date(2000, i).toLocaleDateString("en-KE", { month: "short" })}
             </SelectItem>
           ))}

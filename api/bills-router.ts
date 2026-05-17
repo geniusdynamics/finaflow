@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { createRouter, billQuery, billCreate, billPay, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, businesses, expenseCategories, expenses } from "@db/schema";
-import { eq, and, isNull, desc, sql } from "drizzle-orm";
+import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, expenseCategories, expenses } from "@db/schema";
+import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { notFutureDateString } from "./lib/future-date";
 import { logAudit } from "./lib/audit";
+import { ensureSystemAccount } from "./lib/accounting-accounts";
+import { getExpenseAccountSubType } from "./lib/accounting-maps";
+import { reverseLedgerEntriesForTransaction } from "./lib/accounting-reversal";
 
 const LIABILITY_ACCOUNT_MAP: Record<string, { accountCode: string; description: string }> = {
   rent: { accountCode: "2110", description: "Rent Payable" },
@@ -92,6 +95,45 @@ export const batchBillPaymentInputSchema = z.object({
   reference: z.string().optional(),
 });
 
+async function resolveBillCategoryId(tx: any, billId: number, supplierId?: number | null) {
+  const itemCategories = await tx
+    .select({ categoryId: billItems.categoryId })
+    .from(billItems)
+    .where(and(eq(billItems.billId, billId), isNull(billItems.deletedAt), sql`${billItems.categoryId} IS NOT NULL`));
+
+  const distinctCategoryIds = [...new Set(itemCategories.map((item) => item.categoryId).filter((value): value is number => value !== null))];
+
+  if (distinctCategoryIds.length === 1) {
+    return distinctCategoryIds[0];
+  }
+
+  if (distinctCategoryIds.length > 1) {
+    const categories = await tx
+      .select({ id: expenseCategories.id, name: expenseCategories.name })
+      .from(expenseCategories)
+      .where(inArray(expenseCategories.id, distinctCategoryIds as number[]));
+    const categoryNames = categories.map((c) => `${c.name}`).join(", ");
+    throw new Error(
+      `Bill line items have conflicting categories: ${categoryNames}. ` +
+      `Please assign a single top-level category to the bill to resolve this conflict.`
+    );
+  }
+
+  const [bill] = await tx.select().from(bills).where(eq(bills.id, billId)).limit(1);
+  if (bill?.categoryId) {
+    return bill.categoryId;
+  }
+
+  if (supplierId) {
+    const [supplier] = await tx.select().from(suppliers).where(eq(suppliers.id, supplierId)).limit(1);
+    if (supplier?.autoCategoryId) {
+      return supplier.autoCategoryId;
+    }
+  }
+
+  return null;
+}
+
 export const billsRouter = createRouter({
   list: billQuery
     .input(z.object({ locationId: z.number().optional(), status: z.enum(["pending", "partial", "paid", "overdue", "cancelled"]).optional(), supplierId: z.number().optional(), page: z.number().default(1), pageSize: z.number().default(50) }).optional())
@@ -135,13 +177,16 @@ export const billsRouter = createRouter({
         await requireAuthorizedBusinessEntity(ctx, suppliers, input.supplierId);
       }
 
-      const loc = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
-      const business = await db.select().from(businesses).where(eq(businesses.id, loc[0]?.businessId)).limit(1);
-      const businessId = business[0]?.id;
+      const [location] = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
+      const businessId = location?.businessId;
+
+      if (!businessId) {
+        throw new Error("Selected location is not linked to a business");
+      }
 
       await db.transaction(async (tx) => {
         if (!billNumber) {
-          const nextNum = loc[0]?.nextBillNumber ?? 1;
+          const nextNum = location?.nextBillNumber ?? 1;
           billNumber = `BILL-${String(nextNum).padStart(4, "0")}`;
           await tx.update(locations).set({ nextBillNumber: nextNum + 1 }).where(eq(locations.id, input.locationId));
         }
@@ -150,6 +195,7 @@ export const billsRouter = createRouter({
           locationId: input.locationId,
           businessId,
           supplierId: input.supplierId,
+          categoryId: input.categoryId,
           billNumber, description: input.description,
           amount: input.amount, balanceDue: input.amount,
           issueDate: new Date(input.issueDate), dueDate: new Date(input.dueDate),
@@ -174,78 +220,71 @@ export const billsRouter = createRouter({
           }
         }
 
-        if (businessId) {
-          const expenseCategory = input.categoryId 
-            ? await tx.select().from(expenseCategories).where(eq(expenseCategories.id, input.categoryId)).limit(1)
-            : null;
-          
-          let expenseAccountId: number | undefined;
-          if (expenseCategory?.[0]?.defaultAccountId) {
-            expenseAccountId = expenseCategory[0].defaultAccountId!;
-          } else {
-            const accountingClass = expenseCategory?.[0]?.accountingClass || "operating_expense";
-            const subtypeMap: Record<string, string> = {
-              cogs: "cogs",
-              operating_expense: "operating_expense",
-              admin_expense: "admin_expense",
-              marketing: "marketing_expense",
-              depreciation: "depreciation_expense",
-              other: "other_expense",
-            };
-            const expenseAcct = await tx.select().from(accounts).where(
-              and(
-                eq(accounts.businessId, businessId),
-                eq(accounts.accountSubType, subtypeMap[accountingClass] as any),
-                isNull(accounts.deletedAt)
-              )
-            ).limit(1);
-            if (expenseAcct[0]) expenseAccountId = expenseAcct[0].id;
-          }
+        const supplier = input.supplierId
+          ? await tx.select().from(suppliers).where(eq(suppliers.id, input.supplierId)).limit(1)
+          : [];
+        const resolvedCategoryId = input.categoryId ?? supplier[0]?.autoCategoryId ?? null;
+        const expenseCategory = resolvedCategoryId
+          ? await tx.select().from(expenseCategories).where(eq(expenseCategories.id, resolvedCategoryId)).limit(1)
+          : [];
 
-          const liabilityAcctId = input.liabilityAccountId;
-          const apAccount = liabilityAcctId
-            ? await tx.select().from(accounts).where(and(eq(accounts.id, liabilityAcctId), isNull(accounts.deletedAt))).limit(1)
-            : await tx.select().from(accounts).where(
-                and(
-                  eq(accounts.businessId, businessId),
-                  eq(accounts.accountSubType, "accounts_payable" as any),
-                  isNull(accounts.deletedAt)
-                )
-              ).limit(1);
+        let expenseAccountId: number | undefined;
+        if (expenseCategory[0]?.defaultAccountId) {
+          expenseAccountId = expenseCategory[0].defaultAccountId;
+        } else if (resolvedCategoryId) {
+          const accountingClass = expenseCategory[0]?.accountingClass || "operating_expense";
+          expenseAccountId = await ensureSystemAccount({
+            businessId,
+            accountType: "expense",
+            accountSubType: getExpenseAccountSubType(accountingClass as any),
+            name: expenseCategory[0]?.name || input.description,
+          });
+        }
 
-          if (expenseAccountId && apAccount[0]) {
-            const issueDateStr = new Date(input.issueDate).toISOString().split("T")[0];
-            const expenseNewBal = d(expenseAccountId ? (await tx.select().from(accounts).where(eq(accounts.id, expenseAccountId)).limit(1))[0]?.currentBalance || "0" : "0").plus(d(input.amount));
-            const apNewBal = d(apAccount[0].currentBalance || "0").plus(d(input.amount));
+        const liabilityAcctId = input.liabilityAccountId
+          ?? await ensureSystemAccount({
+            businessId,
+            accountType: "liability",
+            accountSubType: "accounts_payable",
+            name: "Accounts Payable",
+          });
+        const [apAccount] = await tx
+          .select()
+          .from(accounts)
+          .where(and(eq(accounts.id, liabilityAcctId), isNull(accounts.deletedAt)))
+          .limit(1);
 
-            if (expenseAccountId) {
-              await tx.insert(ledgerEntries).values({
-                accountId: expenseAccountId,
-                transactionType: "expense" as any,
-                transactionId: billId,
-                entryType: "debit",
-                amount: input.amount,
-                balanceAfter: expenseNewBal.toFixed(2),
-                entryDate: issueDateStr,
-                createdBy: enteredBy,
-                description: `Bill: ${input.description}`,
-              } as any).returning();
-              await tx.update(accounts).set({ currentBalance: expenseNewBal.toFixed(2) }).where(eq(accounts.id, expenseAccountId));
-            }
+        if (expenseAccountId && apAccount) {
+          const issueDateStr = new Date(input.issueDate).toISOString().split("T")[0];
+          const [expenseAccount] = await tx.select().from(accounts).where(eq(accounts.id, expenseAccountId)).limit(1);
+          const expenseNewBal = d(expenseAccount?.currentBalance || "0").plus(d(input.amount));
+          const apNewBal = d(apAccount.currentBalance || "0").plus(d(input.amount));
 
-            await tx.insert(ledgerEntries).values({
-              accountId: apAccount[0].id,
-              transactionType: "bill_payment" as any,
-              transactionId: billId,
-              entryType: "credit",
-              amount: input.amount,
-              balanceAfter: apNewBal.toFixed(2),
-              entryDate: issueDateStr,
-              createdBy: enteredBy,
-              description: `Bill: ${input.description}`,
-            } as any).returning();
-            await tx.update(accounts).set({ currentBalance: apNewBal.toFixed(2) }).where(eq(accounts.id, apAccount[0].id));
-          }
+          await tx.insert(ledgerEntries).values({
+            accountId: expenseAccountId,
+            transactionType: "expense" as any,
+            transactionId: billId,
+            entryType: "debit",
+            amount: input.amount,
+            balanceAfter: expenseNewBal.toFixed(2),
+            entryDate: issueDateStr,
+            createdBy: enteredBy,
+            description: `Bill: ${input.description}`,
+          } as any).returning();
+          await tx.update(accounts).set({ currentBalance: expenseNewBal.toFixed(2) }).where(eq(accounts.id, expenseAccountId));
+
+          await tx.insert(ledgerEntries).values({
+            accountId: apAccount.id,
+            transactionType: "bill_payment" as any,
+            transactionId: billId,
+            entryType: "credit",
+            amount: input.amount,
+            balanceAfter: apNewBal.toFixed(2),
+            entryDate: issueDateStr,
+            createdBy: enteredBy,
+            description: `Bill: ${input.description}`,
+          } as any).returning();
+          await tx.update(accounts).set({ currentBalance: apNewBal.toFixed(2) }).where(eq(accounts.id, apAccount.id));
         }
       });
 
@@ -273,6 +312,11 @@ export const billsRouter = createRouter({
       const newPaid = currentPaid.plus(paymentAmount);
       const newBalance = d(Math.max(0, totalAmount.minus(currentPaid).minus(paymentAmount).toNumber()));
       const status = newBalance.lte(0) ? "paid" as const : "partial" as const;
+
+      const resolvedCategoryId = await resolveBillCategoryId(db, input.billId, bill.supplierId);
+      if (!resolvedCategoryId) {
+        throw new Error("No category is defined for this bill. Kindly define one before processing payment.");
+      }
 
       let paymentId = 0;
 
@@ -339,7 +383,7 @@ export const billsRouter = createRouter({
 
           if (existingAp[0]) {
             const billBalanceDue = d(bill.balanceDue || "0");
-            const apDebitAmount = d.min(paymentAmount, billBalanceDue);
+            const apDebitAmount = paymentAmount.lte(billBalanceDue) ? paymentAmount : billBalanceDue;
             const prepaymentAmount = paymentAmount.gt(billBalanceDue) ? paymentAmount.minus(billBalanceDue) : d(0);
             const paymentDateStr = new Date(input.paymentDate).toISOString().split("T")[0];
 
@@ -360,9 +404,15 @@ export const billsRouter = createRouter({
             }
 
             if (prepaymentAmount.gt(0)) {
+              const prepayAccountId = await ensureSystemAccount({
+                businessId: bill.businessId,
+                accountType: "asset",
+                accountSubType: "prepaid_expense",
+                name: "Supplier Prepayments",
+              });
               const prepayAcct = await tx.query.accounts.findFirst({
                 where: and(
-                  eq(accounts.accountCode, "1550"),
+                  eq(accounts.id, prepayAccountId),
                   eq(accounts.businessId, bill.businessId),
                   isNull(accounts.deletedAt)
                 ),
@@ -383,26 +433,25 @@ export const billsRouter = createRouter({
                 await tx.update(accounts).set({ currentBalance: prepayNewBal.toFixed(2) }).where(eq(accounts.id, prepayAcct.id));
               }
             }
-
-            const categoryId = bill.categoryId ?? 1;
-            const expenseNumber = `EXP-BP-${String(paymentId).padStart(6, "0")}`;
-            await tx.insert(expenses).values({
-              locationId: bill.locationId,
-              businessId: bill.businessId,
-              categoryId,
-              supplierId: bill.supplierId,
-              expenseNumber,
-              billId: input.billId,
-              amount: input.amount,
-              description: `Bill Payment: ${input.reference || bill.description}`,
-              expenseDate: new Date(input.paymentDate),
-              paymentMethod: input.paymentMethod,
-              accountId: cashAccountId ?? null,
-              enteredBy,
-              refNo: bill.billNumber ?? `BILL-${String(bill.id).padStart(4, "0")}`,
-            } as any).returning();
           }
         }
+
+        const expenseNumber = `EXP-BP-${String(paymentId).padStart(6, "0")}`;
+        await tx.insert(expenses).values({
+          locationId: bill.locationId,
+          businessId: bill.businessId,
+          categoryId: resolvedCategoryId,
+          supplierId: bill.supplierId,
+          expenseNumber,
+          billId: input.billId,
+          amount: input.amount,
+          description: `Bill Payment: ${input.reference || bill.description}`,
+          expenseDate: new Date(input.paymentDate),
+          paymentMethod: input.paymentMethod,
+          accountId: cashAccountId ?? null,
+          enteredBy,
+          refNo: bill.billNumber ?? `BILL-${String(bill.id).padStart(4, "0")}`,
+        } as any).returning();
       });
 
       return { id: paymentId, newBalanceDue: newBalance.toFixed(2), status, success: true };
@@ -413,7 +462,59 @@ export const billsRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       await requireAuthorizedEntity(ctx, bills, input.id);
+      const existingLedger = await db
+        .select({ id: ledgerEntries.id })
+        .from(ledgerEntries)
+        .where(eq(ledgerEntries.transactionId, input.id))
+        .limit(1);
+
+      if (existingLedger[0]) {
+        throw new Error("Posted bills cannot be deleted. Reverse the posted entry instead.");
+      }
+
       await db.update(bills).set({ deletedAt: new Date() }).where(eq(bills.id, input.id));
+      return { success: true };
+    }),
+
+  reverse: billCreate
+    .input(z.object({ id: z.number(), reason: z.string().min(1).max(255) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const bill = await requireAuthorizedEntity(ctx, bills, input.id);
+
+      if (bill.reversedAt) {
+        throw new Error("This bill has already been reversed.");
+      }
+
+      const existingPayments = await db
+        .select({ id: billPayments.id })
+        .from(billPayments)
+        .where(and(eq(billPayments.billId, input.id), isNull(billPayments.deletedAt)))
+        .limit(1);
+
+      if (existingPayments[0]) {
+        throw new Error("Bills with recorded payments must be corrected from the payment history before reversal.");
+      }
+
+      await db.transaction(async (tx) => {
+        await reverseLedgerEntriesForTransaction({
+          db: tx,
+          transactionId: input.id,
+          userId: (ctx as any).user?.id ?? 1,
+          reason: input.reason,
+        });
+
+        await tx
+          .update(bills)
+          .set({
+            reversedAt: new Date(),
+            reversedBy: (ctx as any).user?.id ?? 1,
+            status: "cancelled",
+            balanceDue: "0.00",
+          })
+          .where(eq(bills.id, input.id));
+      });
+
       return { success: true };
     }),
 
@@ -501,7 +602,7 @@ export const billsRouter = createRouter({
       categoryId: z.number().optional(),
       description: z.string().min(1), 
       amount: z.string(), 
-      billingCycle: z.enum(["weekly", "biweekly", "monthly", "quarterly", "annually"]), 
+      frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annually"]), 
       nextDueDate: z.string(), 
       liabilityAccountId: z.number().optional(),
       attachments: z.array(z.object({ imageData: z.string(), mimeType: z.string().default("image/jpeg"), caption: z.string().optional() })).optional() 
@@ -521,7 +622,7 @@ export const billsRouter = createRouter({
         liabilityAccountId: input.liabilityAccountId,
         description: input.description, 
         amount: input.amount, 
-        billingCycle: input.billingCycle,
+        frequency: input.frequency,
         nextDueDate: new Date(input.nextDueDate),
       } as any).returning();
       return { id: result.id, success: true };
@@ -533,7 +634,7 @@ export const billsRouter = createRouter({
       categoryId: z.number().optional(),
       description: z.string().min(1).optional(), 
       amount: z.string().optional(), 
-      billingCycle: z.enum(["weekly", "biweekly", "monthly", "quarterly", "annually"]).optional(), 
+      frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "annually"]).optional(), 
       nextDueDate: z.string().optional(), 
       liabilityAccountId: z.number().optional(),
       isActive: z.boolean().optional(),

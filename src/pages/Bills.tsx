@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, CreditCard, AlertTriangle, CheckCircle, Clock, Trash2, Package, Search, Camera, Calendar, Repeat, FileText } from "lucide-react";
+import { Plus, CreditCard, AlertTriangle, CheckCircle, Clock, Trash2, Package, Search, Camera, Calendar, Repeat, FileText, RotateCcw, OctagonX } from "lucide-react";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -46,26 +46,50 @@ export function Bills() {
   const utils = trpc.useUtils();
   const createBill = trpc.bills.create.useMutation({ onSuccess: () => { setOpen(false); utils.bills.list.invalidate(); } });
   const createRecurring = trpc.bills.createRecurring.useMutation({ onSuccess: () => { setRecurringOpen(false); utils.bills.listRecurring.invalidate(); } });
-  const generateRecurring = trpc.bills.generateRecurring.useMutation({ onSuccess: () => utils.bills.list.invalidate() });
   const deleteRecurring = trpc.bills.deleteRecurring.useMutation({ onSuccess: () => { utils.bills.listRecurring.invalidate(); utils.bills.list.invalidate(); } });
   const recordPayment = trpc.bills.recordPayment.useMutation({ 
     onSuccess: () => { 
       setPaymentOpen(null); 
+      setPaymentError(null);
       utils.bills.list.invalidate();
       utils.bills.getSupplierSummary.invalidate();
       toast.success("Payment recorded successfully");
     },
     onError: (e) => {
-      toast.error(`Payment failed: ${e.message}`);
+      const msg = e.message;
+      setPaymentError(msg);
+      toast.error(msg, { duration: 6000 });
     }
   });
   const addItem = trpc.bills.addItem.useMutation({ onSuccess: () => { utils.bills.getItems.invalidate(); utils.bills.list.invalidate(); } });
   const deleteItem = trpc.bills.deleteItem.useMutation({ onSuccess: () => { utils.bills.getItems.invalidate(); utils.bills.list.invalidate(); } });
   const deleteBill = trpc.bills.delete.useMutation({ onSuccess: () => utils.bills.list.invalidate() });
+  const reverseBill = trpc.bills.reverse.useMutation({
+    onSuccess: () => { utils.bills.list.invalidate(); toast.success("Bill reversed"); },
+    onError: (e) => toast.error(`Reverse failed: ${e.message}`),
+  });
 
-  const [form, setForm] = useState({ locationId: "", supplierId: "", description: "", amount: "", issueDate: "", dueDate: "" });
-  const [recForm, setRecForm] = useState({ locationId: "", supplierId: "", description: "", amount: "", frequency: "monthly" as const, nextDueDate: "" });
+  const [form, setForm] = useState({
+    locationId: "",
+    supplierId: "",
+    categoryId: "",
+    billNumber: "",
+    description: "",
+    amount: "",
+    issueDate: "",
+    dueDate: "",
+  });
+  const [recForm, setRecForm] = useState({
+    locationId: "",
+    supplierId: "",
+    categoryId: "",
+    description: "",
+    amount: "",
+    frequency: "monthly" as const,
+    nextDueDate: "",
+  });
   const [payForm, setPayForm] = useState({ paymentMethod: "mpesa" as const, amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" });
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const todayDate = getLocalDateString();
 
   // Item form with autocomplete
@@ -82,7 +106,7 @@ export function Bills() {
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    const newAttachments = [];
+    const newAttachments: { imageData: string; mimeType: string; caption: string }[] = [];
     for (const file of Array.from(files)) {
       if (file.size > 5 * 1024 * 1024) { toast.error(`${file.name} is too large (max 5MB)`); continue; }
       const base64 = await fileToBase64(file);
@@ -150,10 +174,11 @@ export function Bills() {
     setShowSuggestions(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); createBill.mutate({ locationId: +form.locationId, supplierId: form.supplierId ? +form.supplierId : undefined, description: form.description, amount: form.amount, issueDate: form.issueDate, dueDate: form.dueDate, attachments: photosEnabled ? attachments : undefined }); };
-  const handleRecurring = (e: React.FormEvent) => { e.preventDefault(); createRecurring.mutate({ locationId: +recForm.locationId, supplierId: recForm.supplierId ? +recForm.supplierId : undefined, description: recForm.description, amount: recForm.amount, frequency: recForm.frequency, nextDueDate: recForm.nextDueDate }); };
+  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); createBill.mutate({ locationId: +form.locationId, supplierId: form.supplierId ? +form.supplierId : undefined, categoryId: form.categoryId ? +form.categoryId : undefined, billNumber: form.billNumber || undefined, description: form.description, amount: form.amount, issueDate: form.issueDate, dueDate: form.dueDate, attachments: photosEnabled ? attachments : undefined }); };
+  const handleRecurring = (e: React.FormEvent) => { e.preventDefault(); createRecurring.mutate({ locationId: +recForm.locationId, supplierId: recForm.supplierId ? +recForm.supplierId : undefined, categoryId: recForm.categoryId ? +recForm.categoryId : undefined, description: recForm.description, amount: recForm.amount, frequency: recForm.frequency, nextDueDate: recForm.nextDueDate }); };
   const handlePayment = (billId: number) => (e: React.FormEvent) => {
     e.preventDefault();
+    setPaymentError(null);
     if (payForm.paymentDate > todayDate) {
       toast.error("Payment date cannot be in the future");
       return;
@@ -179,6 +204,7 @@ export function Bills() {
                   <form onSubmit={handleRecurring} className="space-y-3">
                     <div><Label>Location</Label><select value={recForm.locationId} onChange={e => setRecForm(p => ({...p, locationId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm" required><option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
                     <div><Label>Description</Label><Input value={recForm.description} onChange={e => setRecForm(p => ({...p, description: e.target.value}))} placeholder="e.g. Rent, License" required /></div>
+                    <div><Label>Default Category</Label><select value={recForm.categoryId} onChange={e => setRecForm(p => ({...p, categoryId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Optional</option>{categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                     <div className="grid grid-cols-2 gap-3"><div><Label>Amount</Label><Input type="number" step="0.01" value={recForm.amount} onChange={e => setRecForm(p => ({...p, amount: e.target.value}))} required /></div><div><Label>Frequency</Label><select value={recForm.frequency} onChange={e => setRecForm(p => ({...p, frequency: e.target.value as any}))} className="w-full rounded border px-3 py-2 text-sm"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div></div>
                     <div><Label>Next Due</Label><Input type="date" value={recForm.nextDueDate} onChange={e => setRecForm(p => ({...p, nextDueDate: e.target.value}))} required /></div>
                     <Button type="submit" className="w-full bg-[#C73E1D]" disabled={createRecurring.isPending}>{createRecurring.isPending ? "Saving..." : "Add Recurring"}</Button>
@@ -190,6 +216,7 @@ export function Bills() {
                 <DialogContent className="bg-white max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle className="font-serif text-xl">Add Bill</DialogTitle></DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-3">
                     <div className="grid grid-cols-2 gap-3"><div><Label>Location</Label><select value={form.locationId} onChange={e => setForm(p => ({...p, locationId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm" required><option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div><div><Label>Supplier</Label><select value={form.supplierId} onChange={e => setForm(p => ({...p, supplierId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Optional</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div></div>
+                    <div><Label>Category</Label><select value={form.categoryId} onChange={e => setForm(p => ({...p, categoryId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Use supplier/default logic</option>{categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                     <div><Label>Description</Label><Input value={form.description} onChange={e => setForm(p => ({...p, description: e.target.value}))} required /></div>
                     <div className="grid grid-cols-2 gap-3">
                       <div><Label>Bill Number <span className="text-[#8D8A87] font-normal">(optional)</span></Label><Input value={form.billNumber} onChange={e => setForm(p => ({...p, billNumber: e.target.value}))} placeholder="Auto: BILL-0001" /></div>
@@ -261,7 +288,7 @@ export function Bills() {
         {recurring && recurring.length > 0 && (
           <Card className="border-[#E8E0D8]"><CardHeader className="pb-3"><CardTitle className="font-serif text-lg">Recurring Bills</CardTitle></CardHeader>
             <CardContent><div className="overflow-x-auto"><table className="w-full"><thead><tr className="border-b"><th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Description</th><th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Freq</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Amount</th><th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Next Due</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Action</th></tr></thead>
-              <tbody className="divide-y">{recurring.map(r => <tr key={r.id} className="hover:bg-[#F5EDE6]/50"><td className="py-2 text-sm font-medium">{r.description}</td><td className="py-2 text-sm capitalize text-[#8D8A87]">{r.frequency}</td><td className="py-2 text-right font-mono text-sm">{formatKES(r.amount)}</td><td className="py-2 text-sm text-[#ED6C02]">{formatDate(r.nextDueDate)}</td><td className="py-2 text-right"><div className="flex items-center justify-end gap-1">{canCreate && <Button size="sm" onClick={() => generateRecurring.mutate({ templateId: r.id })} disabled={generateRecurring.isPending} className="bg-[#C73E1D]">Generate</Button>}{canCreate && <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete this recurring bill template?")) deleteRecurring.mutate({ id: r.id }); }}><Trash2 className="h-4 w-4 text-[#D32F2F]"/></Button>}</div></td></tr>)}</tbody>
+              <tbody className="divide-y">{recurring.map(r => <tr key={r.id} className="hover:bg-[#F5EDE6]/50"><td className="py-2 text-sm font-medium">{r.description}</td><td className="py-2 text-sm capitalize text-[#8D8A87]">{r.frequency}</td><td className="py-2 text-right font-mono text-sm">{formatKES(r.amount)}</td><td className="py-2 text-sm text-[#ED6C02]">{formatDate(r.nextDueDate)}</td><td className="py-2 text-right"><div className="flex items-center justify-end gap-1">{canCreate && <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete this recurring bill template?")) deleteRecurring.mutate({ id: r.id }); }}><Trash2 className="h-4 w-4 text-[#D32F2F]"/></Button>}</div></td></tr>)}</tbody>
             </table></div></CardContent>
           </Card>
         )}
@@ -282,19 +309,29 @@ export function Bills() {
                   <div className="flex items-center justify-end gap-1">
                     {canCreate && <Button size="sm" variant="ghost" onClick={() => setItemsOpen(itemsOpen === bill.id ? null : bill.id)}><Package className="h-4 w-4 text-[#D4A854]"/></Button>}
                     {canPay && bill.status !== "paid" && (
-                      <Dialog open={paymentOpen === bill.id} onOpenChange={v => setPaymentOpen(v ? bill.id : null)}>
-                        <DialogTrigger asChild><Button size="sm" variant="outline" className="border-[#C73E1D] text-[#C73E1D]" onClick={() => setPayForm({ paymentMethod: "mpesa" as const, amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" })}>Pay</Button></DialogTrigger>
+                      <Dialog open={paymentOpen === bill.id} onOpenChange={v => { setPaymentOpen(v ? bill.id : null); setPaymentError(null); }}>
+                        <DialogTrigger asChild><Button size="sm" variant="outline" className="border-[#C73E1D] text-[#C73E1D]" onClick={() => { setPayForm({ paymentMethod: "mpesa" as const, amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" }); setPaymentError(null); }}>Pay</Button></DialogTrigger>
                         <DialogContent className="bg-white"><DialogHeader><DialogTitle className="font-serif text-xl">Record Payment</DialogTitle></DialogHeader>
                           <form onSubmit={handlePayment(bill.id)} className="space-y-3">
                             <div className="rounded bg-[#F5EDE6] p-3"><p className="text-sm font-medium">{bill.description}</p><p className="text-xs text-[#8D8A87]">Supplier: {suppliers?.find(s => s.id === bill.supplierId)?.name ?? "-"} · Balance: {formatKES(bill.balanceDue)}</p></div>
                             <div className="grid grid-cols-2 gap-3"><div><Label>Amount</Label><Input type="number" step="0.01" max={parseFloat(bill.balanceDue)} value={payForm.amount} onChange={e => setPayForm(p => ({...p, amount: e.target.value}))} required /></div><div><Label>Method</Label><select value={payForm.paymentMethod} onChange={e => setPayForm(p => ({...p, paymentMethod: e.target.value as any}))} className="w-full rounded border px-3 py-2 text-sm"><option value="cash">Cash</option><option value="mpesa">M-PESA</option><option value="bank_transfer">Bank</option><option value="card">Card</option></select></div></div>
                             <div><Label>Payment Date</Label><Input type="date" value={payForm.paymentDate} max={todayDate} onChange={e => setPayForm(p => ({ ...p, paymentDate: e.target.value }))} required /></div>
                             <div className="grid grid-cols-2 gap-3"><div><Label>Funding Source</Label><select value={payForm.accountId} onChange={e => setPayForm(p => ({...p, accountId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Auto-detect</option>{accounts?.filter(a => a.isPaymentMethod && a.locationId === bill.locationId)?.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name}{loc ? ` (${loc})` : ""}</option>; })}</select></div><div><Label>Reference</Label><Input value={payForm.reference} onChange={e => setPayForm(p => ({...p, reference: e.target.value}))} placeholder="M-PESA code"/></div></div>
+                            {paymentError && (
+                              <div role="alert" className="flex items-start gap-2 rounded-md border border-[#D32F2F]/30 bg-[#D32F2F]/5 p-3 text-sm text-[#D32F2F]">
+                                <OctagonX className="mt-0.5 h-4 w-4 shrink-0" />
+                                <div>
+                                  <p className="font-medium">Payment failed</p>
+                                  <p className="mt-0.5 text-xs opacity-80">{paymentError}</p>
+                                </div>
+                              </div>
+                            )}
                             <Button type="submit" className="w-full bg-[#C73E1D]" disabled={recordPayment.isPending}>{recordPayment.isPending ? "Processing..." : "Record Payment"}</Button>
                           </form>
                         </DialogContent>
                       </Dialog>
                     )}
+                    {canCreate && !bill.reversedAt && <Button size="sm" variant="ghost" onClick={() => { const reason = prompt("Reason for reversal", "Correction"); if (reason) reverseBill.mutate({ id: bill.id, reason }); }}><RotateCcw className="h-4 w-4 text-[#ED6C02]"/></Button>}
                     {canCreate && <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete this bill?")) deleteBill.mutate({ id: bill.id }); }}><Trash2 className="h-4 w-4 text-[#D32F2F]"/></Button>}
                   </div>
                 </td>

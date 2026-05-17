@@ -16,7 +16,7 @@ export function getTestDb() {
     });
   }
   if (!instance) {
-    instance = drizzle(pool);
+    instance = drizzle(pool, { schema: fullSchema });
   }
   return instance;
 }

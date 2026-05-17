@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, authedQuery, userManage, PERMISSIONS, loadRolePermissionsFromDb, invalidateRolePermissionCache } from "./middleware";
+import { createRouter, authedQuery, userManage, PERMISSIONS, loadRolePermissionsFromDb, invalidateRolePermissionCache, type Permission } from "./middleware";
 import { getDb } from "./queries/connection";
 import { users, rolePermissions, userBusinesses } from "@db/schema";
 import { eq, isNull } from "drizzle-orm";
@@ -111,7 +111,7 @@ export const permissionsRouter = createRouter({
     for (const row of rows) {
       try {
         const perms = Array.isArray(row.permissions) ? row.permissions : JSON.parse(row.permissions as string || "[]");
-        dbOverrides[row.roleKey] = perms.filter((p: string) => Object.values(PERMISSIONS).includes(p));
+        dbOverrides[row.roleKey] = perms.filter((p: string): p is Permission => Object.values(PERMISSIONS).includes(p as Permission));
       } catch {
         dbOverrides[row.roleKey] = [];
       }

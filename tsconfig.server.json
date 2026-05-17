@@ -11,6 +11,7 @@
     "moduleDetection": "force",
     "noEmit": true,
     "strict": true,
+    "jsx": "preserve",
     "noImplicitAny": false,
     "esModuleInterop": true,
     "noFallthroughCasesInSwitch": true,

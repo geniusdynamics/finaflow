@@ -4,6 +4,7 @@ import { getDb } from "./queries/connection";
 import { dailySales, expenses, bills, billItems, billPayments, accounts, mpesaTransactions, recurringBillTemplates, payrollPeriods, payrollEntries, payrollAdvances, ledgerEntries, dailyMpesaLedger, suppliers, attachments, locations } from "@db/schema";
 import { eq, and, isNull, sql, desc } from "drizzle-orm";
 import { d, Decimal } from "./lib/decimal";
+import { resetBusinessTransactions } from "./lib/business-reset";
 
 export const dashboardRouter = createRouter({
   summary: authedQuery
@@ -166,6 +167,9 @@ export const dashboardRouter = createRouter({
     const accts = await db.select().from(accounts).where(and(isNull(accounts.deletedAt), eq(accounts.isActive, true), locFilter));
     const totalBalance = accts.reduce((sum, a) => sum.plus(d(a.currentBalance)), d(0));
     const byLocation = accts.reduce((acc, a) => {
+      if (a.locationId === null) {
+        return acc;
+      }
       if (!acc[a.locationId]) acc[a.locationId] = d(0);
       acc[a.locationId] = acc[a.locationId].plus(d(a.currentBalance));
       return acc;
@@ -206,91 +210,19 @@ export const dashboardRouter = createRouter({
 
   resetAllTransactions: ownerQuery
     .mutation(async ({ ctx }) => {
-      const db = getDb();
-      const now = new Date();
-      const results: Record<string, { ok: boolean; count?: number; error?: string }> = {};
-      const locIds = await getCurrentBusinessLocationIds(ctx);
-      const locIdSql = locIds.length > 0 ? sql.join(locIds.map(id => sql`${id}`), sql`, `) : sql`0`;
-
-      async function softDelete(tableName: string, table: any, extraSet?: Record<string, unknown>) {
-        try {
-          const setClause = { deletedAt: now, ...extraSet };
-          const r = await db.update(table).set(setClause).where(and(isNull(table.deletedAt), sql`${table.locationId} IN (${locIdSql})`));
-          const count = typeof r === "object" && r !== null && "rowsAffected" in r ? (r as any).rowsAffected ?? 0 : 0;
-          results[tableName] = { ok: true, count };
-        } catch (e: any) {
-          results[tableName] = { ok: false, error: e.message ?? String(e) };
-        }
+      const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
+      if (!businessId) {
+        throw new Error("No active business available for reset.");
       }
 
-      await softDelete("daily_sales", dailySales);
-      await softDelete("expenses", expenses);
-      await softDelete("bills", bills, { status: "cancelled" });
-      await softDelete("bill_items", billItems);
-      await softDelete("bill_payments", billPayments);
-      await softDelete("mpesa_transactions", mpesaTransactions);
-      await softDelete("payroll_periods", payrollPeriods, { status: "cancelled" });
-      await softDelete("payroll_entries", payrollEntries);
-      await softDelete("payroll_advances", payrollAdvances);
-      await softDelete("ledger_entries", ledgerEntries);
-      await softDelete("daily_mpesa_ledger", dailyMpesaLedger);
-      await softDelete("attachments", attachments);
-      await softDelete("recurring_bill_templates", recurringBillTemplates, { isActive: false });
+      const resetResult = await resetBusinessTransactions({
+        db: getDb(),
+        businessId,
+      });
 
-      try {
-        const accts = await db.select().from(accounts)
-          .where(and(isNull(accounts.deletedAt), eq(accounts.isActive, true), sql`${accounts.locationId} IN (${locIdSql})`));
-        let resetCount = 0;
-        for (const acct of accts) {
-          try {
-            const targetBalance = acct.openingBalance ?? "0.00";
-            await db.update(accounts).set({ currentBalance: targetBalance }).where(eq(accounts.id, acct.id));
-            resetCount++;
-          } catch (e: any) {
-            results[`account_${acct.id}`] = { ok: false, error: e.message ?? String(e) };
-          }
-        }
-        results.accounts = { ok: true, count: resetCount };
-      } catch (e: any) {
-        results.accounts = { ok: false, error: e.message ?? String(e) };
-      }
-
-      try {
-        const supplierIds = await db.select({ supplierId: bills.supplierId }).from(bills)
-          .where(and(sql`${bills.locationId} IN (${locIdSql})`, isNull(bills.deletedAt)))
-          .groupBy(bills.supplierId);
-        const ids = supplierIds.map(s => s.supplierId).filter(Boolean);
-        if (ids.length > 0) {
-          const idSql = sql.join(ids.map(id => sql`${id}`), sql`, `);
-          await db.update(suppliers)
-            .set({ currentBalance: "0.00", totalBilled: "0.00", totalPaid: "0.00" })
-            .where(and(sql`${suppliers.id} IN (${idSql})`, isNull(suppliers.deletedAt)));
-          results.suppliers = { ok: true, count: ids.length };
-        } else {
-          results.suppliers = { ok: true, count: 0 };
-        }
-      } catch (e: any) {
-        results.suppliers = { ok: false, error: e.message ?? String(e) };
-      }
-
-      try {
-        if (locIds.length > 0) {
-          const locIdFilter = sql.join(locIds.map(id => sql`${id}`), sql`, `);
-          await db.update(locations).set({ nextBillNumber: 1, nextExpenseNumber: 1 })
-            .where(and(sql`${locations.id} IN (${locIdFilter})`, isNull(locations.deletedAt)));
-          results.locations = { ok: true, count: locIds.length };
-        } else {
-          results.locations = { ok: true, count: 0 };
-        }
-      } catch (e: any) {
-        results.locations = { ok: false, error: e.message ?? String(e) };
-      }
-
-      const failures = Object.entries(results).filter(([_, v]) => !v.ok);
-      if (failures.length > 0) {
-        const failureList = failures.map(([k, v]) => `${k}: ${v.error}`).join("; ");
-        return { success: true, warning: `Some tables had errors: ${failureList}`, results };
-      }
-      return { success: true, message: "All transactions have been reset.", results };
+      return {
+        ...resetResult,
+        message: "All transactions have been reset.",
+      };
     }),
 });

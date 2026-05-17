@@ -36,34 +36,38 @@ export function OperationsReportsPanel() {
   const [cogsOpen, setCogsOpen] = useState(false);
   const [selectedFlowKey, setSelectedFlowKey] = useState<"inflow" | "outflow" | null>(null);
   const [selectedBudgetCategoryId, setSelectedBudgetCategoryId] = useState<number | null>(null);
-  const [budgetForm, setBudgetForm] = useState({ categoryId: "", amount: "" });
+  const [budgetForm, setBudgetForm] = useState<{ budgetType: "cogs" | "sales"; amount: string }>({
+    budgetType: "cogs",
+    amount: "",
+  });
   const [cogsForm, setCogsForm] = useState({ target: "35", alert: "38" });
   const queryClient = useQueryClient();
+  const selectedLocationId = branchFilter ? +branchFilter : undefined;
 
   const { data: locations } = trpc.locations.list.useQuery();
-  const plQuery = trpc.reports.plStatement.useQuery({ year, month, locationId: branchFilter ? +branchFilter : undefined });
-  const plMonthlyQuery = trpc.reports.plMonthly.useQuery({ year, locationId: branchFilter ? +branchFilter : undefined });
-  const comparativeQuery = trpc.reports.plComparative.useQuery({ locationId: branchFilter ? +branchFilter : undefined });
-  const bvaQuery = trpc.reports.budgetVsActual.useQuery({ year, month, locationId: branchFilter ? +branchFilter : undefined });
-  const cashFlowQuery = trpc.reports.cashFlowForecast.useQuery({ locationId: branchFilter ? +branchFilter : undefined });
-  const cogsQuery = trpc.reports.cogsAnalysis.useQuery({ year, month, locationId: branchFilter ? +branchFilter : undefined });
-  const cogsTargetQuery = trpc.reports.getCogsTarget.useQuery({ locationId: branchFilter ? +branchFilter : undefined });
+  const plQuery = trpc.reports.plStatement.useQuery({ year, month, locationId: selectedLocationId });
+  const plMonthlyQuery = trpc.reports.plMonthly.useQuery({ year, locationId: selectedLocationId });
+  const comparativeQuery = trpc.reports.plComparative.useQuery({ locationId: selectedLocationId });
+  const bvaQuery = trpc.reports.budgetVsActual.useQuery({ year, month, locationId: selectedLocationId });
+  const cashFlowQuery = trpc.reports.cashFlowForecast.useQuery({ locationId: selectedLocationId });
+  const cogsQuery = trpc.reports.cogsAnalysis.useQuery({ year, month, locationId: selectedLocationId });
+  const cogsTargetQuery = trpc.reports.getCogsTarget.useQuery({ locationId: selectedLocationId });
   const { data: categories } = trpc.expenses.categories.useQuery();
 
   const { data: salesData } = trpc.dailySales.list.useQuery({
     dateFrom: `${year}-${String(month).padStart(2, "0")}-01`,
     dateTo: `${year}-${String(month).padStart(2, "0")}-31`,
-    locationId: branchFilter ? +branchFilter : undefined,
+    locationId: selectedLocationId,
   });
   const { data: expenseData } = trpc.expenses.list.useQuery({
     dateFrom: `${year}-${String(month).padStart(2, "0")}-01`,
     dateTo: `${year}-${String(month).padStart(2, "0")}-31`,
-    locationId: branchFilter ? +branchFilter : undefined,
+    locationId: selectedLocationId,
   });
   const { data: mpesaData } = trpc.mpesa.list.useQuery({
     dateFrom: `${year}-${String(month).padStart(2, "0")}-01`,
     dateTo: `${year}-${String(month).padStart(2, "0")}-31`,
-    locationId: branchFilter ? +branchFilter : undefined,
+    locationId: selectedLocationId,
   });
 
   const pl = plQuery.data;
@@ -259,7 +263,7 @@ export function OperationsReportsPanel() {
             </Card>
           )}
 
-          <MonthlyTrendChart data={plMonthly ?? []} year={year} />
+          <MonthlyTrendChart data={(plMonthly ?? []).map(m => ({ ...m, month: String(m.month), payroll: "0.00" }))} year={year} />
 
           {cashFlow && (
             <Card className="border-gray-200">
@@ -356,7 +360,17 @@ export function OperationsReportsPanel() {
                   <DialogHeader>
                     <DialogTitle className="font-serif text-xl">Set COGS Target</DialogTitle>
                   </DialogHeader>
-                  <form onSubmit={e => { e.preventDefault(); setCogsT.mutate({ locationId: branchFilter ? +branchFilter : undefined, targetFoodCostPercent: cogsForm.target, alertThresholdPercent: cogsForm.alert }); }} className="space-y-3">
+                  <form
+                    onSubmit={e => {
+                      e.preventDefault();
+                      if (!selectedLocationId) {
+                        toast.error("Select a branch before setting a COGS target");
+                        return;
+                      }
+                      setCogsT.mutate({ locationId: selectedLocationId, cogsTarget: cogsForm.target });
+                    }}
+                    className="space-y-3"
+                  >
                     <div>
                       <label className="text-sm text-gray-500">Target Cost %</label>
                       <Input type="number" step="0.1" value={cogsForm.target} onChange={e => setCogsForm(p => ({ ...p, target: e.target.value }))} />
@@ -420,12 +434,33 @@ export function OperationsReportsPanel() {
                   <DialogHeader>
                     <DialogTitle className="font-serif text-xl">Set Budget</DialogTitle>
                   </DialogHeader>
-                  <form onSubmit={e => { e.preventDefault(); setBudget.mutate({ categoryId: +budgetForm.categoryId, year, month, amount: budgetForm.amount, locationId: branchFilter ? +branchFilter : undefined }); }} className="space-y-3">
+                  <form
+                    onSubmit={e => {
+                      e.preventDefault();
+                      if (!selectedLocationId) {
+                        toast.error("Select a branch before setting a budget");
+                        return;
+                      }
+                      setBudget.mutate({
+                        year,
+                        month,
+                        budgetType: budgetForm.budgetType,
+                        amount: budgetForm.amount,
+                        locationId: selectedLocationId,
+                      });
+                    }}
+                    className="space-y-3"
+                  >
                     <div>
-                      <label className="text-sm text-gray-500">Category</label>
-                      <select value={budgetForm.categoryId} onChange={e => setBudgetForm(p => ({ ...p, categoryId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required>
-                        <option value="">Select</option>
-                        {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      <label className="text-sm text-gray-500">Budget Type</label>
+                      <select
+                        value={budgetForm.budgetType}
+                        onChange={e => setBudgetForm(p => ({ ...p, budgetType: e.target.value as "cogs" | "sales" }))}
+                        className="w-full rounded border px-3 py-2 text-sm"
+                        required
+                      >
+                        <option value="cogs">Cost of Goods Sold</option>
+                        <option value="sales">Sales Revenue</option>
                       </select>
                     </div>
                     <div>
@@ -475,7 +510,7 @@ export function OperationsReportsPanel() {
                     >
                       <div className="flex items-center justify-between text-sm">
                         <div className="flex items-center gap-2">
-                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: cat.categoryColor ?? "#C73E1D" }} />
+                          <span className="h-2 w-2 rounded-full" style={{ backgroundColor: "#C73E1D" }} />
                           <span className="font-medium">{cat.categoryName}</span>
                         </div>
                         <div className="flex gap-3 text-xs">

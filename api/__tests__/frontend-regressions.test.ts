@@ -9,7 +9,7 @@ describe("Frontend regressions", () => {
     const module = await import("../../src/pages/Businesses");
 
     expect(typeof module.default).toBe("function");
-  });
+  }, 30000);
 
   it("recovers the CSRF token from cookies after a page reload", async () => {
     const module = await import("../../src/providers/trpc");

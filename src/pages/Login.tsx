@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Link, useSearchParams } from "react-router";
+import { Link, useSearchParams, useNavigate } from "react-router";
 import { Landmark, LogIn, Store, Eye, EyeOff, Briefcase, CheckCircle, Gift, Building, Globe, Loader2, Check, X, ArrowRight, ArrowLeft, ChevronLeft, Sparkles, UserPlus, Handshake } from "lucide-react";
 import { setCsrfFromResponse } from "@/hooks/useAuth";
 
@@ -38,6 +38,7 @@ function goToSignup(
 
 export default function Login() {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const preselectedType = searchParams.get("type");
 
   const [mode, setMode] = useState<"accountLookup" | "credentials" | "signup">(
@@ -74,7 +75,7 @@ export default function Login() {
       setCsrfFromResponse((data.csrfToken as string) || null);
       toast.success("Welcome back, " + ((data.user as Record<string, string>)?.name || (data.user as Record<string, string>)?.username) + "!");
       utils.invalidate();
-      window.location.href = "/dashboard";
+      navigate("/dashboard");
     },
     onError: (err: { message?: string }) => toast.error(err.message || "Login failed"),
   });
@@ -84,7 +85,7 @@ export default function Login() {
       setCsrfFromResponse((data.csrfToken as string) || null);
       toast.success("Welcome, " + (data.user as Record<string, string>)?.name + "! Your account is ready.");
       utils.invalidate();
-      window.location.href = "/dashboard";
+      navigate("/dashboard");
     },
     onError: (err: { message?: string }) => toast.error(err.message || "Registration failed"),
   });

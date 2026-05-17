@@ -75,7 +75,11 @@ export function ChartOfAccounts({ embedded }: { embedded?: boolean }) {
             <DialogHeader>
               <DialogTitle className="font-serif text-xl">Create Account</DialogTitle>
             </DialogHeader>
-            <AccountForm onSuccess={() => setCreateOpen(false)} businessId={businessId} />
+            {businessId ? (
+              <AccountForm onSuccess={() => setCreateOpen(false)} businessId={businessId} />
+            ) : (
+              <p className="text-sm text-[#8D8A87]">Select an active business before creating chart accounts.</p>
+            )}
           </DialogContent>
         </Dialog>
       </div>
@@ -232,15 +236,20 @@ function AccountForm({ onSuccess, businessId }: { onSuccess: () => void; busines
     onError: (e) => toast.error(e.message),
   });
 
-  const getNextCodeMutation = trpc.chartOfAccounts.getNextAccountCode.useMutation({
-    onSuccess: (data) => {
-      setAccountCode(data.nextCode);
-    },
-  });
+  const nextCodeQuery = trpc.chartOfAccounts.getNextAccountCode.useQuery(
+    { businessId, accountType: accountType as any },
+    { enabled: !!businessId }
+  );
+
+  useEffect(() => {
+    if (nextCodeQuery.data?.nextCode && !accountCode) {
+      setAccountCode(nextCodeQuery.data.nextCode);
+    }
+  }, [nextCodeQuery.data?.nextCode, accountCode]);
 
   const handleTypeChange = (type: string) => {
     setAccountType(type);
-    getNextCodeMutation.mutate({ businessId, accountType: type as any });
+    setAccountCode("");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -289,7 +298,7 @@ function AccountForm({ onSuccess, businessId }: { onSuccess: () => void; busines
       { value: "admin_expense", label: "Administrative Expense" },
       { value: "marketing_expense", label: "Marketing Expense" },
       { value: "depreciation_expense", label: "Depreciation Expense" },
-      { value: "other_expense", label: "Other Expense" },
+      { value: "operating_expense", label: "Other Operating Expense" },
     ],
   };
 

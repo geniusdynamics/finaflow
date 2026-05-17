@@ -56,31 +56,36 @@ async function ensureTestDatabase(): Promise<void> {
   });
 
   try {
-    const migrationFiles = [
-      {
-        tableName: "users",
-        migrationPath: path.resolve(import.meta.dirname, "../../db/migrations/0000_magical_logan.sql"),
-      },
-      {
-        tableName: "customer_accounts",
-        migrationPath: path.resolve(import.meta.dirname, "../../db/migrations/0001_account_level_subscriptions.sql"),
-      },
-      {
-        tableName: "customer_accounts",
-        migrationPath: path.resolve(import.meta.dirname, "../../db/migrations/0002_add_user_type.sql"),
-      },
-    ];
-
-    for (const { tableName, migrationPath } of migrationFiles) {
-      if (await tableExists(testPool, tableName)) {
-        continue;
+    const baseSchemaPath = path.resolve(
+      import.meta.dirname,
+      "../../db/migrations/0000_flawless_jack_murdock.sql",
+    );
+    if (!(await tableExists(testPool, "users"))) {
+      let sql = fs.readFileSync(baseSchemaPath, "utf8");
+      // Strip the DOWN migration section (everything from the "Drops all tables" comment onward)
+      const downMarker = "-- Drops all tables and enums created by this migration";
+      const downIdx = sql.indexOf(downMarker);
+      if (downIdx !== -1) {
+        sql = sql.slice(0, downIdx);
       }
-
-      let sql = fs.readFileSync(migrationPath, "utf8").replaceAll("--> statement-breakpoint", "");
-      if (!migrationPath.includes("0002_add_user_type")) {
-        sql = sql.replace(/CREATE TYPE\s+"public"\./g, 'CREATE TYPE IF NOT EXISTS "public".');
-      }
+      sql = sql.replaceAll("--> statement-breakpoint", "");
+      sql = sql.replace(/CREATE TYPE\s+"public"\./g, 'CREATE TYPE IF NOT EXISTS "public".');
       await testPool.query(sql);
+    }
+
+    const constraintsPath = path.resolve(
+      import.meta.dirname,
+      "../../db/migrations/0001_gifted_secret_warriors.sql",
+    );
+    let constraintSql = fs.readFileSync(constraintsPath, "utf8").replaceAll("--> statement-breakpoint", "");
+    const constraintStatements = constraintSql.split(";").filter((s) => s.trim());
+    for (const stmt of constraintStatements) {
+      try {
+        await testPool.query(stmt);
+      } catch {
+        // Individual FK constraints may already exist;
+        // continue with the next statement for idempotent setup.
+      }
     }
   } finally {
     await testPool.end();

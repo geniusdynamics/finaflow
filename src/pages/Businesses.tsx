@@ -46,7 +46,17 @@ export function Businesses() {
     onSuccess: () => { window.location.reload(); },
   });
   const resetAll = trpc.dashboard.resetAllTransactions.useMutation({
-    onSuccess: (data) => { toast.success(data.message); utils.invalidate(); },
+    onSuccess: (data) => {
+      const parts: string[] = [];
+      if (data.results?.ledger_entries?.count) parts.push(`${data.results.ledger_entries.count} ledger entries cleared`);
+      if (data.results?.user_accounts?.count) parts.push(`${data.results.user_accounts.count} accounts removed`);
+      if (data.results?.accounts?.count) parts.push(`${data.results.accounts.count} account balances reset`);
+      if (data.results?.daily_sales?.count) parts.push(`${data.results.daily_sales.count} sales cleared`);
+      if (data.results?.expenses?.count) parts.push(`${data.results.expenses.count} expenses cleared`);
+      if (data.results?.mpesa_transactions?.count) parts.push(`${data.results.mpesa_transactions.count} M-PESA transactions cleared`);
+      toast.success(parts.length > 0 ? `Reset complete: ${parts.join(", ")}.` : data.message);
+      utils.invalidate();
+    },
     onError: (err) => toast.error(err.message),
   });
 
@@ -175,7 +185,7 @@ export function Businesses() {
                           variant="outline"
                           className="border-[#D32F2F] text-[#D32F2F] hover:bg-[#D32F2F]/5"
                           onClick={() => {
-                            if (confirm("⚠️ RESET ALL TRANSACTIONS\n\nThis will permanently delete ALL transactions in this business:\n• Sales records\n• Expenses\n• Bills & payments\n• M-PESA transactions\n• Payroll records\n• Ledger entries\n\nSetup data (branches, accounts, categories, suppliers, employees, users) will be preserved.\n\nThis action CANNOT be undone.\n\nAre you sure?")) {
+                            if (confirm("⚠️ RESET ALL TRANSACTIONS\n\nThis will permanently delete ALL transactions in this business:\n• Sales records\n• Expenses\n• Bills & payments\n• M-PESA transactions\n• Payroll records\n• Ledger entries\n\nThe following will be reset or removed:\n• All account balances reset to opening balances\n• User-created payment accounts will be removed\n• Default system accounts (Cash, Bank, M-PESA) are preserved with balance reset\n• Categories, suppliers, employees, and locations are preserved\n\nThis action CANNOT be undone.\n\nAre you sure?")) {
                               const confirmText = prompt("Type 'RESET' to confirm deletion of all transactions in this business:");
                               if (confirmText === "RESET") resetAll.mutate();
                               else toast.info("Reset cancelled.");

@@ -53,7 +53,13 @@ export const reportsRouter = createRouter({
     .input(z.object({ year: z.number(), locationId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = getDb();
-      const months = [];
+      const months: {
+        month: number;
+        monthName: string;
+        revenue: string;
+        expenses: string;
+        netProfit: string;
+      }[] = [];
       for (let m = 1; m <= 12; m++) {
         const monthStart = `${input.year}-${String(m).padStart(2, "0")}-01`;
         const monthEnd = new Date(input.year, m, 0).toISOString().split("T")[0];

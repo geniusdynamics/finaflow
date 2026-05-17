@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, salesQuery, salesCreate, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { dailySales, accounts, ledgerEntries, attachments, paymentMethods, dailySalePayments, locationPaymentMethods, locations, businesses } from "@db/schema";
+import { dailySales, accounts, ledgerEntries, attachments, paymentMethods, dailySalePayments, locationPaymentMethods, locations } from "@db/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { d } from "./lib/decimal";
 
@@ -102,9 +102,11 @@ export const dailySalesRouter = createRouter({
       const grossSales = input.payments.reduce((sum, p) => sum.plus(d(p.amount)), d(0));
       const netSales = grossSales.plus(d(input.unpaidAmount)).minus(d(input.discountAmount)).minus(d(input.voidAmount));
 
-      const loc = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
-      const business = await db.select().from(businesses).where(eq(businesses.id, loc[0]?.businessId)).limit(1);
-      const businessId = business[0]?.id;
+      const [location] = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
+      const businessId = location?.businessId;
+      if (!businessId) {
+        throw new Error("Selected location is not linked to a business");
+      }
       const saleDateStr = new Date(input.saleDate).toISOString().split("T")[0];
 
       let saleId = 0;
@@ -170,51 +172,52 @@ export const dailySalesRouter = createRouter({
                   createdBy: enteredBy,
                 } as any).returning();
                 await tx.update(accounts).set({ currentBalance: cashNewBal.toFixed(2) }).where(eq(accounts.id, cashAcct[0].id));
-
-                if (revenueAccountId && netSales.gt(0)) {
-                  const revenueAcct = await tx.select().from(accounts).where(eq(accounts.id, revenueAccountId)).limit(1);
-                  if (revenueAcct[0]) {
-                    const revenueNewBal = d(revenueAcct[0].currentBalance || "0").plus(netSales);
-                    await tx.insert(ledgerEntries).values({
-                      accountId: revenueAccountId,
-                      transactionType: "sale" as any,
-                      transactionId: saleId,
-                      entryType: "credit",
-                      amount: netSales.toFixed(2),
-                      balanceAfter: revenueNewBal.toFixed(2),
-                      entryDate: saleDateStr,
-                      createdBy: enteredBy,
-                      description: `Daily Sales - ${input.salesType || "food"}`,
-                    } as any).returning();
-                    await tx.update(accounts).set({ currentBalance: revenueNewBal.toFixed(2) }).where(eq(accounts.id, revenueAccountId));
-                  }
-                }
-                if (d(input.unpaidAmount).gt(0)) {
-                  const arAcct = await tx.query.accounts.findFirst({
-                    where: and(
-                      eq(accounts.accountCode, "1300"),
-                      eq(accounts.businessId, businessId),
-                      isNull(accounts.deletedAt)
-                    ),
-                  });
-                  if (arAcct) {
-                    const arNewBal = d(arAcct.currentBalance || "0").plus(d(input.unpaidAmount));
-                    await tx.insert(ledgerEntries).values({
-                      accountId: arAcct.id,
-                      transactionType: "sale" as any,
-                      transactionId: saleId,
-                      entryType: "debit",
-                      amount: input.unpaidAmount,
-                      balanceAfter: arNewBal.toFixed(2),
-                      entryDate: saleDateStr,
-                      createdBy: enteredBy,
-                      description: `Credit Sale - ${input.salesType || "food"} ${input.unpaidNotes ? "(" + input.unpaidNotes + ")" : ""}`,
-                    } as any).returning();
-                    await tx.update(accounts).set({ currentBalance: arNewBal.toFixed(2) }).where(eq(accounts.id, arAcct.id));
-                  }
-                }
               }
             }
+          }
+        }
+
+        if (revenueAccountId && netSales.gt(0)) {
+          const revenueAcct = await tx.select().from(accounts).where(eq(accounts.id, revenueAccountId)).limit(1);
+          if (revenueAcct[0]) {
+            const revenueNewBal = d(revenueAcct[0].currentBalance || "0").plus(netSales);
+            await tx.insert(ledgerEntries).values({
+              accountId: revenueAccountId,
+              transactionType: "sale" as any,
+              transactionId: saleId,
+              entryType: "credit",
+              amount: netSales.toFixed(2),
+              balanceAfter: revenueNewBal.toFixed(2),
+              entryDate: saleDateStr,
+              createdBy: enteredBy,
+              description: `Daily Sales - ${input.salesType || "food"}`,
+            } as any).returning();
+            await tx.update(accounts).set({ currentBalance: revenueNewBal.toFixed(2) }).where(eq(accounts.id, revenueAccountId));
+          }
+        }
+
+        if (d(input.unpaidAmount).gt(0)) {
+          const arAcct = await tx.query.accounts.findFirst({
+            where: and(
+              eq(accounts.accountCode, "1300"),
+              eq(accounts.businessId, businessId),
+              isNull(accounts.deletedAt)
+            ),
+          });
+          if (arAcct) {
+            const arNewBal = d(arAcct.currentBalance || "0").plus(d(input.unpaidAmount));
+            await tx.insert(ledgerEntries).values({
+              accountId: arAcct.id,
+              transactionType: "sale" as any,
+              transactionId: saleId,
+              entryType: "debit",
+              amount: input.unpaidAmount,
+              balanceAfter: arNewBal.toFixed(2),
+              entryDate: saleDateStr,
+              createdBy: enteredBy,
+              description: `Credit Sale - ${input.salesType || "food"} ${input.unpaidNotes ? "(" + input.unpaidNotes + ")" : ""}`,
+            } as any).returning();
+            await tx.update(accounts).set({ currentBalance: arNewBal.toFixed(2) }).where(eq(accounts.id, arAcct.id));
           }
         }
 

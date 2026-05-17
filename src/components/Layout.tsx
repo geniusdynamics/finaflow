@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Receipt, TrendingDown, Users, FileText,
   CreditCard, CalendarDays, Smartphone, Menu, X, LogOut,
   Building2, ChevronRight, FileSpreadsheet, BookOpen,
-  Wallet, ShieldCheck, Settings, MessageSquare, Briefcase,
+  Wallet, ShieldCheck, Settings, Briefcase,
   Building, Bell, TrendingUp, Plug, Handshake, Key,
 } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
@@ -25,7 +25,7 @@ const allNavItems = [
   { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
   { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
   { path: "/users", label: "Users & Roles", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },
-  { path: "/feedback", label: "Feedback", icon: MessageSquare, perms: [PERMISSIONS.FEEDBACK_MANAGE] },
+
   { path: "/settings", label: "Settings", icon: Settings, perms: [PERMISSIONS.SETTINGS_MANAGE] },
   { path: "/businesses", label: "Businesses", icon: Briefcase, perms: [PERMISSIONS.BUSINESS_MANAGE] },
   { path: "/partner", label: "Partner", icon: Handshake, perms: [PERMISSIONS.PARTNER_VIEW] },

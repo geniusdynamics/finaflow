@@ -103,34 +103,24 @@ async function findPrimaryBusinessForAccount(
 function setAuthCookies(ctx: AuthCookieContext, token: string, csrfToken: string): void {
   const host = ctx.req.headers.get("host") || "";
   const isLocal = host.startsWith("localhost:") || host.startsWith("127.0.0.1:");
-  ctx.resHeaders.append(
-    "Set-Cookie",
-    serialize("finaflow_token", token, {
-      httpOnly: true,
-      secure: !isLocal,
-      sameSite: "strict",
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60,
-    })
-  );
-  setCsrfOnHeaders(ctx.resHeaders, csrfToken);
+  ctx.resHeaders.append("Set-Cookie", serialize("finaflow_token", token, {
+    httpOnly: true,
+    secure: !isLocal,
+    sameSite: "strict",
+    path: "/",
+    maxAge: 30 * 24 * 60 * 60,
+  }));
+  ctx.resHeaders.append("Set-Cookie", serialize("csrf_token", csrfToken, {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    path: "/",
+    maxAge: 30 * 24 * 60 * 60,
+  }));
 }
 
 function getClientIp(ctx: Pick<AuthCookieContext, "req">): string {
   return ctx.req.headers.get("x-forwarded-for") || ctx.req.headers.get("x-real-ip") || "unknown";
-}
-
-function setCsrfOnHeaders(resHeaders: Headers, token: string): void {
-  resHeaders.append(
-    "Set-Cookie",
-    serialize("csrf_token", token, {
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/",
-      maxAge: 30 * 24 * 60 * 60,
-    })
-  );
 }
 
 export const localAuthRouter = createRouter({
@@ -470,6 +460,7 @@ export const localAuthRouter = createRouter({
 
       let userId: number;
       let businessId: number;
+      let locationId: number;
       let accountRefId: number;
 
       try {
@@ -601,7 +592,7 @@ export const localAuthRouter = createRouter({
 
         userId = registration.userId;
         businessId = registration.businessId;
-        const locationId = registration.locationId;
+        locationId = registration.locationId;
         accountRefId = registration.accountRefId;
       } catch (error: unknown) {
         console.error("[register] signup failed", error);

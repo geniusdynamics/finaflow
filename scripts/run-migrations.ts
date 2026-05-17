@@ -54,8 +54,9 @@ async function main() {
       appliedCount++;
     } catch (err: any) {
       await pool.query("ROLLBACK");
-      if (err.code === "42710" || err.code === "23505") {
+      if (err.code === "42710" || err.code === "23505" || err.code === "42P07" || err.code === "42701") {
         console.log(`  [OK] ${file} already applied (conflict caught)`);
+        await pool.query("INSERT INTO drizzle_schema (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [file]);
         appliedCount++;
       } else {
         console.error(`  [ERROR] ${file}: ${err.message}`);

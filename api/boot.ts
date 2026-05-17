@@ -15,6 +15,9 @@ import { getDb, closePool } from "./queries/connection";
 import { sql } from "drizzle-orm";
 import { processTrialLifecycle, TRIAL_JOB_INTERVAL_MS } from "./lib/subscriptions";
 import { shouldStartStandaloneServer } from "./lib/server-runtime";
+import { ensureDatabaseReady } from "./lib/db-startup";
+
+await ensureDatabaseReady(env.databaseUrl);
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 

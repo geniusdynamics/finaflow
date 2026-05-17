@@ -19,7 +19,7 @@ export function getPool(): pg.Pool {
 
 export function getDb(): ReturnType<typeof drizzle<typeof fullSchema>> {
   if (!instance) {
-    instance = drizzle(getPool());
+    instance = drizzle(getPool(), { schema: fullSchema });
   }
   return instance;
 }
