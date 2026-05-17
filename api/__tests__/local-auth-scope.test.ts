@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appRouter } from "../router";
 import { getDb } from "../queries/connection";
-import { accounts, businesses, customerAccounts, locations, refreshTokens, userBusinesses, users } from "@db/schema";
+import { accounts, businesses, customerAccounts, expenseCategories, locations, refreshTokens, userBusinesses, users } from "@db/schema";
 import { and, eq, isNull, or } from "drizzle-orm";
 
 function createCaller(cookieHeader = "") {
@@ -59,6 +59,7 @@ async function cleanupAccount(accountId: string, email?: string, username?: stri
         .limit(1))[0]?.id ?? -1),
     ));
   for (const business of matchingBusinesses) {
+    await db.delete(expenseCategories).where(eq(expenseCategories.businessId, business.id));
     const businessLocations = await db.select().from(locations).where(eq(locations.businessId, business.id));
     for (const location of businessLocations) {
       await db.delete(accounts).where(eq(accounts.locationId, location.id));

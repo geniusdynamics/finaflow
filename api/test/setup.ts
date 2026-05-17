@@ -1,6 +1,6 @@
 // ABOUTME: Boots the isolated PostgreSQL test database and applies required SQL migrations for integration tests.
 // ABOUTME: Keeps test setup idempotent by only loading migrations whose tables are still missing.
-import { beforeAll, afterAll } from "vitest";
+import { beforeAll } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import pg from "pg";
@@ -17,6 +17,9 @@ process.env.BCRYPT_ROUNDS = "4";
 import { clearRateLimitStore } from "../lib/rate-limit";
 
 const skipTestDatabaseBootstrap = process.env.SKIP_API_TEST_DB === "1";
+
+// Increase timeout for database bootstrapping since it involves DDL operations
+const BOOTSTRAP_TIMEOUT = 60_000;
 
 async function tableExists(testPool: pg.Pool, tableName: string): Promise<boolean> {
   const result = await testPool.query(
@@ -40,15 +43,19 @@ async function ensureTestDatabase(): Promise<void> {
     max: 1,
   });
 
+  // Attempt to create the database. Multiple test files may race here
+  // in parallel test runs, so we gracefully handle both the standard
+  // "42P04" (duplicate_database) and any "duplicate key" errors.
   try {
     await adminPool.query('CREATE DATABASE "finaflow_test"');
   } catch (error: any) {
-    if (error?.code !== "42P04") {
+    const msg = (error?.message ?? "").toLowerCase();
+    const isDupDb = error?.code === "42P04" || msg.includes("already exists") || msg.includes("duplicate key");
+    if (!isDupDb) {
       throw error;
     }
-  } finally {
-    await adminPool.end();
   }
+  await adminPool.end();
 
   const testPool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
@@ -105,13 +112,8 @@ beforeAll(async () => {
     return;
   }
   await ensureTestDatabase();
-});
+}, BOOTSTRAP_TIMEOUT);
 
-afterAll(async () => {
-  clearRateLimitStore();
-  if (skipTestDatabaseBootstrap) {
-    return;
-  }
-  const { closePool } = await import("../queries/connection");
-  await closePool();
-});
+// Pool is not explicitly closed here because this is a shared setup file loaded for every test suite.
+// Closing the singleton pool in afterAll while other suites are still running causes connection errors.
+// Connections are cleaned up when the Node process exits after all tests complete.
