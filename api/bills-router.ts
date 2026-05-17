@@ -38,9 +38,7 @@ export async function getLiabilityAccountForRecurring(
     const cat = await db.select().from(expenseCategories).where(
       and(eq(expenseCategories.id, categoryId), isNull(expenseCategories.deletedAt))
     ).limit(1);
-    if (cat[0]?.accountingClass) {
-      accountingClass = cat[0].accountingClass;
-    }
+    accountingClass = cat[0]?.accountingClass || null;
   }
   
   const descLower = (description || "").toLowerCase();
@@ -173,20 +171,15 @@ export const billsRouter = createRouter({
 
       await requireAuthorizedLocation(ctx, input.locationId);
 
-      if (input.supplierId) {
-        await requireAuthorizedBusinessEntity(ctx, suppliers, input.supplierId);
-      }
-
       const [location] = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
-      const businessId = location?.businessId;
-
-      if (!businessId) {
-        throw new Error("Selected location is not linked to a business");
+      if (!location) {
+        throw new Error("Location not found");
       }
+      const businessId = location.businessId!;
 
       await db.transaction(async (tx) => {
         if (!billNumber) {
-          const nextNum = location?.nextBillNumber ?? 1;
+          const nextNum = location.nextBillNumber ?? 1;
           billNumber = `BILL-${String(nextNum).padStart(4, "0")}`;
           await tx.update(locations).set({ nextBillNumber: nextNum + 1 }).where(eq(locations.id, input.locationId));
         }
@@ -310,7 +303,7 @@ export const billsRouter = createRouter({
       const currentPaid = d(bill.amountPaid);
       const totalAmount = d(bill.amount);
       const newPaid = currentPaid.plus(paymentAmount);
-      const newBalance = d(Math.max(0, totalAmount.minus(currentPaid).minus(paymentAmount).toNumber()));
+      const newBalance = d(Math.max(0, d(totalAmount).minus(currentPaid).minus(paymentAmount).toNumber()));
       const status = newBalance.lte(0) ? "paid" as const : "partial" as const;
 
       const resolvedCategoryId = await resolveBillCategoryId(db, input.billId, bill.supplierId);

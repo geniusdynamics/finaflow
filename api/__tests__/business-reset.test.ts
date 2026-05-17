@@ -53,7 +53,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     isActive: true,
   } as any);
 
-  const [location] = await db.insert(locations).values({
+  const locRows = await db.insert(locations).values({
     businessId: business.id,
     name: `Main ${seed}`,
     slug: `main-${seed.toLowerCase()}`,
@@ -61,8 +61,9 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     nextBillNumber: 19,
     nextExpenseNumber: 27,
   } as any).returning();
+  const [location] = locRows as any[];
 
-  const [operationalAccount] = await db.insert(accounts).values({
+  const opRows = await db.insert(accounts).values({
     businessId: business.id,
     locationId: location.id,
     name: "Cash Drawer",
@@ -71,8 +72,9 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     openingBalance: "100.00",
     isActive: true,
   } as any).returning();
+  const [operationalAccount] = opRows as any[];
 
-  const [systemAccount] = await db.insert(accounts).values({
+  const sysRows = await db.insert(accounts).values({
     businessId: business.id,
     locationId: null,
     name: "Expense Clearing",
@@ -85,8 +87,9 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     isSystemGenerated: true,
     isActive: true,
   } as any).returning();
+  const [systemAccount] = sysRows as any[];
 
-  const [entry] = await db.insert(journalEntries).values({
+  const entryRows = await db.insert(journalEntries).values({
     businessId: business.id,
     entryNumber: `JE-${seed}`,
     entryDate: "2026-05-16",
@@ -94,6 +97,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     isPosted: true,
     createdBy: owner.id,
   } as any).returning();
+  const [entry] = entryRows as any[];
 
   await db.insert(journalLines).values({
     journalEntryId: entry.id,

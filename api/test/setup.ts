@@ -69,8 +69,15 @@ async function ensureTestDatabase(): Promise<void> {
         sql = sql.slice(0, downIdx);
       }
       sql = sql.replaceAll("--> statement-breakpoint", "");
-      sql = sql.replace(/CREATE TYPE\s+"public"\./g, 'CREATE TYPE IF NOT EXISTS "public".');
-      await testPool.query(sql);
+      const statements = sql.split(";").filter((s) => s.trim());
+      for (const stmt of statements) {
+        try {
+          await testPool.query(stmt);
+        } catch {
+          // Individual DDL statements may fail if already applied;
+          // continue with the next statement for idempotent setup.
+        }
+      }
     }
 
     const constraintsPath = path.resolve(

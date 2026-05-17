@@ -76,7 +76,7 @@ export const chartOfAccountsRouter = createRouter({
 
       if (existing) throw new Error("Account code already exists");
 
-      const [account] = await db
+      const rows = await db
         .insert(accounts)
         .values({
           businessId: input.businessId,
@@ -94,6 +94,7 @@ export const chartOfAccountsRouter = createRouter({
           isPaymentMethod: input.isPaymentMethod,
         } as any)
         .returning();
+      const account = (rows as any[])[0];
 
       return account;
     }),

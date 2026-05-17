@@ -115,7 +115,7 @@ export const accountsRouter = createRouter({
               : "Cash Accounts",
       });
 
-      const [result] = await db.insert(accounts).values({
+      const rows = await db.insert(accounts).values({
         locationId: input.locationId,
         businessId: location.businessId,
         name: input.name,
@@ -129,6 +129,7 @@ export const accountsRouter = createRouter({
         accountSubType: classification.accountSubType as any,
         isContra: false,
       }).returning();
+      const result = (rows as any[])[0];
 
       await logAudit({
         userId,

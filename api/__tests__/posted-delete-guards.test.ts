@@ -149,7 +149,7 @@ describe("posted record delete guards", () => {
     const caller = createCaller(ctx);
     const db = getTestDb();
 
-    const [account] = await db.insert(accounts).values({
+    const acctRows = await db.insert(accounts).values({
       businessId: ctx.business.id,
       locationId: ctx.location.id,
       name: "Expense Cash",
@@ -159,6 +159,7 @@ describe("posted record delete guards", () => {
       currentBalance: "1000.00",
       openingBalance: "1000.00",
     } as any).returning();
+    const [account] = acctRows as any[];
 
     const [category] = await db.insert(expenseCategories).values({
       businessId: ctx.business.id,
@@ -199,7 +200,7 @@ describe("posted record delete guards", () => {
     const caller = createCaller(ctx);
     const db = getTestDb();
 
-    const [cashAccount] = await db.insert(accounts).values({
+    const cashRows = await db.insert(accounts).values({
       businessId: ctx.business.id,
       locationId: ctx.location.id,
       name: "Reversal Cash",
@@ -209,8 +210,9 @@ describe("posted record delete guards", () => {
       currentBalance: "800.00",
       openingBalance: "1000.00",
     } as any).returning();
+    const [cashAccount] = cashRows as any[];
 
-    const [expenseAccount] = await db.insert(accounts).values({
+    const expenseRows = await db.insert(accounts).values({
       businessId: ctx.business.id,
       locationId: null,
       name: "Office Expense",
@@ -220,6 +222,7 @@ describe("posted record delete guards", () => {
       currentBalance: "200.00",
       openingBalance: "0.00",
     } as any).returning();
+    const [expenseAccount] = expenseRows as any[];
 
     const [category] = await db.insert(expenseCategories).values({
       businessId: ctx.business.id,
@@ -279,7 +282,7 @@ describe("posted record delete guards", () => {
     const caller = createCaller(ctx);
     const db = getTestDb();
 
-    const [account] = await db.insert(accounts).values({
+    const acctRows = await db.insert(accounts).values({
       businessId: ctx.business.id,
       locationId: null,
       name: "Accounts Payable",
@@ -289,6 +292,7 @@ describe("posted record delete guards", () => {
       currentBalance: "0.00",
       openingBalance: "0.00",
     } as any).returning();
+    const [account] = acctRows as any[];
 
     const [bill] = await db.insert(bills).values({
       locationId: ctx.location.id,
@@ -321,7 +325,7 @@ describe("posted record delete guards", () => {
     const caller = createCaller(ctx);
     const db = getTestDb();
 
-    const [apAccount] = await db.insert(accounts).values({
+    const apRows = await db.insert(accounts).values({
       businessId: ctx.business.id,
       locationId: null,
       name: "Accounts Payable",
@@ -331,8 +335,9 @@ describe("posted record delete guards", () => {
       currentBalance: "300.00",
       openingBalance: "0.00",
     } as any).returning();
+    const [apAccount] = apRows as any[];
 
-    const [expenseAccount] = await db.insert(accounts).values({
+    const expAcctRows = await db.insert(accounts).values({
       businessId: ctx.business.id,
       locationId: null,
       name: "Ops Expense",
@@ -342,6 +347,7 @@ describe("posted record delete guards", () => {
       currentBalance: "300.00",
       openingBalance: "0.00",
     } as any).returning();
+    const [expenseAccount] = expAcctRows as any[];
 
     const [category] = await db.insert(expenseCategories).values({
       businessId: ctx.business.id,

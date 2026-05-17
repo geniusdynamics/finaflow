@@ -79,6 +79,10 @@ export const expensesRouter = createRouter({
         throw new Error("No active business context available");
       }
 
+      if (!input) {
+        throw new Error("Invalid input");
+      }
+
       let defaultAccountId = input.defaultAccountId;
       if (defaultAccountId) {
         const account = await db.query.accounts.findFirst({

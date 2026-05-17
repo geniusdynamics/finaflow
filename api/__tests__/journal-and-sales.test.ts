@@ -162,7 +162,7 @@ describe("journal router and daily sales posting", () => {
     const caller = createCaller(ctx);
     const db = getTestDb();
 
-    const [debitAccount] = await db.insert(accounts).values({
+    const debitRows = await db.insert(accounts).values({
       businessId: ctx.business.id,
       locationId: null,
       name: "Cash",
@@ -172,8 +172,9 @@ describe("journal router and daily sales posting", () => {
       currentBalance: "0.00",
       openingBalance: "0.00",
     } as any).returning();
+    const [debitAccount] = debitRows as any[];
 
-    const [creditAccount] = await db.insert(accounts).values({
+    const creditRows = await db.insert(accounts).values({
       businessId: ctx.business.id,
       locationId: null,
       name: "Sales Revenue",
@@ -183,6 +184,7 @@ describe("journal router and daily sales posting", () => {
       currentBalance: "0.00",
       openingBalance: "0.00",
     } as any).returning();
+    const [creditAccount] = creditRows as any[];
 
     const entry = await caller.journal.create({
       businessId: ctx.business.id,
@@ -220,7 +222,7 @@ describe("journal router and daily sales posting", () => {
       isPaymentMethod: true,
     });
 
-    const [revenueAccount] = await db.insert(accounts).values({
+    const revenueRows = await db.insert(accounts).values({
       businessId: ctx.business.id,
       locationId: null,
       name: "Sales Revenue",
@@ -230,6 +232,7 @@ describe("journal router and daily sales posting", () => {
       currentBalance: "0.00",
       openingBalance: "0.00",
     } as any).returning();
+    const [revenueAccount] = revenueRows as any[];
 
     const cashMethod = await caller.paymentMethods.create({
       name: "Cash",
