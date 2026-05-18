@@ -282,11 +282,11 @@ export function Accounts() {
                     </div>
                     <div className="flex items-center gap-2 pt-2">
                       <input type="checkbox" id="linkToCoa" checked={form.linkToCoa} onChange={e => setForm(p => ({ ...p, linkToCoa: e.target.checked }))} className="rounded" />
-                      <Label htmlFor="linkToCoa" className="text-sm font-medium">Use chart-compatible asset classification</Label>
+                      <Label htmlFor="linkToCoa" className="text-sm font-medium">Show in Chart of Accounts</Label>
                     </div>
                     {form.linkToCoa && (
                       <>
-                        <p className="text-xs text-[#8D8A87]">The general Accounts page only supports cash-equivalent asset links. Use the Chart of Accounts page for advanced liability, equity, revenue, or expense setup.</p>
+                        <p className="text-xs text-[#8D8A87]">The account balance will sync to the corresponding Chart of Accounts entry, making it visible in financial statements.</p>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2"><Label>Account Type</Label>
                             <select value="asset" onChange={() => undefined} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" disabled>
@@ -577,7 +577,7 @@ export function Accounts() {
                           </div>
                           <div className="flex items-center gap-2 pt-2">
                             <input type="checkbox" id="editLinkToCoa" checked={editForm.linkToCoa} onChange={e => setEditForm(p => ({ ...p, linkToCoa: e.target.checked }))} className="rounded" />
-                            <Label htmlFor="editLinkToCoa" className="text-sm font-medium">Use chart-compatible asset classification</Label>
+                            <Label htmlFor="editLinkToCoa" className="text-sm font-medium">Show in Chart of Accounts</Label>
                           </div>
                           {editForm.linkToCoa && (
                             <>

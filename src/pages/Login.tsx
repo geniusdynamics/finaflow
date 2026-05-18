@@ -58,6 +58,8 @@ export default function Login() {
   });
   const [accountNameStatus, setAccountNameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
   const [accountNameMessage, setAccountNameMessage] = useState("");
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
 
@@ -68,10 +70,13 @@ export default function Login() {
       console.log("[Login] lookupAccount SUCCESS", data);
       setFoundBusiness(data.business as Record<string, unknown> | null);
       setMode("credentials");
+      setLookupLoading(false);
+      setLookupError(null);
     },
-    onError: (err: { message?: string }) => {
+    onError: (err: { message?: string }, _, __) => {
       console.error("[Login] lookupAccount ERROR:", err);
-      toast.error(err.message || "Account not found");
+      setLookupLoading(false);
+      setLookupError(err.message || "Account not found");
     },
   });
 
@@ -98,12 +103,6 @@ export default function Login() {
     },
     onError: (err: { message?: string }) => toast.error(err.message || "Registration failed"),
   });
-
-  useEffect(() => {
-    if (accountId && accountId.length >= 2 && mode === "accountLookup") {
-      lookupMutation.mutate({ accountId });
-    }
-  }, [accountId, mode, lookupMutation]);
 
   const checkAvailability = useCallback(async (name: string) => {
     const cleaned = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -247,15 +246,48 @@ export default function Login() {
                     <Label className="text-xs text-[#8D8A87]">Account ID</Label>
                     <div className="relative">
                       <Globe className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8D8A87]" />
-                      <Input value={accountId} onChange={e => setAccountId(e.target.value.toUpperCase())} placeholder="e.g. GENIUS" className="font-mono uppercase pl-9" required />
+                      <Input 
+                        value={accountId} 
+                        onChange={e => setAccountId(e.target.value.toUpperCase())} 
+                        placeholder="e.g. GENIUS" 
+                        className="font-mono uppercase pl-9" 
+                        required 
+                      />
+                      {lookupLoading && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <Loader2 className="h-4 w-4 animate-spin text-[#C73E1D]" />
+                        </div>
+                      )}
+                      {lookupError && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <X className="h-4 w-4 text-red-600" />
+                        </div>
+                      )}
                     </div>
-                    <p className="mt-1 text-xs text-[#8D8A87]">
-                      Your unique business identifier.
-                      {accountId && <span className="ml-1 text-[#C73E1D]">{"-> "}<strong>{accountId.toLowerCase()}.finaflow.app</strong></span>}
-                    </p>
+                    {lookupError && (
+                      <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+                        <X className="h-3 w-3" /> {lookupError}
+                      </p>
+                    )}
+                    {!lookupError && accountId && (
+                      <p className="mt-1 text-xs text-[#8D8A87]">
+                        Your unique business identifier.
+                        {accountId && <span className="ml-1 text-[#C73E1D]">{"-> "}<strong>{accountId.toLowerCase()}.finaflow.app</strong></span>}
+                      </p>
+                    )}
                   </div>
                   <Button type="submit" className="w-full bg-[#C73E1D]" disabled={lookupMutation.isPending}>
-                    <ArrowRight className="mr-2 h-4 w-4" />{lookupMutation.isPending ? "Looking up..." : "Continue"}
+                    {lookupMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Searching for Account...
+                      </>
+                    ) : (
+                      <>
+                        <ArrowRight className="mr-2 h-4 w-4" />
+                        Continue
+                      </>
+                    )}
                   </Button>
                   <p className="text-center text-xs text-[#8D8A87]">
                     New here? <button type="button" onClick={() => goToSignup(setMode, setSignupForm, "standard")} className="font-medium text-[#C73E1D] underline">Create a new account</button>
