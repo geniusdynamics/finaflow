@@ -221,7 +221,7 @@ export function Expenses() {
 
     if (form.categoryIds.length === 0) {
       if (hasBillWithItems) {
-        // Bill has items - allow proceeding (will create expenses from items)
+        // Bill has items - allow proceeding (will create expense with items)
       } else if (form.billId) {
         toast.error("The selected bill has no items. Please add items to the bill or select a category manually.");
         return;
@@ -233,48 +233,60 @@ export function Expenses() {
 
     if (hasMultiCategoryItems && !billHasOwnCategory) {
       const grouped = groupBillItemsByCategory(billItems);
-      const expenseCount = grouped.size;
-      let createdCount = 0;
-
-      const expenseDataArray = Array.from(grouped.entries()).map(([categoryId, items]) => {
-        const totalAmount = items.reduce((sum, item) => sum + parseFloat(String(item.totalPrice)), 0);
-        return {
-          locationId: +form.locationId,
-          categoryId: categoryId ? +categoryId : form.categoryIds[0],
-          supplierId: form.supplierId ? +form.supplierId : undefined,
-          amount: totalAmount.toFixed(2),
-          description: `${form.description} (${items.map(i => i.itemName).join(", ")})`,
-          expenseDate: form.expenseDate,
-          paymentMethod: form.paymentMethod,
-          accountId: form.accountId ? +form.accountId : undefined,
-          billId: form.billId ? +form.billId : undefined,
-          attachments: undefined as undefined,
-        };
+      const expenseItems = Array.from(grouped.entries()).flatMap(([categoryId, items]) => {
+        return items.map(item => ({
+          itemName: item.itemName,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalPrice: item.totalPrice,
+          categoryId: categoryId ? Number(categoryId) : form.categoryIds[0],
+          notes: undefined as string | undefined,
+        }));
       });
 
-      toast.info(`Creating ${expenseCount} expense entries for multi-category bill...`);
+      const totalAmount = expenseItems.reduce((sum, item) => sum + parseFloat(String(item.totalPrice)), 0);
 
-      const createNextExpense = (index: number) => {
-        if (index >= expenseDataArray.length) {
-          toast.success(`Created ${createdCount} expenses successfully`);
-          setOpen(false);
-          resetForm();
-          refetch();
-          return;
-        }
-        createExpense.mutate(expenseDataArray[index], {
-          onSuccess: () => {
-            createdCount++;
-            createNextExpense(index + 1);
-          },
-          onError: (err) => {
-            toast.error(`Failed to create expense: ${err.message}`);
-            createNextExpense(index + 1);
-          }
-        });
-      };
+      toast.info("Creating expense with line items...");
 
-      createNextExpense(0);
+      createExpense.mutate({
+        locationId: +form.locationId,
+        categoryId: form.categoryIds[0],
+        supplierId: form.supplierId ? +form.supplierId : undefined,
+        amount: totalAmount.toFixed(2),
+        description: form.description,
+        expenseDate: form.expenseDate,
+        paymentMethod: form.paymentMethod,
+        accountId: form.accountId ? +form.accountId : undefined,
+        billId: form.billId ? +form.billId : undefined,
+        attachments: photosEnabled ? attachments : undefined,
+        items: expenseItems,
+      });
+      return;
+    }
+
+    if (hasBillWithItems && billItems && billItems.length > 0) {
+      const expenseItems = billItems.map(item => ({
+        itemName: item.itemName,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+        totalPrice: item.totalPrice,
+        categoryId: item.categoryId ? Number(item.categoryId) : form.categoryIds[0],
+        notes: undefined as string | undefined,
+      }));
+
+      createExpense.mutate({
+        locationId: +form.locationId,
+        categoryId: form.categoryIds[0],
+        supplierId: form.supplierId ? +form.supplierId : undefined,
+        amount: form.amount,
+        description: form.description,
+        expenseDate: form.expenseDate,
+        paymentMethod: form.paymentMethod,
+        accountId: form.accountId ? +form.accountId : undefined,
+        billId: form.billId ? +form.billId : undefined,
+        attachments: photosEnabled ? attachments : undefined,
+        items: expenseItems,
+      });
       return;
     }
 

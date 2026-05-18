@@ -9,6 +9,7 @@ import {
   accounts,
   dailySales,
   expenses,
+  expenseItems,
   expenseCategories,
   suppliers,
   bills,
@@ -102,7 +103,7 @@ export const masterItemsRelations = relations(masterItems, ({ one }) => ({
   }),
 }));
 
-export const expensesRelations = relations(expenses, ({ one }) => ({
+export const expensesRelations = relations(expenses, ({ one, many }) => ({
   location: one(locations, {
     fields: [expenses.locationId],
     references: [locations.id],
@@ -118,6 +119,18 @@ export const expensesRelations = relations(expenses, ({ one }) => ({
   account: one(accounts, {
     fields: [expenses.accountId],
     references: [accounts.id],
+  }),
+  items: many(expenseItems),
+}));
+
+export const expenseItemsRelations = relations(expenseItems, ({ one }) => ({
+  expense: one(expenses, {
+    fields: [expenseItems.expenseId],
+    references: [expenses.id],
+  }),
+  category: one(expenseCategories, {
+    fields: [expenseItems.categoryId],
+    references: [expenseCategories.id],
   }),
 }));
 
