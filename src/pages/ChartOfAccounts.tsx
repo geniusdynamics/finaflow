@@ -7,21 +7,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, BookOpen, TrendingUp, TrendingDown, ChevronDown, ChevronRight, Pencil, DollarSign } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
 import { toast } from "sonner";
-import { getCurrentBusinessId } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 export function ChartOfAccounts({ embedded }: { embedded?: boolean }) {
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set(["asset", "liability", "equity", "revenue", "expense"]));
   const [createOpen, setCreateOpen] = useState(false);
-  const [businessId, setBusinessId] = useState<number | null>(null);
-
-  useEffect(() => {
-    setBusinessId(getCurrentBusinessId());
-  }, []);
+  const { user } = useAuth();
+  const businessId = user?.currentBusinessId ?? null;
 
   const { data, isLoading, error } = trpc.chartOfAccounts.list.useQuery({ businessId: businessId || 0 }, { enabled: !!businessId });
-  const utils = trpc.useUtils();
 
   const toggleType = (type: string) => {
     const newExpanded = new Set(expandedTypes);
@@ -75,7 +71,11 @@ export function ChartOfAccounts({ embedded }: { embedded?: boolean }) {
             <DialogHeader>
               <DialogTitle className="font-serif text-xl">Create Account</DialogTitle>
             </DialogHeader>
-            <AccountForm onSuccess={() => setCreateOpen(false)} businessId={businessId} />
+            {businessId ? (
+              <AccountForm onSuccess={() => setCreateOpen(false)} businessId={businessId} />
+            ) : (
+              <p className="text-sm text-[#8D8A87]">Select an active business before creating chart accounts.</p>
+            )}
           </DialogContent>
         </Dialog>
       </div>
@@ -232,15 +232,20 @@ function AccountForm({ onSuccess, businessId }: { onSuccess: () => void; busines
     onError: (e) => toast.error(e.message),
   });
 
-  const getNextCodeMutation = trpc.chartOfAccounts.getNextAccountCode.useMutation({
-    onSuccess: (data) => {
-      setAccountCode(data.nextCode);
-    },
-  });
+  const nextCodeQuery = trpc.chartOfAccounts.getNextAccountCode.useQuery(
+    { businessId, accountType: accountType as any },
+    { enabled: !!businessId }
+  );
+
+  useEffect(() => {
+    if (nextCodeQuery.data?.nextCode && !accountCode) {
+      setAccountCode(nextCodeQuery.data.nextCode);
+    }
+  }, [nextCodeQuery.data?.nextCode, accountCode]);
 
   const handleTypeChange = (type: string) => {
     setAccountType(type);
-    getNextCodeMutation.mutate({ businessId, accountType: type as any });
+    setAccountCode("");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -289,7 +294,7 @@ function AccountForm({ onSuccess, businessId }: { onSuccess: () => void; busines
       { value: "admin_expense", label: "Administrative Expense" },
       { value: "marketing_expense", label: "Marketing Expense" },
       { value: "depreciation_expense", label: "Depreciation Expense" },
-      { value: "other_expense", label: "Other Expense" },
+      { value: "operating_expense", label: "Other Operating Expense" },
     ],
   };
 

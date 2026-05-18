@@ -2,7 +2,7 @@
 // Run this once after schema migration: npx tsx db/migrate-existing-data.ts
 
 import { getDb } from "../api/queries/connection";
-import { accounts, expenses, expenseCategories, bills, dailySales, ledgerEntries, journalEntries, journalLines } from "./schema";
+import { accounts, expenses, expenseCategories, bills, journalEntries, journalLines } from "./schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { d } from "../api/lib/decimal";
 
@@ -142,13 +142,12 @@ async function migrateExistingData(businessId: number, locationIds: number[]) {
   // 4. Convert existing ledger entries to journal entries
   console.log("--- Step 4: Converting existing ledger entries ---");
   
-  const existingLedgerEntries = await db
-    .select()
-    .from(ledgerEntries)
-    .where(sql`${ledgerEntries.journalEntryId} IS NULL`);
+  const existingLedgerEntries = await db.execute(
+    sql`SELECT * FROM "ledger_entries" WHERE "journalEntryId" IS NULL`
+  );
 
   const ledgerGrouped: Record<string, any[]> = {};
-  for (const le of existingLedgerEntries) {
+  for (const le of existingLedgerEntries.rows) {
     const key = `${le.transactionType}-${le.transactionId}-${le.entryDate}`;
     if (!ledgerGrouped[key]) ledgerGrouped[key] = [];
     ledgerGrouped[key].push(le);

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, authedQuery, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { feedbackQuestionnaires, feedbackResponses } from "@db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, type SQL } from "drizzle-orm";
 
 export const feedbackRouter = createRouter({
   questionnaires: authedQuery.query(async () => {
@@ -91,7 +91,7 @@ export const feedbackRouter = createRouter({
     .input(z.object({ questionnaireId: z.number().optional() }).optional())
     .query(async ({ input }) => {
       const db = getDb();
-      const conditions = [];
+      const conditions: SQL<unknown>[] = [];
       if (input?.questionnaireId) conditions.push(eq(feedbackResponses.questionnaireId, input.questionnaireId));
       const rows = await db.select().from(feedbackResponses)
         .where(conditions.length > 0 ? and(...conditions) : undefined)
@@ -99,5 +99,4 @@ export const feedbackRouter = createRouter({
       return rows.map(r => ({ ...r, answers: typeof r.answers === "string" ? JSON.parse(r.answers) : r.answers }));
     }),
 });
-
 

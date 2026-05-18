@@ -1,11 +1,14 @@
 import { z } from "zod";
 import { createRouter, expenseQuery, expenseCreate, expenseManage, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { expenses, expenseCategories, accounts, ledgerEntries, suppliers, bills, attachments, locations, businesses } from "@db/schema";
+import { expenses, expenseCategories, accounts, ledgerEntries, suppliers, bills, attachments, locations } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { notFutureDateString, optionalNotFutureDateString } from "./lib/future-date";
 import { logAudit } from "./lib/audit";
+import { ensureSystemAccount } from "./lib/accounting-accounts";
+import { getExpenseAccountSubType } from "./lib/accounting-maps";
+import { reverseLedgerEntriesForTransaction } from "./lib/accounting-reversal";
 
 export const createExpenseInputSchema = z.object({
   locationId: z.number(),
@@ -65,37 +68,62 @@ export const expensesRouter = createRouter({
       description: z.string().optional(), 
       color: z.string().optional(),
       accountingClass: z.enum(["cogs", "operating_expense", "admin_expense", "marketing", "depreciation", "other"]).optional(),
-      defaultAccountId: z.number(),
+      defaultAccountId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const userId = (ctx as any).user?.id ?? 1;
-      const account = await db.query.accounts.findFirst({
-        where: and(
-          eq(accounts.id, input.defaultAccountId),
-          eq(accounts.accountType, "expense" as any),
-          isNull(accounts.deletedAt)
-        ),
-      });
-      if (!account) {
-        throw new Error("Default account must be a valid chart of accounts expense entry");
+      const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
+
+      if (!businessId) {
+        throw new Error("No active business context available");
       }
+
+      if (!input) {
+        throw new Error("Invalid input");
+      }
+
+      let defaultAccountId = input.defaultAccountId;
+      if (defaultAccountId) {
+        const account = await db.query.accounts.findFirst({
+          where: and(
+            eq(accounts.id, defaultAccountId),
+            eq(accounts.businessId, businessId),
+            eq(accounts.accountType, "expense" as any),
+            isNull(accounts.deletedAt)
+          ),
+        });
+        if (!account) {
+          throw new Error("Default account must be a valid chart of accounts expense entry for this business");
+        }
+      } else {
+        const accountSubType = getExpenseAccountSubType(input.accountingClass);
+        defaultAccountId = await ensureSystemAccount({
+          businessId,
+          accountType: "expense",
+          accountSubType,
+          name: input.name,
+        });
+      }
+
       const [result] = await db.insert(expenseCategories).values({
+        businessId,
         name: input.name, 
         description: input.description, 
         color: input.color ?? "#C73E1D",
         accountingClass: (input.accountingClass || "operating_expense") as any,
-        defaultAccountId: input.defaultAccountId,
+        defaultAccountId,
       }).returning();
       
       await logAudit({
         userId,
+        businessId,
         action: "CREATE",
         resource: "expense_categories",
         resourceId: result.id,
         details: {
           name: input.name,
-          defaultAccountId: input.defaultAccountId,
+          defaultAccountId,
         },
       });
       
@@ -115,11 +143,35 @@ export const expensesRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const userId = (ctx as any).user?.id ?? 1;
+      const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
       const { id, ...updates } = input;
       
       const existing = await db.select().from(expenseCategories).where(
         and(eq(expenseCategories.id, id), isNull(expenseCategories.deletedAt))
       ).limit(1);
+
+      const normalizedUpdates: Record<string, unknown> = { ...updates };
+      if (businessId && updates.defaultAccountId === undefined) {
+        const accountingClass = (updates.accountingClass ?? existing[0]?.accountingClass ?? "operating_expense") as any;
+        normalizedUpdates.defaultAccountId = await ensureSystemAccount({
+          businessId,
+          accountType: "expense",
+          accountSubType: getExpenseAccountSubType(accountingClass),
+          name: (updates.name ?? existing[0]?.name ?? "Operating Expense") as string,
+        });
+      } else if (updates.defaultAccountId !== undefined && businessId) {
+        const account = await db.query.accounts.findFirst({
+          where: and(
+            eq(accounts.id, updates.defaultAccountId),
+            eq(accounts.businessId, businessId),
+            eq(accounts.accountType, "expense" as any),
+            isNull(accounts.deletedAt)
+          ),
+        });
+        if (!account) {
+          throw new Error("Default account must be a valid chart of accounts expense entry for this business");
+        }
+      }
       
       const auditDetails: Record<string, any> = {};
       if (updates.accountingClass && updates.accountingClass !== existing[0]?.accountingClass) {
@@ -135,11 +187,12 @@ export const expensesRouter = createRouter({
         };
       }
       
-      await db.update(expenseCategories).set(updates as any).where(eq(expenseCategories.id, id));
+      await db.update(expenseCategories).set(normalizedUpdates as any).where(eq(expenseCategories.id, id));
       
       if (Object.keys(auditDetails).length > 0) {
         await logAudit({
           userId,
+          businessId,
           action: "UPDATE",
           resource: "expense_categories",
           resourceId: id,
@@ -194,9 +247,12 @@ export const expensesRouter = createRouter({
         await requireAuthorizedBusinessEntity(ctx, suppliers, input.supplierId);
       }
 
-      const loc = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
-      const business = await db.select().from(businesses).where(eq(businesses.id, loc[0]?.businessId)).limit(1);
-      const nextNum = loc[0]?.nextExpenseNumber ?? 1;
+      const [location] = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
+      const businessId = location?.businessId;
+      if (!businessId) {
+        throw new Error("Selected location is not linked to a business");
+      }
+      const nextNum = location?.nextExpenseNumber ?? 1;
       const expenseNumber = `EXP-${String(nextNum).padStart(4, "0")}`;
 
       let expenseId = 0;
@@ -232,7 +288,7 @@ export const expensesRouter = createRouter({
 
         const [result] = await tx.insert(expenses).values({
           locationId: input.locationId, 
-          businessId: business[0]?.id,
+          businessId,
           categoryId: input.categoryId, 
           supplierId: input.supplierId,
           expenseNumber, 
@@ -285,17 +341,18 @@ export const expensesRouter = createRouter({
                 } as any).returning();
                 await tx.update(accounts).set({ currentBalance: assetNewBal.toFixed(2) }).where(eq(accounts.id, input.assetAccountId));
               }
-            } else if (input.billId && business[0]?.id) {
+            } else if (input.billId) {
               const apAccount = await tx.query.accounts.findFirst({
                 where: and(
                   eq(accounts.accountSubType, "accounts_payable" as any),
-                  eq(accounts.businessId, business[0].id),
+                  eq(accounts.businessId, businessId),
                   isNull(accounts.deletedAt)
                 ),
               });
               const billRecord = await tx.select().from(bills).where(eq(bills.id, input.billId)).limit(1);
               const billBalanceDue = d(billRecord[0]?.balanceDue || "0");
-              const apDebitAmount = d.min(d(input.amount), billBalanceDue);
+              const paymentAmount = d(input.amount);
+              const apDebitAmount = paymentAmount.lte(billBalanceDue) ? paymentAmount : billBalanceDue;
               const prepaymentAmount = d(input.amount).gt(billBalanceDue) ? d(input.amount).minus(billBalanceDue) : d(0);
               if (apAccount && apAccount.id !== accountId && apDebitAmount.gt(0)) {
                 const apNewBal = d(apAccount.currentBalance || "0").minus(apDebitAmount);
@@ -310,7 +367,7 @@ export const expensesRouter = createRouter({
                 const prepayAcct = await tx.query.accounts.findFirst({
                   where: and(
                     eq(accounts.accountCode, "1550"),
-                    eq(accounts.businessId, business[0].id),
+                    eq(accounts.businessId, businessId),
                     isNull(accounts.deletedAt)
                   ),
                 });
@@ -397,7 +454,44 @@ export const expensesRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       await requireAuthorizedEntity(ctx, expenses, input.id);
+      const existingLedger = await db
+        .select({ id: ledgerEntries.id })
+        .from(ledgerEntries)
+        .where(eq(ledgerEntries.transactionId, input.id))
+        .limit(1);
+
+      if (existingLedger[0]) {
+        throw new Error("Posted expenses cannot be deleted. Reverse the posted entry instead.");
+      }
+
       await db.update(expenses).set({ deletedAt: new Date() }).where(eq(expenses.id, input.id));
+      return { success: true };
+    }),
+
+  reverse: expenseManage
+    .input(z.object({ id: z.number(), reason: z.string().min(1).max(255) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const expense = await requireAuthorizedEntity(ctx, expenses, input.id);
+
+      if (expense.reversedAt) {
+        throw new Error("This expense has already been reversed.");
+      }
+
+      await db.transaction(async (tx) => {
+        await reverseLedgerEntriesForTransaction({
+          db: tx,
+          transactionId: input.id,
+          userId: (ctx as any).user?.id ?? 1,
+          reason: input.reason,
+        });
+
+        await tx
+          .update(expenses)
+          .set({ reversedAt: new Date(), reversedBy: (ctx as any).user?.id ?? 1 })
+          .where(eq(expenses.id, input.id));
+      });
+
       return { success: true };
     }),
 

@@ -69,7 +69,7 @@ async function seedBusiness(accountId: string, overrides?: Partial<typeof busine
     email: `${accountId.toLowerCase()}@example.com`,
     role: "owner",
     isActive: true,
-    currentBusinessId: business.id,
+    currentBusinessId: business.id!,
     accountId,
     accountRefId: account.id,
   } as any).returning();
@@ -114,7 +114,7 @@ describe("Subscription lifecycle", () => {
 
   it("returns the full subscription matrix for the current business", async () => {
     const { business, user } = await seedBusiness("TIERCO");
-    const caller = createAuthedCaller(user, business);
+    const caller = createAuthedCaller({ ...user, accountId: user.accountId!, currentBusinessId: user.currentBusinessId! }, business);
 
     const tier = await caller.businesses.myTier();
 
@@ -130,7 +130,7 @@ describe("Subscription lifecycle", () => {
 
   it("extends a trial once and blocks a second extension", async () => {
     const { account, business, user } = await seedBusiness("TIERCO");
-    const caller = createAuthedCaller(user, business);
+    const caller = createAuthedCaller({ ...user, accountId: user.accountId!, currentBusinessId: user.currentBusinessId! }, business);
 
     const first = await caller.businesses.extendTrial();
     expect(first.success).toBe(true);

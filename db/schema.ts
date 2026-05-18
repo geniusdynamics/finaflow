@@ -171,8 +171,8 @@ export const locations = pgTable("locations", {
   kraPin: varchar("kraPin", { length: 20 }),
   email: varchar("email", { length: 255 }),
   isActive: boolean("isActive").default(true).notNull(),
-  defaultMpesaAccountId: bigint("defaultMpesaAccountId", { mode: "number" }),
-  defaultCashAccountId: bigint("defaultCashAccountId", { mode: "number" }),
+  defaultMpesaAccountId: bigint("defaultMpesaAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
+  defaultCashAccountId: bigint("defaultCashAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   nextBillNumber: bigint("nextBillNumber", { mode: "number" }).default(1).notNull(),
   nextExpenseNumber: bigint("nextExpenseNumber", { mode: "number" }).default(1).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -185,21 +185,23 @@ export type Location = typeof locations.$inferSelect;
 // Accounts table (cash, mpesa, bank accounts per location)
 export const accounts = pgTable("accounts", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }),
   businessId: bigint("businessId", { mode: "number" }),
   name: varchar("name", { length: 100 }).notNull(),
   type: typeEnum("type").notNull(),
   accountCode: varchar("accountCode", { length: 20 }),
   accountNumber: varchar("accountNumber", { length: 100 }),
   description: text("description"),
+  systemKey: varchar("systemKey", { length: 120 }),
   accountType: accountTypeEnum("accountType"),
   accountSubType: accountSubTypeEnum("accountSubType"),
   openingBalance: numeric("openingBalance", { precision: 15, scale: 2 }).default("0.00").notNull(),
   currentBalance: numeric("currentBalance", { precision: 15, scale: 2 }).default("0.00").notNull(),
   currency: varchar("currency", { length: 3 }).default("KES").notNull(),
   isPaymentMethod: boolean("isPaymentMethod").default(false).notNull(),
+  isSystemGenerated: boolean("isSystemGenerated").default(false).notNull(),
   isContra: boolean("isContra").default(false),
-  parentAccountId: bigint("parentAccountId", { mode: "number" }),
+  parentAccountId: bigint("parentAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   externalId: varchar("externalId", { length: 255 }),
   externalSystem: varchar("externalSystem", { length: 50 }),
   lastSyncedAt: timestamp("lastSyncedAt"),
@@ -210,6 +212,7 @@ export const accounts = pgTable("accounts", {
 }, (table) => ({
   accountTypeIdx: index("idx_accounts_type").on(table.accountType),
   businessIdx: index("idx_accounts_business").on(table.businessId),
+  systemKeyIdx: uniqueIndex("uq_accounts_business_system_key").on(table.businessId, table.systemKey),
 }));
 
 export type Account = typeof accounts.$inferSelect;
@@ -217,7 +220,7 @@ export type Account = typeof accounts.$inferSelect;
 // Ledger entries - now includes drawing and deposit
 export const ledgerEntries = pgTable("ledger_entries", {
   id: serial("id").primaryKey(),
-  accountId: bigint("accountId", { mode: "number" }).notNull(),
+  accountId: bigint("accountId", { mode: "number" }).notNull().references(() => accounts.id, { onDelete: "no action" }),
   transactionType: transactionTypeEnum("transactionType").notNull(),
   transactionId: bigint("transactionId", { mode: "number" }).notNull(),
   entryType: entryTypeEnum("entryType").notNull(),
@@ -275,7 +278,7 @@ export const expenseCategories = pgTable("expense_categories", {
   description: text("description"),
   color: varchar("color", { length: 20 }).default("#C73E1D"),
   accountingClass: accountingClassEnum("accountingClass").default("operating_expense"),
-  defaultAccountId: bigint("defaultAccountId", { mode: "number" }).notNull(),
+  defaultAccountId: bigint("defaultAccountId", { mode: "number" }).notNull().references(() => accounts.id, { onDelete: "no action" }),
   externalAccountCode: varchar("externalAccountCode", { length: 50 }),
   externalSystem: varchar("externalSystem", { length: 50 }),
   isActive: boolean("isActive").default(true).notNull(),
@@ -303,7 +306,7 @@ export const expenses = pgTable("expenses", {
   description: text("description").notNull(),
   expenseDate: date("expenseDate").notNull(),
   paymentMethod: paymentMethod2Enum("paymentMethod").notNull(),
-  accountId: bigint("accountId", { mode: "number" }),
+  accountId: bigint("accountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   receiptImageUrl: text("receiptImageUrl"),
   mpesaTxnId: varchar("mpesaTxnId", { length: 20 }),
   expenseRef: varchar("expenseRef", { length: 50 }),
@@ -315,6 +318,8 @@ export const expenses = pgTable("expenses", {
   depreciationMethod: depreciationMethodEnum("depreciationMethod"),
   salvageValue: numeric("salvageValue", { precision: 15, scale: 2 }),
   journalEntryId: bigint("journalEntryId", { mode: "number" }),
+  reversedAt: timestamp("reversedAt"),
+  reversedBy: bigint("reversedBy", { mode: "number" }),
   enteredBy: bigint("enteredBy", { mode: "number" }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -357,6 +362,7 @@ export const bills = pgTable("bills", {
   locationId: bigint("locationId", { mode: "number" }).notNull(),
   businessId: bigint("businessId", { mode: "number" }),
   supplierId: bigint("supplierId", { mode: "number" }),
+  categoryId: bigint("categoryId", { mode: "number" }),
   billNumber: varchar("billNumber", { length: 100 }),
   description: text("description").notNull(),
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
@@ -366,6 +372,8 @@ export const bills = pgTable("bills", {
   dueDate: date("dueDate").notNull(),
   status: billStatusEnum("status").default("pending").notNull(),
   journalEntryId: bigint("journalEntryId", { mode: "number" }),
+  reversedAt: timestamp("reversedAt"),
+  reversedBy: bigint("reversedBy", { mode: "number" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -414,7 +422,7 @@ export const billPayments = pgTable("bill_payments", {
   paymentDate: date("paymentDate").notNull(),
   reference: varchar("reference", { length: 100 }),
   notes: text("notes"),
-  accountId: bigint("accountId", { mode: "number" }),
+  accountId: bigint("accountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   journalEntryId: bigint("journalEntryId", { mode: "number" }),
   enteredBy: bigint("enteredBy", { mode: "number" }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -431,7 +439,7 @@ export const recurringBillTemplates = pgTable("recurring_bill_templates", {
   businessId: bigint("businessId", { mode: "number" }),
   supplierId: bigint("supplierId", { mode: "number" }),
   categoryId: bigint("categoryId", { mode: "number" }),
-  liabilityAccountId: bigint("liabilityAccountId", { mode: "number" }),
+  liabilityAccountId: bigint("liabilityAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   description: text("description").notNull(),
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
   frequency: frequencyEnum("frequency").notNull(),
@@ -549,8 +557,8 @@ export const mpesaTransactions = pgTable("mpesa_transactions", {
   linkedExpenseId: bigint("linkedExpenseId", { mode: "number" }),
   linkedBillId: bigint("linkedBillId", { mode: "number" }),
   linkedSupplierId: bigint("linkedSupplierId", { mode: "number" }),
-  sourceAccountId: bigint("sourceAccountId", { mode: "number" }), // bank account that funded this topup
-  destinationAccountId: bigint("destinationAccountId", { mode: "number" }), // M-PESA wallet that received this topup
+  sourceAccountId: bigint("sourceAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }), // bank account that funded this topup
+  destinationAccountId: bigint("destinationAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }), // M-PESA wallet that received this topup
   importedBy: bigint("importedBy", { mode: "number" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -563,7 +571,7 @@ export type MpesaTransaction = typeof mpesaTransactions.$inferSelect;
 export const dailyMpesaLedger = pgTable("daily_mpesa_ledger", {
   id: serial("id").primaryKey(),
   locationId: bigint("locationId", { mode: "number" }).notNull(),
-  accountId: bigint("accountId", { mode: "number" }).notNull(), // specific M-PESA wallet
+  accountId: bigint("accountId", { mode: "number" }).notNull().references(() => accounts.id, { onDelete: "no action" }), // specific M-PESA wallet
   ledgerDate: date("ledgerDate").notNull(),
   openingBalance: numeric("openingBalance", { precision: 15, scale: 2 }).notNull(),
   totalTopups: numeric("totalTopups", { precision: 15, scale: 2 }).default("0.00").notNull(),
@@ -817,7 +825,7 @@ export const locationPaymentMethods = pgTable("location_payment_methods", {
   id: serial("id").primaryKey(),
   locationId: bigint("locationId", { mode: "number" }).notNull(),
   paymentMethodId: bigint("paymentMethodId", { mode: "number" }).notNull(),
-  linkedAccountId: bigint("linkedAccountId", { mode: "number" }),
+  linkedAccountId: bigint("linkedAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -903,7 +911,7 @@ export type CogsTarget = typeof cogsTargets.$inferSelect;
 export const alertsConfig = pgTable("alerts_config", {
   id: serial("id").primaryKey(),
   locationId: bigint("locationId", { mode: "number" }),
-  accountId: bigint("accountId", { mode: "number" }),
+  accountId: bigint("accountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   minBalance: numeric("minBalance", { precision: 15, scale: 2 }).default("10000.00"),
   notifyEmail: varchar("notifyEmail", { length: 320 }),
   notifyPhone: varchar("notifyPhone", { length: 20 }),
@@ -922,7 +930,7 @@ export const alertsLog = pgTable("alerts_log", {
   message: text("message"),
   severity: severityEnum("severity").default("info").notNull(),
   locationId: bigint("locationId", { mode: "number" }),
-  accountId: bigint("accountId", { mode: "number" }),
+  accountId: bigint("accountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   isRead: boolean("isRead").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
@@ -1172,7 +1180,7 @@ export type InsertJournalEntry = typeof journalEntries.$inferInsert;
 export const journalLines = pgTable("journal_lines", {
   id: serial("id").primaryKey(),
   journalEntryId: bigint("journalEntryId", { mode: "number" }).notNull(),
-  accountId: bigint("accountId", { mode: "number" }).notNull(),
+  accountId: bigint("accountId", { mode: "number" }).notNull().references(() => accounts.id, { onDelete: "no action" }),
   debit: numeric("debit", { precision: 15, scale: 2 }).default("0.00"),
   credit: numeric("credit", { precision: 15, scale: 2 }).default("0.00"),
   description: text("description"),
@@ -1196,9 +1204,9 @@ export const items = pgTable("items", {
   description: text("description"),
   sku: varchar("sku", { length: 50 }).unique(),
   itemType: itemTypeEnum("itemType").notNull(),
-  incomeAccountId: bigint("incomeAccountId", { mode: "number" }),
-  expenseAccountId: bigint("expenseAccountId", { mode: "number" }),
-  assetAccountId: bigint("assetAccountId", { mode: "number" }),
+  incomeAccountId: bigint("incomeAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
+  expenseAccountId: bigint("expenseAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
+  assetAccountId: bigint("assetAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   isFixedAsset: boolean("isFixedAsset").default(false),
   purchaseDate: date("purchaseDate"),
   purchasePrice: numeric("purchasePrice", { precision: 15, scale: 2 }),
@@ -1257,7 +1265,7 @@ export const revenueCategories = pgTable("revenue_categories", {
   businessId: bigint("businessId", { mode: "number" }),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
-  incomeAccountId: bigint("incomeAccountId", { mode: "number" }),
+  incomeAccountId: bigint("incomeAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   accountCode: varchar("accountCode", { length: 20 }),
   categoryType: revenueCategoryTypeEnum("categoryType").default("other"),
   externalId: varchar("externalId", { length: 255 }),

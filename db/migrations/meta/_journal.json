@@ -5,43 +5,15 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1778320070960,
-      "tag": "0000_magical_logan",
+      "when": 1778934650027,
+      "tag": "0000_flawless_jack_murdock",
       "breakpoints": true
     },
     {
       "idx": 1,
       "version": "7",
-      "when": 1778400422424,
-      "tag": "0001_odd_susan_delgado",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1778677778095,
-      "tag": "0002_unusual_vulture",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1778768400000,
-      "tag": "0003_recurring_bill_accounting_classification",
-      "breakpoints": false
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1778768400000,
-      "tag": "0004_expense_category_accounting_class_assignment",
-      "breakpoints": false
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1778838878442,
-      "tag": "0005_strange_warbird",
+      "when": 1779017871967,
+      "tag": "0001_gifted_secret_warriors",
       "breakpoints": true
     }
   ]

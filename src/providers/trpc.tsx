@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createTRPCReact } from "@trpc/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -58,9 +59,18 @@ const trpcClient = trpc.createClient({
         return headers;
       },
       fetch(input, init) {
+        console.log(`[trpc-client] --> ${typeof input === "string" ? input : (input as URL).href}`, init?.method ?? "GET");
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
+        }).then(async (res) => {
+          const clone = res.clone();
+          const body = await clone.text().catch(() => "<unreadable>");
+          console.log(`[trpc-client] <-- ${typeof input === "string" ? input : (input as URL).href} ${res.status} body=${body.slice(0, 300)}`);
+          return res;
+        }).catch((err) => {
+          console.error(`[trpc-client] <-- NETWORK ERROR:`, err);
+          throw err;
         });
       },
     }),

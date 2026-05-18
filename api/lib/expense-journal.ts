@@ -217,7 +217,7 @@ async function createExpenseJournalEntryInternal(
   });
 }
 
-function mapCategoryToSubType(accountingClass?: string): string {
+function mapCategoryToSubType(accountingClass?: string | null): string {
   switch (accountingClass) {
     case "cogs":
       return "cogs";

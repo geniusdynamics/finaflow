@@ -1,6 +1,6 @@
 {
-  "id": "5f148471-7394-4c0b-9d38-e6485e085427",
-  "prevId": "4d4584fb-1402-449c-a5cd-8e9ea5329437",
+  "id": "768f881e-c5f3-4dc0-961f-459a816e8d1b",
+  "prevId": "99a6836b-010f-4916-b472-463840468a0b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -18,7 +18,13 @@
           "name": "locationId",
           "type": "bigint",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "businessId": {
+          "name": "businessId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
         },
         "name": {
           "name": "name",
@@ -42,6 +48,32 @@
         "accountNumber": {
           "name": "accountNumber",
           "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "systemKey": {
+          "name": "systemKey",
+          "type": "varchar(120)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "accountType": {
+          "name": "accountType",
+          "type": "accountType",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "accountSubType": {
+          "name": "accountSubType",
+          "type": "accountSubType",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": false
         },
@@ -73,6 +105,44 @@
           "notNull": true,
           "default": false
         },
+        "isSystemGenerated": {
+          "name": "isSystemGenerated",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "isContra": {
+          "name": "isContra",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "parentAccountId": {
+          "name": "parentAccountId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "externalId": {
+          "name": "externalId",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "externalSystem": {
+          "name": "externalSystem",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lastSyncedAt": {
+          "name": "lastSyncedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "isActive": {
           "name": "isActive",
           "type": "boolean",
@@ -101,8 +171,74 @@
           "notNull": false
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
+      "indexes": {
+        "idx_accounts_type": {
+          "name": "idx_accounts_type",
+          "columns": [
+            {
+              "expression": "accountType",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_accounts_business": {
+          "name": "idx_accounts_business",
+          "columns": [
+            {
+              "expression": "businessId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_accounts_business_system_key": {
+          "name": "uq_accounts_business_system_key",
+          "columns": [
+            {
+              "expression": "businessId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "systemKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "accounts_parentAccountId_accounts_id_fk": {
+          "name": "accounts_parentAccountId_accounts_id_fk",
+          "tableFrom": "accounts",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "parentAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -173,7 +309,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "alerts_config_accountId_accounts_id_fk": {
+          "name": "alerts_config_accountId_accounts_id_fk",
+          "tableFrom": "alerts_config",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "accountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -244,6 +394,204 @@
         }
       },
       "indexes": {},
+      "foreignKeys": {
+        "alerts_log_accountId_accounts_id_fk": {
+          "name": "alerts_log_accountId_accounts_id_fk",
+          "tableFrom": "alerts_log",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "accountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.allocation_invites": {
+      "name": "allocation_invites",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "code": {
+          "name": "code",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ownerAccountId": {
+          "name": "ownerAccountId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "businessId": {
+          "name": "businessId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rightsProfile": {
+          "name": "rightsProfile",
+          "type": "allocation_rights",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "allocation_invite_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "createdBy": {
+          "name": "createdBy",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "consumedByPartnerAccountId": {
+          "name": "consumedByPartnerAccountId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "consumedByPartnerUserId": {
+          "name": "consumedByPartnerUserId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "consumedAt": {
+          "name": "consumedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "revokedAt": {
+          "name": "revokedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expiresAt": {
+          "name": "expiresAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "uq_allocation_invites_code": {
+          "name": "uq_allocation_invites_code",
+          "columns": [
+            {
+              "expression": "code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_allocation_invites_ownerAccountId": {
+          "name": "idx_allocation_invites_ownerAccountId",
+          "columns": [
+            {
+              "expression": "ownerAccountId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_allocation_invites_businessId": {
+          "name": "idx_allocation_invites_businessId",
+          "columns": [
+            {
+              "expression": "businessId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_allocation_invites_status": {
+          "name": "idx_allocation_invites_status",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_allocation_invites_deletedAt": {
+          "name": "idx_allocation_invites_deletedAt",
+          "columns": [
+            {
+              "expression": "deletedAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -643,6 +991,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "journalEntryId": {
+          "name": "journalEntryId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "enteredBy": {
           "name": "enteredBy",
           "type": "bigint",
@@ -671,7 +1025,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "bill_payments_accountId_accounts_id_fk": {
+          "name": "bill_payments_accountId_accounts_id_fk",
+          "tableFrom": "bill_payments",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "accountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -694,8 +1062,20 @@
           "primaryKey": false,
           "notNull": true
         },
+        "businessId": {
+          "name": "businessId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "supplierId": {
           "name": "supplierId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "categoryId": {
+          "name": "categoryId",
           "type": "bigint",
           "primaryKey": false,
           "notNull": false
@@ -750,6 +1130,24 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'pending'"
+        },
+        "journalEntryId": {
+          "name": "journalEntryId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reversedAt": {
+          "name": "reversedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reversedBy": {
+          "name": "reversedBy",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
         },
         "createdAt": {
           "name": "createdAt",
@@ -1714,7 +2112,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "daily_mpesa_ledger_accountId_accounts_id_fk": {
+          "name": "daily_mpesa_ledger_accountId_accounts_id_fk",
+          "tableFrom": "daily_mpesa_ledger",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "accountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2107,6 +2519,18 @@
           "primaryKey": true,
           "notNull": true
         },
+        "businessId": {
+          "name": "businessId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "locationId": {
+          "name": "locationId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "name": {
           "name": "name",
           "type": "varchar(100)",
@@ -2125,6 +2549,32 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'#C73E1D'"
+        },
+        "accountingClass": {
+          "name": "accountingClass",
+          "type": "accountingClass",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'operating_expense'"
+        },
+        "defaultAccountId": {
+          "name": "defaultAccountId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "externalAccountCode": {
+          "name": "externalAccountCode",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "externalSystem": {
+          "name": "externalSystem",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
         },
         "isActive": {
           "name": "isActive",
@@ -2154,8 +2604,53 @@
           "notNull": false
         }
       },
-      "indexes": {},
-      "foreignKeys": {},
+      "indexes": {
+        "idx_expense_category_business": {
+          "name": "idx_expense_category_business",
+          "columns": [
+            {
+              "expression": "businessId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_expense_categories_default_account": {
+          "name": "idx_expense_categories_default_account",
+          "columns": [
+            {
+              "expression": "defaultAccountId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "expense_categories_defaultAccountId_accounts_id_fk": {
+          "name": "expense_categories_defaultAccountId_accounts_id_fk",
+          "tableFrom": "expense_categories",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "defaultAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2177,6 +2672,12 @@
           "type": "bigint",
           "primaryKey": false,
           "notNull": true
+        },
+        "businessId": {
+          "name": "businessId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
         },
         "categoryId": {
           "name": "categoryId",
@@ -2270,6 +2771,56 @@
           "primaryKey": false,
           "notNull": false
         },
+        "isFixedAsset": {
+          "name": "isFixedAsset",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "fixedAssetItemId": {
+          "name": "fixedAssetItemId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usefulLifeMonths": {
+          "name": "usefulLifeMonths",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "depreciationMethod": {
+          "name": "depreciationMethod",
+          "type": "depreciationMethod",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "salvageValue": {
+          "name": "salvageValue",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "journalEntryId": {
+          "name": "journalEntryId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reversedAt": {
+          "name": "reversedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reversedBy": {
+          "name": "reversedBy",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "enteredBy": {
           "name": "enteredBy",
           "type": "bigint",
@@ -2298,6 +2849,113 @@
         }
       },
       "indexes": {},
+      "foreignKeys": {
+        "expenses_accountId_accounts_id_fk": {
+          "name": "expenses_accountId_accounts_id_fk",
+          "tableFrom": "expenses",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "accountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.external_sync_config": {
+      "name": "external_sync_config",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "businessId": {
+          "name": "businessId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "systemName": {
+          "name": "systemName",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "config": {
+          "name": "config",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "lastSyncAt": {
+          "name": "lastSyncAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "syncStatus": {
+          "name": "syncStatus",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'idle'"
+        },
+        "isActive": {
+          "name": "isActive",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_sync_config_business_system": {
+          "name": "idx_sync_config_business_system",
+          "columns": [
+            {
+              "expression": "businessId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "systemName",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -2412,6 +3070,897 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.financial_reports": {
+      "name": "financial_reports",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "businessId": {
+          "name": "businessId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reportType": {
+          "name": "reportType",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "periodStart": {
+          "name": "periodStart",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "periodEnd": {
+          "name": "periodEnd",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reportData": {
+          "name": "reportData",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reportMetadata": {
+          "name": "reportMetadata",
+          "type": "json",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "generatedBy": {
+          "name": "generatedBy",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "generatedAt": {
+          "name": "generatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_financial_report_business": {
+          "name": "idx_financial_report_business",
+          "columns": [
+            {
+              "expression": "businessId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_financial_report_type_period": {
+          "name": "idx_financial_report_type_period",
+          "columns": [
+            {
+              "expression": "reportType",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "periodStart",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "periodEnd",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.fixed_asset_depreciation": {
+      "name": "fixed_asset_depreciation",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "itemId": {
+          "name": "itemId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "journalEntryId": {
+          "name": "journalEntryId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "periodYear": {
+          "name": "periodYear",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "periodMonth": {
+          "name": "periodMonth",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "depreciationAmount": {
+          "name": "depreciationAmount",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "accumulatedAfter": {
+          "name": "accumulatedAfter",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "bookValueAfter": {
+          "name": "bookValueAfter",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "isPosted": {
+          "name": "isPosted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "idx_depreciation_item": {
+          "name": "idx_depreciation_item",
+          "columns": [
+            {
+              "expression": "itemId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_depreciation_period": {
+          "name": "idx_depreciation_period",
+          "columns": [
+            {
+              "expression": "periodYear",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "periodMonth",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_depreciation_item_period": {
+          "name": "idx_depreciation_item_period",
+          "columns": [
+            {
+              "expression": "itemId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "periodYear",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "periodMonth",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.items": {
+      "name": "items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "businessId": {
+          "name": "businessId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "locationId": {
+          "name": "locationId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sku": {
+          "name": "sku",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "itemType": {
+          "name": "itemType",
+          "type": "itemType",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "incomeAccountId": {
+          "name": "incomeAccountId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "expenseAccountId": {
+          "name": "expenseAccountId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "assetAccountId": {
+          "name": "assetAccountId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isFixedAsset": {
+          "name": "isFixedAsset",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "purchaseDate": {
+          "name": "purchaseDate",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "purchasePrice": {
+          "name": "purchasePrice",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "usefulLifeMonths": {
+          "name": "usefulLifeMonths",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "depreciationMethod": {
+          "name": "depreciationMethod",
+          "type": "depreciationMethod",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "salvageValue": {
+          "name": "salvageValue",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'0.00'"
+        },
+        "accumulatedDepreciation": {
+          "name": "accumulatedDepreciation",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'0.00'"
+        },
+        "currentBookValue": {
+          "name": "currentBookValue",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "disposalDate": {
+          "name": "disposalDate",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "disposalValue": {
+          "name": "disposalValue",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unitCost": {
+          "name": "unitCost",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unitPrice": {
+          "name": "unitPrice",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "currentStock": {
+          "name": "currentStock",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'0'"
+        },
+        "reorderLevel": {
+          "name": "reorderLevel",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "taxRate": {
+          "name": "taxRate",
+          "type": "numeric(5, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "externalId": {
+          "name": "externalId",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "externalSystem": {
+          "name": "externalSystem",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lastSyncedAt": {
+          "name": "lastSyncedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isActive": {
+          "name": "isActive",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_items_sku": {
+          "name": "idx_items_sku",
+          "columns": [
+            {
+              "expression": "sku",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_items_business": {
+          "name": "idx_items_business",
+          "columns": [
+            {
+              "expression": "businessId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_items_type": {
+          "name": "idx_items_type",
+          "columns": [
+            {
+              "expression": "itemType",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "items_incomeAccountId_accounts_id_fk": {
+          "name": "items_incomeAccountId_accounts_id_fk",
+          "tableFrom": "items",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "incomeAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "items_expenseAccountId_accounts_id_fk": {
+          "name": "items_expenseAccountId_accounts_id_fk",
+          "tableFrom": "items",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "expenseAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "items_assetAccountId_accounts_id_fk": {
+          "name": "items_assetAccountId_accounts_id_fk",
+          "tableFrom": "items",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "assetAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "items_sku_unique": {
+          "name": "items_sku_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "sku"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.journal_entries": {
+      "name": "journal_entries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "businessId": {
+          "name": "businessId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "entryNumber": {
+          "name": "entryNumber",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "entryDate": {
+          "name": "entryDate",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reference": {
+          "name": "reference",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sourceType": {
+          "name": "sourceType",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sourceId": {
+          "name": "sourceId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isPosted": {
+          "name": "isPosted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "postedBy": {
+          "name": "postedBy",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "postedAt": {
+          "name": "postedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isReversed": {
+          "name": "isReversed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": false
+        },
+        "reversedBy": {
+          "name": "reversedBy",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reversalOf": {
+          "name": "reversalOf",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "externalId": {
+          "name": "externalId",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "externalSystem": {
+          "name": "externalSystem",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdBy": {
+          "name": "createdBy",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_journal_entry_number": {
+          "name": "idx_journal_entry_number",
+          "columns": [
+            {
+              "expression": "entryNumber",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_journal_entry_date": {
+          "name": "idx_journal_entry_date",
+          "columns": [
+            {
+              "expression": "entryDate",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_journal_entry_source": {
+          "name": "idx_journal_entry_source",
+          "columns": [
+            {
+              "expression": "sourceType",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sourceId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_journal_entry_business": {
+          "name": "idx_journal_entry_business",
+          "columns": [
+            {
+              "expression": "businessId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "journal_entries_entryNumber_unique": {
+          "name": "journal_entries_entryNumber_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "entryNumber"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.journal_lines": {
+      "name": "journal_lines",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "journalEntryId": {
+          "name": "journalEntryId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "accountId": {
+          "name": "accountId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "debit": {
+          "name": "debit",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'0.00'"
+        },
+        "credit": {
+          "name": "credit",
+          "type": "numeric(15, 2)",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'0.00'"
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lineNumber": {
+          "name": "lineNumber",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_journal_line_entry": {
+          "name": "idx_journal_line_entry",
+          "columns": [
+            {
+              "expression": "journalEntryId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_journal_line_account": {
+          "name": "idx_journal_line_account",
+          "columns": [
+            {
+              "expression": "accountId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "journal_lines_accountId_accounts_id_fk": {
+          "name": "journal_lines_accountId_accounts_id_fk",
+          "tableFrom": "journal_lines",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "accountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.ledger_entries": {
       "name": "ledger_entries",
       "schema": "",
@@ -2499,7 +4048,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "ledger_entries_accountId_accounts_id_fk": {
+          "name": "ledger_entries_accountId_accounts_id_fk",
+          "tableFrom": "ledger_entries",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "accountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2550,7 +4113,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "location_payment_methods_linkedAccountId_accounts_id_fk": {
+          "name": "location_payment_methods_linkedAccountId_accounts_id_fk",
+          "tableFrom": "location_payment_methods",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "linkedAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -2700,7 +4277,34 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "locations_defaultMpesaAccountId_accounts_id_fk": {
+          "name": "locations_defaultMpesaAccountId_accounts_id_fk",
+          "tableFrom": "locations",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "defaultMpesaAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "locations_defaultCashAccountId_accounts_id_fk": {
+          "name": "locations_defaultCashAccountId_accounts_id_fk",
+          "tableFrom": "locations",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "defaultCashAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "locations_slug_unique": {
@@ -3016,7 +4620,34 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "mpesa_transactions_sourceAccountId_accounts_id_fk": {
+          "name": "mpesa_transactions_sourceAccountId_accounts_id_fk",
+          "tableFrom": "mpesa_transactions",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "sourceAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "mpesa_transactions_destinationAccountId_accounts_id_fk": {
+          "name": "mpesa_transactions_destinationAccountId_accounts_id_fk",
+          "tableFrom": "mpesa_transactions",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "destinationAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "mpesa_transactions_txnId_unique": {
@@ -3114,6 +4745,208 @@
         }
       },
       "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.partner_allocations": {
+      "name": "partner_allocations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "ownerAccountId": {
+          "name": "ownerAccountId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ownerBusinessId": {
+          "name": "ownerBusinessId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "partnerAccountId": {
+          "name": "partnerAccountId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "partnerUserId": {
+          "name": "partnerUserId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rightsProfile": {
+          "name": "rightsProfile",
+          "type": "allocation_rights",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "inviteId": {
+          "name": "inviteId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "partner_allocation_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "revokedAt": {
+          "name": "revokedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdBy": {
+          "name": "createdBy",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_partner_allocations_ownerAccountId": {
+          "name": "idx_partner_allocations_ownerAccountId",
+          "columns": [
+            {
+              "expression": "ownerAccountId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_partner_allocations_ownerBusinessId": {
+          "name": "idx_partner_allocations_ownerBusinessId",
+          "columns": [
+            {
+              "expression": "ownerBusinessId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_partner_allocations_partnerAccountId": {
+          "name": "idx_partner_allocations_partnerAccountId",
+          "columns": [
+            {
+              "expression": "partnerAccountId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_partner_allocations_partnerUserId": {
+          "name": "idx_partner_allocations_partnerUserId",
+          "columns": [
+            {
+              "expression": "partnerUserId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "uq_partner_allocations_inviteId": {
+          "name": "uq_partner_allocations_inviteId",
+          "columns": [
+            {
+              "expression": "inviteId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_partner_allocations_status": {
+          "name": "idx_partner_allocations_status",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "idx_partner_allocations_deletedAt": {
+          "name": "idx_partner_allocations_deletedAt",
+          "columns": [
+            {
+              "expression": "deletedAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -4103,8 +5936,26 @@
           "primaryKey": false,
           "notNull": true
         },
+        "businessId": {
+          "name": "businessId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
         "supplierId": {
           "name": "supplierId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "categoryId": {
+          "name": "categoryId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "liabilityAccountId": {
+          "name": "liabilityAccountId",
           "type": "bigint",
           "primaryKey": false,
           "notNull": false
@@ -4181,7 +6032,21 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "recurring_bill_templates_liabilityAccountId_accounts_id_fk": {
+          "name": "recurring_bill_templates_liabilityAccountId_accounts_id_fk",
+          "tableFrom": "recurring_bill_templates",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "liabilityAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -4285,6 +6150,132 @@
         }
       },
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.revenue_categories": {
+      "name": "revenue_categories",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "businessId": {
+          "name": "businessId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "varchar(100)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "incomeAccountId": {
+          "name": "incomeAccountId",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "accountCode": {
+          "name": "accountCode",
+          "type": "varchar(20)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "categoryType": {
+          "name": "categoryType",
+          "type": "revenueCategoryType",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'other'"
+        },
+        "externalId": {
+          "name": "externalId",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "externalSystem": {
+          "name": "externalSystem",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "isActive": {
+          "name": "isActive",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false,
+          "default": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "idx_revenue_category_business": {
+          "name": "idx_revenue_category_business",
+          "columns": [
+            {
+              "expression": "businessId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "revenue_categories_incomeAccountId_accounts_id_fk": {
+          "name": "revenue_categories_incomeAccountId_accounts_id_fk",
+          "tableFrom": "revenue_categories",
+          "tableTo": "accounts",
+          "columnsFrom": [
+            "incomeAccountId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
@@ -4697,6 +6688,14 @@
           "notNull": true,
           "default": "'viewer'"
         },
+        "userType": {
+          "name": "userType",
+          "type": "user_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'standard'"
+        },
         "phone": {
           "name": "phone",
           "type": "varchar(20)",
@@ -5026,6 +7025,61 @@
     }
   },
   "enums": {
+    "public.accountSubType": {
+      "name": "accountSubType",
+      "schema": "public",
+      "values": [
+        "cash",
+        "bank",
+        "accounts_receivable",
+        "inventory",
+        "prepaid_expense",
+        "fixed_asset",
+        "accumulated_depreciation",
+        "intangible_asset",
+        "other_asset",
+        "accounts_payable",
+        "accrued_expense",
+        "current_loan",
+        "long_term_loan",
+        "capital",
+        "retained_earnings",
+        "drawings",
+        "current_year_earnings",
+        "sales_revenue",
+        "service_revenue",
+        "subscription_revenue",
+        "other_income",
+        "cogs",
+        "operating_expense",
+        "admin_expense",
+        "marketing_expense",
+        "depreciation_expense"
+      ]
+    },
+    "public.accountType": {
+      "name": "accountType",
+      "schema": "public",
+      "values": [
+        "asset",
+        "liability",
+        "equity",
+        "revenue",
+        "expense"
+      ]
+    },
+    "public.accountingClass": {
+      "name": "accountingClass",
+      "schema": "public",
+      "values": [
+        "cogs",
+        "operating_expense",
+        "admin_expense",
+        "marketing",
+        "depreciation",
+        "other"
+      ]
+    },
     "public.action": {
       "name": "action",
       "schema": "public",
@@ -5049,6 +7103,25 @@
         "cancelled"
       ]
     },
+    "public.allocation_invite_status": {
+      "name": "allocation_invite_status",
+      "schema": "public",
+      "values": [
+        "active",
+        "consumed",
+        "revoked",
+        "expired"
+      ]
+    },
+    "public.allocation_rights": {
+      "name": "allocation_rights",
+      "schema": "public",
+      "values": [
+        "view_only",
+        "create_view",
+        "manage"
+      ]
+    },
     "public.billStatus": {
       "name": "billStatus",
       "schema": "public",
@@ -5058,6 +7131,14 @@
         "paid",
         "overdue",
         "cancelled"
+      ]
+    },
+    "public.depreciationMethod": {
+      "name": "depreciationMethod",
+      "schema": "public",
+      "values": [
+        "straight_line",
+        "declining_balance"
       ]
     },
     "public.entryType": {
@@ -5079,6 +7160,16 @@
         "annually"
       ]
     },
+    "public.itemType": {
+      "name": "itemType",
+      "schema": "public",
+      "values": [
+        "inventory",
+        "fixed_asset",
+        "service",
+        "non_inventory"
+      ]
+    },
     "public.leadStatus": {
       "name": "leadStatus",
       "schema": "public",
@@ -5098,6 +7189,14 @@
         "delivered",
         "billed",
         "cancelled"
+      ]
+    },
+    "public.partner_allocation_status": {
+      "name": "partner_allocation_status",
+      "schema": "public",
+      "values": [
+        "active",
+        "revoked"
       ]
     },
     "public.paymentMethod2": {
@@ -5127,6 +7226,17 @@
         "processing",
         "paid",
         "cancelled"
+      ]
+    },
+    "public.revenueCategoryType": {
+      "name": "revenueCategoryType",
+      "schema": "public",
+      "values": [
+        "product_sales",
+        "service_revenue",
+        "subscription",
+        "membership",
+        "other"
       ]
     },
     "public.role": {
@@ -5182,7 +7292,10 @@
         "opening_balance",
         "mpesa_topup",
         "drawing",
-        "deposit"
+        "deposit",
+        "journal",
+        "depreciation",
+        "asset_disposal"
       ]
     },
     "public.txnType": {
@@ -5205,6 +7318,14 @@
         "cash",
         "mpesa",
         "bank_account"
+      ]
+    },
+    "public.user_type": {
+      "name": "user_type",
+      "schema": "public",
+      "values": [
+        "standard",
+        "partner"
       ]
     }
   },

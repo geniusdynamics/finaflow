@@ -251,7 +251,11 @@ export const payrollRouter = createRouter({
       }
 
       const loc = await db.select().from(locations).where(eq(locations.id, period.locationId)).limit(1);
-      const business = await db.select().from(businesses).where(eq(businesses.id, loc[0]?.businessId)).limit(1);
+      const locationBusinessId = loc[0]?.businessId;
+      if (!locationBusinessId) {
+        throw new Error("Selected payroll period location is not linked to a business");
+      }
+      const business = await db.select().from(businesses).where(eq(businesses.id, locationBusinessId)).limit(1);
       const businessId = business[0]?.id;
 
       await db.transaction(async (tx) => {
@@ -290,7 +294,7 @@ export const payrollRouter = createRouter({
         } as any).returning();
         await tx.update(accounts).set({ currentBalance: cashNewBalance.toFixed(2) }).where(eq(accounts.id, input.accountId));
 
-        if (businessId && totalGross.gt(0)) {
+        if (businessId && d(totalGross || "0").gt(0)) {
           const salaryExpenseAcct = await tx.query.accounts.findFirst({
             where: and(
               eq(accounts.accountCode, "6300"),
@@ -299,13 +303,13 @@ export const payrollRouter = createRouter({
             ),
           });
           if (salaryExpenseAcct) {
-            const expenseNewBal = d(salaryExpenseAcct.currentBalance || "0").plus(totalGross);
+            const expenseNewBal = d(salaryExpenseAcct.currentBalance || "0").plus(totalNetPay);
             await tx.insert(ledgerEntries).values({
               accountId: salaryExpenseAcct.id,
               transactionType: "payroll" as any,
               transactionId: input.periodId,
               entryType: "debit",
-              amount: totalGross.toFixed(2),
+              amount: totalNetPay.toFixed(2),
               balanceAfter: expenseNewBal.toFixed(2),
               entryDate: paymentDateStr,
               createdBy: userId,
@@ -315,14 +319,21 @@ export const payrollRouter = createRouter({
           }
         }
 
-        if (businessId && totalPaye.gt(0)) {
+        if (businessId && d(totalPaye || "0").gt(0)) {
           const payeAcct = await tx.select().from(accounts).where(
             and(eq(accounts.businessId, businessId), eq(accounts.accountSubType, "accrued_expense" as any), isNull(accounts.deletedAt))
           ).limit(1);
-          if (payeAcct[0]) {
-            const payeNewBal = d(payeAcct[0].currentBalance || "0").plus(totalPaye);
+          const payePayableAcct = await tx.query.accounts.findFirst({
+            where: and(
+              eq(accounts.accountCode, "2200"),
+              eq(accounts.businessId, businessId),
+              isNull(accounts.deletedAt)
+            ),
+          });
+          if (payePayableAcct) {
+            const payeNewBal = d(payePayableAcct.currentBalance || "0").plus(totalPaye);
             await tx.insert(ledgerEntries).values({
-              accountId: payeAcct[0].id,
+              accountId: payePayableAcct.id,
               transactionType: "payroll" as any,
               transactionId: input.periodId,
               entryType: "credit",
@@ -332,18 +343,25 @@ export const payrollRouter = createRouter({
               createdBy: userId,
               description: `PAYE Payable: ${period.periodName}`,
             } as any).returning();
-            await tx.update(accounts).set({ currentBalance: payeNewBal.toFixed(2) }).where(eq(accounts.id, payeAcct[0].id));
+            await tx.update(accounts).set({ currentBalance: payeNewBal.toFixed(2) }).where(eq(accounts.id, payePayableAcct.id));
           }
         }
 
-        if (businessId && totalNssf.gt(0)) {
+        if (businessId && d(totalNssf || "0").gt(0)) {
           const nssfAcct = await tx.select().from(accounts).where(
             and(eq(accounts.businessId, businessId), eq(accounts.accountSubType, "accrued_expense" as any), isNull(accounts.deletedAt))
           ).limit(1);
-          if (nssfAcct[0]) {
-            const nssfNewBal = d(nssfAcct[0].currentBalance || "0").plus(totalNssf);
+          const nssfPayableAcct = await tx.query.accounts.findFirst({
+            where: and(
+              eq(accounts.accountCode, "2300"),
+              eq(accounts.businessId, businessId),
+              isNull(accounts.deletedAt)
+            ),
+          });
+          if (nssfPayableAcct) {
+            const nssfNewBal = d(nssfPayableAcct.currentBalance || "0").plus(totalNssf);
             await tx.insert(ledgerEntries).values({
-              accountId: nssfAcct[0].id,
+              accountId: nssfPayableAcct.id,
               transactionType: "payroll" as any,
               transactionId: input.periodId,
               entryType: "credit",
@@ -353,18 +371,25 @@ export const payrollRouter = createRouter({
               createdBy: userId,
               description: `NSSF Payable: ${period.periodName}`,
             } as any).returning();
-            await tx.update(accounts).set({ currentBalance: nssfNewBal.toFixed(2) }).where(eq(accounts.id, nssfAcct[0].id));
+            await tx.update(accounts).set({ currentBalance: nssfNewBal.toFixed(2) }).where(eq(accounts.id, nssfPayableAcct.id));
           }
         }
 
-        if (businessId && totalNhif.gt(0)) {
+        if (businessId && d(totalNhif || "0").gt(0)) {
           const nhifAcct = await tx.select().from(accounts).where(
             and(eq(accounts.businessId, businessId), eq(accounts.accountSubType, "accrued_expense" as any), isNull(accounts.deletedAt))
           ).limit(1);
-          if (nhifAcct[0]) {
-            const nhifNewBal = d(nhifAcct[0].currentBalance || "0").plus(totalNhif);
+          const nhifPayableAcct = await tx.query.accounts.findFirst({
+            where: and(
+              eq(accounts.accountCode, "2400"),
+              eq(accounts.businessId, businessId),
+              isNull(accounts.deletedAt)
+            ),
+          });
+          if (nhifPayableAcct) {
+            const nhifNewBal = d(nhifPayableAcct.currentBalance || "0").plus(totalNhif);
             await tx.insert(ledgerEntries).values({
-              accountId: nhifAcct[0].id,
+              accountId: nhifPayableAcct.id,
               transactionType: "payroll" as any,
               transactionId: input.periodId,
               entryType: "credit",
@@ -374,18 +399,25 @@ export const payrollRouter = createRouter({
               createdBy: userId,
               description: `NHIF Payable: ${period.periodName}`,
             } as any).returning();
-            await tx.update(accounts).set({ currentBalance: nhifNewBal.toFixed(2) }).where(eq(accounts.id, nhifAcct[0].id));
+            await tx.update(accounts).set({ currentBalance: nhifNewBal.toFixed(2) }).where(eq(accounts.id, nhifPayableAcct.id));
           }
         }
 
-        if (businessId && totalHousingLevy.gt(0)) {
+        if (businessId && d(totalHousingLevy || "0").gt(0)) {
           const hlAcct = await tx.select().from(accounts).where(
             and(eq(accounts.businessId, businessId), eq(accounts.accountSubType, "accrued_expense" as any), isNull(accounts.deletedAt))
           ).limit(1);
-          if (hlAcct[0]) {
-            const hlNewBal = d(hlAcct[0].currentBalance || "0").plus(totalHousingLevy);
+          const hlPayableAcct = await tx.query.accounts.findFirst({
+            where: and(
+              eq(accounts.accountCode, "2600"),
+              eq(accounts.businessId, businessId),
+              isNull(accounts.deletedAt)
+            ),
+          });
+          if (hlPayableAcct) {
+            const hlNewBal = d(hlPayableAcct.currentBalance || "0").plus(totalHousingLevy);
             await tx.insert(ledgerEntries).values({
-              accountId: hlAcct[0].id,
+              accountId: hlPayableAcct.id,
               transactionType: "payroll" as any,
               transactionId: input.periodId,
               entryType: "credit",
@@ -395,7 +427,7 @@ export const payrollRouter = createRouter({
               createdBy: userId,
               description: `Housing Levy Payable: ${period.periodName}`,
             } as any).returning();
-            await tx.update(accounts).set({ currentBalance: hlNewBal.toFixed(2) }).where(eq(accounts.id, hlAcct[0].id));
+            await tx.update(accounts).set({ currentBalance: hlNewBal.toFixed(2) }).where(eq(accounts.id, hlPayableAcct.id));
           }
         }
 

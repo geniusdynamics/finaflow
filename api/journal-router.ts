@@ -89,7 +89,7 @@ export const journalRouter = createRouter({
       }));
 
       const entry = await createJournalEntry({
-        businessId: business.id,
+        businessId: input.businessId,
         entryDate: input.entryDate,
         description: input.description,
         reference: input.reference,

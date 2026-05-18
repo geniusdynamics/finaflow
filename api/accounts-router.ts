@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { createRouter, accountQuery, accountManage, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { accounts, ledgerEntries } from "@db/schema";
+import { accounts, ledgerEntries, locations } from "@db/schema";
 import { eq, and, isNull, desc, asc, gte, lt, sql } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { logAudit } from "./lib/audit";
 import { notFutureDateString } from "./lib/future-date";
 import { toLocalDateKey } from "./lib/date-key";
+import { ensureSystemAccount } from "./lib/accounting-accounts";
+import { validateOperationalAccountClassification } from "./lib/accounting-validation";
 
 export const drawingInputSchema = z.object({
   accountId: z.number(),
@@ -42,8 +44,13 @@ export const accountsRouter = createRouter({
     const db = getDb();
     const locIds = await getCurrentBusinessLocationIds(ctx);
     if (locIds.length === 0) return [];
+    // Operational accounts: have locationId but NO accountType (pure operational, not COA)
     return db.select().from(accounts).where(
-      and(sql`${accounts.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`, isNull(accounts.deletedAt))
+      and(
+        sql`${accounts.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`,
+        isNull(accounts.deletedAt),
+        isNull(accounts.accountType) // Exclude COA accounts
+      )
     );
   }),
 
@@ -70,23 +77,75 @@ export const accountsRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const userId = (ctx as any).user?.id ?? 1;
       await requireAuthorizedLocation(ctx, input.locationId);
       const ob = input.openingBalance ?? "0.00";
+      const [location] = await db
+        .select()
+        .from(locations)
+        .where(and(eq(locations.id, input.locationId), isNull(locations.deletedAt)))
+        .limit(1);
+
+      if (!location?.businessId) {
+        throw new Error("Selected location is missing an active business context");
+      }
+
       const existing = await db.select().from(accounts).where(
         and(eq(accounts.locationId, input.locationId), eq(accounts.name, input.name), eq(accounts.type, input.type), isNull(accounts.deletedAt))
       ).limit(1);
       if (existing.length > 0) {
         throw new Error(`Account "${input.name}" of type ${input.type} already exists for this location`);
       }
-      const [result] = await db.insert(accounts).values({
-        locationId: input.locationId, name: input.name, type: input.type,
-        accountCode: input.accountCode, accountNumber: input.accountNumber,
-        openingBalance: ob, currentBalance: ob,
+
+      const classification = validateOperationalAccountClassification(
+        input.type,
+        input.accountType as any,
+        input.accountSubType,
+      );
+
+      await ensureSystemAccount({
+        businessId: location.businessId,
+        accountType: classification.accountType,
+        accountSubType: classification.accountSubType,
+        name:
+          classification.accountSubType === "bank"
+            ? "Bank Accounts"
+            : input.type === "mpesa"
+              ? "M-Pesa Accounts"
+              : "Cash Accounts",
+      });
+
+      const rows = await db.insert(accounts).values({
+        locationId: input.locationId,
+        businessId: location.businessId,
+        name: input.name,
+        type: input.type,
+        accountCode: input.accountCode,
+        accountNumber: input.accountNumber,
+        openingBalance: ob,
+        currentBalance: ob,
         isPaymentMethod: input.isPaymentMethod ?? false,
-        accountType: input.accountType as any,
-        accountSubType: input.accountSubType as any,
-        isContra: input.isContra ?? false,
+        accountType: classification.accountType as any,
+        accountSubType: classification.accountSubType as any,
+        isContra: false,
       }).returning();
+      const result = (rows as any[])[0];
+
+      await logAudit({
+        userId,
+        businessId: location.businessId,
+        action: "CREATE",
+        resource: "accounts",
+        resourceId: result.id,
+        details: {
+          locationId: input.locationId,
+          type: input.type,
+          accountType: classification.accountType,
+          accountSubType: classification.accountSubType,
+          isPaymentMethod: input.isPaymentMethod ?? false,
+        },
+      });
+
       return { id: result.id, success: true };
     }),
 
@@ -104,9 +163,33 @@ export const accountsRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      await requireAuthorizedEntity(ctx, accounts, input.id);
+      const userId = (ctx as any).user?.id ?? 1;
+      const existing = await requireAuthorizedEntity(ctx, accounts, input.id);
       const { id, ...updates } = input;
-      await db.update(accounts).set(updates).where(eq(accounts.id, id));
+
+      const normalizedUpdates: Record<string, unknown> = { ...updates };
+      if (input.accountType !== undefined || input.accountSubType !== undefined) {
+        const classification = validateOperationalAccountClassification(
+          existing.type as any,
+          input.accountType as any,
+          input.accountSubType,
+        );
+        normalizedUpdates.accountType = classification.accountType;
+        normalizedUpdates.accountSubType = classification.accountSubType;
+        normalizedUpdates.isContra = false;
+      }
+
+      await db.update(accounts).set(normalizedUpdates).where(eq(accounts.id, id));
+
+      await logAudit({
+        userId,
+        businessId: existing.businessId ?? undefined,
+        action: "UPDATE",
+        resource: "accounts",
+        resourceId: id,
+        details: normalizedUpdates,
+      });
+
       return { success: true };
     }),
 
@@ -326,7 +409,8 @@ export const accountsRouter = createRouter({
               locIds.map((id) => sql`${id}`),
               sql`, `
             )})`,
-            isNull(accounts.deletedAt)
+            isNull(accounts.deletedAt),
+            isNull(accounts.accountType) // Exclude COA accounts
           )
         )
         .orderBy(asc(accounts.name));

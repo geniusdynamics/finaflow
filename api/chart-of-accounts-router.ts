@@ -1,11 +1,11 @@
 import { z } from "zod";
-import { createRouter, accountManage } from "./middleware";
+import { createRouter, accountQuery, accountManage } from "./middleware";
 import { getDb } from "./queries/connection";
 import { accounts } from "@db/schema";
 import { eq, and, isNull, sql, desc } from "drizzle-orm";
 
 export const chartOfAccountsRouter = createRouter({
-  list: accountManage
+  list: accountQuery
     .input(z.object({ businessId: z.number() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -35,7 +35,7 @@ export const chartOfAccountsRouter = createRouter({
       return { grouped, summary };
     }),
 
-  getByType: accountManage
+  getByType: accountQuery
     .input(z.object({ businessId: z.number(), accountType: z.enum(["asset", "liability", "equity", "revenue", "expense"]) }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -76,7 +76,7 @@ export const chartOfAccountsRouter = createRouter({
 
       if (existing) throw new Error("Account code already exists");
 
-      const [account] = await db
+      const rows = await db
         .insert(accounts)
         .values({
           businessId: input.businessId,
@@ -94,6 +94,7 @@ export const chartOfAccountsRouter = createRouter({
           isPaymentMethod: input.isPaymentMethod,
         } as any)
         .returning();
+      const account = (rows as any[])[0];
 
       return account;
     }),
@@ -152,7 +153,7 @@ export const chartOfAccountsRouter = createRouter({
       return { success: true };
     }),
 
-  getAccountBalance: accountManage
+  getAccountBalance: accountQuery
     .input(z.object({ id: z.number(), businessId: z.number() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -165,7 +166,7 @@ export const chartOfAccountsRouter = createRouter({
       return { account, normalBalance: getNormalBalance(account.accountType || "") };
     }),
 
-  validateCode: accountManage
+  validateCode: accountQuery
     .input(z.object({ businessId: z.number(), accountCode: z.string(), excludeId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -183,7 +184,7 @@ export const chartOfAccountsRouter = createRouter({
       return { valid: true };
     }),
 
-  getNextAccountCode: accountManage
+  getNextAccountCode: accountQuery
     .input(z.object({ businessId: z.number(), accountType: z.enum(["asset", "liability", "equity", "revenue", "expense"]) }))
     .query(async ({ input }) => {
       const db = getDb();

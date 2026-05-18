@@ -1,26 +1,23 @@
 // ABOUTME: Journal Entries management page for double-entry bookkeeping
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
-import { cn, formatKES } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatKES } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, BookOpen, CheckCircle, XCircle, RotateCcw, Pencil, Trash2 } from "lucide-react";
+import { Plus, BookOpen, CheckCircle, XCircle, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { getCurrentBusinessId } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 export function JournalEntries({ embedded }: { embedded?: boolean }) {
   const [page, setPage] = useState(1);
   const [isPosted, setIsPosted] = useState<boolean | undefined>(undefined);
   const [createOpen, setCreateOpen] = useState(false);
-  const [selectedEntry, setSelectedEntry] = useState<any>(null);
-  const [businessId, setBusinessId] = useState<number | null>(null);
-
-  useEffect(() => {
-    setBusinessId(getCurrentBusinessId());
-  }, []);
+  const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
+  const { user } = useAuth();
+  const businessId = user?.currentBusinessId ?? null;
 
   const journalQuery = trpc.journal.list.useQuery({
     businessId: businessId || 0,
@@ -30,6 +27,10 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
   }, { enabled: !!businessId });
 
   const utils = trpc.useUtils();
+  const selectedEntryQuery = trpc.journal.getById.useQuery(
+    businessId && selectedEntryId ? { id: selectedEntryId, businessId } : undefined!,
+    { enabled: !!businessId && selectedEntryId !== null }
+  );
 
   const postMutation = trpc.journal.post.useMutation({
     onSuccess: () => {
@@ -39,27 +40,13 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
     onError: (e) => toast.error(e.message),
   });
 
-  const unpostMutation = trpc.journal.unpost.useMutation({
-    onSuccess: () => {
-      toast.success("Journal entry unpublished");
-      utils.journal.list.invalidate();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
   const reverseMutation = trpc.journal.reverse.useMutation({
     onSuccess: () => {
       toast.success("Journal entry reversed");
       utils.journal.list.invalidate();
-      setSelectedEntry(null);
+      setSelectedEntryId(null);
     },
     onError: (e) => toast.error(e.message),
-  });
-
-  const getDetailsMutation = trpc.journal.getById.useMutation({
-    onSuccess: (data) => {
-      setSelectedEntry(data);
-    },
   });
 
   const entries = journalQuery.data?.entries || [];
@@ -67,9 +54,7 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
   const totalPages = journalQuery.data?.totalPages || 1;
 
   const viewDetails = (id: number) => {
-    if (businessId) {
-      getDetailsMutation.mutate({ id, businessId });
-    }
+    setSelectedEntryId(id);
   };
 
   const content = (
@@ -90,7 +75,11 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
             <DialogHeader>
               <DialogTitle className="font-serif text-xl">Create Journal Entry</DialogTitle>
             </DialogHeader>
-            <JournalEntryForm onSuccess={() => setCreateOpen(false)} businessId={businessId} />
+            {businessId ? (
+              <JournalEntryForm onSuccess={() => setCreateOpen(false)} businessId={businessId} />
+            ) : (
+              <p className="text-sm text-[#8D8A87]">Select an active business before creating journal entries.</p>
+            )}
             </DialogContent>
           </Dialog>
         </div>
@@ -187,7 +176,7 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => postMutation.mutate({ id: entry.id, businessId })}
+                            onClick={() => businessId && postMutation.mutate({ id: entry.id, businessId })}
                             disabled={postMutation.isPending}
                           >
                             Post
@@ -197,7 +186,7 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => reverseMutation.mutate({ id: entry.id, businessId })}
+                            onClick={() => businessId && reverseMutation.mutate({ id: entry.id, businessId })}
                             disabled={reverseMutation.isPending}
                           >
                             Reverse
@@ -240,34 +229,34 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
         )}
 
         {/* Entry Details Dialog */}
-        {selectedEntry && (
-          <Dialog open={!!selectedEntry} onOpenChange={() => setSelectedEntry(null)}>
+        {selectedEntryId && (
+          <Dialog open={!!selectedEntryId} onOpenChange={() => setSelectedEntryId(null)}>
             <DialogContent className="bg-white max-w-2xl">
               <DialogHeader>
                 <DialogTitle className="font-serif text-xl">
-                  Journal Entry: {selectedEntry.entry?.entryNumber}
+                  Journal Entry: {selectedEntryQuery.data?.entry?.entryNumber}
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-[#8D8A87]">Date:</span>
-                    <span className="ml-2 font-medium">{selectedEntry.entry?.entryDate}</span>
+                    <span className="ml-2 font-medium">{selectedEntryQuery.data?.entry?.entryDate}</span>
                   </div>
                   <div>
                     <span className="text-[#8D8A87]">Status:</span>
-                    <span className={`ml-2 font-medium ${selectedEntry.entry?.isPosted ? "text-[#2E7D32]" : "text-[#ED6C02]"}`}>
-                      {selectedEntry.entry?.isPosted ? "Posted" : "Draft"}
+                    <span className={`ml-2 font-medium ${selectedEntryQuery.data?.entry?.isPosted ? "text-[#2E7D32]" : "text-[#ED6C02]"}`}>
+                      {selectedEntryQuery.data?.entry?.isPosted ? "Posted" : "Draft"}
                     </span>
                   </div>
                   <div className="col-span-2">
                     <span className="text-[#8D8A87]">Description:</span>
-                    <span className="ml-2 font-medium">{selectedEntry.entry?.description}</span>
+                    <span className="ml-2 font-medium">{selectedEntryQuery.data?.entry?.description}</span>
                   </div>
-                  {selectedEntry.entry?.reference && (
+                  {selectedEntryQuery.data?.entry?.reference && (
                     <div>
                       <span className="text-[#8D8A87]">Reference:</span>
-                      <span className="ml-2 font-medium">{selectedEntry.entry?.reference}</span>
+                      <span className="ml-2 font-medium">{selectedEntryQuery.data?.entry?.reference}</span>
                     </div>
                   )}
                 </div>
@@ -283,7 +272,7 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedEntry.lines?.map((line: any, idx: number) => (
+                      {selectedEntryQuery.data?.lines?.map((line: any, idx: number) => (
                         <tr key={idx} className="border-b">
                           <td className="py-2">
                             <div className="font-medium">{line.accountName || `Account #${line.accountId}`}</div>
@@ -331,7 +320,7 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
     onError: (e) => toast.error(e.message),
   });
 
-  const { data: accounts } = trpc.accounts.list.useQuery({ locationId: undefined });
+  const { data: accounts } = trpc.accounts.list.useQuery();
 
   const addLine = () => {
     setLines([...lines, { accountId: "", debit: "", credit: "", description: "" }]);

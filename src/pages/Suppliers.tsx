@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
+import { skipToken } from "@tanstack/react-query";
 import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,8 +48,7 @@ export function Suppliers() {
 
   const { data: items } = trpc.supplierPrices.allItems.useQuery(selectedSupplierForPrices ? { supplierId: +selectedSupplierForPrices } : undefined);
   const { data: history } = trpc.supplierPrices.history.useQuery(
-    searchItem ? { itemName: searchItem, limit: 50 } : undefined,
-    { enabled: !!searchItem }
+    searchItem ? { itemName: searchItem, limit: 50 } : skipToken
   );
   const { data: alerts } = trpc.supplierPrices.checkAlerts.useQuery();
   const { data: rules } = trpc.supplierPrices.listRules.useQuery();

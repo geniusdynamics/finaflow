@@ -4,10 +4,11 @@ import { useState, useCallback } from "react";
 import { trpc } from "@/providers/trpc";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { getCurrentBusinessId } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
+import { resolveFinancialReportBusinessId } from "./report-scope";
 
 export interface GenerateOptions {
-  businessId: number;
+  businessId: number | null;
   startDate?: string;
   endDate?: string;
   asOfDate?: string;
@@ -26,8 +27,18 @@ export interface FinancialReportData {
 
 export interface BalanceSheetData {
   assets: {
-    current: string[];
-    fixed: string[];
+    current: {
+      accountCode?: string;
+      accountName: string;
+      amount: string;
+      indent?: number;
+    }[];
+    fixed: {
+      accountCode?: string;
+      accountName: string;
+      amount: string;
+      indent?: number;
+    }[];
     total: string;
   };
   liabilities: { total: string };
@@ -64,7 +75,8 @@ export interface AssetRegisterData {
 }
 
 export function useFinancialStatements() {
-  const businessId = getCurrentBusinessId() || 1;
+  const { user } = useAuth();
+  const businessId = resolveFinancialReportBusinessId(user);
   const queryClient = useQueryClient();
 
   const incomeStatementMutation = trpc.reports.incomeStatement.useMutation();
@@ -82,7 +94,19 @@ export function useFinancialStatements() {
   const generateIncomeStatement = useCallback(
     async (options: GenerateOptions) => {
       try {
-        const result = await incomeStatementMutation.mutateAsync(options);
+        if (!options.businessId) {
+          toast.error("Select an active business before generating reports");
+          return;
+        }
+        if (!options.startDate || !options.endDate) {
+          toast.error("Select a valid report period before generating the income statement");
+          return;
+        }
+        const result = await incomeStatementMutation.mutateAsync({
+          businessId: options.businessId,
+          startDate: options.startDate,
+          endDate: options.endDate,
+        });
         setIncomeStatementData(result);
         queryClient.invalidateQueries({ queryKey: ["reports.incomeStatement"] });
         toast.success("Income Statement generated successfully");
@@ -96,7 +120,18 @@ export function useFinancialStatements() {
   const generateBalanceSheet = useCallback(
     async (options: GenerateOptions) => {
       try {
-        const result = await balanceSheetMutation.mutateAsync(options);
+        if (!options.businessId) {
+          toast.error("Select an active business before generating reports");
+          return;
+        }
+        if (!options.asOfDate) {
+          toast.error("Select a report date before generating the balance sheet");
+          return;
+        }
+        const result = await balanceSheetMutation.mutateAsync({
+          businessId: options.businessId,
+          asOfDate: options.asOfDate,
+        });
         setBalanceSheetData(result);
         queryClient.invalidateQueries({ queryKey: ["reports.balanceSheet"] });
         toast.success("Balance Sheet generated successfully");
@@ -110,7 +145,18 @@ export function useFinancialStatements() {
   const generateTrialBalance = useCallback(
     async (options: GenerateOptions) => {
       try {
-        const result = await trialBalanceMutation.mutateAsync(options);
+        if (!options.businessId) {
+          toast.error("Select an active business before generating reports");
+          return;
+        }
+        if (!options.asOfDate) {
+          toast.error("Select a report date before generating the trial balance");
+          return;
+        }
+        const result = await trialBalanceMutation.mutateAsync({
+          businessId: options.businessId,
+          asOfDate: options.asOfDate,
+        });
         setTrialBalanceData(result);
         queryClient.invalidateQueries({ queryKey: ["reports.trialBalance"] });
         toast.success("Trial Balance generated successfully");
@@ -124,7 +170,13 @@ export function useFinancialStatements() {
   const generateAssetRegister = useCallback(
     async (options: GenerateOptions) => {
       try {
-        const result = await assetRegisterMutation.mutateAsync(options);
+        if (!options.businessId) {
+          toast.error("Select an active business before generating reports");
+          return;
+        }
+        const result = await assetRegisterMutation.mutateAsync({
+          businessId: options.businessId,
+        });
         setAssetRegisterData(result);
         queryClient.invalidateQueries({ queryKey: ["reports.assetRegister"] });
         toast.success("Asset Register generated successfully");

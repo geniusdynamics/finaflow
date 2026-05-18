@@ -3,7 +3,7 @@ import { trpc } from "@/providers/trpc";
 import { formatKES } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Building, DollarSign, TrendingUp, Gift, Link2, Copy, CheckCircle, Users, RefreshCw, Key, Eye, KeyRound, TrendingDown } from "lucide-react";
+import { Building, DollarSign, TrendingUp, Gift, Link2, Copy, CheckCircle, Users, RefreshCw, Key, Eye, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
 import { AllocationsTab } from "@/components/partner/AllocationsTab";

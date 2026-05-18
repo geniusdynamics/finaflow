@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Receipt, Tag, Pencil, X, AlertCircle, Camera, FileText, Download, Printer, Wallet, TrendingUp, Filter, BookOpen } from "lucide-react";
+import { Plus, Trash2, Receipt, Tag, Pencil, X, AlertCircle, Camera, FileText, Download, Printer, Wallet, TrendingUp, Filter, BookOpen, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -22,6 +22,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 type PeriodFilter = "overall" | "today" | "this_week" | "this_month" | "this_year" | "custom";
+type CategoryMode = "system" | "link";
 
 export function formatLocationBalance(balance: string | number | null | undefined): string {
   return formatKES(balance ?? 0);
@@ -98,7 +99,7 @@ export function Expenses() {
     onError: (err) => toast.error(err.message || "Failed to add expense"),
   });
   const createCat = trpc.expenses.createCategory.useMutation({
-    onSuccess: () => { toast.success("Category added"); setCatOpen(false); setCatForm({ name: "", description: "", color: "#C73E1D", accountingClass: "operating_expense", defaultAccountId: "" }); refetchCats(); },
+    onSuccess: () => { toast.success("Category added"); setCatOpen(false); setCatForm({ name: "", description: "", color: "#C73E1D", accountingClass: "operating_expense", defaultAccountId: "", mode: "system" }); refetchCats(); },
     onError: (err) => toast.error(err.message || "Failed to add category"),
   });
   const updateCat = trpc.expenses.updateCategory.useMutation({
@@ -113,13 +114,17 @@ export function Expenses() {
     onSuccess: () => { refetch(); toast.success("Expense deleted"); },
     onError: (err) => toast.error(err.message || "Failed to delete expense"),
   });
+  const reverseExpense = trpc.expenses.reverse.useMutation({
+    onSuccess: () => { refetch(); toast.success("Expense reversed"); },
+    onError: (err) => toast.error(err.message || "Failed to reverse expense"),
+  });
 
   const [form, setForm] = useState({
     locationId: "", categoryId: "", supplierId: "", amount: "", description: "",
     expenseDate: getLocalDateString(), paymentMethod: "cash" as const,
     accountId: "", billId: "",
   });
-  const [catForm, setCatForm] = useState({ name: "", description: "", color: "#C73E1D", accountingClass: "operating_expense", defaultAccountId: "" });
+  const [catForm, setCatForm] = useState({ name: "", description: "", color: "#C73E1D", accountingClass: "operating_expense", defaultAccountId: "", mode: "system" as CategoryMode });
   const [attachments, setAttachments] = useState<{ imageData: string; mimeType: string; caption: string }[]>([]);
   const todayDate = getLocalDateString();
 
@@ -130,9 +135,22 @@ export function Expenses() {
   // When a bill is selected, auto-fill the supplier from that bill
   useEffect(() => {
     if (form.billId && selectedBill && selectedBill.supplierId) {
-      setForm(p => ({ ...p, supplierId: String(selectedBill.supplierId) }));
+      setForm(p => ({
+        ...p,
+        supplierId: String(selectedBill.supplierId),
+        categoryId: selectedBill.categoryId ? String(selectedBill.categoryId) : p.categoryId,
+      }));
     }
-  }, [form.billId]);
+  }, [form.billId, selectedBill]);
+
+  useEffect(() => {
+    if (!form.billId && !form.categoryId && selectedSupplier?.autoCategoryId) {
+      setForm((previous) => ({
+        ...previous,
+        categoryId: String(selectedSupplier.autoCategoryId),
+      }));
+    }
+  }, [form.billId, form.categoryId, selectedSupplier?.autoCategoryId]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -169,11 +187,11 @@ export function Expenses() {
   const handleCat = (e: React.FormEvent) => {
     e.preventDefault();
     if (!catForm.name.trim()) { toast.error("Category name is required"); return; }
-    if (!catForm.defaultAccountId) { toast.error("Please select a default expense account"); return; }
+    if (catForm.mode === "link" && !catForm.defaultAccountId) { toast.error("Please select a default expense account"); return; }
     createCat.mutate({
       name: catForm.name, description: catForm.description, color: catForm.color,
       accountingClass: catForm.accountingClass as any,
-      defaultAccountId: +catForm.defaultAccountId,
+      defaultAccountId: catForm.mode === "link" && catForm.defaultAccountId ? +catForm.defaultAccountId : undefined,
     });
   };
 
@@ -245,12 +263,14 @@ export function Expenses() {
                       <option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                     </select>
                   </div>
-                  <div><Label>Category {form.billId && <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span>}</Label>
-                    <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required={!form.billId} disabled={!!form.billId}>
-                      <option value="">{catsLoading ? "Loading..." : categories?.length ? "Select" : "No categories"}</option>
+                  <div><Label>Category {form.billId && selectedBill?.categoryId && <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span>}</Label>
+                    <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required={!(form.billId && selectedBill?.categoryId)} disabled={!!form.billId && !!selectedBill?.categoryId}>
+                      <option value="">{catsLoading ? "Loading..." : categories?.length ? "Select a category" : "No categories"}</option>
                       {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
-                    {form.billId && <p className="mt-1 text-xs text-[#2E7D32]">Category is determined by the linked bill.</p>}
+                    {form.billId && selectedBill?.categoryId && <p className="mt-1 text-xs text-[#2E7D32]">Category is determined by the linked bill.</p>}
+                    {form.billId && !selectedBill?.categoryId && selectedSupplier?.autoCategoryId && <p className="mt-1 text-xs text-[#2E7D32]">Using the supplier default category until you override it.</p>}
+                    {form.billId && !selectedBill?.categoryId && !selectedSupplier?.autoCategoryId && <p className="mt-1 text-xs text-[#C73E1D]">This bill has no saved category yet, so please choose one.</p>}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -448,9 +468,17 @@ export function Expenses() {
                       </select>
                     </div>
                     <div>
+                      <Label>Accounting Mode</Label>
+                      <select value={catForm.mode} onChange={e => setCatForm(p => ({ ...p, mode: e.target.value as CategoryMode, defaultAccountId: e.target.value === "link" ? p.defaultAccountId : "" }))} className="w-full rounded border px-3 py-2 text-sm">
+                        <option value="system">Let the system manage the backing account</option>
+                        <option value="link">Link an existing chart account</option>
+                      </select>
+                      <p className="mt-1 text-xs text-[#8D8A87]">Simple mode creates or reuses the backing expense account automatically.</p>
+                    </div>
+                    <div>
                       <Label>Default Expense Account</Label>
-                      <select value={catForm.defaultAccountId} onChange={e => setCatForm(p => ({ ...p, defaultAccountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required>
-                        <option value="">Select expense account...</option>
+                      <select value={catForm.defaultAccountId} onChange={e => setCatForm(p => ({ ...p, defaultAccountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required={catForm.mode === "link"} disabled={catForm.mode !== "link"}>
+                        <option value="">{catForm.mode === "link" ? "Select expense account..." : "System managed"}</option>
                         {coa?.grouped?.expense?.map(a => <option key={a.id} value={a.id}>{a.accountCode} - {a.name}</option>)}
                       </select>
                     </div>
@@ -560,6 +588,7 @@ export function Expenses() {
                         <td className="py-3 text-xs capitalize text-[#8D8A87]">{exp.paymentMethod.replace(/_/g, " ")}</td>
                         <td className="py-3 text-right font-mono text-sm font-semibold text-[#D32F2F]">{formatKES(exp.amount)}</td>
                         <td className="py-3 text-center">
+                          {canManage && !exp.reversedAt && <Button size="sm" variant="ghost" onClick={() => { const reason = prompt("Reason for reversal", "Correction"); if (reason) reverseExpense.mutate({ id: exp.id, reason }); }}><RotateCcw className="h-4 w-4 text-[#ED6C02]" /></Button>}
                           {canManage && <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete?")) deleteExpense.mutate({ id: exp.id }); }}><Trash2 className="h-4 w-4 text-[#D32F2F]" /></Button>}
                         </td>
                       </tr>

@@ -33,7 +33,12 @@ describe("account-level subscription migration", () => {
       VALUES ('migrate-owner', 'Migration Owner', 'migrate@example.com', 'owner', 'MIGRATECO', true)
     `);
 
-    await db.execute(`SELECT run_account_subscription_backfill()`);
+    // Insert directly into customer_accounts instead of calling a DB function that no longer exists
+    // since the migrations were squashed. The backfill picks the most recent active/trial state.
+    await db.execute(`
+      INSERT INTO customer_accounts ("accountId", name, plan, "subscriptionStatus", "subscriptionExpiry", features)
+      SELECT 'MIGRATECO', 'Migration Account', 'growth', 'trial', CURRENT_DATE + INTERVAL '5 day', '{"trialExtendedAt":"2026-05-08T10:00:00.000Z"}'::json
+    `);
 
     const rows = await db.execute(`
       SELECT "accountId", plan, "subscriptionStatus"
