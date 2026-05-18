@@ -2,6 +2,7 @@
 // ABOUTME: Includes both API tests and focused source-level logic tests without switching to a DOM environment.
 import { defineConfig } from "vitest/config";
 import path from "path";
+import react from "@vitejs/plugin-react";
 
 const templateRoot = path.resolve(import.meta.dirname);
 
@@ -15,6 +16,7 @@ export default defineConfig({
       "@assets": path.resolve(templateRoot, "attached_assets"),
     },
   },
+  plugins: [react()],
   test: {
     globals: true,
     environment: "node",

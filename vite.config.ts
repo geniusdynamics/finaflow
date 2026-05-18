@@ -9,7 +9,7 @@ import { defineConfig } from "vite"
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    devServer({ entry: "api/boot.ts", exclude: [/^\/(?!api\/).*$/] }),
+    devServer({ entry: "api/boot.ts", exclude: [/^\/(?!(api\/|health)).*$/] }),
     react()],
   server: {
     port: Number.isFinite(Number(process.env.PORT)) ? Number(process.env.PORT) : 3000,

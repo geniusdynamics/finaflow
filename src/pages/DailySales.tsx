@@ -135,7 +135,7 @@ export function DailySales() {
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    const newAttachments = [];
+    const newAttachments: { imageData: string; mimeType: string; caption: string }[] = [];
     for (const file of Array.from(files)) {
       if (file.size > 5 * 1024 * 1024) { toast.error(`${file.name} too large (max 5MB)`); continue; }
       const base64 = await fileToBase64(file);

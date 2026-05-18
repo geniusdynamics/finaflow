@@ -40,6 +40,20 @@ export function BudgetActualExpensesPieChart({
   selectedCategoryId,
   onSelectCategory,
 }: BudgetActualExpensesPieChartProps) {
+  if (!data || !data.segments || data.segments.length === 0 || data.isEmpty) {
+    return (
+      <FinancialDistributionCard
+        title="Budget vs Actual Expenses"
+        subtitle="Actual spend share by category"
+        isEmpty={true}
+        emptyMessage="No actual expenses are available for the selected period yet."
+        summary={<div className="text-right"><p className="text-[11px] uppercase tracking-wide text-[#8D8A87]">Variance</p><p className="font-mono text-sm font-semibold text-[#8D8A87]">KES 0.00</p></div>}
+        chart={null}
+        legend={null}
+      />
+    );
+  }
+
   const chartConfig = Object.fromEntries(
     data.segments.map((segment) => [
       segment.key,

@@ -10,11 +10,14 @@ import { createContext } from "./context";
 import { env } from "./lib/env";
 import { securityHeaders } from "./lib/security-headers";
 import { csrfProtection } from "./lib/csrf";
-import { apiLimiter, loginLimiter } from "./lib/rate-limit";
+import { apiLimiter, loginLimiter, lookupAccountLimiter } from "./lib/rate-limit";
 import { getDb, closePool } from "./queries/connection";
 import { sql } from "drizzle-orm";
 import { processTrialLifecycle, TRIAL_JOB_INTERVAL_MS } from "./lib/subscriptions";
 import { shouldStartStandaloneServer } from "./lib/server-runtime";
+import { ensureDatabaseReady } from "./lib/db-startup";
+
+await ensureDatabaseReady(env.databaseUrl);
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -49,26 +52,56 @@ app.get("/health", async (c) => {
   }
 });
 
-app.use("/api/trpc/localAuth.login*", loginLimiter);
-app.use("/api/trpc/localAuth.register*", loginLimiter);
-app.use("/*", csrfProtection);
-app.use("/api/*", apiLimiter);
+async function trpcRateLimiter(c: any, next: any) {
+  if (c.req.method === "POST" && c.req.path.startsWith("/api/trpc")) {
+    try {
+      const body = await c.req.raw.clone().json().catch(() => null);
+      if (body && typeof body === "object") {
+        const paths = new Set<string>();
+        const walk = (obj: any) => {
+          if (!obj || typeof obj !== "object") return;
+          if (obj.path && typeof obj.path === "string") paths.add(obj.path);
+          for (const v of Object.values(obj)) {
+            if (v && typeof v === "object") walk(v);
+          }
+        };
+        walk(body);
+        if (paths.has("localAuth.login") || paths.has("localAuth.register")) {
+          return loginLimiter(c, next);
+        }
+        if (paths.has("localAuth.lookupAccount")) {
+          return lookupAccountLimiter(c, next);
+        }
+      }
+    } catch {
+      // body parse failed, fall through to general limiter
+    }
+  }
+  return next();
+}
 
-app.use("/api/trpc", async (c) => {
-  return fetchRequestHandler({
-    endpoint: "/api/trpc",
-    req: c.req.raw,
-    router: appRouter,
-    createContext,
-  });
-});
-app.use("/api/trpc/*", async (c) => {
-  return fetchRequestHandler({
-    endpoint: "/api/trpc",
-    req: c.req.raw,
-    router: appRouter,
-    createContext,
-  });
+app.use("/*", csrfProtection);
+app.use("/api/trpc*", trpcRateLimiter, apiLimiter);
+
+app.use("/api/trpc*", async (c) => {
+  const method = c.req.method;
+  const url = c.req.url;
+  console.log(`[trpc-server] --> ${method} ${url}`);
+  try {
+    const response = await fetchRequestHandler({
+      endpoint: "/api/trpc",
+      req: c.req.raw,
+      router: appRouter,
+      createContext,
+    });
+    const clone = response.clone();
+    const bodyText = await clone.text().catch(() => "<could not read body>");
+    console.log(`[trpc-server] <-- ${method} ${url} -> ${response.status} body=${bodyText.slice(0, 300)}`);
+    return response;
+  } catch (err) {
+    console.error(`[trpc-server] <-- ${method} ${url} ERROR:`, err);
+    return c.json({ error: "Internal server error" }, 500);
+  }
 });
 app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 

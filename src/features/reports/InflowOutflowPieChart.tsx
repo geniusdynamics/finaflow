@@ -43,6 +43,21 @@ export function InflowOutflowPieChart({
   selectedKey,
   onSelect,
 }: InflowOutflowPieChartProps) {
+  if (!data || !data.segments || data.segments.length === 0) {
+    return (
+      <FinancialDistributionCard
+        title="Inflow / Outflow"
+        subtitle="Revenue vs Expenses"
+        summary={null}
+        chart={null}
+        legend={null}
+        isEmpty={true}
+        emptyMessage="No data available"
+        className="h-full min-h-[200px]"
+      />
+    );
+  }
+
   const chartConfig = Object.fromEntries(
     data.segments.map((segment) => [
       segment.key,

@@ -14,7 +14,7 @@ export const supplierPricesRouter = createRouter({
     }))
     .query(async ({ input }) => {
       const db = getDb();
-      const cond = [];
+      const cond: any[] = [];
       if (input.itemName) cond.push(sql`LOWER(${supplierPriceHistory.itemName}) LIKE LOWER(${"%" + input.itemName + "%"})`);
       if (input.supplierId) cond.push(eq(supplierPriceHistory.supplierId, input.supplierId));
       return db.select().from(supplierPriceHistory).where(cond.length > 0 ? and(...cond) : undefined).orderBy(desc(supplierPriceHistory.priceDate)).limit(input.limit);
@@ -65,10 +65,10 @@ export const supplierPricesRouter = createRouter({
         supplierId: supplierPriceHistory.supplierId,
       }).from(supplierPriceHistory).where(cond.length > 0 ? and(...cond) : undefined).limit(200);
 
-      const results = [];
+      const results: any[] = [];
       for (const item of items) {
         const history = await db.select().from(supplierPriceHistory).where(
-          and(eq(supplierPriceHistory.supplierId, item.supplierId), sql`LOWER(${supplierPriceHistory.itemName}) = LOWER(${item.itemName})`)
+          and(eq(supplierPriceHistory.supplierId, item.supplierId!), sql`LOWER(${supplierPriceHistory.itemName}) = LOWER(${item.itemName})`)
         ).orderBy(desc(supplierPriceHistory.priceDate)).limit(10);
 
         if (history.length >= 2) {
@@ -76,12 +76,12 @@ export const supplierPricesRouter = createRouter({
           const previous = parseFloat(history[1].unitPrice);
           const avg = history.reduce((s, h) => s + parseFloat(h.unitPrice), 0) / history.length;
           const changePercent = previous > 0 ? ((latest - previous) / previous) * 100 : 0;
-          const sup = await db.select().from(suppliers).where(eq(suppliers.id, item.supplierId)).limit(1);
+          const sup = await db.select().from(suppliers).where(eq(suppliers.id, item.supplierId!)).limit(1);
 
           results.push({
             itemName: item.itemName,
             supplierName: sup[0]?.name ?? "",
-            supplierId: item.supplierId,
+            supplierId: item.supplierId!,
             latestPrice: latest.toFixed(2),
             previousPrice: previous.toFixed(2),
             averagePrice: avg.toFixed(2),
@@ -129,7 +129,7 @@ export const supplierPricesRouter = createRouter({
 
       for (const rule of rules) {
         const latest = await db.select().from(supplierPriceHistory).where(
-          and(eq(supplierPriceHistory.supplierId, rule.supplierId), sql`LOWER(${supplierPriceHistory.itemName}) = LOWER(${rule.itemName})`)
+          and(eq(supplierPriceHistory.supplierId, rule.supplierId!), sql`LOWER(${supplierPriceHistory.itemName}) = LOWER(${rule.itemName})`)
         ).orderBy(desc(supplierPriceHistory.priceDate)).limit(1);
 
         if (latest.length > 0 && rule.expectedPrice) {
@@ -141,7 +141,7 @@ export const supplierPricesRouter = createRouter({
           if (variance > varianceThreshold) {
             alerts.push({
               itemName: rule.itemName,
-              supplierId: rule.supplierId,
+              supplierId: rule.supplierId!,
               latestPrice: latest[0].unitPrice,
               expectedPrice: rule.expectedPrice,
               variancePercent: variance.toFixed(1),

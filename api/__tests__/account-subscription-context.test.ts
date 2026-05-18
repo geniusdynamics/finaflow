@@ -54,7 +54,7 @@ describe("account subscription context", () => {
         accountId: "MULTICO",
         accountRefId,
         currentBusinessId: (businessRows.rows[0] as InsertedBusinessRow).id,
-        currentBusiness: { id: (businessRows.rows[0] as InsertedBusinessRow).id, accountId: "MULTICO", accountRefId },
+        currentBusiness: { id: (businessRows.rows[0] as InsertedBusinessRow).id, accountId: "MULTICO", accountRefId, plan: "growth", features: null, maxBranches: 3, maxUsers: 5 },
         businessIds: businessRows.rows.map((row) => (row as InsertedBusinessRow).id),
       },
     };
@@ -71,7 +71,7 @@ describe("account subscription context", () => {
         accountId: "MULTICO",
         accountRefId,
         currentBusinessId: (businessRows.rows[1] as InsertedBusinessRow).id,
-        currentBusiness: { id: (businessRows.rows[1] as InsertedBusinessRow).id, accountId: "MULTICO", accountRefId },
+        currentBusiness: { id: (businessRows.rows[1] as InsertedBusinessRow).id, accountId: "MULTICO", accountRefId, plan: "growth", features: null, maxBranches: 3, maxUsers: 5 },
         businessIds: businessRows.rows.map((row) => (row as InsertedBusinessRow).id),
       },
     };
@@ -80,9 +80,9 @@ describe("account subscription context", () => {
     const subscriptionA = await callerA.accountSubscriptions.mySubscription();
     const subscriptionB = await callerB.accountSubscriptions.mySubscription();
 
-    expect(subscriptionA.plan).toBe("growth");
-    expect(subscriptionB.plan).toBe("growth");
-    expect(subscriptionA.accountId).toBe("MULTICO");
-    expect(subscriptionB.accountId).toBe("MULTICO");
+    expect(subscriptionA!.plan).toBe("growth");
+    expect(subscriptionB!.plan).toBe("growth");
+    expect(subscriptionA!.accountId).toBe("MULTICO");
+    expect(subscriptionB!.accountId).toBe("MULTICO");
   });
 });

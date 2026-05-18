@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { useSearchParams } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
@@ -11,15 +12,37 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { Plus, Wallet, CreditCard, Smartphone, Landmark, BookOpen, ArrowDownLeft, ArrowUpRight, Pencil, Trash2, ArrowRightLeft, BarChart3, AlertTriangle, Tag, CheckCircle } from "lucide-react";
+import { Plus, Wallet, CreditCard, Smartphone, Landmark, BookOpen, ArrowDownLeft, ArrowUpRight, Pencil, Trash2, ArrowRightLeft, BarChart3, AlertTriangle, Tag, CheckCircle, FileText } from "lucide-react";
 import { toast } from "sonner";
+import { ChartOfAccounts } from "./ChartOfAccounts";
+import { JournalEntries } from "./JournalEntries";
 
 const accountPalette = ["#2E7D32", "#388E3C", "#43A047", "#C77D2D", "#D4A854", "#B8872E", "#9E9D24", "#5D4037"];
 
 export function Accounts() {
+  type CoaAccountType = "asset" | "liability" | "equity" | "revenue" | "expense";
+  type OperationalSubType = "" | "cash" | "bank";
+
   const { user } = useAuth();
   const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.ACCOUNTS_MANAGE);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sectionParam = searchParams.get("section");
+  const [section, setSection] = useState<"accounts" | "chart-of-accounts" | "journal-entries">(
+    sectionParam === "chart-of-accounts" || sectionParam === "journal-entries" ? sectionParam : "accounts"
+  );
   const [tab, setTab] = useState<"accounts" | "payment-methods">("accounts");
+
+  useEffect(() => {
+    const sp = searchParams.get("section");
+    if (sp === "chart-of-accounts" || sp === "journal-entries") {
+      setSection(sp);
+    }
+  }, [searchParams]);
+
+  const handleSectionChange = (newSection: "accounts" | "chart-of-accounts" | "journal-entries") => {
+    setSection(newSection);
+    setSearchParams(newSection === "accounts" ? {} : { section: newSection });
+  };
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState<number | null>(null);
   const [drawingOpen, setDrawingOpen] = useState<number | null>(null);
@@ -45,8 +68,9 @@ export function Accounts() {
   const [form, setForm] = useState({
     locationId: "", name: "", type: "cash" as "cash" | "mpesa" | "bank_account",
     accountCode: "", accountNumber: "", openingBalance: "0.00", isPaymentMethod: true,
+    accountType: "asset" as CoaAccountType, accountSubType: "" as OperationalSubType, isContra: false, linkToCoa: false,
   });
-  const [editForm, setEditForm] = useState({ name: "", accountCode: "", accountNumber: "", isPaymentMethod: true, isActive: true });
+  const [editForm, setEditForm] = useState({ name: "", accountCode: "", accountNumber: "", isPaymentMethod: true, isActive: true, accountType: "asset" as CoaAccountType, accountSubType: "" as OperationalSubType, isContra: false, linkToCoa: false });
   const [drawingForm, setDrawingForm] = useState({ amount: "", description: "", date: getLocalDateString() });
   const [depositForm, setDepositForm] = useState({ amount: "", description: "", date: getLocalDateString() });
 
@@ -119,7 +143,10 @@ export function Accounts() {
     createAccount.mutate({
       locationId: parseInt(form.locationId), name: form.name, type: form.type,
       accountCode: form.accountCode || undefined, accountNumber: form.accountNumber || undefined,
-      openingBalance: form.openingBalance, isPaymentMethod: form.isPaymentMethod
+      openingBalance: form.openingBalance, isPaymentMethod: form.isPaymentMethod,
+      accountType: form.linkToCoa ? (form.accountType as any || undefined) : undefined,
+      accountSubType: form.linkToCoa ? (form.accountSubType || undefined) : undefined,
+      isContra: form.linkToCoa ? form.isContra : undefined,
     });
   };
 
@@ -164,6 +191,21 @@ export function Accounts() {
   return (
     <Layout>
       <div className="space-y-6">
+        {/* Outer section tabs */}
+        <div className="flex items-center gap-2 border-b border-[#E8E0D8]">
+          <button onClick={() => handleSectionChange("accounts")} className={`px-4 py-2 text-sm font-medium ${section === "accounts" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <Wallet className="mr-1 inline h-4 w-4"/>Accounts &amp; Payments
+          </button>
+          <button onClick={() => handleSectionChange("chart-of-accounts")} className={`px-4 py-2 text-sm font-medium ${section === "chart-of-accounts" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <BookOpen className="mr-1 inline h-4 w-4"/>Chart of Accounts
+          </button>
+          <button onClick={() => handleSectionChange("journal-entries")} className={`px-4 py-2 text-sm font-medium ${section === "journal-entries" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <FileText className="mr-1 inline h-4 w-4"/>Journal Entries
+          </button>
+        </div>
+
+        {section === "accounts" && (
+        <>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-serif text-2xl font-bold text-[#2D2A26]">Accounts &amp; Payments</h1>
@@ -238,6 +280,28 @@ export function Accounts() {
                         <Input type="number" step="0.01" value={form.openingBalance} onChange={e => setForm(p => ({ ...p, openingBalance: e.target.value }))} className="pl-10" />
                       </div>
                     </div>
+                    <div className="flex items-center gap-2 pt-2">
+                      <input type="checkbox" id="linkToCoa" checked={form.linkToCoa} onChange={e => setForm(p => ({ ...p, linkToCoa: e.target.checked }))} className="rounded" />
+                      <Label htmlFor="linkToCoa" className="text-sm font-medium">Use chart-compatible asset classification</Label>
+                    </div>
+                    {form.linkToCoa && (
+                      <>
+                        <p className="text-xs text-[#8D8A87]">The general Accounts page only supports cash-equivalent asset links. Use the Chart of Accounts page for advanced liability, equity, revenue, or expense setup.</p>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <div className="space-y-2"><Label>Account Type</Label>
+                            <select value="asset" onChange={() => undefined} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" disabled>
+                              <option value="asset">Asset</option>
+                            </select>
+                          </div>
+                          <div className="space-y-2"><Label>Sub-Type</Label>
+                            <select value={form.accountSubType} onChange={e => setForm(p => ({ ...p, accountSubType: e.target.value as OperationalSubType }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
+                              <option value="">Select asset sub-type...</option>
+                              {form.type === "bank_account" ? <option value="bank">Bank</option> : <option value="cash">Cash</option>}
+                            </select>
+                          </div>
+                        </div>
+                      </>
+                    )}
                     <Button type="submit" className="w-full bg-[#C73E1D] hover:bg-[#C73E1D]/90" disabled={createAccount.isPending}>
                       {createAccount.isPending ? "Creating..." : "Add Account"}
                     </Button>
@@ -495,13 +559,13 @@ export function Accounts() {
                     </div>
                     <Dialog open={editOpen === account.id} onOpenChange={(v) => setEditOpen(v ? account.id : null)}>
                       <DialogTrigger asChild>
-                        <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setEditOpen(account.id); setEditForm({ name: account.name, accountCode: account.accountCode ?? "", accountNumber: account.accountNumber ?? "", isPaymentMethod: account.isPaymentMethod, isActive: account.isActive }); }}>
+                        <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setEditOpen(account.id); setEditForm({ name: account.name, accountCode: account.accountCode ?? "", accountNumber: account.accountNumber ?? "", isPaymentMethod: account.isPaymentMethod, isActive: account.isActive, accountType: "asset", accountSubType: account.type === "bank_account" ? "bank" : "cash", isContra: false, linkToCoa: !!(account.accountType) }); }}>
                           <Pencil className="h-3 w-3 text-[#8D8A87]" />
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="bg-white">
                         <DialogHeader><DialogTitle className="font-serif text-xl">Edit Account</DialogTitle></DialogHeader>
-                        <form onSubmit={(e) => { e.preventDefault(); updateAccount.mutate({ id: account.id, ...editForm }); }} className="space-y-3">
+                        <form onSubmit={(e) => { e.preventDefault(); updateAccount.mutate({ id: account.id, name: editForm.name, accountCode: editForm.accountCode || undefined, accountNumber: editForm.accountNumber || undefined, accountType: editForm.linkToCoa ? (editForm.accountType || undefined) : undefined, accountSubType: editForm.linkToCoa ? (editForm.accountSubType || undefined) : undefined, isContra: editForm.linkToCoa ? editForm.isContra : undefined, isPaymentMethod: editForm.isPaymentMethod, isActive: editForm.isActive }); }} className="space-y-3">
                           <div className="space-y-2"><Label>Name</Label><Input value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} required /></div>
                           <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-2"><Label>Code</Label><Input value={editForm.accountCode} onChange={e => setEditForm(p => ({ ...p, accountCode: e.target.value }))} /></div>
@@ -511,6 +575,28 @@ export function Accounts() {
                             <div className="space-y-2"><Label>Current Balance</Label><Input value={account.currentBalance} disabled className="bg-[#F5EDE6]" /></div>
                             <div className="space-y-2"><Label>New Balance (optional adjust)</Label><Input type="number" step="0.01" placeholder="Leave empty to keep" onBlur={e => { if (e.target.value) adjustBalance.mutate({ id: account.id, newBalance: e.target.value, reason: "Manual balance adjustment" }); }} /></div>
                           </div>
+                          <div className="flex items-center gap-2 pt-2">
+                            <input type="checkbox" id="editLinkToCoa" checked={editForm.linkToCoa} onChange={e => setEditForm(p => ({ ...p, linkToCoa: e.target.checked }))} className="rounded" />
+                            <Label htmlFor="editLinkToCoa" className="text-sm font-medium">Use chart-compatible asset classification</Label>
+                          </div>
+                          {editForm.linkToCoa && (
+                            <>
+                              <p className="text-xs text-[#8D8A87]">This page only supports asset-side links for cash and bank operational accounts.</p>
+                              <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="space-y-2"><Label>Account Type</Label>
+                                  <select value="asset" onChange={() => undefined} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" disabled>
+                                    <option value="asset">Asset</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-2"><Label>Sub-Type</Label>
+                                  <select value={editForm.accountSubType} onChange={e => setEditForm(p => ({ ...p, accountSubType: e.target.value as OperationalSubType }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
+                                    <option value="">Select asset sub-type...</option>
+                                    {account.type === "bank_account" ? <option value="bank">Bank</option> : <option value="cash">Cash</option>}
+                                  </select>
+                                </div>
+                              </div>
+                            </>
+                          )}
                           <Button type="submit" className="w-full bg-[#C73E1D]" disabled={updateAccount.isPending}>Save Changes</Button>
                         </form>
                       </DialogContent>
@@ -667,6 +753,12 @@ export function Accounts() {
             </div>
           </>
         )}
+        </>
+        )}
+
+        {section === "chart-of-accounts" && <ChartOfAccounts embedded />}
+
+        {section === "journal-entries" && <JournalEntries embedded />}
       </div>
     </Layout>
   );

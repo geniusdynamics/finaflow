@@ -43,41 +43,41 @@ async function seed() {
 
   console.log("Created accounts");
 
-  // Create expense categories
+  // Create expense categories (defaultAccountId is required; run seed-accounting.ts first for proper COA linking)
   await db.insert(expenseCategories).values([
-    { name: "Food Supplies", description: "Ingredients and raw materials", color: "#C73E1D" },
-    { name: "Beverages", description: "Drinks and beverages stock", color: "#D4A854" },
-    { name: "Utilities", description: "Electricity, water, internet", color: "#2D7D46" },
-    { name: "Rent", description: "Property lease payments", color: "#4A5568" },
-    { name: "Salaries & Wages", description: "Staff payroll", color: "#3182CE" },
-    { name: "Marketing", description: "Advertising and promotions", color: "#805AD5" },
-    { name: "Maintenance & Repairs", description: "Equipment fixes", color: "#DD6B20" },
-    { name: "Transport & Delivery", description: "Logistics costs", color: "#38B2AC" },
-    { name: "Licenses & Permits", description: "County health permits", color: "#718096" },
-    { name: "Fuel", description: "Petrol and diesel", color: "#E53E3E" },
-    { name: "Airtime/Data", description: "Mobile communication", color: "#319795" },
-    { name: "Miscellaneous", description: "Uncategorized expenses", color: "#A0AEC0" },
+    { name: "Food Supplies", description: "Ingredients and raw materials", color: "#C73E1D", defaultAccountId: 1 },
+    { name: "Beverages", description: "Drinks and beverages stock", color: "#D4A854", defaultAccountId: 1 },
+    { name: "Utilities", description: "Electricity, water, internet", color: "#2D7D46", defaultAccountId: 1 },
+    { name: "Rent", description: "Property lease payments", color: "#4A5568", defaultAccountId: 1 },
+    { name: "Salaries & Wages", description: "Staff payroll", color: "#3182CE", defaultAccountId: 1 },
+    { name: "Marketing", description: "Advertising and promotions", color: "#805AD5", defaultAccountId: 1 },
+    { name: "Maintenance & Repairs", description: "Equipment fixes", color: "#DD6B20", defaultAccountId: 1 },
+    { name: "Transport & Delivery", description: "Logistics costs", color: "#38B2AC", defaultAccountId: 1 },
+    { name: "Licenses & Permits", description: "County health permits", color: "#718096", defaultAccountId: 1 },
+    { name: "Fuel", description: "Petrol and diesel", color: "#E53E3E", defaultAccountId: 1 },
+    { name: "Airtime/Data", description: "Mobile communication", color: "#319795", defaultAccountId: 1 },
+    { name: "Miscellaneous", description: "Uncategorized expenses", color: "#A0AEC0", defaultAccountId: 1 },
   ]);
 
   console.log("Created expense categories");
 
   // Create suppliers
   await db.insert(suppliers).values([
-    { name: "NAIVAS UKUNDA DIANI", phone: "+254700000001", paymentTermsDays: 7, notes: "Supermarket supplier" },
-    { name: "CARREFOUR DIANI", phone: "+254700000002", paymentTermsDays: 14, notes: "Retail supplier" },
-    { name: "GRAND PETROLEUM STATION", phone: "+254700000003", paymentTermsDays: 0, notes: "Fuel station" },
-    { name: "PUREJOY SHELL DIANI", phone: "+254700000004", paymentTermsDays: 0, notes: "Fuel station" },
-    { name: "KPLC Prepaid", phone: "+254700000005", paymentTermsDays: 0, notes: "Electricity utility" },
-    { name: "Safaricom Data Bundles", phone: "+254700000006", paymentTermsDays: 0, notes: "Airtime & data" },
-    { name: "SPIRO EV", phone: "+254700000007", paymentTermsDays: 0, notes: "EV charging / fuel" },
-    { name: "BASHIR ABDULLAHI OMAR", phone: "+254700000008", paymentTermsDays: 0, notes: "Individual supplier" },
-    { name: "samrat diani", phone: "+254700000009", paymentTermsDays: 0, notes: "Individual supplier" },
-    { name: "Co-operative Bank", phone: "+254700000010", paymentTermsDays: 0, notes: "Bank transfers" },
-    { name: "Equity Bank", phone: "+254700000011", paymentTermsDays: 0, notes: "Bank transfers" },
-    { name: "KCB Bank", phone: "+254700000012", paymentTermsDays: 0, notes: "Bank transfers" },
-    { name: "Family Bank", phone: "+254700000013", paymentTermsDays: 0, notes: "Bank transfers" },
-    { name: "National Bank of Kenya", phone: "+254700000014", paymentTermsDays: 0, notes: "Bank transfers" },
-    { name: "LELA BOOKS AND STATIONERY", phone: "+254700000015", paymentTermsDays: 0, notes: "Stationery supplier" },
+    { name: "NAIVAS UKUNDA DIANI", phone: "+254700000001", businessId: 1, paymentTermsDays: 7, notes: "Supermarket supplier" },
+    { name: "CARREFOUR DIANI", phone: "+254700000002", businessId: 1, paymentTermsDays: 14, notes: "Retail supplier" },
+    { name: "GRAND PETROLEUM STATION", phone: "+254700000003", businessId: 1, paymentTermsDays: 0, notes: "Fuel station" },
+    { name: "PUREJOY SHELL DIANI", phone: "+254700000004", businessId: 1, paymentTermsDays: 0, notes: "Fuel station" },
+    { name: "KPLC Prepaid", phone: "+254700000005", businessId: 1, paymentTermsDays: 0, notes: "Electricity utility" },
+    { name: "Safaricom Data Bundles", phone: "+254700000006", businessId: 1, paymentTermsDays: 0, notes: "Airtime & data" },
+    { name: "SPIRO EV", phone: "+254700000007", businessId: 1, paymentTermsDays: 0, notes: "EV charging / fuel" },
+    { name: "BASHIR ABDULLAHI OMAR", phone: "+254700000008", businessId: 1, paymentTermsDays: 0, notes: "Individual supplier" },
+    { name: "samrat diani", phone: "+254700000009", businessId: 1, paymentTermsDays: 0, notes: "Individual supplier" },
+    { name: "Co-operative Bank", phone: "+254700000010", businessId: 1, paymentTermsDays: 0, notes: "Bank transfers" },
+    { name: "Equity Bank", phone: "+254700000011", businessId: 1, paymentTermsDays: 0, notes: "Bank transfers" },
+    { name: "KCB Bank", phone: "+254700000012", businessId: 1, paymentTermsDays: 0, notes: "Bank transfers" },
+    { name: "Family Bank", phone: "+254700000013", businessId: 1, paymentTermsDays: 0, notes: "Bank transfers" },
+    { name: "National Bank of Kenya", phone: "+254700000014", businessId: 1, paymentTermsDays: 0, notes: "Bank transfers" },
+    { name: "LELA BOOKS AND STATIONERY", phone: "+254700000015", businessId: 1, paymentTermsDays: 0, notes: "Stationery supplier" },
   ]);
 
   console.log("Created suppliers");

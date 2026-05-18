@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Receipt, TrendingDown, Users, FileText,
   CreditCard, CalendarDays, Smartphone, Menu, X, LogOut,
   Building2, ChevronRight, FileSpreadsheet, BookOpen,
-  Wallet, ShieldCheck, Settings, MessageSquare, Briefcase,
+  Wallet, ShieldCheck, Settings, Briefcase,
   Building, Bell, TrendingUp, Plug, Handshake, Key,
 } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
@@ -22,11 +22,10 @@ const allNavItems = [
   { path: "/locations", label: "Branches", icon: Building2, perms: [PERMISSIONS.SETTINGS_MANAGE] },
   { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW] },
   { path: "/mpesa", label: "M-PESA", icon: Smartphone, perms: [PERMISSIONS.MPESA_VIEW] },
-  { path: "/daily-payments", label: "Daily Payments", icon: Wallet, perms: [PERMISSIONS.BILLS_VIEW] },
   { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
   { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
   { path: "/users", label: "Users & Roles", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },
-  { path: "/feedback", label: "Feedback", icon: MessageSquare, perms: [PERMISSIONS.FEEDBACK_MANAGE] },
+
   { path: "/settings", label: "Settings", icon: Settings, perms: [PERMISSIONS.SETTINGS_MANAGE] },
   { path: "/businesses", label: "Businesses", icon: Briefcase, perms: [PERMISSIONS.BUSINESS_MANAGE] },
   { path: "/partner", label: "Partner", icon: Handshake, perms: [PERMISSIONS.PARTNER_VIEW] },

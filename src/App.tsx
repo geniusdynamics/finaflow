@@ -21,11 +21,9 @@ const Payroll = lazy(() => import("./pages/Payroll").then(m => ({ default: m.Pay
 const Mpesa = lazy(() => import("./pages/Mpesa").then(m => ({ default: m.Mpesa })));
 const Calendar = lazy(() => import("./pages/Calendar").then(m => ({ default: m.Calendar })));
 const Reports = lazy(() => import("./pages/Reports").then(m => ({ default: m.Reports })));
-const DailyPayments = lazy(() => import("./pages/DailyPayments").then(m => ({ default: m.DailyPayments })));
 const Users = lazy(() => import("./pages/Users").then(m => ({ default: m.Users })));
 const Locations = lazy(() => import("./pages/Locations").then(m => ({ default: m.Locations })));
 const Settings = lazy(() => import("./pages/Settings").then(m => ({ default: m.Settings })));
-const Feedback = lazy(() => import("./pages/Feedback").then(m => ({ default: m.Feedback })));
 const Businesses = lazy(() => import("./pages/Businesses"));
 const BusinessDetails = lazy(() => import("./pages/BusinessDetails").then(m => ({ default: m.BusinessDetails })));
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard").then(m => ({ default: m.PartnerDashboard })));
@@ -50,15 +48,17 @@ export default function App() {
         <Route path="/suppliers" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="suppliers:view"><Suppliers /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/bills" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="bills:view"><Bills /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/accounts" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="accounts:view"><Accounts /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/chart-of-accounts" element={<Navigate to="/accounts?section=chart-of-accounts" replace />} />
         <Route path="/locations" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><Locations /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/payroll" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="payroll:view"><Payroll /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/mpesa" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="mpesa:view"><Mpesa /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/daily-payments" element={<ErrorBoundary><SuspendedPage><ProtectedPage><DailyPayments /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/daily-payments" element={<Navigate to="/calendar?section=payments" replace />} />
         <Route path="/calendar" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="calendar:view"><Calendar /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/reports" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="reports:view"><Reports /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/journal-entries" element={<Navigate to="/accounts?section=journal-entries" replace />} />
         <Route path="/users" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="users:manage"><Users /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/settings" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><Settings /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/feedback" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="feedback:manage"><Feedback /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/feedback" element={<Navigate to="/settings?tab=feedback" replace />} />
         <Route path="/businesses" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><Businesses /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/businesses/:id/details" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><BusinessDetails /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/partner" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="partner:view"><PartnerDashboard /></ProtectedPage></SuspendedPage></ErrorBoundary>} />

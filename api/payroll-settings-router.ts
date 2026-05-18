@@ -3,6 +3,8 @@ import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { payrollSettings } from "@db/schema";
 import { eq, and } from "drizzle-orm";
+import { computePaye, computeNssf, PERSONAL_RELIEF } from "./lib/tax";
+import { d } from "./lib/decimal";
 
 export const payrollSettingsRouter = createRouter({
   get: authedQuery
@@ -37,5 +39,39 @@ export const payrollSettingsRouter = createRouter({
         await db.insert(payrollSettings).values({ locationId, ...updates } as any).returning();
       }
       return { success: true };
+    }),
+
+  compute: authedQuery
+    .input(z.object({
+      grossPay: z.number(),
+      locationId: z.number(),
+      insurancePremium: z.number().optional().default(0),
+    }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const { grossPay, locationId, insurancePremium } = input;
+
+      const settings = await db.select().from(payrollSettings).where(eq(payrollSettings.locationId, locationId)).limit(1);
+      const set = settings[0] ?? null;
+
+      const nhif = d(grossPay).mul(parseFloat(set?.nhifRate || "2.75")).div(100).toNumber();
+      const nssfResult = computeNssf(grossPay);
+      const personalRelief = parseFloat(set?.personalRelief || "2400");
+      const rawPaye = computePaye(grossPay);
+      const insuranceReliefAmount = insurancePremium * (parseFloat(set?.insuranceRelief || "0") / 100);
+      const paye = Math.max(0, rawPaye - personalRelief + PERSONAL_RELIEF - insuranceReliefAmount);
+
+      const totalDeductions = nhif + nssfResult.employee + paye;
+      const netPay = grossPay - totalDeductions;
+
+      return {
+        nhif,
+        nssfEmployee: nssfResult.employee,
+        nssfEmployer: nssfResult.employer,
+        paye,
+        taxableIncome: grossPay,
+        totalDeductions,
+        netPay: Math.max(0, netPay),
+      };
     }),
 });

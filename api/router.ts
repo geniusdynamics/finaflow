@@ -26,6 +26,10 @@ import { integrationsRouter } from "./integrations-router";
 import { partnerRouter } from "./partner-router";
 import { notificationsRouter } from "./notifications-router";
 import { supplierPricesRouter } from "./supplier-prices-router";
+import { journalRouter } from "./journal-router";
+import { itemsRouter } from "./items-router";
+import { depreciationRouter } from "./depreciation-router";
+import { chartOfAccountsRouter } from "./chart-of-accounts-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -59,6 +63,10 @@ export const appRouter = createRouter({
   partner: partnerRouter,
   notifications: notificationsRouter,
   supplierPrices: supplierPricesRouter,
+  journal: journalRouter,
+  items: itemsRouter,
+  depreciation: depreciationRouter,
+  chartOfAccounts: chartOfAccountsRouter,
 });
 
 export type AppRouter = typeof appRouter;

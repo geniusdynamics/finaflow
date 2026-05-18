@@ -180,7 +180,7 @@ export const mpesaRouter = createRouter({
       
       const amount = Math.abs(parseFloat(txn.amount)).toFixed(2);
 
-      let expenseId: number;
+      let expenseId = 0;
       let expenseNumber = "";
 
       await db.transaction(async (tx) => {

@@ -81,8 +81,8 @@ const toPercent = (value: Decimal, total: Decimal) =>
   total.gt(0) ? value.div(total).mul(100).toFixed(1) : "0.0";
 
 export function buildInflowOutflowChartData(input: ProfitLossChartInput): InflowOutflowChartData {
-  const inflow = toDecimal(input.revenue);
-  const outflow = toDecimal(input.cogs).plus(input.expenses).plus(input.payroll);
+  const inflow = toDecimal(input?.revenue || "0");
+  const outflow = toDecimal(input?.cogs || "0").plus(input?.expenses || "0").plus(input?.payroll || "0");
   const totalMovement = inflow.plus(outflow);
   const net = inflow.minus(outflow);
 
@@ -114,9 +114,10 @@ export function buildInflowOutflowChartData(input: ProfitLossChartInput): Inflow
 }
 
 export function buildBudgetActualChartData(input: BudgetActualChartInput): BudgetActualChartData {
-  const totalActual = toDecimal(input.totalActual);
+  const totalActual = toDecimal(input.totalActual || "0");
+  const categories = input.categories || [];
 
-  const legendItems = input.categories.map((category) => {
+  const legendItems = categories.map((category) => {
     const actual = toDecimal(category.actual);
 
     return {

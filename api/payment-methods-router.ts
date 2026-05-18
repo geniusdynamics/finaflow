@@ -1,8 +1,9 @@
 import { z } from "zod";
-import { createRouter, settingsManage } from "./middleware";
+import { createRouter, settingsManage, requireAuthorizedLocation } from "./middleware";
 import { getDb } from "./queries/connection";
 import { paymentMethods, locationPaymentMethods, accounts } from "@db/schema";
 import { eq, and, isNull, asc, sql } from "drizzle-orm";
+import { logAudit } from "./lib/audit";
 
 export const paymentMethodsRouter = createRouter({
   list: settingsManage.query(async ({ ctx }) => {
@@ -120,8 +121,22 @@ export const paymentMethodsRouter = createRouter({
       paymentMethodId: z.number(),
       linkedAccountId: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const userId = (ctx as any).user?.id ?? 1;
+      const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? undefined;
+      await requireAuthorizedLocation(ctx, input.locationId);
+
+      if (input.linkedAccountId !== undefined) {
+        const [linkedAccount] = await db.select().from(accounts).where(
+          and(eq(accounts.id, input.linkedAccountId), isNull(accounts.deletedAt), eq(accounts.isActive, true))
+        ).limit(1);
+
+        if (!linkedAccount || linkedAccount.locationId !== input.locationId) {
+          throw new Error("Linked account must belong to the selected location");
+        }
+      }
+
       // Check if junction already exists
       const existing = await db.select().from(locationPaymentMethods).where(
         and(
@@ -145,6 +160,16 @@ export const paymentMethodsRouter = createRouter({
           isActive: true,
         } as any).returning();
       }
+
+      await logAudit({
+        userId,
+        businessId,
+        action: "UPDATE",
+        resource: "location_payment_methods",
+        resourceId: input.paymentMethodId,
+        details: input,
+      });
+
       return { success: true };
     }),
 
@@ -155,27 +180,64 @@ export const paymentMethodsRouter = createRouter({
       paymentMethodId: z.number(),
       linkedAccountId: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const userId = (ctx as any).user?.id ?? 1;
+      const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? undefined;
+      await requireAuthorizedLocation(ctx, input.locationId);
+
+      if (input.linkedAccountId !== undefined) {
+        const [linkedAccount] = await db.select().from(accounts).where(
+          and(eq(accounts.id, input.linkedAccountId), isNull(accounts.deletedAt), eq(accounts.isActive, true))
+        ).limit(1);
+
+        if (!linkedAccount || linkedAccount.locationId !== input.locationId) {
+          throw new Error("Linked account must belong to the selected location");
+        }
+      }
+
       await db.update(locationPaymentMethods)
         .set({ linkedAccountId: input.linkedAccountId ?? null })
         .where(and(
           eq(locationPaymentMethods.locationId, input.locationId),
           eq(locationPaymentMethods.paymentMethodId, input.paymentMethodId)
         ));
+
+      await logAudit({
+        userId,
+        businessId,
+        action: "UPDATE",
+        resource: "location_payment_methods",
+        resourceId: input.paymentMethodId,
+        details: input,
+      });
+
       return { success: true };
     }),
 
   removeFromLocation: settingsManage
     .input(z.object({ locationId: z.number(), paymentMethodId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const userId = (ctx as any).user?.id ?? 1;
+      const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? undefined;
+      await requireAuthorizedLocation(ctx, input.locationId);
       await db.update(locationPaymentMethods)
         .set({ isActive: false })
         .where(and(
           eq(locationPaymentMethods.locationId, input.locationId),
           eq(locationPaymentMethods.paymentMethodId, input.paymentMethodId)
         ));
+
+      await logAudit({
+        userId,
+        businessId,
+        action: "DELETE",
+        resource: "location_payment_methods",
+        resourceId: input.paymentMethodId,
+        details: input,
+      });
+
       return { success: true };
     }),
 });

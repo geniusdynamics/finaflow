@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Receipt, Tag, Pencil, X, AlertCircle, Camera, FileText, Download, Printer, Wallet, TrendingUp, Filter } from "lucide-react";
+import { Plus, Trash2, Receipt, Tag, Pencil, X, AlertCircle, Camera, FileText, Download, Printer, Wallet, TrendingUp, Filter, BookOpen, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -22,6 +22,7 @@ function fileToBase64(file: File): Promise<string> {
 }
 
 type PeriodFilter = "overall" | "today" | "this_week" | "this_month" | "this_year" | "custom";
+type CategoryMode = "system" | "link";
 
 export function formatLocationBalance(balance: string | number | null | undefined): string {
   return formatKES(balance ?? 0);
@@ -56,6 +57,7 @@ export function Expenses() {
   const [open, setOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
   const [editCat, setEditCat] = useState<number | null>(null);
+  const [tab, setTab] = useState<"expenses" | "categories">("expenses");
 
   // Filters
   const [branchFilter, setBranchFilter] = useState<string>("");
@@ -67,6 +69,10 @@ export function Expenses() {
   const { data: categories, refetch: refetchCats, isLoading: catsLoading, error: catsError } = trpc.expenses.categories.useQuery();
   const { data: suppliers } = trpc.suppliers.list.useQuery();
   const { data: accounts } = trpc.accounts.list.useQuery();
+  const { data: coa } = trpc.chartOfAccounts.list.useQuery(
+    { businessId: user?.currentBusinessId ?? 0 },
+    { enabled: !!user?.currentBusinessId }
+  );
   const { data: bills } = trpc.bills.list.useQuery();
   const { data: settings } = trpc.settings.list.useQuery();
 
@@ -93,7 +99,7 @@ export function Expenses() {
     onError: (err) => toast.error(err.message || "Failed to add expense"),
   });
   const createCat = trpc.expenses.createCategory.useMutation({
-    onSuccess: () => { toast.success("Category added"); setCatOpen(false); setCatForm({ name: "", description: "", color: "#C73E1D" }); refetchCats(); },
+    onSuccess: () => { toast.success("Category added"); setCatOpen(false); setCatForm({ name: "", description: "", color: "#C73E1D", accountingClass: "operating_expense", defaultAccountId: "", mode: "system" }); refetchCats(); },
     onError: (err) => toast.error(err.message || "Failed to add category"),
   });
   const updateCat = trpc.expenses.updateCategory.useMutation({
@@ -108,13 +114,17 @@ export function Expenses() {
     onSuccess: () => { refetch(); toast.success("Expense deleted"); },
     onError: (err) => toast.error(err.message || "Failed to delete expense"),
   });
+  const reverseExpense = trpc.expenses.reverse.useMutation({
+    onSuccess: () => { refetch(); toast.success("Expense reversed"); },
+    onError: (err) => toast.error(err.message || "Failed to reverse expense"),
+  });
 
   const [form, setForm] = useState({
     locationId: "", categoryId: "", supplierId: "", amount: "", description: "",
     expenseDate: getLocalDateString(), paymentMethod: "cash" as const,
     accountId: "", billId: "",
   });
-  const [catForm, setCatForm] = useState({ name: "", description: "", color: "#C73E1D" });
+  const [catForm, setCatForm] = useState({ name: "", description: "", color: "#C73E1D", accountingClass: "operating_expense", defaultAccountId: "", mode: "system" as CategoryMode });
   const [attachments, setAttachments] = useState<{ imageData: string; mimeType: string; caption: string }[]>([]);
   const todayDate = getLocalDateString();
 
@@ -122,10 +132,30 @@ export function Expenses() {
   const selectedSupplier = suppliers?.find(s => s.id.toString() === form.supplierId);
   const selectedBill = bills?.find(b => b.id.toString() === form.billId);
 
+  // When a bill is selected, auto-fill the supplier from that bill
+  useEffect(() => {
+    if (form.billId && selectedBill && selectedBill.supplierId) {
+      setForm(p => ({
+        ...p,
+        supplierId: String(selectedBill.supplierId),
+        categoryId: selectedBill.categoryId ? String(selectedBill.categoryId) : p.categoryId,
+      }));
+    }
+  }, [form.billId, selectedBill]);
+
+  useEffect(() => {
+    if (!form.billId && !form.categoryId && selectedSupplier?.autoCategoryId) {
+      setForm((previous) => ({
+        ...previous,
+        categoryId: String(selectedSupplier.autoCategoryId),
+      }));
+    }
+  }, [form.billId, form.categoryId, selectedSupplier?.autoCategoryId]);
+
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    const newAttachments = [];
+    const newAttachments: { imageData: string; mimeType: string; caption: string }[] = [];
     for (const file of Array.from(files)) {
       if (file.size > 5 * 1024 * 1024) { toast.error(`${file.name} is too large (max 5MB)`); continue; }
       const base64 = await fileToBase64(file);
@@ -157,7 +187,12 @@ export function Expenses() {
   const handleCat = (e: React.FormEvent) => {
     e.preventDefault();
     if (!catForm.name.trim()) { toast.error("Category name is required"); return; }
-    createCat.mutate(catForm);
+    if (catForm.mode === "link" && !catForm.defaultAccountId) { toast.error("Please select a default expense account"); return; }
+    createCat.mutate({
+      name: catForm.name, description: catForm.description, color: catForm.color,
+      accountingClass: catForm.accountingClass as any,
+      defaultAccountId: catForm.mode === "link" && catForm.defaultAccountId ? +catForm.defaultAccountId : undefined,
+    });
   };
 
   const totalExpenses = expenses?.reduce((sum, e) => sum + parseFloat(e.amount), 0) ?? 0;
@@ -197,6 +232,18 @@ export function Expenses() {
   return (
     <Layout>
       <div className="space-y-6">
+        {/* Section tabs */}
+        <div className="flex items-center gap-2 border-b border-[#E8E0D8]">
+          <button onClick={() => setTab("expenses")} className={`px-4 py-2 text-sm font-medium ${tab === "expenses" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <Receipt className="mr-1 inline h-4 w-4"/>Expenses
+          </button>
+          <button onClick={() => setTab("categories")} className={`px-4 py-2 text-sm font-medium ${tab === "categories" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <BookOpen className="mr-1 inline h-4 w-4"/>Categories
+          </button>
+        </div>
+
+        {tab === "expenses" && (
+        <>
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -216,11 +263,14 @@ export function Expenses() {
                       <option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                     </select>
                   </div>
-                  <div><Label>Category</Label>
-                    <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required>
-                      <option value="">{catsLoading ? "Loading..." : categories?.length ? "Select" : "No categories"}</option>
+                  <div><Label>Category {form.billId && selectedBill?.categoryId && <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span>}</Label>
+                    <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required={!(form.billId && selectedBill?.categoryId)} disabled={!!form.billId && !!selectedBill?.categoryId}>
+                      <option value="">{catsLoading ? "Loading..." : categories?.length ? "Select a category" : "No categories"}</option>
                       {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
+                    {form.billId && selectedBill?.categoryId && <p className="mt-1 text-xs text-[#2E7D32]">Category is determined by the linked bill.</p>}
+                    {form.billId && !selectedBill?.categoryId && selectedSupplier?.autoCategoryId && <p className="mt-1 text-xs text-[#2E7D32]">Using the supplier default category until you override it.</p>}
+                    {form.billId && !selectedBill?.categoryId && !selectedSupplier?.autoCategoryId && <p className="mt-1 text-xs text-[#C73E1D]">This bill has no saved category yet, so please choose one.</p>}
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -235,15 +285,15 @@ export function Expenses() {
                     </select>
                   </div>
                 </div>
-                <div><Label>Account</Label>
+                <div><Label>Funding Source</Label>
                   <select value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
                     <option value="">Auto-detect</option>
-                    {accounts?.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {loc ? `· ${loc}` : ""}</option>; })}
+                    {accounts?.filter(a => a.isPaymentMethod)?.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name}{loc ? ` (${loc})` : ""}</option>; })}
                   </select>
                 </div>
-                <div><Label>Supplier</Label>
-                  <select value={form.supplierId} onChange={e => setForm(p => ({ ...p, supplierId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
-                    <option value="">Optional</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <div><Label>Supplier {form.billId ? <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span> : ""}</Label>
+                  <select value={form.supplierId} onChange={e => setForm(p => ({ ...p, supplierId: e.target.value, billId: "" }))} className="w-full rounded border px-3 py-2 text-sm" disabled={!!form.billId}>
+                    <option value="">{form.billId ? "Auto-filled from bill" : "Optional"}</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                 </div>
                 {selectedSupplier && (
@@ -255,8 +305,8 @@ export function Expenses() {
                 )}
                 <div><Label>Link to Bill <span className="text-[#8D8A87] font-normal">(optional)</span></Label>
                   <select value={form.billId} onChange={e => setForm(p => ({ ...p, billId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
-                    <option value="">No bill</option>
-                    {bills?.filter(b => b.status !== "paid" && b.status !== "cancelled").map(b => (
+                    <option value="">{form.supplierId ? "No bill (for this supplier)" : "No bill"}</option>
+                    {bills?.filter(b => b.status !== "paid" && b.status !== "cancelled" && (!form.supplierId || b.supplierId?.toString() === form.supplierId)).map(b => (
                       <option key={b.id} value={b.id}>{b.billNumber ?? `BILL-${String(b.id).padStart(4,"0")}`} · {b.description} · Bal: {formatKES(b.balanceDue)}</option>
                     ))}
                   </select>
@@ -324,18 +374,23 @@ export function Expenses() {
         </div>
 
         {/* Per-Branch Breakdown */}
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-2">
           {locations?.map(loc => {
             const locBalance = accountBalances?.byLocation[loc.id] ?? 0;
             const locIncome = prevDayIncome?.byBranch.find(b => b.locationId === loc.id)?.total ?? "0";
             return (
               <Card key={loc.id} className="border-[#E8E0D8] bg-white">
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-[#2D2A26]">{loc.name}</p>
-                    <div className="mt-1 flex gap-4">
-                        <span className="text-xs text-[#8D8A87]">Balance: <span className="font-mono font-semibold text-[#2E7D32]">{formatLocationBalance(locBalance)}</span></span>
-                      <span className="text-xs text-[#8D8A87]">Income: <span className="font-mono font-semibold text-[#D4A854]">{formatKES(locIncome)}</span></span>
+                <CardContent className="p-2.5 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-[#F5EDE6] text-xs font-bold text-[#C73E1D]">
+                      {loc.name.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#2D2A26]">{loc.name}</p>
+                      <div className="flex gap-3 text-[10px] text-[#8D8A87]">
+                        <span>Bal: <span className="font-mono font-semibold text-[#2E7D32]">{formatLocationBalance(locBalance)}</span></span>
+                        <span>Inc: <span className="font-mono font-semibold text-[#D4A854]">{formatKES(locIncome)}</span></span>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -381,6 +436,11 @@ export function Expenses() {
           </CardContent>
         </Card>
 
+        </>
+        )}
+
+        {tab === "categories" && (
+        <>
         {/* Categories - Tag Style */}
         <div>
           <div className="flex items-center justify-between mb-3">
@@ -396,6 +456,32 @@ export function Expenses() {
                     <div><Label>Name</Label><Input value={catForm.name} onChange={e => setCatForm(p => ({ ...p, name: e.target.value }))} required /></div>
                     <div><Label>Description</Label><Input value={catForm.description} onChange={e => setCatForm(p => ({ ...p, description: e.target.value }))} /></div>
                     <div><Label>Color</Label><div className="flex items-center gap-2"><input type="color" value={catForm.color} onChange={e => setCatForm(p => ({ ...p, color: e.target.value }))} className="h-10 w-10 rounded border p-0.5" /><span className="text-xs text-[#8D8A87]">{catForm.color}</span></div></div>
+                    <div>
+                      <Label>Classification</Label>
+                      <select value={catForm.accountingClass} onChange={e => setCatForm(p => ({ ...p, accountingClass: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
+                        <option value="operating_expense">Operating Expense</option>
+                        <option value="admin_expense">Administrative Expense</option>
+                        <option value="cogs">Cost of Goods Sold</option>
+                        <option value="marketing">Marketing Expense</option>
+                        <option value="depreciation">Depreciation</option>
+                        <option value="other">Other Expense</option>
+                      </select>
+                    </div>
+                    <div>
+                      <Label>Accounting Mode</Label>
+                      <select value={catForm.mode} onChange={e => setCatForm(p => ({ ...p, mode: e.target.value as CategoryMode, defaultAccountId: e.target.value === "link" ? p.defaultAccountId : "" }))} className="w-full rounded border px-3 py-2 text-sm">
+                        <option value="system">Let the system manage the backing account</option>
+                        <option value="link">Link an existing chart account</option>
+                      </select>
+                      <p className="mt-1 text-xs text-[#8D8A87]">Simple mode creates or reuses the backing expense account automatically.</p>
+                    </div>
+                    <div>
+                      <Label>Default Expense Account</Label>
+                      <select value={catForm.defaultAccountId} onChange={e => setCatForm(p => ({ ...p, defaultAccountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required={catForm.mode === "link"} disabled={catForm.mode !== "link"}>
+                        <option value="">{catForm.mode === "link" ? "Select expense account..." : "System managed"}</option>
+                        {coa?.grouped?.expense?.map(a => <option key={a.id} value={a.id}>{a.accountCode} - {a.name}</option>)}
+                      </select>
+                    </div>
                     <Button type="submit" className="w-full bg-[#2E7D32]" disabled={createCat.isPending}>{createCat.isPending ? "Adding..." : "Add Category"}</Button>
                   </form>
                 </DialogContent>
@@ -416,6 +502,13 @@ export function Expenses() {
                 <span>{c.name}</span>
                 {editCat === c.id ? (
                   <>
+                    <select value={c.accountingClass ?? "operating_expense"} onChange={e => updateCat.mutate({ id: c.id, accountingClass: e.target.value as any })} className="w-28 rounded border px-1 py-0.5 text-[10px]">
+                      <option value="operating_expense">Operating</option>
+                      <option value="admin_expense">Admin</option>
+                      <option value="cogs">COGS</option>
+                      <option value="marketing">Marketing</option>
+                      <option value="other">Other</option>
+                    </select>
                     <input type="color" value={c.color ?? "#C73E1D"} onChange={e => updateCat.mutate({ id: c.id, color: e.target.value })} className="h-5 w-5 rounded p-0" />
                     <button onClick={() => setEditCat(null)}><X className="h-3 w-3" /></button>
                   </>
@@ -429,7 +522,11 @@ export function Expenses() {
             ))}
           </div>
         </div>
+        </>
+        )}
 
+        {tab === "expenses" && (
+        <>
         {/* Expenses Table */}
         <Card className="border-[#E8E0D8]">
           <CardHeader className="pb-3">
@@ -491,6 +588,7 @@ export function Expenses() {
                         <td className="py-3 text-xs capitalize text-[#8D8A87]">{exp.paymentMethod.replace(/_/g, " ")}</td>
                         <td className="py-3 text-right font-mono text-sm font-semibold text-[#D32F2F]">{formatKES(exp.amount)}</td>
                         <td className="py-3 text-center">
+                          {canManage && !exp.reversedAt && <Button size="sm" variant="ghost" onClick={() => { const reason = prompt("Reason for reversal", "Correction"); if (reason) reverseExpense.mutate({ id: exp.id, reason }); }}><RotateCcw className="h-4 w-4 text-[#ED6C02]" /></Button>}
                           {canManage && <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete?")) deleteExpense.mutate({ id: exp.id }); }}><Trash2 className="h-4 w-4 text-[#D32F2F]" /></Button>}
                         </td>
                       </tr>
@@ -506,6 +604,8 @@ export function Expenses() {
             </div>
           </CardContent>
         </Card>
+        </>
+        )}
       </div>
     </Layout>
   );

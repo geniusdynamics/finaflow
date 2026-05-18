@@ -320,15 +320,23 @@ export const businessesRouter = createRouter({
           slug: locationSlug,
           isActive: true,
         } as any).returning();
-        const locationId = locResult.id;
+        const locId = locResult.id;
 
         // Create default accounts for this location
         await tx.insert(accounts).values([
-          { name: "Cash Drawer", type: "cash", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
-          { name: "M-PESA Till", type: "mpesa", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
-          { name: "Bank Account", type: "bank_account", locationId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
+          { name: "Cash Drawer", type: "cash", locationId: locId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
+          { name: "M-PESA Till", type: "mpesa", locationId: locId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
+          { name: "Bank Account", type: "bank_account", locationId: locId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
         ]);
       });
+
+      if (businessId) {
+        const locs = await db.select({ id: locations.id }).from(locations).where(eq(locations.businessId, businessId)).limit(1);
+        const { seedAccountingData } = await import("../db/seed-accounting");
+        await seedAccountingData(businessId, locs[0]?.id).catch((err) =>
+          console.error("[businesses.create] seedAccountingData failed", err)
+        );
+      }
 
       return { id: businessId, accountId, success: true };
     }),
@@ -384,15 +392,23 @@ export const businessesRouter = createRouter({
           slug: `demo-main-${businessId}`,
           isActive: true,
         } as any).returning();
-        const locationId = locResult.id;
+        const locId = locResult.id;
 
         // Create default accounts
         await tx.insert(accounts).values([
-          { name: "Cash Drawer", type: "cash", locationId, openingBalance: "50000.00", currentBalance: "50000.00", isActive: true } as any,
-          { name: "M-PESA Till", type: "mpesa", locationId, openingBalance: "75000.00", currentBalance: "75000.00", isActive: true } as any,
-          { name: "Bank Account", type: "bank_account", locationId, openingBalance: "200000.00", currentBalance: "200000.00", isActive: true } as any,
+          { name: "Cash Drawer", type: "cash", locationId: locId, openingBalance: "50000.00", currentBalance: "50000.00", isActive: true } as any,
+          { name: "M-PESA Till", type: "mpesa", locationId: locId, openingBalance: "75000.00", currentBalance: "75000.00", isActive: true } as any,
+          { name: "Bank Account", type: "bank_account", locationId: locId, openingBalance: "200000.00", currentBalance: "200000.00", isActive: true } as any,
         ]);
       });
+
+      if (businessId) {
+        const locs = await db.select({ id: locations.id }).from(locations).where(eq(locations.businessId, businessId)).limit(1);
+        const { seedAccountingData } = await import("../db/seed-accounting");
+        await seedAccountingData(businessId, locs[0]?.id).catch((err) =>
+          console.error("[businesses.createDemo] seedAccountingData failed", err)
+        );
+      }
 
       return { id: businessId, accountId, success: true, message: "Demo created" };
     }),

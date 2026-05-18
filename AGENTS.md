@@ -28,6 +28,18 @@
 - `api/lib/` - Shared utilities (password, tax, decimal, pagination, rate-limit, csrf, audit)
 - `api/queries/connection.ts` - DB connection with connection pooling
 
+## Navigation & Layout
+- Sidebar items defined in `src/components/Layout.tsx` (allNavItems array)
+- **Accounting Hub**: Accounts page at `/accounts` hosts three sections via URL param `?section=`:
+  - `accounts` (default): Legacy accounts & payment-methods tabbed view
+  - `chart-of-accounts`: Embedded ChartOfAccounts component
+  - `journal-entries`: Embedded JournalEntries component
+- **Calendar Hub**: Calendar page at `/calendar` hosts two sections via URL param `?section=`:
+  - `calendar` (default): Cashflow calendar timeline view
+  - `payments`: Embedded DailyPayments component
+- Old standalone routes (`/chart-of-accounts`, `/journal-entries`, `/daily-payments`) redirect to their respective hub pages with `?section=...`
+- Each section renders without its own `<Layout>` wrapper when embedded; standalone pages accept `embedded?: boolean` prop
+
 ## Key Conventions
 - All financial calculations use decimal.js (not parseFloat)
 - All multi-step financial operations use db.transaction()
