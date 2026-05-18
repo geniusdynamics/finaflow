@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, billQuery, billCreate, billPay, getCurrentBusinessLocationIds, rnoqrieKoPWvcUkDFdrTXwEmkRKEzmEz21, requireAuthorizedEntity, rnoqrieKoPWvcUkDFdrTXwEmkRKEzmEz21 } from "./middleware";
+import { createRouter, billQuery, billCreate, billPay, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity } from "./middleware";
 import { getDb } from "./queries/connection";
 import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, expenseCategories, expenses } from "@db/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
@@ -8,7 +8,7 @@ import { notFutureDateString } from "./lib/future-date";
 import { logAudit } from "./lib/audit";
 import { ensureSystemAccount } from "./lib/accounting-accounts";
 import { getExpenseAccountSubType } from "./lib/accounting-maps";
-import { rnoqrieKoPWvcUkDFdrTXwEmkRKEzmEz21 } from "./lib/accounting-reversal";
+import { reverseLedgerEntriesForTransaction } from "./lib/accounting-reversal";
 
 const LIABILITY_ACCOUNT_MAP: Record<string, { accountCode: string; description: string }> = {
   rent: { accountCode: "2110", description: "Rent Payable" },
@@ -139,7 +139,7 @@ export const billsRouter = createRouter({
       const db = getDb();
       const conditions = [isNull(bills.deletedAt)];
       if (input?.locationId) {
-        await rnoqrieKoPWvcUkDFdrTXwEmkRKEzmEz21(ctx, input.locationId);
+        await requireAuthorizedLocation(ctx, input.locationId);
         conditions.push(eq(bills.locationId, input.locationId));
       } else {
         const locIds = await getCurrentBusinessLocationIds(ctx);
@@ -169,7 +169,7 @@ export const billsRouter = createRouter({
       let billId = 0;
       const enteredBy = (ctx as any).user?.id ?? 1;
 
-      await rnoqrieKoPWvcUkDFdrTXwEmkRKEzmEz21(ctx, input.locationId);
+      await requireAuthorizedLocation(ctx, input.locationId);
 
       const [location] = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
       if (!location) {
@@ -490,7 +490,7 @@ export const billsRouter = createRouter({
       }
 
       await db.transaction(async (tx) => {
-        await rnoqrieKoPWvcUkDFdrTXwEmkRKEzmEz21({
+        await reverseLedgerEntriesForTransaction({
           db: tx,
           transactionId: input.id,
           userId: (ctx as any).user?.id ?? 1,
@@ -582,7 +582,7 @@ export const billsRouter = createRouter({
       const db = getDb();
       const conditions = [isNull(recurringBillTemplates.deletedAt), eq(recurringBillTemplates.isActive, true)];
       if (input?.locationId) {
-        await rnoqrieKoPWvcUkDFdrTXwEmkRKEzmEz21(ctx, input.locationId);
+        await requireAuthorizedLocation(ctx, input.locationId);
         conditions.push(eq(recurringBillTemplates.locationId, input.locationId));
       }
       return db.select().from(recurringBillTemplates).where(and(...conditions)).orderBy(desc(recurringBillTemplates.createdAt));
@@ -602,7 +602,7 @@ export const billsRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      await rnoqrieKoPWvcUkDFdrTXwEmkRKEzmEz21(ctx, input.locationId);
+      await requireAuthorizedLocation(ctx, input.locationId);
       
       const loc = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
       const businessId = loc[0]?.businessId;
@@ -662,7 +662,7 @@ export const billsRouter = createRouter({
     .input(z.object({ supplierId: z.number() }))
     .query(async ({ input, ctx }) => {
       const db = getDb();
-      await rnoqrieKoPWvcUkDFdrTXwEmkRKEzmEz21(ctx, suppliers, input.supplierId);
+      await requireAuthorizedEntity(ctx, suppliers, input.supplierId);
       const allBills = await db.select().from(bills).where(and(eq(bills.supplierId, input.supplierId), isNull(bills.deletedAt)));
       const supplier = await db.select().from(suppliers).where(eq(suppliers.id, input.supplierId)).limit(1);
       return { bills: allBills, supplier: supplier[0] };
