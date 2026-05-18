@@ -44,6 +44,13 @@ export function Bills() {
   );
 
   const utils = trpc.useUtils();
+
+  const selectedBillForItems = itemsOpen ? bills?.find(b => b.id === itemsOpen) : null;
+  const itemsTotal = billItemsData?.reduce((sum, item) => sum + parseFloat(String(item.totalPrice)), 0) ?? 0;
+  const billAmount = selectedBillForItems ? parseFloat(selectedBillForItems.amount) : 0;
+  const remainingAmount = billAmount - itemsTotal;
+  const isOverBudget = remainingAmount < 0;
+
   const createBill = trpc.bills.create.useMutation({ onSuccess: () => { setOpen(false); utils.bills.list.invalidate(); } });
   const createRecurring = trpc.bills.createRecurring.useMutation({ onSuccess: () => { setRecurringOpen(false); utils.bills.listRecurring.invalidate(); } });
   const deleteRecurring = trpc.bills.deleteRecurring.useMutation({ onSuccess: () => { utils.bills.listRecurring.invalidate(); utils.bills.list.invalidate(); } });
@@ -160,16 +167,22 @@ export function Bills() {
     if (!itemsOpen) return;
     const qty = parseFloat(itemForm.quantity) || 1;
     const price = parseFloat(itemForm.unitPrice) || 0;
+    const itemTotal = qty * price;
+
+    if (billAmount > 0 && itemsTotal + itemTotal > billAmount) {
+      toast.error(`Item total (${formatKES(itemTotal)}) would exceed bill amount (${formatKES(billAmount)}). Remaining: ${formatKES(remainingAmount)}`);
+      return;
+    }
+
     addItem.mutate({
       billId: itemsOpen,
       itemName: itemForm.itemName,
       quantity: qty.toString(),
       unitPrice: price.toFixed(2),
-      totalPrice: (qty * price).toFixed(2),
+      totalPrice: itemTotal.toFixed(2),
       categoryId: itemForm.categoryId ? +itemForm.categoryId : undefined,
       notes: itemForm.notes,
     });
-    // Reset form but keep suggestions ready
     setItemForm({ itemName: "", quantity: "1", unitPrice: "", totalPrice: "", categoryId: "", notes: "" });
     setShowSuggestions(false);
   };
@@ -346,6 +359,25 @@ export function Bills() {
               <div className="overflow-x-auto mb-4"><table className="w-full"><thead><tr className="border-b"><th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Item</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Qty</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Unit Price</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Total</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Category</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]"></th></tr></thead>
                 <tbody className="divide-y">{billItemsData?.map(item => <tr key={item.id} className="hover:bg-[#F5EDE6]/50"><td className="py-2 text-sm">{item.itemName}</td><td className="py-2 text-right font-mono text-sm">{item.quantity}</td><td className="py-2 text-right font-mono text-sm">{formatKES(item.unitPrice)}</td><td className="py-2 text-right font-mono text-sm font-semibold">{formatKES(item.totalPrice)}</td><td className="py-2 text-right text-xs">{categories?.find(c => c.id === item.categoryId)?.name ?? "-"}</td><td className="py-2 text-right"><Button size="sm" variant="ghost" onClick={() => deleteItem.mutate({ id: item.id })}><Trash2 className="h-3 w-3 text-[#D32F2F]"/></Button></td></tr>)}{(!billItemsData || billItemsData.length === 0) && <tr><td colSpan={6} className="py-4 text-center text-sm text-[#8D8A87]">No items yet.</td></tr>}</tbody>
               </table></div>
+              {selectedBillForItems && (
+                <div className={`mt-3 flex justify-end gap-6 rounded p-3 ${isOverBudget ? "bg-red-50 border border-red-200" : itemsTotal > 0 ? "bg-green-50 border border-green-200" : ""}`}>
+                  <div className="text-right">
+                    <p className="text-xs text-[#8D8A87]">Bill Amount</p>
+                    <p className="font-mono font-semibold">{formatKES(billAmount)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-[#8D8A87]">Items Total</p>
+                    <p className="font-mono font-semibold">{formatKES(itemsTotal)}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-[#8D8A87]">Remaining</p>
+                    <p className={`font-mono font-semibold flex items-center gap-1 ${isOverBudget ? "text-red-600" : itemsTotal >= billAmount ? "text-green-600" : ""}`}>
+                      {isOverBudget && <AlertTriangle className="h-3 w-3" />}
+                      {isOverBudget ? `OVER by ${formatKES(Math.abs(remainingAmount))}` : formatKES(remainingAmount)}
+                    </p>
+                  </div>
+                </div>
+              )}
               {canCreate && (
                 <form onSubmit={handleAddItem} className="space-y-3">
                   <div className="relative">

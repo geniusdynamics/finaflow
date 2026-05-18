@@ -218,13 +218,13 @@ export function Expenses() {
     const hasBillWithItems = form.billId && billItems && billItems.length > 0;
     const categories = hasBillWithItems ? getCategoriesFromBillItems(billItems) : [];
     const hasMultiCategoryItems = hasBillWithItems && categories.length > 1;
-    const billHasOwnCategory = selectedBill?.categoryId;
+    const billHasOwnCategory = !!selectedBill?.categoryId;
 
     if (!form.categoryId) {
-      if (form.billId && (billHasOwnCategory || hasMultiCategoryItems)) {
-        // Bill has its own category or multi-category items - proceed
+      if (hasBillWithItems) {
+        // Bill has items - allow proceeding even without category (will create expenses from items)
       } else if (form.billId) {
-        toast.error("The selected bill has no category. Please edit the bill to add items with categories, or select a category manually.");
+        toast.error("The selected bill has no items. Please add items to the bill or select a category manually.");
         return;
       } else {
         toast.error("Please select a category");
