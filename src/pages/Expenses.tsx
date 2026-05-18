@@ -120,7 +120,7 @@ export function Expenses() {
   });
 
   const [form, setForm] = useState({
-    locationId: "", categoryId: "", supplierId: "", amount: "", description: "",
+    locationId: "", categoryIds: [] as number[], supplierId: "", amount: "", description: "",
     expenseDate: getLocalDateString(), paymentMethod: "cash" as const,
     accountId: "", billId: "",
   });
@@ -134,15 +134,17 @@ export function Expenses() {
     { enabled: !!selectedBillId }
   );
 
-  const photosEnabled = settings?.photosExpenses !== "false";
-  const selectedSupplier = suppliers?.find(s => s.id.toString() === form.supplierId);
-  const selectedBill = bills?.find(b => b.id.toString() === form.billId);
-
   const getCategoriesFromBillItems = (items: typeof billItems): number[] => {
     if (!items || items.length === 0) return [];
     const uniqueCategories = [...new Set(items.map(item => item.categoryId).filter(Boolean))];
     return uniqueCategories as number[];
   };
+
+  const photosEnabled = settings?.photosExpenses !== "false";
+  const selectedSupplier = suppliers?.find(s => s.id.toString() === form.supplierId);
+  const selectedBill = bills?.find(b => b.id.toString() === form.billId);
+  const itemCategories = billItems ? getCategoriesFromBillItems(billItems) : [];
+  const hasMultiCategoryItems = !!form.billId && !!billItems && billItems.length > 0 && itemCategories.length > 1;
 
   const groupBillItemsByCategory = (items: typeof billItems): Map<number | undefined, typeof billItems> => {
     const grouped = new Map<number | undefined, typeof billItems>();
@@ -160,36 +162,33 @@ export function Expenses() {
   useEffect(() => {
     if (!form.billId || !selectedBill) return;
 
-    let categoryId: string | undefined;
+    let categoryIds: number[] = [];
 
     if (selectedBill.categoryId) {
-      categoryId = String(selectedBill.categoryId);
+      categoryIds = [selectedBill.categoryId];
     } else if (billItems && billItems.length > 0) {
-      const categories = getCategoriesFromBillItems(billItems);
-      if (categories.length === 1) {
-        categoryId = String(categories[0]);
-      }
+      categoryIds = getCategoriesFromBillItems(billItems);
     }
 
-    if (!categoryId && selectedSupplier?.autoCategoryId) {
-      categoryId = String(selectedSupplier.autoCategoryId);
+    if (categoryIds.length === 0 && selectedSupplier?.autoCategoryId) {
+      categoryIds = [selectedSupplier.autoCategoryId];
     }
 
     setForm(p => ({
       ...p,
       supplierId: selectedBill.supplierId ? String(selectedBill.supplierId) : p.supplierId,
-      categoryId: categoryId ?? p.categoryId,
+      categoryIds: categoryIds.length > 0 ? categoryIds : p.categoryIds,
     }));
   }, [form.billId, selectedBill, billItems, selectedSupplier?.autoCategoryId]);
 
   useEffect(() => {
-    if (!form.billId && !form.categoryId && selectedSupplier?.autoCategoryId) {
+    if (!form.billId && form.categoryIds.length === 0 && selectedSupplier?.autoCategoryId) {
       setForm((previous) => ({
         ...previous,
-        categoryId: String(selectedSupplier.autoCategoryId),
+        categoryIds: [selectedSupplier.autoCategoryId],
       }));
     }
-  }, [form.billId, form.categoryId, selectedSupplier?.autoCategoryId]);
+  }, [form.billId, form.categoryIds, selectedSupplier?.autoCategoryId]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -204,7 +203,7 @@ export function Expenses() {
   };
 
   const resetForm = () => {
-    setForm({ locationId: "", categoryId: "", supplierId: "", amount: "", description: "", expenseDate: getLocalDateString(), paymentMethod: "cash", accountId: "", billId: "" });
+    setForm({ locationId: "", categoryIds: [], supplierId: "", amount: "", description: "", expenseDate: getLocalDateString(), paymentMethod: "cash", accountId: "", billId: "" });
     setAttachments([]);
   };
 
@@ -216,18 +215,18 @@ export function Expenses() {
     if (form.expenseDate > todayDate) { toast.error("Expense date cannot be in the future"); return; }
 
     const hasBillWithItems = form.billId && billItems && billItems.length > 0;
-    const categories = hasBillWithItems ? getCategoriesFromBillItems(billItems) : [];
-    const hasMultiCategoryItems = hasBillWithItems && categories.length > 1;
+    const itemCategories = hasBillWithItems ? getCategoriesFromBillItems(billItems) : [];
+    const hasMultiCategoryItems = hasBillWithItems && itemCategories.length > 1;
     const billHasOwnCategory = !!selectedBill?.categoryId;
 
-    if (!form.categoryId) {
+    if (form.categoryIds.length === 0) {
       if (hasBillWithItems) {
-        // Bill has items - allow proceeding even without category (will create expenses from items)
+        // Bill has items - allow proceeding (will create expenses from items)
       } else if (form.billId) {
         toast.error("The selected bill has no items. Please add items to the bill or select a category manually.");
         return;
       } else {
-        toast.error("Please select a category");
+        toast.error("Please select at least one category");
         return;
       }
     }
@@ -239,11 +238,9 @@ export function Expenses() {
 
       const expenseDataArray = Array.from(grouped.entries()).map(([categoryId, items]) => {
         const totalAmount = items.reduce((sum, item) => sum + parseFloat(String(item.totalPrice)), 0);
-        const category = categories?.find(c => c === categoryId);
-        const catName = category ? categories?.find(c => c === categoryId) : "uncategorized";
         return {
           locationId: +form.locationId,
-          categoryId: categoryId ? +categoryId : +form.categoryId,
+          categoryId: categoryId ? +categoryId : form.categoryIds[0],
           supplierId: form.supplierId ? +form.supplierId : undefined,
           amount: totalAmount.toFixed(2),
           description: `${form.description} (${items.map(i => i.itemName).join(", ")})`,
@@ -281,8 +278,9 @@ export function Expenses() {
       return;
     }
 
+    const primaryCategoryId = form.categoryIds[0] ?? 0;
     createExpense.mutate({
-      locationId: +form.locationId, categoryId: +form.categoryId, supplierId: form.supplierId ? +form.supplierId : undefined,
+      locationId: +form.locationId, categoryId: primaryCategoryId, supplierId: form.supplierId ? +form.supplierId : undefined,
       amount: form.amount, description: form.description, expenseDate: form.expenseDate,
       paymentMethod: form.paymentMethod, accountId: form.accountId ? +form.accountId : undefined,
       billId: form.billId ? +form.billId : undefined, attachments: photosEnabled ? attachments : undefined,
@@ -368,16 +366,65 @@ export function Expenses() {
                       <option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                     </select>
                   </div>
-                  <div><Label>Category {form.billId && selectedBill?.categoryId && <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span>}</Label>
-                    <select value={form.categoryId} onChange={e => setForm(p => ({ ...p, categoryId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required={!(form.billId && selectedBill?.categoryId)} disabled={!!form.billId && !!selectedBill?.categoryId}>
-                      <option value="">{catsLoading ? "Loading..." : categories?.length ? "Select a category" : "No categories"}</option>
-                      {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                    </select>
-                    {form.billId && selectedBill?.categoryId && <p className="mt-1 text-xs text-[#2E7D32]">Category is determined by the linked bill.</p>}
-                    {form.billId && !selectedBill?.categoryId && selectedSupplier?.autoCategoryId && <p className="mt-1 text-xs text-[#2E7D32]">Using the supplier default category until you override it.</p>}
-                    {form.billId && !selectedBill?.categoryId && !selectedSupplier?.autoCategoryId && <p className="mt-1 text-xs text-[#C73E1D]">This bill has no saved category yet, so please choose one.</p>}
-                  </div>
+                  {!hasMultiCategoryItems && (
+                    <div>
+                      <Label>Category {form.billId && selectedBill?.categoryId && <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span>}</Label>
+                      <select
+                        value={form.categoryIds[0] ?? ""}
+                        onChange={e => setForm(p => ({ ...p, categoryIds: e.target.value ? [parseInt(e.target.value)] : [] }))}
+                        className="w-full rounded border px-3 py-2 text-sm"
+                      >
+                        <option value="">{catsLoading ? "Loading..." : categories?.length ? "Select a category" : "No categories"}</option>
+                        {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      {form.billId && selectedBill?.categoryId && <p className="mt-1 text-xs text-[#2E7D32]">Category from linked bill.</p>}
+                      {form.billId && !selectedBill?.categoryId && selectedSupplier?.autoCategoryId && <p className="mt-1 text-xs text-[#2E7D32]">Using supplier default.</p>}
+                    </div>
+                  )}
                 </div>
+
+                {hasMultiCategoryItems && billItems && billItems.length > 0 && (
+                  <div className="rounded-lg border border-[#D4A854] bg-[#FDF8F3] p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs font-medium text-[#2D2A26]">Bill Items — select categories for expenses:</p>
+                      <span className="text-xs text-[#8D8A87]">{form.categoryIds.length} of {itemCategories.length} selected</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {billItems.map(item => {
+                        const cat = categories?.find(c => c.id === item.categoryId);
+                        const isSelected = item.categoryId && form.categoryIds.includes(item.categoryId);
+                        return (
+                          <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => {
+                              if (item.categoryId) {
+                                const newCategories = isSelected
+                                  ? form.categoryIds.filter(id => id !== item.categoryId)
+                                  : [...form.categoryIds, item.categoryId];
+                                setForm(p => ({ ...p, categoryIds: newCategories }));
+                              }
+                            }}
+                            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors ${
+                              isSelected
+                                ? "bg-[#2E7D32] text-white"
+                                : "bg-white border border-[#E8E0D8] text-[#2D2A26] hover:border-[#D4A854]"
+                            }`}
+                          >
+                            {cat ? cat.name : "No cat"}
+                            <span className={`font-mono ${isSelected ? "text-white/80" : "text-[#8D8A87]"}`}>{formatKES(item.totalPrice)}</span>
+                            {isSelected && <span className="text-white/70">✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 text-xs text-[#8D8A87]">Click categories to toggle. Each selected category creates a separate expense.</p>
+                  </div>
+                )}
+
+                {hasMultiCategoryItems && form.categoryIds.length === 0 && (
+                  <p className="text-xs text-[#C73E1D]">Please select at least one category from the bill items above.</p>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <div><Label>Amount</Label>
                     <div className="relative"><span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#8D8A87]">KES</span>
