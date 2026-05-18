@@ -138,10 +138,23 @@ export function Expenses() {
   const selectedSupplier = suppliers?.find(s => s.id.toString() === form.supplierId);
   const selectedBill = bills?.find(b => b.id.toString() === form.billId);
 
-  const getCategoryFromBillItems = (items: typeof billItems): number | undefined => {
-    if (!items || items.length === 0) return undefined;
+  const getCategoriesFromBillItems = (items: typeof billItems): number[] => {
+    if (!items || items.length === 0) return [];
     const uniqueCategories = [...new Set(items.map(item => item.categoryId).filter(Boolean))];
-    return uniqueCategories.length === 1 ? uniqueCategories[0] : undefined;
+    return uniqueCategories as number[];
+  };
+
+  const groupBillItemsByCategory = (items: typeof billItems): Map<number | undefined, typeof billItems> => {
+    const grouped = new Map<number | undefined, typeof billItems>();
+    if (!items) return grouped;
+    for (const item of items) {
+      const catId = item.categoryId;
+      if (!grouped.has(catId)) {
+        grouped.set(catId, []);
+      }
+      grouped.get(catId)!.push(item);
+    }
+    return grouped;
   };
 
   useEffect(() => {
@@ -152,9 +165,9 @@ export function Expenses() {
     if (selectedBill.categoryId) {
       categoryId = String(selectedBill.categoryId);
     } else if (billItems && billItems.length > 0) {
-      const itemCategory = getCategoryFromBillItems(billItems);
-      if (itemCategory) {
-        categoryId = String(itemCategory);
+      const categories = getCategoriesFromBillItems(billItems);
+      if (categories.length === 1) {
+        categoryId = String(categories[0]);
       }
     }
 
@@ -198,17 +211,76 @@ export function Expenses() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.locationId) { toast.error("Please select a location"); return; }
-    if (!form.categoryId) {
-      if (form.billId) {
-        toast.error("The selected bill has no category. Please edit the bill to add a category, or select a category manually.");
-      } else {
-        toast.error("Please select a category");
-      }
-      return;
-    }
     if (!form.amount || parseFloat(form.amount) <= 0) { toast.error("Please enter a valid amount"); return; }
     if (!form.description.trim()) { toast.error("Please enter a description"); return; }
     if (form.expenseDate > todayDate) { toast.error("Expense date cannot be in the future"); return; }
+
+    const hasBillWithItems = form.billId && billItems && billItems.length > 0;
+    const categories = hasBillWithItems ? getCategoriesFromBillItems(billItems) : [];
+    const hasMultiCategoryItems = hasBillWithItems && categories.length > 1;
+    const billHasOwnCategory = selectedBill?.categoryId;
+
+    if (!form.categoryId) {
+      if (form.billId && (billHasOwnCategory || hasMultiCategoryItems)) {
+        // Bill has its own category or multi-category items - proceed
+      } else if (form.billId) {
+        toast.error("The selected bill has no category. Please edit the bill to add items with categories, or select a category manually.");
+        return;
+      } else {
+        toast.error("Please select a category");
+        return;
+      }
+    }
+
+    if (hasMultiCategoryItems && !billHasOwnCategory) {
+      const grouped = groupBillItemsByCategory(billItems);
+      const expenseCount = grouped.size;
+      let createdCount = 0;
+
+      const expenseDataArray = Array.from(grouped.entries()).map(([categoryId, items]) => {
+        const totalAmount = items.reduce((sum, item) => sum + parseFloat(String(item.totalPrice)), 0);
+        const category = categories?.find(c => c === categoryId);
+        const catName = category ? categories?.find(c => c === categoryId) : "uncategorized";
+        return {
+          locationId: +form.locationId,
+          categoryId: categoryId ? +categoryId : +form.categoryId,
+          supplierId: form.supplierId ? +form.supplierId : undefined,
+          amount: totalAmount.toFixed(2),
+          description: `${form.description} (${items.map(i => i.itemName).join(", ")})`,
+          expenseDate: form.expenseDate,
+          paymentMethod: form.paymentMethod,
+          accountId: form.accountId ? +form.accountId : undefined,
+          billId: form.billId ? +form.billId : undefined,
+          attachments: undefined as undefined,
+        };
+      });
+
+      toast.info(`Creating ${expenseCount} expense entries for multi-category bill...`);
+
+      const createNextExpense = (index: number) => {
+        if (index >= expenseDataArray.length) {
+          toast.success(`Created ${createdCount} expenses successfully`);
+          setOpen(false);
+          resetForm();
+          refetch();
+          return;
+        }
+        createExpense.mutate(expenseDataArray[index], {
+          onSuccess: () => {
+            createdCount++;
+            createNextExpense(index + 1);
+          },
+          onError: (err) => {
+            toast.error(`Failed to create expense: ${err.message}`);
+            createNextExpense(index + 1);
+          }
+        });
+      };
+
+      createNextExpense(0);
+      return;
+    }
+
     createExpense.mutate({
       locationId: +form.locationId, categoryId: +form.categoryId, supplierId: form.supplierId ? +form.supplierId : undefined,
       amount: form.amount, description: form.description, expenseDate: form.expenseDate,
