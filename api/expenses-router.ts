@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, expenseQuery, expenseCreate, expenseManage, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { expenses, expenseCategories, accounts, ledgerEntries, suppliers, bills, attachments, locations } from "@db/schema";
+import { expenses, expenseItems, expenseCategories, accounts, ledgerEntries, suppliers, bills, attachments, locations } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { notFutureDateString, optionalNotFutureDateString } from "./lib/future-date";
@@ -9,6 +9,19 @@ import { logAudit } from "./lib/audit";
 import { ensureSystemAccount } from "./lib/accounting-accounts";
 import { getExpenseAccountSubType } from "./lib/accounting-maps";
 import { reverseLedgerEntriesForTransaction } from "./lib/accounting-reversal";
+
+export const expenseItemInputSchema = z.object({
+  itemName: z.string().min(1),
+  quantity: z.string().default("1"),
+  unitPrice: z.string(),
+  totalPrice: z.string(),
+  categoryId: z.number(),
+  notes: z.string().optional(),
+});
+
+export const expenseItemWithIdSchema = expenseItemInputSchema.extend({
+  id: z.number().optional(),
+});
 
 export const createExpenseInputSchema = z.object({
   locationId: z.number(),
@@ -38,6 +51,7 @@ export const createExpenseInputSchema = z.object({
   depreciationMethod: z.enum(["straight_line", "declining_balance"]).optional(),
   salvageValue: z.string().optional(),
   assetAccountId: z.number().optional(),
+  items: z.array(expenseItemInputSchema).optional(),
 });
 
 export const updateExpenseInputSchema = z.object({
@@ -230,6 +244,14 @@ export const expensesRouter = createRouter({
       return db.select().from(expenses).where(and(...conditions)).orderBy(desc(expenses.expenseDate)).limit(input.pageSize).offset(offset);
     }),
 
+  getItems: expenseQuery
+    .input(z.object({ expenseId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      const db = getDb();
+      await requireAuthorizedEntity(ctx, expenses, input.expenseId);
+      return db.select().from(expenseItems).where(and(eq(expenseItems.expenseId, input.expenseId), isNull(expenseItems.deletedAt)));
+    }),
+
   create: expenseCreate
     .input(createExpenseInputSchema)
     .mutation(async ({ input, ctx }) => {
@@ -315,6 +337,20 @@ export const expensesRouter = createRouter({
             await tx.insert(attachments).values({
               recordType: "expense", recordId: expenseId,
               imageData: att.imageData, mimeType: att.mimeType, caption: att.caption,
+            } as any).returning();
+          }
+        }
+
+        if (input.items && input.items.length > 0) {
+          for (const item of input.items) {
+            await tx.insert(expenseItems).values({
+              expenseId,
+              itemName: item.itemName,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalPrice: item.totalPrice,
+              categoryId: item.categoryId,
+              notes: item.notes,
             } as any).returning();
           }
         }

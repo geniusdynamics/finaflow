@@ -1,24 +1,37 @@
 import { z } from "zod";
-import { createRouter, accountManage } from "./middleware";
+import { createRouter, reportQuery, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
 import { dailySales, expenses, bills, expenseCategories, accounts, financialReports } from "@db/schema";
 import { eq, and, isNull, sql, inArray } from "drizzle-orm";
 import { d } from "./lib/decimal";
 
+async function resolveLocationFilter(ctx: any, inputLocationId?: number): Promise<number[]> {
+  const locIds = await getCurrentBusinessLocationIds(ctx);
+  if (inputLocationId !== undefined) {
+    if (!locIds.includes(inputLocationId)) {
+      throw new Error("Invalid location for the current business");
+    }
+    return [inputLocationId];
+  }
+  return locIds;
+}
+
 export const reportsRouter = createRouter({
-  plStatement: accountManage
+  plStatement: reportQuery
     .input(z.object({ year: z.number(), month: z.number(), locationId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
       const startDate = `${input.year}-${String(input.month).padStart(2, "0")}-01`;
       const endDate = new Date(input.year, input.month, 0).toISOString().split("T")[0];
+      const locFilter = await resolveLocationFilter(ctx, input.locationId);
+      const locIdSql = sql.join(locFilter.map(id => sql`${id}`), sql`, `);
 
       const salesCond: any[] = [
         sql`${dailySales.saleDate} >= ${startDate}`,
         sql`${dailySales.saleDate} <= ${endDate}`,
         isNull(dailySales.deletedAt),
+        sql`${dailySales.locationId} IN (${locIdSql})`,
       ];
-      if (input.locationId) salesCond.push(eq(dailySales.locationId, input.locationId));
       const salesData = await db.select().from(dailySales).where(and(...salesCond));
       const revenue = salesData.reduce((sum, s) => sum.plus(d(s.netSales || "0")), d(0));
 
@@ -26,8 +39,8 @@ export const reportsRouter = createRouter({
         sql`${expenses.expenseDate} >= ${startDate}`,
         sql`${expenses.expenseDate} <= ${endDate}`,
         isNull(expenses.deletedAt),
+        sql`${expenses.locationId} IN (${locIdSql})`,
       ];
-      if (input.locationId) expenseCond.push(eq(expenses.locationId, input.locationId));
       const expenseResult = await db
         .select({ total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)` })
         .from(expenses)
@@ -49,10 +62,12 @@ export const reportsRouter = createRouter({
       };
     }),
 
-  plMonthly: accountManage
+  plMonthly: reportQuery
     .input(z.object({ year: z.number(), locationId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
+      const locFilter = await resolveLocationFilter(ctx, input.locationId);
+      const locIdSql = sql.join(locFilter.map(id => sql`${id}`), sql`, `);
       const months: {
         month: number;
         monthName: string;
@@ -68,8 +83,8 @@ export const reportsRouter = createRouter({
           sql`${dailySales.saleDate} >= ${monthStart}`,
           sql`${dailySales.saleDate} <= ${monthEnd}`,
           isNull(dailySales.deletedAt),
+          sql`${dailySales.locationId} IN (${locIdSql})`,
         ];
-        if (input.locationId) salesCond.push(eq(dailySales.locationId, input.locationId));
         const salesData = await db.select().from(dailySales).where(and(...salesCond));
         const revenue = salesData.reduce((sum, s) => sum.plus(d(s.netSales || "0")), d(0));
 
@@ -77,8 +92,8 @@ export const reportsRouter = createRouter({
           sql`${expenses.expenseDate} >= ${monthStart}`,
           sql`${expenses.expenseDate} <= ${monthEnd}`,
           isNull(expenses.deletedAt),
+          sql`${expenses.locationId} IN (${locIdSql})`,
         ];
-        if (input.locationId) expenseCond.push(eq(expenses.locationId, input.locationId));
         const expenseResult = await db
           .select({ total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)` })
           .from(expenses)
@@ -96,23 +111,23 @@ export const reportsRouter = createRouter({
       return months;
     }),
 
-  plComparative: accountManage
+  plComparative: reportQuery
     .input(z.object({ locationId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
+      const locFilter = await resolveLocationFilter(ctx, input.locationId);
+      const locIdSql = sql.join(locFilter.map(id => sql`${id}`), sql`, `);
       const thisYear = new Date().getFullYear();
       const lastYear = thisYear - 1;
 
       const getTotals = async (year: number) => {
         const start = `${year}-01-01`;
         const end = `${year}-12-31`;
-        const salesCond: any[] = [sql`${dailySales.saleDate} >= ${start}`, sql`${dailySales.saleDate} <= ${end}`, isNull(dailySales.deletedAt)];
-        if (input.locationId) salesCond.push(eq(dailySales.locationId, input.locationId));
+        const salesCond: any[] = [sql`${dailySales.saleDate} >= ${start}`, sql`${dailySales.saleDate} <= ${end}`, isNull(dailySales.deletedAt), sql`${dailySales.locationId} IN (${locIdSql})`];
         const salesData = await db.select().from(dailySales).where(and(...salesCond));
         const revenue = salesData.reduce((sum, s) => sum.plus(d(s.netSales || "0")), d(0));
 
-        const expenseCond: any[] = [sql`${expenses.expenseDate} >= ${start}`, sql`${expenses.expenseDate} <= ${end}`, isNull(expenses.deletedAt)];
-        if (input.locationId) expenseCond.push(eq(expenses.locationId, input.locationId));
+        const expenseCond: any[] = [sql`${expenses.expenseDate} >= ${start}`, sql`${expenses.expenseDate} <= ${end}`, isNull(expenses.deletedAt), sql`${expenses.locationId} IN (${locIdSql})`];
         const expenseResult = await db.select({ total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)` }).from(expenses).where(and(...expenseCond));
         const expensesTotal = d(expenseResult[0]?.total || "0");
 
@@ -131,10 +146,12 @@ export const reportsRouter = createRouter({
       };
     }),
 
-  budgetVsActual: accountManage
+  budgetVsActual: reportQuery
     .input(z.object({ year: z.number(), month: z.number().optional(), locationId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
+      const locFilter = await resolveLocationFilter(ctx, input.locationId);
+      const locIdSql = sql.join(locFilter.map(id => sql`${id}`), sql`, `);
       const startDate = `${input.year}-01-01`;
       const endDate = input.month ? new Date(input.year, input.month, 0).toISOString().split("T")[0] : `${input.year}-12-31`;
 
@@ -142,8 +159,8 @@ export const reportsRouter = createRouter({
         sql`${expenses.expenseDate} >= ${startDate}`,
         sql`${expenses.expenseDate} <= ${endDate}`,
         isNull(expenses.deletedAt),
+        sql`${expenses.locationId} IN (${locIdSql})`,
       ];
-      if (input.locationId) expenseCond.push(eq(expenses.locationId, input.locationId));
 
       const expenseData = await db
         .select({
@@ -176,10 +193,12 @@ export const reportsRouter = createRouter({
       };
     }),
 
-  cashFlowForecast: accountManage
+  cashFlowForecast: reportQuery
     .input(z.object({ locationId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
+      const locFilter = await resolveLocationFilter(ctx, input.locationId);
+      const locIdSql = sql.join(locFilter.map(id => sql`${id}`), sql`, `);
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
       const today = new Date().toISOString().split("T")[0];
       const next30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -188,8 +207,8 @@ export const reportsRouter = createRouter({
         sql`${dailySales.saleDate} >= ${thirtyDaysAgo}`,
         sql`${dailySales.saleDate} <= ${today}`,
         isNull(dailySales.deletedAt),
+        sql`${dailySales.locationId} IN (${locIdSql})`,
       ];
-      if (input.locationId) salesCond.push(eq(dailySales.locationId, input.locationId));
       const salesData = await db.select().from(dailySales).where(and(...salesCond));
       const totalSales = salesData.reduce((sum, s) => sum.plus(d(s.netSales || "0")), d(0));
       const avgDaily = totalSales.gt(0) ? totalSales.dividedBy(30) : d(0);
@@ -199,8 +218,8 @@ export const reportsRouter = createRouter({
         sql`${bills.dueDate} <= ${next30}`,
         sql`${bills.balanceDue} > 0`,
         isNull(bills.deletedAt),
+        sql`${bills.locationId} IN (${locIdSql})`,
       ];
-      if (input.locationId) billCond.push(eq(bills.locationId, input.locationId));
       const billData = await db.select().from(bills).where(and(...billCond));
       const totalBills = billData.reduce((sum, b) => sum.plus(d(b.balanceDue || "0")), d(0));
 
@@ -214,10 +233,12 @@ export const reportsRouter = createRouter({
       };
     }),
 
-  cogsAnalysis: accountManage
+  cogsAnalysis: reportQuery
     .input(z.object({ year: z.number(), month: z.number().optional(), locationId: z.number().optional() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
+      const locFilter = await resolveLocationFilter(ctx, input.locationId);
+      const locIdSql = sql.join(locFilter.map(id => sql`${id}`), sql`, `);
       const startDate = input.month ? `${input.year}-${String(input.month).padStart(2, "0")}-01` : `${input.year}-01-01`;
       const endDate = input.month ? new Date(input.year, input.month, 0).toISOString().split("T")[0] : `${input.year}-12-31`;
 
@@ -225,8 +246,8 @@ export const reportsRouter = createRouter({
         sql`${dailySales.saleDate} >= ${startDate}`,
         sql`${dailySales.saleDate} <= ${endDate}`,
         isNull(dailySales.deletedAt),
+        sql`${dailySales.locationId} IN (${locIdSql})`,
       ];
-      if (input.locationId) salesCond.push(eq(dailySales.locationId, input.locationId));
       const salesData = await db.select().from(dailySales).where(and(...salesCond));
       const revenue = salesData.reduce((sum, s) => sum.plus(d(s.netSales || "0")), d(0));
 
@@ -244,8 +265,8 @@ export const reportsRouter = createRouter({
           sql`${expenses.expenseDate} <= ${endDate}`,
           inArray(expenses.categoryId, cogsCatIds),
           isNull(expenses.deletedAt),
+          sql`${expenses.locationId} IN (${locIdSql})`,
         ];
-        if (input.locationId) cogsCond.push(eq(expenses.locationId, input.locationId));
         const cogsResult = await db
           .select({ total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)` })
           .from(expenses)
@@ -272,43 +293,43 @@ export const reportsRouter = createRouter({
       };
     }),
 
-  getCogsTarget: accountManage
+  getCogsTarget: reportQuery
     .input(z.object({ locationId: z.number().optional() }))
     .query(async () => ({
       targetFoodCostPercent: "35",
       alertThresholdPercent: "38",
     })),
 
-  setBudget: accountManage
+  setBudget: reportQuery
     .input(z.object({ year: z.number(), month: z.number(), budgetType: z.enum(["cogs", "sales"]), amount: z.string(), locationId: z.number() }))
     .mutation(async () => ({ success: true })),
 
-  setCogsTarget: accountManage
+  setCogsTarget: reportQuery
     .input(z.object({ locationId: z.number(), cogsTarget: z.string() }))
     .mutation(async () => ({ success: true })),
 
-  incomeStatement: accountManage
+  incomeStatement: reportQuery
     .input(z.object({ businessId: z.number(), startDate: z.string(), endDate: z.string(), saveReport: z.boolean().default(false) }))
     .mutation(async ({ input }) => {
       const { generateIncomeStatement } = await import("./lib/reports");
       return generateIncomeStatement(input.businessId, new Date(input.startDate), new Date(input.endDate));
     }),
 
-  balanceSheet: accountManage
+  balanceSheet: reportQuery
     .input(z.object({ businessId: z.number(), asOfDate: z.string(), saveReport: z.boolean().default(false) }))
     .mutation(async ({ input }) => {
       const { generateBalanceSheet } = await import("./lib/reports");
       return generateBalanceSheet(input.businessId, new Date(input.asOfDate));
     }),
 
-  trialBalance: accountManage
+  trialBalance: reportQuery
     .input(z.object({ businessId: z.number(), asOfDate: z.string(), saveReport: z.boolean().default(false) }))
     .mutation(async ({ input }) => {
       const { generateTrialBalance } = await import("./lib/reports");
       return generateTrialBalance(input.businessId, new Date(input.asOfDate));
     }),
 
-  assetRegister: accountManage
+  assetRegister: reportQuery
     .input(z.object({ businessId: z.number(), saveReport: z.boolean().default(false) }))
     .mutation(async ({ input }) => {
       const { generateAssetRegister } = await import("./lib/reports");

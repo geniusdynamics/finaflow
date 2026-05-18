@@ -328,6 +328,23 @@ export const expenses = pgTable("expenses", {
 
 export type Expense = typeof expenses.$inferSelect;
 
+// Expense line items - for expenses with multiple categories
+export const expenseItems = pgTable("expense_items", {
+  id: serial("id").primaryKey(),
+  expenseId: bigint("expenseId", { mode: "number" }).notNull(),
+  itemName: varchar("itemName", { length: 255 }).notNull(),
+  quantity: numeric("quantity", { precision: 10, scale: 3 }).default("1.000").notNull(),
+  unitPrice: numeric("unitPrice", { precision: 15, scale: 2 }).notNull(),
+  totalPrice: numeric("totalPrice", { precision: 15, scale: 2 }).notNull(),
+  categoryId: bigint("categoryId", { mode: "number" }).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+});
+
+export type ExpenseItem = typeof expenseItems.$inferSelect;
+
 // Suppliers
 export const suppliers = pgTable("suppliers", {
   id: serial("id").primaryKey(),
