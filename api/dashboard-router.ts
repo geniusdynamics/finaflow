@@ -4,7 +4,7 @@ import { getDb } from "./queries/connection";
 import { dailySales, expenses, bills, billItems, billPayments, accounts, mpesaTransactions, recurringBillTemplates, payrollPeriods, payrollEntries, payrollAdvances, ledgerEntries, dailyMpesaLedger, suppliers, attachments, locations } from "@db/schema";
 import { eq, and, isNull, sql, desc } from "drizzle-orm";
 import { d, Decimal } from "./lib/decimal";
-import { resetBusinessTransactions } from "./lib/business-reset";
+import { resetBusinessTransactions, validatePreReset, createResetSnapshot, type ResetResult } from "./lib/business-reset";
 
 export const dashboardRouter = createRouter({
   summary: authedQuery
@@ -208,6 +208,23 @@ export const dashboardRouter = createRouter({
     };
   }),
 
+  resetValidation: ownerQuery
+    .query(async ({ ctx }) => {
+      const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
+      if (!businessId) {
+        throw new Error("No active business available.");
+      }
+      const validation = await validatePreReset({ db: getDb(), businessId });
+      const snapshot = await createResetSnapshot({ db: getDb(), businessId });
+      const totalRecords = Object.values(snapshot.tableCounts).reduce((s, c) => s + c, 0);
+      return {
+        validation,
+        snapshot,
+        totalRecords,
+        hasRecordsToReset: totalRecords > 0,
+      };
+    }),
+
   resetAllTransactions: ownerQuery
     .mutation(async ({ ctx }) => {
       const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
@@ -215,14 +232,42 @@ export const dashboardRouter = createRouter({
         throw new Error("No active business available for reset.");
       }
 
+      const db = getDb();
+      const userId = ctx.user!.id;
+
+      // Run pre-reset validation
+      const validation = await validatePreReset({ db, businessId });
+      if (!validation.valid) {
+        throw new Error("Pre-reset validation failed. System may be in an unstable state.");
+      }
+
+      // Create a pre-reset snapshot for audit trail
+      const snapshot = await createResetSnapshot({ db, businessId });
+
+      // Execute the reset
       const resetResult = await resetBusinessTransactions({
-        db: getDb(),
+        db,
         businessId,
+        userId,
       });
+
+      const totalCleared = Object.values(resetResult.results).reduce(
+        (sum, r) => sum + r.count,
+        0,
+      );
 
       return {
         ...resetResult,
-        message: "All transactions have been reset.",
+        snapshot,
+        summary: {
+          totalRecordsCleared: totalCleared,
+          tablesAffected: Object.keys(resetResult.results).filter(
+            (k) => resetResult.results[k].count > 0,
+          ),
+          preservedTables: resetResult.preserved,
+          resetTimestamp: resetResult.resetAt,
+        },
+        message: `Reset complete: ${totalCleared} total records cleared across ${Object.keys(resetResult.results).filter((k) => resetResult.results[k].count > 0).length} tables. All ${resetResult.preserved.length} preserved table types remain intact.`,
       };
     }),
 });

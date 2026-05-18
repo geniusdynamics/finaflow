@@ -1,6 +1,6 @@
 import { getDb } from "../queries/connection";
-import { accounts, journalEntries, journalLines, ledgerEntries, items, fixedAssetDepreciation, expenseCategories } from "@db/schema";
-import { eq, and, isNull, sql, gte, lte, desc } from "drizzle-orm";
+import { accounts, journalEntries, journalLines, ledgerEntries, items, fixedAssetDepreciation, expenseCategories, locations } from "@db/schema";
+import { eq, and, isNull, sql, gte, lte, desc, inArray } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { d } from "./decimal";
 
@@ -80,31 +80,36 @@ interface AssetRegisterData {
   };
 }
 
+async function getAllBusinessAccounts(businessId: number) {
+  const db = getDb();
+  const locs = await db.select({ id: locations.id }).from(locations).where(
+    and(eq(locations.businessId, businessId), isNull(locations.deletedAt))
+  );
+  const locIds = locs.map((l: { id: number }) => l.id);
+
+  const conditions: any[] = [
+    isNull(accounts.deletedAt),
+    sql`(${accounts.businessId} = ${businessId} OR ${accounts.locationId} IN (${sql.join(locIds.map((id: number) => sql`${id}`), sql`, `)}))`,
+  ];
+
+  return db.select().from(accounts).where(and(...conditions)).orderBy(accounts.accountCode);
+}
+
 export async function generateIncomeStatement(
   businessId: number,
   startDate: Date,
   endDate: Date
 ): Promise<IncomeStatementData> {
   const db = getDb();
-  
-  const allAccounts = await db
-    .select()
-    .from(accounts)
-    .where(
-      and(
-        eq(accounts.businessId, businessId),
-        isNull(accounts.deletedAt)
-      )
-    )
-    .orderBy(accounts.accountCode);
+  const allAccounts = await getAllBusinessAccounts(businessId);
 
-  const revenueAccounts = allAccounts.filter(a => a.accountType === "revenue");
-  const cogsAccounts = allAccounts.filter(a => a.accountSubType === "cogs");
-  const expenseAccounts = allAccounts.filter(a => a.accountType === "expense");
+  const revenueAccounts = allAccounts.filter((a: any) => a.accountType === "revenue");
+  const cogsAccounts = allAccounts.filter((a: any) => a.accountSubType === "cogs");
+  const expenseAccounts = allAccounts.filter((a: any) => a.accountType === "expense");
 
   const revenueSection: ReportSection = {
     title: "Revenue",
-    items: revenueAccounts.map(acc => ({
+    items: revenueAccounts.map((acc: any) => ({
       accountCode: acc.accountCode || undefined,
       accountName: acc.name,
       amount: formatCurrency(acc.currentBalance || "0"),
@@ -112,13 +117,13 @@ export async function generateIncomeStatement(
   };
 
   const totalRevenue = revenueAccounts.reduce(
-    (sum, acc) => sum.plus(d(acc.currentBalance || "0")),
+    (sum: Decimal, acc: any) => sum.plus(d(acc.currentBalance || "0")),
     d("0")
   );
 
   const cogsSection: ReportSection = {
     title: "Cost of Goods Sold",
-    items: cogsAccounts.map(acc => ({
+    items: cogsAccounts.map((acc: any) => ({
       accountCode: acc.accountCode || undefined,
       accountName: acc.name,
       amount: formatCurrency(acc.currentBalance || "0"),
@@ -126,7 +131,7 @@ export async function generateIncomeStatement(
   };
 
   const totalCOGS = cogsAccounts.reduce(
-    (sum, acc) => sum.plus(d(acc.currentBalance || "0")),
+    (sum: Decimal, acc: any) => sum.plus(d(acc.currentBalance || "0")),
     d("0")
   );
 
@@ -166,7 +171,7 @@ export async function generateIncomeStatement(
   for (const [classType, lineItems] of Object.entries(expensesByClass)) {
     if (lineItems.length > 0) {
       const classTotal = lineItems.reduce(
-        (sum, item) => sum.plus(d(item.amount.replace(/[^0-9.-]/g, "") || "0")),
+        (sum: Decimal, item: ReportLineItem) => sum.plus(d(item.amount.replace(/[^0-9.-]/g, "") || "0")),
         d("0")
       );
       totalExpensesNum = totalExpensesNum.plus(classTotal);
@@ -198,24 +203,16 @@ export async function generateBalanceSheet(
   businessId: number,
   asOfDate: Date
 ): Promise<BalanceSheetData> {
-  const db = getDb();
+  const allAccounts = await getAllBusinessAccounts(businessId);
 
-  const allAccounts = await db
-    .select()
-    .from(accounts)
-    .where(
-      and(
-        eq(accounts.businessId, businessId),
-        isNull(accounts.deletedAt)
-      )
-    )
-    .orderBy(accounts.accountCode);
+  const assetAccounts = allAccounts.filter((a: any) => a.accountType === "asset" || !a.accountType);
+  const liabilityAccounts = allAccounts.filter((a: any) => a.accountType === "liability");
+  const equityAccounts = allAccounts.filter((a: any) => a.accountType === "equity");
+  const revenueAccounts = allAccounts.filter((a: any) => a.accountType === "revenue");
+  const expenseAccounts = allAccounts.filter((a: any) => a.accountType === "expense");
 
-  const assetAccounts = allAccounts.filter(a => a.accountType === "asset");
-  const liabilityAccounts = allAccounts.filter(a => a.accountType === "liability");
-  const equityAccounts = allAccounts.filter(a => a.accountType === "equity");
-
-  const currentAssets = assetAccounts.filter(a => 
+  const currentAssets = assetAccounts.filter((a: any) => 
+    !a.accountType ||
     a.accountSubType === "cash" || 
     a.accountSubType === "bank" || 
     a.accountSubType === "accounts_receivable" ||
@@ -223,94 +220,118 @@ export async function generateBalanceSheet(
     a.accountSubType === "prepaid_expense"
   );
 
-  const fixedAssets = assetAccounts.filter(a => 
+  const fixedAssets = assetAccounts.filter((a: any) => 
     a.accountSubType === "fixed_asset" ||
     a.accountSubType === "accumulated_depreciation" ||
     a.accountSubType === "intangible_asset"
   );
 
-  const currentLiabilities = liabilityAccounts.filter(a => 
+  const currentLiabilities = liabilityAccounts.filter((a: any) => 
     a.accountSubType === "accounts_payable" ||
     a.accountSubType === "accrued_expense"
   );
 
-  const longTermLiabilities = liabilityAccounts.filter(a => 
+  const longTermLiabilities = liabilityAccounts.filter((a: any) => 
     a.accountSubType === "current_loan" ||
     a.accountSubType === "long_term_loan"
   );
 
-  const formatAccountBalance = (acc: any): string => {
+  const getAccountBalance = (acc: any): Decimal => {
     const balance = d(acc.currentBalance || "0");
     if (acc.isContra || acc.accountSubType === "accumulated_depreciation") {
+      return balance.abs().negated();
+    }
+    return balance;
+  };
+
+  const formatAccountBalance = (acc: any): string => {
+    const balance = getAccountBalance(acc);
+    if (balance.isNegative()) {
       return `(${formatCurrency(balance.abs().toString())})`;
     }
     return formatCurrency(balance.toString());
   };
 
-  const assetsCurrent: ReportLineItem[] = currentAssets.map(acc => ({
+  const assetsCurrent: ReportLineItem[] = currentAssets.map((acc: any) => ({
     accountCode: acc.accountCode || undefined,
     accountName: acc.name,
     amount: formatAccountBalance(acc),
   }));
 
-  const assetsFixed: ReportLineItem[] = fixedAssets.map(acc => ({
+  const assetsFixed: ReportLineItem[] = fixedAssets.map((acc: any) => ({
     accountCode: acc.accountCode || undefined,
     accountName: acc.name,
     amount: formatAccountBalance(acc),
   }));
 
-  const totalCurrentAssets = currentAssets.reduce((sum, acc) => {
-    const bal = d(acc.currentBalance || "0");
-    if (acc.isContra || acc.accountSubType === "accumulated_depreciation") {
-      return sum.minus(bal);
-    }
-    return sum.plus(bal);
+  const totalCurrentAssets = currentAssets.reduce((sum: Decimal, acc: any) => {
+    return sum.plus(getAccountBalance(acc));
   }, d("0"));
 
-  const totalFixedAssets = fixedAssets.reduce((sum, acc) => {
-    const bal = d(acc.currentBalance || "0");
-    if (acc.isContra || acc.accountSubType === "accumulated_depreciation") {
-      return sum.minus(bal);
-    }
-    return sum.plus(bal);
+  const totalFixedAssets = fixedAssets.reduce((sum: Decimal, acc: any) => {
+    return sum.plus(getAccountBalance(acc));
   }, d("0"));
 
   const totalAssets = totalCurrentAssets.plus(totalFixedAssets);
 
-  const liabilitiesCurrent: ReportLineItem[] = currentLiabilities.map(acc => ({
+  const liabilitiesCurrent: ReportLineItem[] = currentLiabilities.map((acc: any) => ({
     accountCode: acc.accountCode || undefined,
     accountName: acc.name,
-    amount: formatCurrency(acc.currentBalance || "0"),
+    amount: formatCurrency(getAccountBalance(acc).abs().toString()),
   }));
 
-  const liabilitiesLongTerm: ReportLineItem[] = longTermLiabilities.map(acc => ({
+  const liabilitiesLongTerm: ReportLineItem[] = longTermLiabilities.map((acc: any) => ({
     accountCode: acc.accountCode || undefined,
     accountName: acc.name,
-    amount: formatCurrency(acc.currentBalance || "0"),
+    amount: formatCurrency(getAccountBalance(acc).abs().toString()),
   }));
 
   const totalCurrentLiabilities = currentLiabilities.reduce(
-    (sum, acc) => sum.plus(d(acc.currentBalance || "0")),
+    (sum: Decimal, acc: any) => sum.plus(getAccountBalance(acc).abs()),
     d("0")
   );
 
   const totalLongTermLiabilities = longTermLiabilities.reduce(
-    (sum, acc) => sum.plus(d(acc.currentBalance || "0")),
+    (sum: Decimal, acc: any) => sum.plus(getAccountBalance(acc).abs()),
     d("0")
   );
 
   const totalLiabilities = totalCurrentLiabilities.plus(totalLongTermLiabilities);
 
-  const equityItems: ReportLineItem[] = equityAccounts.map(acc => ({
-    accountCode: acc.accountCode || undefined,
-    accountName: acc.name,
-    amount: formatCurrency(acc.currentBalance || "0"),
-  }));
-
-  const totalEquity = equityAccounts.reduce(
-    (sum, acc) => sum.plus(d(acc.currentBalance || "0")),
+  const totalRevenue = revenueAccounts.reduce(
+    (sum: Decimal, acc: any) => sum.plus(getAccountBalance(acc)),
     d("0")
   );
+
+  const totalExpenses = expenseAccounts.reduce(
+    (sum: Decimal, acc: any) => sum.plus(getAccountBalance(acc)),
+    d("0")
+  );
+
+  const netIncome = totalRevenue.minus(totalExpenses);
+
+  const equityItems: ReportLineItem[] = equityAccounts.map((acc: any) => ({
+    accountCode: acc.accountCode || undefined,
+    accountName: acc.name,
+    amount: formatCurrency(getAccountBalance(acc).abs().toString()),
+  }));
+
+  if (netIncome.gte(0)) {
+    equityItems.push({
+      accountName: "Net Income (Current Period)",
+      amount: formatCurrency(netIncome.toString()),
+    });
+  } else {
+    equityItems.push({
+      accountName: "Net Loss (Current Period)",
+      amount: `(${formatCurrency(netIncome.abs().toString())})`,
+    });
+  }
+
+  const totalEquity = equityAccounts.reduce(
+    (sum: Decimal, acc: any) => sum.plus(getAccountBalance(acc).abs()),
+    d("0")
+  ).plus(netIncome);
 
   const totalLiabilitiesAndEquity = totalLiabilities.plus(totalEquity);
   const balanceCheck = totalAssets.eq(totalLiabilitiesAndEquity);
@@ -339,20 +360,9 @@ export async function generateTrialBalance(
   businessId: number,
   asOfDate: Date
 ): Promise<TrialBalanceData> {
-  const db = getDb();
+  const allAccounts = await getAllBusinessAccounts(businessId);
 
-  const allAccounts = await db
-    .select()
-    .from(accounts)
-    .where(
-      and(
-        eq(accounts.businessId, businessId),
-        isNull(accounts.deletedAt)
-      )
-    )
-    .orderBy(accounts.accountCode);
-
-  const accountsWithBalance = allAccounts.filter(acc => {
+  const accountsWithBalance = allAccounts.filter((acc: any) => {
     const balance = d(acc.currentBalance || "0");
     return !balance.eq(0);
   });
@@ -360,12 +370,14 @@ export async function generateTrialBalance(
   let totalDebits = d("0");
   let totalCredits = d("0");
 
-  const formattedAccounts = accountsWithBalance.map(acc => {
+  const formattedAccounts = accountsWithBalance.map((acc: any) => {
     const balance = d(acc.currentBalance || "0");
+    const isDebitNormal = acc.accountType === "asset" || acc.accountType === "expense" || !acc.accountType;
+
     let debit = "0.00";
     let credit = "0.00";
 
-    if (acc.accountType === "asset" || acc.accountType === "expense") {
+    if (isDebitNormal) {
       if (balance.gte(0)) {
         debit = balance.toFixed(2);
         totalDebits = totalDebits.plus(balance);
@@ -386,7 +398,7 @@ export async function generateTrialBalance(
     return {
       accountCode: acc.accountCode || "",
       accountName: acc.name,
-      accountType: acc.accountType || "unclassified",
+      accountType: acc.accountType || "operational",
       debit,
       credit,
     };
@@ -420,7 +432,7 @@ export async function generateAssetRegister(
   let totalAccumulatedDepreciation = d("0");
   let totalBookValue = d("0");
 
-  const formattedAssets = fixedAssets.map(asset => {
+  const formattedAssets = fixedAssets.map((asset: any) => {
     const purchasePrice = d(asset.purchasePrice || "0");
     const accumulatedDep = d(asset.accumulatedDepreciation || "0");
     const bookValue = d(asset.currentBookValue || "0");
@@ -474,5 +486,5 @@ export async function generateAssetRegister(
 
 function formatCurrency(amount: string): string {
   const num = d(amount || "0");
-  return num.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return num.toFixed(2).replace(/\B(?=(?=(\d{3})+(?!\d))(?!^)(?!\())/g, ",");
 }
