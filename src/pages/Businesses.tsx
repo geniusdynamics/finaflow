@@ -8,10 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Building2, Building, Trash2, Users, CheckCircle, RotateCcw, MapPin, Edit3, Save, X, Key } from "lucide-react";
-import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Building2, Building, Trash2, Users, CheckCircle, RotateCcw, MapPin, Edit3, Save, X, Key, AlertTriangle, Shield, Database, Clock } from "lucide-react";
 import { AllocationManagement } from "@/components/partner/AllocationManagement";
+import { toast } from "sonner";
 
 export function Businesses() {
   const navigate = useNavigate();
@@ -24,8 +27,13 @@ export function Businesses() {
   const [editId, setEditId] = useState<number | null>(null);
   const [form, setForm] = useState({ name: "", slug: "", address: "", phone: "", email: "", plan: "basic", isMultiLocation: true });
   const [editForm, setEditForm] = useState<Record<string, string>>({});
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState("");
 
   const { data: businesses, refetch: refetchBusinesses } = trpc.businesses.list.useQuery();
+  const { data: resetInfo, refetch: refetchResetInfo } = trpc.dashboard.resetValidation.useQuery(undefined, {
+    enabled: resetDialogOpen,
+  });
   const createBiz = trpc.businesses.create.useMutation({
     onSuccess: async () => {
       setOpen(false); setForm({ name: "", slug: "", address: "", phone: "", email: "", plan: "basic", isMultiLocation: true });
@@ -47,17 +55,29 @@ export function Businesses() {
   });
   const resetAll = trpc.dashboard.resetAllTransactions.useMutation({
     onSuccess: (data) => {
-      const parts: string[] = [];
-      if (data.results?.ledger_entries?.count) parts.push(`${data.results.ledger_entries.count} ledger entries cleared`);
-      if (data.results?.user_accounts?.count) parts.push(`${data.results.user_accounts.count} accounts removed`);
-      if (data.results?.accounts?.count) parts.push(`${data.results.accounts.count} account balances reset`);
-      if (data.results?.daily_sales?.count) parts.push(`${data.results.daily_sales.count} sales cleared`);
-      if (data.results?.expenses?.count) parts.push(`${data.results.expenses.count} expenses cleared`);
-      if (data.results?.mpesa_transactions?.count) parts.push(`${data.results.mpesa_transactions.count} M-PESA transactions cleared`);
-      toast.success(parts.length > 0 ? `Reset complete: ${parts.join(", ")}.` : data.message);
+      setResetDialogOpen(false);
+      setResetConfirmText("");
+
+      const summary = data.summary;
+      const details: string[] = [];
+      if (summary) {
+        details.push(`${summary.totalRecordsCleared} total records cleared`);
+        details.push(`${summary.tablesAffected.length} tables affected`);
+        details.push(`${summary.preservedTables.length} preserved table types untouched`);
+      }
+
+      toast.success(
+        <div className="space-y-1">
+          <p className="font-semibold">Reset complete</p>
+          {details.map((d, i) => <p key={i} className="text-sm opacity-80">{d}</p>)}
+        </div>,
+        { duration: 8000 },
+      );
       utils.invalidate();
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => {
+      toast.error(`Reset failed: ${err.message}`);
+    },
   });
 
   const startEdit = (b: any) => {
@@ -69,6 +89,27 @@ export function Businesses() {
 
   const saveEdit = (id: number) => {
     updateBiz.mutate({ id, ...editForm } as any);
+  };
+
+  const openResetDialog = () => {
+    setResetDialogOpen(true);
+    setResetConfirmText("");
+    refetchResetInfo();
+  };
+
+  const executeReset = () => {
+    if (resetConfirmText !== "RESET") {
+      toast.error("Please type 'RESET' to confirm");
+      return;
+    }
+    resetAll.mutate();
+  };
+
+  // Format table keys for display
+  const formatTableKey = (key: string): string => {
+    return key
+      .replace(/_/g, " ")
+      .replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
   return (
@@ -180,21 +221,156 @@ export function Businesses() {
                           <Button size="sm" variant="outline" onClick={() => navigate(`/businesses/${b.id}/details`)}>
                             <Building className="mr-1 h-3 w-3" /> Details
                           </Button>
-                          <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-[#D32F2F] text-[#D32F2F] hover:bg-[#D32F2F]/5"
-                          onClick={() => {
-                            if (confirm("⚠️ RESET ALL TRANSACTIONS\n\nThis will permanently delete ALL transactions in this business:\n• Sales records\n• Expenses\n• Bills & payments\n• M-PESA transactions\n• Payroll records\n• Ledger entries\n\nThe following will be reset or removed:\n• All account balances reset to opening balances\n• User-created payment accounts will be removed\n• Default system accounts (Cash, Bank, M-PESA) are preserved with balance reset\n• Categories, suppliers, employees, and locations are preserved\n\nThis action CANNOT be undone.\n\nAre you sure?")) {
-                              const confirmText = prompt("Type 'RESET' to confirm deletion of all transactions in this business:");
-                              if (confirmText === "RESET") resetAll.mutate();
-                              else toast.info("Reset cancelled.");
-                            }
-                          }}
-                          disabled={resetAll.isPending}
-                        >
-                          <RotateCcw className="mr-1 h-3 w-3" />{resetAll.isPending ? "Resetting..." : "Reset All"}
-                        </Button>
+                          <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+                            <DialogTrigger asChild>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="border-[#D32F2F] text-[#D32F2F] hover:bg-[#D32F2F]/5"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  openResetDialog();
+                                }}
+                              >
+                                <RotateCcw className="mr-1 h-3 w-3" />Reset
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-2xl bg-white max-h-[85vh]">
+                              <DialogHeader>
+                                <DialogTitle className="flex items-center gap-2 font-serif text-xl text-[#D32F2F]">
+                                  <AlertTriangle className="h-6 w-6" />
+                                  Reset All Transactions
+                                </DialogTitle>
+                                <DialogDescription className="text-[#8D8A87]">
+                                  This action permanently removes all transactional data for your active business.
+                                  It cannot be undone.
+                                </DialogDescription>
+                              </DialogHeader>
+
+                              <ScrollArea className="max-h-[60vh] pr-4">
+                                {resetInfo ? (
+                                  <div className="space-y-4">
+                                    {/* Pre-reset summary */}
+                                    <Alert variant="destructive" className="border-[#D32F2F] bg-[#D32F2F]/5">
+                                      <Database className="h-4 w-4" />
+                                      <AlertTitle>Records to be cleared: {resetInfo.totalRecords}</AlertTitle>
+                                      <AlertDescription>
+                                        {resetInfo.validation.locationCount} location(s) affected.
+                                        {resetInfo.validation.warnings.length > 0 && (
+                                          <span className="block mt-1 text-xs">
+                                            Warning: {resetInfo.validation.warnings.join(", ")}
+                                          </span>
+                                        )}
+                                      </AlertDescription>
+                                    </Alert>
+
+                                    {/* Tables to be reset */}
+                                    <div>
+                                      <h4 className="text-sm font-semibold text-[#2D2A26] mb-2 flex items-center gap-1">
+                                        <RotateCcw className="h-4 w-4 text-[#D32F2F]" />
+                                        Records that will be cleared
+                                      </h4>
+                                      <div className="grid grid-cols-2 gap-2">
+                                        {Object.entries(resetInfo.snapshot.tableCounts)
+                                          .filter(([_, count]) => count > 0)
+                                          .sort(([, a], [, b]) => b - a)
+                                          .map(([table, count]) => (
+                                            <div key={table} className="flex items-center justify-between rounded-lg border border-[#E8E0D8] px-3 py-2">
+                                              <span className="text-xs text-[#2D2A26]">{formatTableKey(table)}</span>
+                                              <Badge variant="destructive" className="text-[10px]">{count}</Badge>
+                                            </div>
+                                          ))}
+                                        {Object.entries(resetInfo.snapshot.tableCounts).filter(([_, count]) => count > 0).length === 0 && (
+                                          <p className="col-span-2 text-sm text-[#8D8A87]">No records found to reset.</p>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Preserved tables */}
+                                    <div>
+                                      <h4 className="text-sm font-semibold text-[#2D2A26] mb-2 flex items-center gap-1">
+                                        <Shield className="h-4 w-4 text-[#2E7D32]" />
+                                        Records that will be preserved
+                                      </h4>
+                                      <div className="flex flex-wrap gap-1">
+                                        {[
+                                          "Business profile & settings",
+                                          "User accounts & permissions",
+                                          "Locations & branches",
+                                          "Suppliers & their info",
+                                          "Employees & their info",
+                                          "Expense categories",
+                                          "System accounts (Cash, Bank, M-PESA)",
+                                          "Chart of Accounts",
+                                          "Payment methods",
+                                          "Documents & logos",
+                                          "API keys & webhooks",
+                                          "Partner allocations",
+                                          "Audit log (regulatory)",
+                                        ].map((item) => (
+                                          <Badge key={item} variant="outline" className="bg-[#2E7D32]/5 text-[#2E7D32] border-[#2E7D32]/20 text-[10px]">
+                                            <CheckCircle className="mr-1 h-3 w-3" />
+                                            {item}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    {/* Confirmation input */}
+                                    <div className="rounded-lg border border-[#D32F2F]/30 bg-[#D32F2F]/5 p-4">
+                                      <Label className="text-sm font-semibold text-[#D32F2F] flex items-center gap-1">
+                                        <AlertTriangle className="h-4 w-4" />
+                                        Type <span className="font-mono bg-[#D32F2F]/10 px-1.5 py-0.5 rounded text-sm">RESET</span> to confirm
+                                      </Label>
+                                      <Input
+                                        value={resetConfirmText}
+                                        onChange={(e) => setResetConfirmText(e.target.value)}
+                                        placeholder='Type "RESET" to confirm'
+                                        className="mt-2 border-[#D32F2F]/50 focus:border-[#D32F2F]"
+                                        autoFocus
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-center py-8">
+                                    <div className="text-center text-[#8D8A87]">
+                                      <Clock className="mx-auto h-8 w-8 mb-2 animate-spin" />
+                                      <p className="text-sm">Analyzing current data...</p>
+                                    </div>
+                                  </div>
+                                )}
+                              </ScrollArea>
+
+                              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E8E0D8]">
+                                <Button
+                                  variant="outline"
+                                  onClick={() => {
+                                    setResetDialogOpen(false);
+                                    setResetConfirmText("");
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  className="bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+                                  onClick={executeReset}
+                                  disabled={resetConfirmText !== "RESET" || resetAll.isPending || !resetInfo?.hasRecordsToReset}
+                                >
+                                  {resetAll.isPending ? (
+                                    <>
+                                      <Clock className="mr-2 h-4 w-4 animate-spin" />
+                                      Resetting...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <RotateCcw className="mr-2 h-4 w-4" />
+                                      Execute Reset
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            </DialogContent>
+                          </Dialog>
                         </>)}
                       {canManage && (
                         <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete this business?")) deleteBiz.mutate({ id: b.id }); }}>
