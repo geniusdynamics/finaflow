@@ -10,6 +10,44 @@ import { toLocalDateKey } from "./lib/date-key";
 import { ensureSystemAccount } from "./lib/accounting-accounts";
 import { validateOperationalAccountClassification } from "./lib/accounting-validation";
 
+async function syncOperationalToCoaBalance(
+  db: any,
+  tx: any,
+  accountId: number
+): Promise<void> {
+  const [account] = await tx.select().from(accounts).where(eq(accounts.id, accountId)).limit(1);
+  if (!account || account.businessId) return;
+
+  const [location] = await tx.select().from(locations).where(eq(locations.id, account.locationId)).limit(1);
+  if (!location?.businessId) return;
+
+  const businessId = location.businessId;
+  const balance = account.currentBalance || "0.00";
+
+  const typeToSystemKey: Record<string, string> = {
+    cash: "asset:cash",
+    mpesa: "asset:cash",
+    bank_account: "asset:bank",
+  };
+
+  const systemKey = typeToSystemKey[account.type];
+  if (!systemKey) return;
+
+  const coaAccount = await tx.query.accounts.findFirst({
+    where: and(
+      eq(accounts.businessId, businessId),
+      eq(accounts.systemKey, systemKey),
+      isNull(accounts.deletedAt)
+    ),
+  });
+
+  if (coaAccount) {
+    await tx.update(accounts)
+      .set({ currentBalance: balance })
+      .where(eq(accounts.id, coaAccount.id));
+  }
+}
+
 export const drawingInputSchema = z.object({
   accountId: z.number(),
   amount: z.string(),
@@ -44,12 +82,11 @@ export const accountsRouter = createRouter({
     const db = getDb();
     const locIds = await getCurrentBusinessLocationIds(ctx);
     if (locIds.length === 0) return [];
-    // Operational accounts: have locationId but NO accountType (pure operational, not COA)
     return db.select().from(accounts).where(
       and(
         sql`${accounts.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`,
         isNull(accounts.deletedAt),
-        isNull(accounts.accountType) // Exclude COA accounts
+        isNull(accounts.accountType)
       )
     );
   }),
@@ -103,7 +140,7 @@ export const accountsRouter = createRouter({
         input.accountSubType,
       );
 
-      await ensureSystemAccount({
+      const systemAccountId = await ensureSystemAccount({
         businessId: location.businessId,
         accountType: classification.accountType,
         accountSubType: classification.accountSubType,
@@ -125,11 +162,13 @@ export const accountsRouter = createRouter({
         openingBalance: ob,
         currentBalance: ob,
         isPaymentMethod: input.isPaymentMethod ?? false,
-        accountType: classification.accountType as any,
-        accountSubType: classification.accountSubType as any,
         isContra: false,
       }).returning();
       const result = (rows as any[])[0];
+
+      if (input.accountType && parseFloat(ob) !== 0) {
+        await db.update(accounts).set({ currentBalance: ob }).where(eq(accounts.id, systemAccountId));
+      }
 
       await logAudit({
         userId,
@@ -140,8 +179,6 @@ export const accountsRouter = createRouter({
         details: {
           locationId: input.locationId,
           type: input.type,
-          accountType: classification.accountType,
-          accountSubType: classification.accountSubType,
           isPaymentMethod: input.isPaymentMethod ?? false,
         },
       });
@@ -165,21 +202,17 @@ export const accountsRouter = createRouter({
       const db = getDb();
       const userId = (ctx as any).user?.id ?? 1;
       const existing = await requireAuthorizedEntity(ctx, accounts, input.id);
-      const { id, ...updates } = input;
+      const { id, accountType, accountSubType, isContra, ...rest } = input;
 
-      const normalizedUpdates: Record<string, unknown> = { ...updates };
-      if (input.accountType !== undefined || input.accountSubType !== undefined) {
-        const classification = validateOperationalAccountClassification(
-          existing.type as any,
-          input.accountType as any,
-          input.accountSubType,
-        );
-        normalizedUpdates.accountType = classification.accountType;
-        normalizedUpdates.accountSubType = classification.accountSubType;
-        normalizedUpdates.isContra = false;
-      }
+      const updates: Record<string, unknown> = { ...rest };
 
-      await db.update(accounts).set(normalizedUpdates).where(eq(accounts.id, id));
+      await db.transaction(async (tx) => {
+        await tx.update(accounts).set(updates).where(eq(accounts.id, id));
+
+        if (accountType !== undefined) {
+          await syncOperationalToCoaBalance(db, tx, id);
+        }
+      });
 
       await logAudit({
         userId,
@@ -187,7 +220,7 @@ export const accountsRouter = createRouter({
         action: "UPDATE",
         resource: "accounts",
         resourceId: id,
-        details: normalizedUpdates,
+        details: updates,
       });
 
       return { success: true };
@@ -217,6 +250,7 @@ export const accountsRouter = createRouter({
           createdBy: userId,
         } as any).returning();
         await tx.update(accounts).set({ currentBalance: input.newBalance }).where(eq(accounts.id, input.id));
+        await syncOperationalToCoaBalance(db, tx, input.id);
       });
 
       await logAudit({
@@ -253,6 +287,7 @@ export const accountsRouter = createRouter({
           createdBy: userId,
         } as any).returning();
         await tx.update(accounts).set({ currentBalance: newBal.toFixed(2) }).where(eq(accounts.id, input.accountId));
+        await syncOperationalToCoaBalance(db, tx, input.accountId);
       });
 
       await logAudit({
@@ -289,6 +324,7 @@ export const accountsRouter = createRouter({
           createdBy: userId,
         } as any).returning();
         await tx.update(accounts).set({ currentBalance: newBal.toFixed(2) }).where(eq(accounts.id, input.accountId));
+        await syncOperationalToCoaBalance(db, tx, input.accountId);
       });
       return { id: input.accountId, newBalance: newBal.toFixed(2), success: true };
     }),
@@ -306,7 +342,6 @@ export const accountsRouter = createRouter({
       if (fromOldBal.lt(totalOut)) throw new Error("Insufficient funds in source account");
       const fromNewBal = fromOldBal.minus(totalOut);
 
-      // Validate all destination accounts belong to the active business before starting tx
       const toAcctMap = new Map();
       for (const to of input.toAccounts) {
         const toAcct = await requireAuthorizedEntity(ctx, accounts, to.accountId);
@@ -328,6 +363,7 @@ export const accountsRouter = createRouter({
           createdBy: userId,
         } as any).returning();
         await tx.update(accounts).set({ currentBalance: fromNewBal.toFixed(2) }).where(eq(accounts.id, input.fromAccountId));
+        await syncOperationalToCoaBalance(db, tx, input.fromAccountId);
 
         for (const to of input.toAccounts) {
           const toAcct = toAcctMap.get(to.accountId);
@@ -346,6 +382,7 @@ export const accountsRouter = createRouter({
             createdBy: userId,
           } as any).returning();
           await tx.update(accounts).set({ currentBalance: toNewBal.toFixed(2) }).where(eq(accounts.id, to.accountId));
+          await syncOperationalToCoaBalance(db, tx, to.accountId);
           results.push({ accountId: to.accountId, amount: to.amount, newBalance: toNewBal.toFixed(2) });
         }
       });
@@ -410,7 +447,7 @@ export const accountsRouter = createRouter({
               sql`, `
             )})`,
             isNull(accounts.deletedAt),
-            isNull(accounts.accountType) // Exclude COA accounts
+            isNull(accounts.accountType)
           )
         )
         .orderBy(asc(accounts.name));
@@ -502,33 +539,31 @@ export const accountsRouter = createRouter({
 
         for (const account of scopedAccounts) {
           const dayBalance = accountEntriesByDate.get(account.id)?.get(dateKey);
-          if (dayBalance !== undefined) {
+          if (dayBalance) {
             currentBalances.set(account.id, dayBalance);
           }
-          const latestBalance = currentBalances.get(account.id) ?? "0.00";
-          row[`account_${account.id}`] = Number(latestBalance);
-          if (account.type === "cash") {
-            cashTotal = cashTotal.plus(d(latestBalance));
-          } else if (account.type === "mpesa") {
-            mpesaTotal = mpesaTotal.plus(d(latestBalance));
-          } else {
-            bankTotal = bankTotal.plus(d(latestBalance));
-          }
+          const bal = d(currentBalances.get(account.id) || "0");
+          const colKey = `account_${account.id}`;
+          if (account.type === "cash") cashTotal = cashTotal.plus(bal);
+          else if (account.type === "bank_account") bankTotal = bankTotal.plus(bal);
+          else if (account.type === "mpesa") mpesaTotal = mpesaTotal.plus(bal);
+          row[colKey] = bal.toNumber();
         }
 
-        row.cashTotal = Number(cashTotal.toFixed(2));
-        row.bankTotal = Number(bankTotal.toFixed(2));
-        row.mpesaTotal = Number(mpesaTotal.toFixed(2));
-        row.totalBalance = Number(cashTotal.plus(bankTotal).plus(mpesaTotal).toFixed(2));
+        row.cashTotal = cashTotal.toNumber();
+        row.bankTotal = bankTotal.toNumber();
+        row.mpesaTotal = mpesaTotal.toNumber();
+        row.totalBalance = cashTotal.plus(bankTotal).plus(mpesaTotal).toNumber();
         series.push(row);
+
         cursor.setDate(cursor.getDate() + 1);
       }
 
       return {
         fromDate: toLocalDateKey(startDate),
         toDate: toLocalDateKey(endDate),
-        accountMeta,
         series,
+        accountMeta,
       };
     }),
 });
