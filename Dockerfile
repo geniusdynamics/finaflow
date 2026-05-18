@@ -13,7 +13,7 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/db/migrations ./db/migrations
 COPY --from=builder /app/package.json ./
-RUN chown -R finaflow:nodejs /app
+COPY --from=builder /app/drizzle.config.ts drizzle.config.ts
 USER finaflow
 
 EXPOSE 3000
