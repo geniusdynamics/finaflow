@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, KeyRound, Users as UsersIcon, ShieldCheck, Save, RotateCcw, Building2, Link2 } from "lucide-react";
+import { Plus, Pencil, Trash2, KeyRound, Users as UsersIcon, ShieldCheck, Save, RotateCcw, Building2 } from "lucide-react";
 import { toast } from "sonner";
 
 const PERMISSION_LABELS: Record<string, string> = {
@@ -112,7 +112,7 @@ export function Users() {
     onError: (err) => toast.error(err.message || "Failed to remove"),
   });
   const { data: allBusinesses } = trpc.businesses.list.useQuery();
-  const { data: userBizList } = trpc.permissions.listUsers.useQuery(); // Reuse for user list
+  trpc.permissions.listUsers.useQuery(); // Keep warm for invalidation
 
   const [selectedBizForUser, setSelectedBizForUser] = useState<number | null>(null);
   const [assignRole, setAssignRole] = useState("employee");

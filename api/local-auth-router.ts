@@ -103,16 +103,17 @@ async function findPrimaryBusinessForAccount(
 function setAuthCookies(ctx: AuthCookieContext, token: string, csrfToken: string): void {
   const host = ctx.req.headers.get("host") || "";
   const isLocal = host.startsWith("localhost:") || host.startsWith("127.0.0.1:");
+  const isSecure = !isLocal;
   ctx.resHeaders.append("Set-Cookie", serialize("finaflow_token", token, {
     httpOnly: true,
-    secure: !isLocal,
+    secure: isSecure,
     sameSite: "strict",
     path: "/",
     maxAge: 30 * 24 * 60 * 60,
   }));
   ctx.resHeaders.append("Set-Cookie", serialize("csrf_token", csrfToken, {
     httpOnly: false,
-    secure: process.env.NODE_ENV === "production",
+    secure: isSecure,
     sameSite: "strict",
     path: "/",
     maxAge: 30 * 24 * 60 * 60,
@@ -129,8 +130,11 @@ export const localAuthRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const accountId = normalizeAccountId(input.accountId);
+      console.log(`[lookupAccount] input.accountId="${input.accountId}" normalized="${accountId}"`);
       const account = await findCustomerAccount(db, accountId);
+      console.log(`[lookupAccount] customerAccount found:`, account ? `id=${account.id}` : null);
       const biz = await findPrimaryBusinessForAccount(db, accountId, account?.id ?? null);
+      console.log(`[lookupAccount] business found:`, biz ? `id=${biz.id}, name="${biz.name}"` : null);
       if (!biz) throw new Error("Account not found");
 
       const usersInBiz = await db.select({
@@ -174,8 +178,11 @@ export const localAuthRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const accountId = normalizeAccountId(input.accountId);
+      console.log(`[login] attempt accountId="${accountId}" username="${input.username}"`);
       const account = await findCustomerAccount(db, accountId);
+      console.log(`[login] customerAccount:`, account ? `id=${account.id}` : null);
       const accountBusiness = await findPrimaryBusinessForAccount(db, accountId, account?.id ?? null);
+      console.log(`[login] business:`, accountBusiness ? `id=${accountBusiness.id}` : null);
       if (!accountBusiness) throw new Error("Invalid account ID or credentials");
 
       const userRows = await db.select().from(users).where(and(
@@ -187,7 +194,30 @@ export const localAuthRouter = createRouter({
         isNull(users.deletedAt),
         eq(users.isActive, true),
       )).limit(1);
-      const user = userRows[0];
+      let user = userRows[0];
+
+      if (!user && accountBusiness) {
+        const fallbackRows = await db.select({
+          id: users.id, name: users.name, username: users.username, role: users.role,
+          email: users.email, phone: users.phone, passwordHash: users.passwordHash,
+          isActive: users.isActive, currentBusinessId: users.currentBusinessId,
+          accountId: users.accountId, accountRefId: users.accountRefId,
+          userType: users.userType, locationId: users.locationId,
+          unionId: users.unionId, avatar: users.avatar,
+          createdAt: users.createdAt, updatedAt: users.updatedAt, lastSignInAt: users.lastSignInAt,
+          deletedAt: users.deletedAt,
+        }).from(users)
+          .innerJoin(userBusinesses, eq(userBusinesses.userId, users.id))
+          .where(and(
+            eq(users.username, input.username),
+            eq(userBusinesses.businessId, accountBusiness.id),
+            eq(userBusinesses.isActive, true),
+            isNull(users.deletedAt),
+            eq(users.isActive, true),
+          )).limit(1);
+        user = fallbackRows[0] ?? null;
+      }
+
       if (!user) throw new Error("Invalid username or password");
       if (!user.isActive) throw new Error("Account is disabled");
 
@@ -295,6 +325,7 @@ export const localAuthRouter = createRouter({
       id: user.id, name: user.name, username: user.username, role: user.role,
       email: user.email, phone: user.phone, locationId: user.locationId,
       isActive: user.isActive,
+      userType: user.userType,
       currentBusinessId: effectiveCurrentBusinessId,
       currentBusiness,
       businessIds: bizIds,

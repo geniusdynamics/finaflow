@@ -1,13 +1,13 @@
 // ABOUTME: Journal Entries management page for double-entry bookkeeping
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
-import { cn, formatKES } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatKES } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, BookOpen, CheckCircle, XCircle, RotateCcw, Pencil, Trash2 } from "lucide-react";
+import { Plus, BookOpen, CheckCircle, XCircle, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getCurrentBusinessId } from "@/hooks/useAuth";
 
@@ -16,11 +16,7 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
   const [isPosted, setIsPosted] = useState<boolean | undefined>(undefined);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
-  const [businessId, setBusinessId] = useState<number | null>(null);
-
-  useEffect(() => {
-    setBusinessId(getCurrentBusinessId());
-  }, []);
+  const [businessId, setBusinessId] = useState<number | null>(() => getCurrentBusinessId());
 
   const journalQuery = trpc.journal.list.useQuery({
     businessId: businessId || 0,
@@ -38,14 +34,6 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
   const postMutation = trpc.journal.post.useMutation({
     onSuccess: () => {
       toast.success("Journal entry posted");
-      utils.journal.list.invalidate();
-    },
-    onError: (e) => toast.error(e.message),
-  });
-
-  const unpostMutation = trpc.journal.unpost.useMutation({
-    onSuccess: () => {
-      toast.success("Journal entry unpublished");
       utils.journal.list.invalidate();
     },
     onError: (e) => toast.error(e.message),

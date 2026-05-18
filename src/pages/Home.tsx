@@ -4,10 +4,10 @@ import { Helmet } from "react-helmet-async";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Landmark, TrendingUp, Users, Smartphone, ShieldCheck, Zap,
+  Landmark, TrendingUp, Users, ShieldCheck, Zap,
   CheckCircle, ArrowRight, Store, FileSpreadsheet, CreditCard, Bell,
-  Menu, X, BarChart3, Wallet, Receipt, PiggyBank, LineChart,
-  DollarSign, ChevronRight, Star, Target, Globe, Lock, Clock,
+  Menu, X, BarChart3, Wallet, Receipt, PiggyBank,
+  ChevronRight, Globe, Lock, Clock,
   RefreshCw, Building2, Percent, HeartHandshake,
 } from "lucide-react";
 

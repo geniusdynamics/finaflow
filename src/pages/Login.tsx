@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Link, useSearchParams, useNavigate } from "react-router";
-import { Landmark, LogIn, Store, Eye, EyeOff, Briefcase, CheckCircle, Gift, Building, Globe, Loader2, Check, X, ArrowRight, ArrowLeft, ChevronLeft, Sparkles, UserPlus, Handshake } from "lucide-react";
+import { Landmark, LogIn, Store, Eye, EyeOff, Briefcase, CheckCircle, Gift, Building, Globe, Loader2, Check, X, ArrowRight, ArrowLeft, ChevronLeft, UserPlus, Handshake } from "lucide-react";
 import { setCsrfFromResponse } from "@/hooks/useAuth";
 
 function detectAccountFromSubdomain(): string | null {
@@ -19,6 +19,7 @@ function detectAccountFromSubdomain(): string | null {
       if (sub.length >= 2 && sub.length <= 100) return sub;
     }
   } catch {
+    return null;
   }
   return null;
 }
@@ -46,7 +47,7 @@ export default function Login() {
   );
   const [showPassword, setShowPassword] = useState(false);
 
-  const [accountId, setAccountId] = useState("");
+  const [accountId, setAccountId] = useState(() => detectAccountFromSubdomain() || "");
   const [foundBusiness, setFoundBusiness] = useState<Record<string, unknown> | null>(null);
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [signupForm, setSignupForm] = useState({
@@ -64,20 +65,28 @@ export default function Login() {
 
   const lookupMutation = trpc.localAuth.lookupAccount.useMutation({
     onSuccess: (data: Record<string, unknown>) => {
+      console.log("[Login] lookupAccount SUCCESS", data);
       setFoundBusiness(data.business as Record<string, unknown> | null);
       setMode("credentials");
     },
-    onError: (err: { message?: string }) => toast.error(err.message || "Account not found"),
+    onError: (err: { message?: string }) => {
+      console.error("[Login] lookupAccount ERROR:", err);
+      toast.error(err.message || "Account not found");
+    },
   });
 
   const loginMutation = trpc.localAuth.login.useMutation({
     onSuccess: (data: Record<string, unknown>) => {
+      console.log("[Login] login SUCCESS", data);
       setCsrfFromResponse((data.csrfToken as string) || null);
       toast.success("Welcome back, " + ((data.user as Record<string, string>)?.name || (data.user as Record<string, string>)?.username) + "!");
       utils.invalidate();
       navigate("/dashboard");
     },
-    onError: (err: { message?: string }) => toast.error(err.message || "Login failed"),
+    onError: (err: { message?: string }) => {
+      console.error("[Login] login ERROR:", err);
+      toast.error(err.message || "Login failed");
+    },
   });
 
   const registerMutation = trpc.localAuth.register.useMutation({
@@ -91,17 +100,10 @@ export default function Login() {
   });
 
   useEffect(() => {
-    const subdomainAcct = detectAccountFromSubdomain();
-    if (subdomainAcct) {
-      setAccountId(subdomainAcct);
-    }
-  }, []);
-
-  useEffect(() => {
     if (accountId && accountId.length >= 2 && mode === "accountLookup") {
       lookupMutation.mutate({ accountId });
     }
-  }, [accountId, mode]);
+  }, [accountId, mode, lookupMutation]);
 
   const checkAvailability = useCallback(async (name: string) => {
     const cleaned = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -131,6 +133,7 @@ export default function Login() {
   const handleLookup = (e: React.FormEvent) => {
     e.preventDefault();
     if (!accountId.trim()) { toast.error("Enter your Account ID"); return; }
+    console.log("[Login] handleLookup calling lookupAccount with:", accountId.trim());
     lookupMutation.mutate({ accountId: accountId.trim() });
   };
 
@@ -140,8 +143,10 @@ export default function Login() {
       toast.error("Please enter username and password");
       return;
     }
+    const loginAccountId = (foundBusiness?.accountId as string) || accountId;
+    console.log("[Login] handleLogin calling login with:", { accountId: loginAccountId, username: loginForm.username });
     loginMutation.mutate({
-      accountId: (foundBusiness?.accountId as string) || accountId,
+      accountId: loginAccountId,
       username: loginForm.username,
       password: loginForm.password,
     });

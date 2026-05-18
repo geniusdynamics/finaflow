@@ -33,7 +33,7 @@ export const dashboardRouter = createRouter({
 
       const unpaidR = await db.select({ total: sql<string>`COALESCE(SUM(${dailySales.unpaidAmount}), 0)` }).from(dailySales).where(and(...salesConditions));
 
-      const accts = await db.select().from(accounts).where(and(sql`${accounts.locationId} IN (${locIdSql})`, isNull(accounts.deletedAt), eq(accounts.isActive, true)));
+      const accts = await db.select().from(accounts).where(and(sql`${accounts.locationId} IN (${locIdSql})`, isNull(accounts.deletedAt), eq(accounts.isActive, true), isNull(accounts.accountType)));
       const mpR = await db.select({
         totalIn: sql<string>`COALESCE(SUM(CASE WHEN ${mpesaTransactions.amount} > 0 THEN ${mpesaTransactions.amount} ELSE 0 END), 0)`,
         totalOut: sql<string>`COALESCE(SUM(CASE WHEN ${mpesaTransactions.amount} < 0 THEN ABS(${mpesaTransactions.amount}) ELSE 0 END), 0)`,
@@ -64,7 +64,7 @@ export const dashboardRouter = createRouter({
     const overdue = await db.select().from(bills).where(and(sql`${bills.dueDate} < ${today}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).limit(10);
     const up7 = await db.select().from(bills).where(and(sql`${bills.dueDate} BETWEEN ${today} AND ${d7}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).orderBy(bills.dueDate).limit(10);
     const up30 = await db.select().from(bills).where(and(sql`${bills.dueDate} BETWEEN ${d7} AND ${d30}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).orderBy(bills.dueDate).limit(10);
-    const lowBal = await db.select().from(accounts).where(and(isNull(accounts.deletedAt), eq(accounts.isActive, true), sql`${accounts.currentBalance} < 5000`, acctLocFilter));
+    const lowBal = await db.select().from(accounts).where(and(isNull(accounts.deletedAt), eq(accounts.isActive, true), isNull(accounts.accountType), sql`${accounts.currentBalance} < 5000`, acctLocFilter));
     const recur = await db.select().from(recurringBillTemplates).where(and(isNull(recurringBillTemplates.deletedAt), eq(recurringBillTemplates.isActive, true), sql`${recurringBillTemplates.nextDueDate} <= ${d30}`, recurLocFilter)).orderBy(recurringBillTemplates.nextDueDate).limit(10);
 
     return { overdueBills: overdue, upcomingBills7: up7, upcomingBills30: up30, lowBalanceAccounts: lowBal, upcomingRecurring: recur, today };
@@ -164,7 +164,7 @@ export const dashboardRouter = createRouter({
     const locIds = await getCurrentBusinessLocationIds(ctx);
     if (locIds.length === 0) return { totalBalance: "0.00", byLocation: {} };
     const locFilter = sql`${accounts.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`;
-    const accts = await db.select().from(accounts).where(and(isNull(accounts.deletedAt), eq(accounts.isActive, true), locFilter));
+    const accts = await db.select().from(accounts).where(and(isNull(accounts.deletedAt), eq(accounts.isActive, true), isNull(accounts.accountType), locFilter));
     const totalBalance = accts.reduce((sum, a) => sum.plus(d(a.currentBalance)), d(0));
     const byLocation = accts.reduce((acc, a) => {
       if (a.locationId === null) {

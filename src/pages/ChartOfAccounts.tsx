@@ -7,21 +7,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, BookOpen, TrendingUp, TrendingDown, ChevronDown, ChevronRight, Pencil, DollarSign } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 import { getCurrentBusinessId } from "@/hooks/useAuth";
 
 export function ChartOfAccounts({ embedded }: { embedded?: boolean }) {
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set(["asset", "liability", "equity", "revenue", "expense"]));
   const [createOpen, setCreateOpen] = useState(false);
-  const [businessId, setBusinessId] = useState<number | null>(null);
-
-  useEffect(() => {
-    setBusinessId(getCurrentBusinessId());
-  }, []);
+  const [businessId, setBusinessId] = useState<number | null>(() => getCurrentBusinessId());
 
   const { data, isLoading, error } = trpc.chartOfAccounts.list.useQuery({ businessId: businessId || 0 }, { enabled: !!businessId });
-  const utils = trpc.useUtils();
 
   const toggleType = (type: string) => {
     const newExpanded = new Set(expandedTypes);
