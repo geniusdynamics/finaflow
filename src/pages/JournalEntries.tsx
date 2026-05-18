@@ -9,14 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, BookOpen, CheckCircle, XCircle, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { getCurrentBusinessId } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 export function JournalEntries({ embedded }: { embedded?: boolean }) {
   const [page, setPage] = useState(1);
   const [isPosted, setIsPosted] = useState<boolean | undefined>(undefined);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null);
-  const [businessId, setBusinessId] = useState<number | null>(() => getCurrentBusinessId());
+  const { user } = useAuth();
+  const businessId = user?.currentBusinessId ?? null;
 
   const journalQuery = trpc.journal.list.useQuery({
     businessId: businessId || 0,

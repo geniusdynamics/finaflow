@@ -9,12 +9,13 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, TrendingUp, TrendingDown, ChevronDown, ChevronRight, DollarSign } from "lucide-react";
 import { toast } from "sonner";
-import { getCurrentBusinessId } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 
 export function ChartOfAccounts({ embedded }: { embedded?: boolean }) {
   const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set(["asset", "liability", "equity", "revenue", "expense"]));
   const [createOpen, setCreateOpen] = useState(false);
-  const [businessId, setBusinessId] = useState<number | null>(() => getCurrentBusinessId());
+  const { user } = useAuth();
+  const businessId = user?.currentBusinessId ?? null;
 
   const { data, isLoading, error } = trpc.chartOfAccounts.list.useQuery({ businessId: businessId || 0 }, { enabled: !!businessId });
 

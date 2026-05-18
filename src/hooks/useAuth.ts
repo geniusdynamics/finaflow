@@ -41,7 +41,3 @@ export function useAuth() {
   return { user: user as AuthUser | null, isLoading, logout };
 }
 
-export function getCurrentBusinessId(): number | null {
-  const stored = localStorage.getItem("finaflow_current_business_id");
-  return stored ? parseInt(stored, 10) : null;
-}
