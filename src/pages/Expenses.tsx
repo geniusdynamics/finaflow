@@ -128,20 +128,46 @@ export function Expenses() {
   const [attachments, setAttachments] = useState<{ imageData: string; mimeType: string; caption: string }[]>([]);
   const todayDate = getLocalDateString();
 
+  const selectedBillId = form.billId ? +form.billId : undefined;
+  const { data: billItems } = trpc.bills.getItems.useQuery(
+    { billId: selectedBillId! },
+    { enabled: !!selectedBillId }
+  );
+
   const photosEnabled = settings?.photosExpenses !== "false";
   const selectedSupplier = suppliers?.find(s => s.id.toString() === form.supplierId);
   const selectedBill = bills?.find(b => b.id.toString() === form.billId);
 
-  // When a bill is selected, auto-fill the supplier from that bill
+  const getCategoryFromBillItems = (items: typeof billItems): number | undefined => {
+    if (!items || items.length === 0) return undefined;
+    const uniqueCategories = [...new Set(items.map(item => item.categoryId).filter(Boolean))];
+    return uniqueCategories.length === 1 ? uniqueCategories[0] : undefined;
+  };
+
   useEffect(() => {
-    if (form.billId && selectedBill && selectedBill.supplierId) {
-      setForm(p => ({
-        ...p,
-        supplierId: String(selectedBill.supplierId),
-        categoryId: selectedBill.categoryId ? String(selectedBill.categoryId) : p.categoryId,
-      }));
+    if (!form.billId || !selectedBill) return;
+
+    let categoryId: string | undefined;
+
+    if (selectedBill.categoryId) {
+      categoryId = String(selectedBill.categoryId);
+    } else if (billItems && billItems.length > 0) {
+      const itemCategory = getCategoryFromBillItems(billItems);
+      if (itemCategory) {
+        categoryId = String(itemCategory);
+      }
     }
-  }, [form.billId, selectedBill]);
+
+    if (!categoryId && selectedSupplier?.autoCategoryId) {
+      categoryId = String(selectedSupplier.autoCategoryId);
+    }
+
+    setForm(p => ({
+      ...p,
+      supplierId: selectedBill.supplierId ? String(selectedBill.supplierId) : p.supplierId,
+      categoryId: categoryId ?? p.categoryId,
+    }));
+  }, [form.billId, selectedBill, billItems, selectedSupplier?.autoCategoryId]);
 
   useEffect(() => {
     if (!form.billId && !form.categoryId && selectedSupplier?.autoCategoryId) {
@@ -172,7 +198,14 @@ export function Expenses() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.locationId) { toast.error("Please select a location"); return; }
-    if (!form.categoryId) { toast.error("Please select a category"); return; }
+    if (!form.categoryId) {
+      if (form.billId) {
+        toast.error("The selected bill has no category. Please edit the bill to add a category, or select a category manually.");
+      } else {
+        toast.error("Please select a category");
+      }
+      return;
+    }
     if (!form.amount || parseFloat(form.amount) <= 0) { toast.error("Please enter a valid amount"); return; }
     if (!form.description.trim()) { toast.error("Please enter a description"); return; }
     if (form.expenseDate > todayDate) { toast.error("Expense date cannot be in the future"); return; }

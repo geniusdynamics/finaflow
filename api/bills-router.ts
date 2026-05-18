@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, billQuery, billCreate, billPay, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
+import { createRouter, billQuery, billCreate, billPay, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity } from "./middleware";
 import { getDb } from "./queries/connection";
 import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, expenseCategories, expenses } from "@db/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
@@ -662,7 +662,7 @@ export const billsRouter = createRouter({
     .input(z.object({ supplierId: z.number() }))
     .query(async ({ input, ctx }) => {
       const db = getDb();
-      await requireAuthorizedBusinessEntity(ctx, suppliers, input.supplierId);
+      await requireAuthorizedEntity(ctx, suppliers, input.supplierId);
       const allBills = await db.select().from(bills).where(and(eq(bills.supplierId, input.supplierId), isNull(bills.deletedAt)));
       const supplier = await db.select().from(suppliers).where(eq(suppliers.id, input.supplierId)).limit(1);
       return { bills: allBills, supplier: supplier[0] };
