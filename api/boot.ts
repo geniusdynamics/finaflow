@@ -15,9 +15,9 @@ import { getDb, closePool } from "./queries/connection";
 import { sql } from "drizzle-orm";
 import { processTrialLifecycle, TRIAL_JOB_INTERVAL_MS } from "./lib/subscriptions";
 import { shouldStartStandaloneServer } from "./lib/server-runtime";
-import { ensureDatabaseReady } from "./lib/db-startup";
+// import { ensureDatabaseReady } from "./lib/db-startup";
 
-await ensureDatabaseReady(env.databaseUrl);
+// await ensureDatabaseReady(env.databaseUrl);
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -28,7 +28,8 @@ function resolveCorsOrigin(origin: string | undefined): string | undefined {
   try {
     const url = new URL(origin);
     if (url.hostname === "localhost" || url.hostname === "127.0.0.1") return origin;
-    if (url.hostname === "finaflow.localhost" || url.hostname.endsWith(".finaflow.localhost")) return origin;
+    if (url.hostname === "finaflow.localhost" || url.hostname.endsWith(".finaflow.localhost"))
+      return origin;
     return undefined;
   } catch {
     return undefined;
@@ -55,7 +56,10 @@ app.get("/health", async (c) => {
 async function trpcRateLimiter(c: any, next: any) {
   if (c.req.method === "POST" && c.req.path.startsWith("/api/trpc")) {
     try {
-      const body = await c.req.raw.clone().json().catch(() => null);
+      const body = await c.req.raw
+        .clone()
+        .json()
+        .catch(() => null);
       if (body && typeof body === "object") {
         const paths = new Set<string>();
         const walk = (obj: any) => {
@@ -96,7 +100,9 @@ app.use("/api/trpc*", async (c) => {
     });
     const clone = response.clone();
     const bodyText = await clone.text().catch(() => "<could not read body>");
-    console.log(`[trpc-server] <-- ${method} ${url} -> ${response.status} body=${bodyText.slice(0, 300)}`);
+    console.log(
+      `[trpc-server] <-- ${method} ${url} -> ${response.status} body=${bodyText.slice(0, 300)}`,
+    );
     return response;
   } catch (err) {
     console.error(`[trpc-server] <-- ${method} ${url} ERROR:`, err);
