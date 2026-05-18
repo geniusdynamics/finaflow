@@ -411,6 +411,20 @@ CREATE TABLE "expense_categories" (
 	"deletedAt" timestamp
 );
 --> statement-breakpoint
+CREATE TABLE "expense_items" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"expenseId" bigint NOT NULL,
+	"itemName" varchar(255) NOT NULL,
+	"quantity" numeric(10, 3) DEFAULT '1.000' NOT NULL,
+	"unitPrice" numeric(15, 2) NOT NULL,
+	"totalPrice" numeric(15, 2) NOT NULL,
+	"categoryId" bigint NOT NULL,
+	"notes" text,
+	"createdAt" timestamp DEFAULT now() NOT NULL,
+	"updatedAt" timestamp DEFAULT now() NOT NULL,
+	"deletedAt" timestamp
+);
+--> statement-breakpoint
 CREATE TABLE "expenses" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"locationId" bigint NOT NULL,
@@ -1012,8 +1026,27 @@ CREATE TABLE "webhooks" (
 	"deletedAt" timestamp
 );
 --> statement-breakpoint
+ALTER TABLE "accounts" ADD CONSTRAINT "accounts_parentAccountId_accounts_id_fk" FOREIGN KEY ("parentAccountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "alerts_config" ADD CONSTRAINT "alerts_config_accountId_accounts_id_fk" FOREIGN KEY ("accountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "alerts_log" ADD CONSTRAINT "alerts_log_accountId_accounts_id_fk" FOREIGN KEY ("accountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "bill_payments" ADD CONSTRAINT "bill_payments_accountId_accounts_id_fk" FOREIGN KEY ("accountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "businesses" ADD CONSTRAINT "businesses_accountRefId_customer_accounts_id_fk" FOREIGN KEY ("accountRefId") REFERENCES "public"."customer_accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "daily_mpesa_ledger" ADD CONSTRAINT "daily_mpesa_ledger_accountId_accounts_id_fk" FOREIGN KEY ("accountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "expense_categories" ADD CONSTRAINT "expense_categories_defaultAccountId_accounts_id_fk" FOREIGN KEY ("defaultAccountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "expenses" ADD CONSTRAINT "expenses_accountId_accounts_id_fk" FOREIGN KEY ("accountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "items" ADD CONSTRAINT "items_incomeAccountId_accounts_id_fk" FOREIGN KEY ("incomeAccountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "items" ADD CONSTRAINT "items_expenseAccountId_accounts_id_fk" FOREIGN KEY ("expenseAccountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "items" ADD CONSTRAINT "items_assetAccountId_accounts_id_fk" FOREIGN KEY ("assetAccountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "journal_lines" ADD CONSTRAINT "journal_lines_accountId_accounts_id_fk" FOREIGN KEY ("accountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ledger_entries" ADD CONSTRAINT "ledger_entries_accountId_accounts_id_fk" FOREIGN KEY ("accountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "location_payment_methods" ADD CONSTRAINT "location_payment_methods_linkedAccountId_accounts_id_fk" FOREIGN KEY ("linkedAccountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "locations" ADD CONSTRAINT "locations_defaultMpesaAccountId_accounts_id_fk" FOREIGN KEY ("defaultMpesaAccountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "locations" ADD CONSTRAINT "locations_defaultCashAccountId_accounts_id_fk" FOREIGN KEY ("defaultCashAccountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mpesa_transactions" ADD CONSTRAINT "mpesa_transactions_sourceAccountId_accounts_id_fk" FOREIGN KEY ("sourceAccountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mpesa_transactions" ADD CONSTRAINT "mpesa_transactions_destinationAccountId_accounts_id_fk" FOREIGN KEY ("destinationAccountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payment_methods" ADD CONSTRAINT "payment_methods_accountRefId_customer_accounts_id_fk" FOREIGN KEY ("accountRefId") REFERENCES "public"."customer_accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "recurring_bill_templates" ADD CONSTRAINT "recurring_bill_templates_liabilityAccountId_accounts_id_fk" FOREIGN KEY ("liabilityAccountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "revenue_categories" ADD CONSTRAINT "revenue_categories_incomeAccountId_accounts_id_fk" FOREIGN KEY ("incomeAccountId") REFERENCES "public"."accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "users" ADD CONSTRAINT "users_accountRefId_customer_accounts_id_fk" FOREIGN KEY ("accountRefId") REFERENCES "public"."customer_accounts"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "idx_accounts_type" ON "accounts" USING btree ("accountType");--> statement-breakpoint
 CREATE INDEX "idx_accounts_business" ON "accounts" USING btree ("businessId");--> statement-breakpoint
@@ -1064,106 +1097,3 @@ CREATE INDEX "idx_users_deletedAt" ON "users" USING btree ("deletedAt");--> stat
 CREATE INDEX "idx_users_isActive" ON "users" USING btree ("isActive");--> statement-breakpoint
 CREATE INDEX "idx_users_currentBusinessId" ON "users" USING btree ("currentBusinessId");--> statement-breakpoint
 CREATE UNIQUE INDEX "idx_users_username_accountId" ON "users" USING btree ("username","accountId");
-
--- ============================================================
--- DOWN: Rollback the entire migration
--- Drops all tables and enums created by this migration
--- Run this to completely revert the database to a clean state
--- ============================================================
-
--- Step 1: Drop foreign key constraints
-ALTER TABLE IF EXISTS "users" DROP CONSTRAINT IF EXISTS "users_accountRefId_customer_accounts_id_fk";
-ALTER TABLE IF EXISTS "payment_methods" DROP CONSTRAINT IF EXISTS "payment_methods_accountRefId_customer_accounts_id_fk";
-ALTER TABLE IF EXISTS "businesses" DROP CONSTRAINT IF EXISTS "businesses_accountRefId_customer_accounts_id_fk";
-
--- Step 2: Drop all tables with CASCADE
-DROP TABLE IF EXISTS "accounts" CASCADE;
-DROP TABLE IF EXISTS "alerts_config" CASCADE;
-DROP TABLE IF EXISTS "alerts_log" CASCADE;
-DROP TABLE IF EXISTS "allocation_invites" CASCADE;
-DROP TABLE IF EXISTS "api_keys" CASCADE;
-DROP TABLE IF EXISTS "app_settings" CASCADE;
-DROP TABLE IF EXISTS "attachments" CASCADE;
-DROP TABLE IF EXISTS "audit_log" CASCADE;
-DROP TABLE IF EXISTS "bill_items" CASCADE;
-DROP TABLE IF EXISTS "bill_payments" CASCADE;
-DROP TABLE IF EXISTS "bills" CASCADE;
-DROP TABLE IF EXISTS "budgets" CASCADE;
-DROP TABLE IF EXISTS "business_documents" CASCADE;
-DROP TABLE IF EXISTS "business_inquiries" CASCADE;
-DROP TABLE IF EXISTS "business_logos" CASCADE;
-DROP TABLE IF EXISTS "businesses" CASCADE;
-DROP TABLE IF EXISTS "cogs_targets" CASCADE;
-DROP TABLE IF EXISTS "customer_accounts" CASCADE;
-DROP TABLE IF EXISTS "daily_mpesa_ledger" CASCADE;
-DROP TABLE IF EXISTS "daily_sale_payments" CASCADE;
-DROP TABLE IF EXISTS "daily_sales" CASCADE;
-DROP TABLE IF EXISTS "employees" CASCADE;
-DROP TABLE IF EXISTS "expense_categories" CASCADE;
-DROP TABLE IF EXISTS "expenses" CASCADE;
-DROP TABLE IF EXISTS "external_sync_config" CASCADE;
-DROP TABLE IF EXISTS "feedback_questionnaires" CASCADE;
-DROP TABLE IF EXISTS "feedback_responses" CASCADE;
-DROP TABLE IF EXISTS "financial_reports" CASCADE;
-DROP TABLE IF EXISTS "fixed_asset_depreciation" CASCADE;
-DROP TABLE IF EXISTS "items" CASCADE;
-DROP TABLE IF EXISTS "journal_entries" CASCADE;
-DROP TABLE IF EXISTS "journal_lines" CASCADE;
-DROP TABLE IF EXISTS "ledger_entries" CASCADE;
-DROP TABLE IF EXISTS "location_payment_methods" CASCADE;
-DROP TABLE IF EXISTS "locations" CASCADE;
-DROP TABLE IF EXISTS "master_items" CASCADE;
-DROP TABLE IF EXISTS "mpesa_reconciliation" CASCADE;
-DROP TABLE IF EXISTS "mpesa_transactions" CASCADE;
-DROP TABLE IF EXISTS "notifications" CASCADE;
-DROP TABLE IF EXISTS "partner_allocations" CASCADE;
-DROP TABLE IF EXISTS "partner_commissions" CASCADE;
-DROP TABLE IF EXISTS "payment_methods" CASCADE;
-DROP TABLE IF EXISTS "payroll_advances" CASCADE;
-DROP TABLE IF EXISTS "payroll_entries" CASCADE;
-DROP TABLE IF EXISTS "payroll_periods" CASCADE;
-DROP TABLE IF EXISTS "payroll_settings" CASCADE;
-DROP TABLE IF EXISTS "price_alert_rules" CASCADE;
-DROP TABLE IF EXISTS "purchase_order_items" CASCADE;
-DROP TABLE IF EXISTS "purchase_orders" CASCADE;
-DROP TABLE IF EXISTS "push_subscriptions" CASCADE;
-DROP TABLE IF EXISTS "quick_actions_log" CASCADE;
-DROP TABLE IF EXISTS "recurring_bill_templates" CASCADE;
-DROP TABLE IF EXISTS "refresh_tokens" CASCADE;
-DROP TABLE IF EXISTS "revenue_categories" CASCADE;
-DROP TABLE IF EXISTS "role_permissions" CASCADE;
-DROP TABLE IF EXISTS "supplier_price_history" CASCADE;
-DROP TABLE IF EXISTS "suppliers" CASCADE;
-DROP TABLE IF EXISTS "user_businesses" CASCADE;
-DROP TABLE IF EXISTS "users" CASCADE;
-DROP TABLE IF EXISTS "webhook_deliveries" CASCADE;
-DROP TABLE IF EXISTS "webhooks" CASCADE;
-
--- Step 3: Drop all custom enum types
-DROP TYPE IF EXISTS "public"."accountSubType";
-DROP TYPE IF EXISTS "public"."accountType";
-DROP TYPE IF EXISTS "public"."accountingClass";
-DROP TYPE IF EXISTS "public"."action";
-DROP TYPE IF EXISTS "public"."advanceStatus";
-DROP TYPE IF EXISTS "public"."allocation_invite_status";
-DROP TYPE IF EXISTS "public"."allocation_rights";
-DROP TYPE IF EXISTS "public"."billStatus";
-DROP TYPE IF EXISTS "public"."depreciationMethod";
-DROP TYPE IF EXISTS "public"."entryType";
-DROP TYPE IF EXISTS "public"."frequency";
-DROP TYPE IF EXISTS "public"."itemType";
-DROP TYPE IF EXISTS "public"."leadStatus";
-DROP TYPE IF EXISTS "public"."orderStatus";
-DROP TYPE IF EXISTS "public"."partner_allocation_status";
-DROP TYPE IF EXISTS "public"."paymentMethod";
-DROP TYPE IF EXISTS "public"."paymentMethod2";
-DROP TYPE IF EXISTS "public"."payrollStatus";
-DROP TYPE IF EXISTS "public"."revenueCategoryType";
-DROP TYPE IF EXISTS "public"."role";
-DROP TYPE IF EXISTS "public"."salaryType";
-DROP TYPE IF EXISTS "public"."severity";
-DROP TYPE IF EXISTS "public"."status";
-DROP TYPE IF EXISTS "public"."transactionType";
-DROP TYPE IF EXISTS "public"."txnType";
-DROP TYPE IF EXISTS "public"."type";
-DROP TYPE IF EXISTS "public"."user_type";
