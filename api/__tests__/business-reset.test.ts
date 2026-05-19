@@ -105,16 +105,6 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     nextExpenseNumber: 27,
   } as any).returning());
 
-  // Create expense category
-  const category = await firstRow<typeof expenseCategories.$inferSelect>(db.insert(expenseCategories).values({
-    businessId: business.id,
-    locationId: location.id,
-    name: `Test Category ${seed}`,
-    color: "#C73E1D",
-    defaultAccountId: 0,
-    isActive: true,
-  } as any).returning());
-
   // Create operational (user) account
   const opAccount = await firstRow<typeof accounts.$inferSelect>(db.insert(accounts).values({
     businessId: business.id,
@@ -141,10 +131,15 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     isActive: true,
   } as any).returning());
 
-  // Fix category defaultAccountId
-  await db.update(expenseCategories)
-    .set({ defaultAccountId: sysAccount.id })
-    .where(eq(expenseCategories.id, category.id));
+  // Create expense category (accounts must exist first due to FK constraint)
+  const category = await firstRow<typeof expenseCategories.$inferSelect>(db.insert(expenseCategories).values({
+    businessId: business.id,
+    locationId: location.id,
+    name: `Test Category ${seed}`,
+    color: "#C73E1D",
+    defaultAccountId: sysAccount.id,
+    isActive: true,
+  } as any).returning());
 
   // Create supplier
   const supplier = await firstRow<typeof suppliers.$inferSelect>(db.insert(suppliers).values({
@@ -255,10 +250,10 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     totalPrice: "1000.00",
   } as any);
 
-  // Create M-PESA transaction
+  // Create M-PESA transaction (txnId limited to varchar(20))
   await db.insert(mpesaTransactions).values({
     locationId: location.id,
-    txnId: `MPESA-${seed}`,
+    txnId: `MPESA-${seed}`.slice(0, 20),
     txnDate: "2026-05-16",
     txnType: "topup",
     amount: "500.00",
@@ -414,8 +409,9 @@ async function cleanupResetContext(accountId: string) {
   await db.delete(journalEntries).where(eq(journalEntries.businessId, business.id));
   await db.delete(expenses).where(eq(expenses.businessId, business.id));
   await db.delete(bills).where(eq(bills.businessId, business.id));
-  await db.delete(accounts).where(eq(accounts.businessId, business.id));
+  // Delete expense_categories FIRST (FK references accounts.id via defaultAccountId)
   await db.delete(expenseCategories).where(eq(expenseCategories.businessId, business.id));
+  await db.delete(accounts).where(eq(accounts.businessId, business.id));
   await db.delete(suppliers).where(eq(suppliers.businessId, business.id));
   await db.delete(employees).where(sql`${employees.id} > 0`);
   await db.delete(locations).where(eq(locations.businessId, business.id));
@@ -455,7 +451,7 @@ describe("resetBusinessTransactions", () => {
 
     expect(result.success).toBe(true);
     expect(result.preserved).toContain("audit_log");
-    expect(result.preserved).toContain("accounts (system)");
+    expect(result.preserved).toContain("accounts (all)");
     expect(result.resetAt).toBeTruthy();
 
     // Verify system account preserved and balance reset
@@ -641,11 +637,11 @@ describe("resetBusinessTransactions", () => {
 
     expect(snapshot.businessId).toBe(ctx.business.id);
     expect(snapshot.timestamp).toBeTruthy();
-    expect(snapshot.tableCounts.dailySales).toBeGreaterThan(0);
-    expect(snapshot.tableCounts.expenses).toBeGreaterThan(0);
-    expect(snapshot.tableCounts.bills).toBeGreaterThan(0);
-    expect(snapshot.tableCounts.mpesaTransactions).toBeGreaterThan(0);
-    expect(snapshot.tableCounts.journalEntries).toBeGreaterThan(0);
+    expect(Number(snapshot.tableCounts.dailySales)).toBeGreaterThan(0);
+    expect(Number(snapshot.tableCounts.expenses)).toBeGreaterThan(0);
+    expect(Number(snapshot.tableCounts.bills)).toBeGreaterThan(0);
+    expect(Number(snapshot.tableCounts.mpesaTransactions)).toBeGreaterThan(0);
+    expect(Number(snapshot.tableCounts.journalEntries)).toBeGreaterThan(0);
   });
 
   // ── Test 5: Return results structure ─────────────────────────────────────

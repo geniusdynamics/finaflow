@@ -101,6 +101,21 @@ async function ensureTestDatabase(): Promise<void> {
         // continue with the next statement for idempotent setup.
       }
     }
+
+    const migration2Path = path.resolve(
+      import.meta.dirname,
+      "../../db/migrations/0002_soft_flamingo.sql",
+    );
+    let migration2Sql = fs.readFileSync(migration2Path, "utf8").replaceAll("--> statement-breakpoint", "");
+    const migration2Statements = migration2Sql.split(";").filter((s) => s.trim());
+    for (const stmt of migration2Statements) {
+      try {
+        await testPool.query(stmt);
+      } catch {
+        // Individual DDL statements may already exist;
+        // continue with the next statement for idempotent setup.
+      }
+    }
   } finally {
     await testPool.end();
   }
