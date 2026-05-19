@@ -98,7 +98,7 @@ export function Calendar() {
         </div>
 
         {/* Alert Cards */}
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Card className="border-[#D32F2F]/30 bg-[#D32F2F]/5">
             <CardContent className="flex items-center gap-3 p-4">
               <AlertTriangle className="h-8 w-8 text-[#D32F2F]" />

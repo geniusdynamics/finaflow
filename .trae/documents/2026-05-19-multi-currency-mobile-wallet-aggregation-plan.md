@@ -3,35 +3,48 @@
 ## Executive Summary
 
 This plan covers two interconnected initiatives:
+
 1. **Multi-Currency Support** — System-wide currency architecture with ISO 4217 compliance, real-time exchange rates, and M-Pesa KES-lock
 2. **Mobile Wallet Aggregation** — Refactor the monolithic M-Pesa integration into a generalized provider framework supporting M-Pesa, Airtel Money, Sasapay, and future providers
 
 Both initiatives share foundational changes (monetary schema, payment provider abstraction) and are planned sequentially across three phases.
 
----
+***
 
 ## Current Architecture Assessment
 
 ### Monetary Value Handling
-- All `numeric` columns use fixed `(15, 2)` — KES-centric with 2 decimal places
-- Only `accounts.currency` column tracks currency (default `'KES'`, unused for conversion)
-- Zero exchange rate infrastructure
-- Frontend has hardcoded `formatKES()` — no currency-aware formatting
-- Backend uses `decimal.js` at 15-digit precision, `ROUND_HALF_UP`
+
+* All `numeric` columns use fixed `(15, 2)` — KES-centric with 2 decimal places
+
+* Only `accounts.currency` column tracks currency (default `'KES'`, unused for conversion)
+
+* Zero exchange rate infrastructure
+
+* Frontend has hardcoded `formatKES()` — no currency-aware formatting
+
+* Backend uses `decimal.js` at 15-digit precision, `ROUND_HALF_UP`
 
 ### M-Pesa Integration
-- **SMS-based** (not Daraja API) — parser handles 7 SMS patterns
-- Tightly coupled: `mpesaTransactions` table, `mpesa-parser.ts` (duplicated server/client), `mpesa-router.ts`
-- Hardcoded enums: `typeEnum = ["cash", "mpesa", "bank_account"]`, `paymentMethodEnum = ["cash", "mpesa", "bank_transfer"]`
-- No Daraja webhook integration; general webhook system exists in `integrations-router.ts` (unwired)
-- SMS parser duplicated across `api/mpesa-parser.ts` and `src/lib/mpesa-parser.ts`
-- M-PESA is referenced in 25+ files across the codebase
 
----
+* **SMS-based** (not Daraja API) — parser handles 7 SMS patterns
+
+* Tightly coupled: `mpesaTransactions` table, `mpesa-parser.ts` (duplicated server/client), `mpesa-router.ts`
+
+* Hardcoded enums: `typeEnum = ["cash", "mpesa", "bank_account"]`, `paymentMethodEnum = ["cash", "mpesa", "bank_transfer"]`
+
+* No Daraja webhook integration; general webhook system exists in `integrations-router.ts` (unwired)
+
+* SMS parser duplicated across `api/mpesa-parser.ts` and `src/lib/mpesa-parser.ts`
+
+* M-PESA is referenced in 25+ files across the codebase
+
+***
 
 ## Phase 1: Foundation (Core Data Models & Abstraction Layer)
 
 ### Goal
+
 Establish the shared schema, abstract interfaces, and utility infrastructure that both initiatives depend on, with 90%+ unit test coverage.
 
 ### 1.1 Multi-Currency: Database Schema Changes
@@ -39,6 +52,7 @@ Establish the shared schema, abstract interfaces, and utility infrastructure tha
 #### 1.1.1 New Tables
 
 **`supported_currencies`**
+
 ```typescript
 // db/schema.ts
 export const supportedCurrencies = pgTable("supported_currencies", {
@@ -53,6 +67,7 @@ export const supportedCurrencies = pgTable("supported_currencies", {
 ```
 
 **`exchange_rates`**
+
 ```typescript
 export const exchangeRates = pgTable("exchange_rates", {
   id: serial("id").primaryKey(),
@@ -68,6 +83,7 @@ export const exchangeRates = pgTable("exchange_rates", {
 ```
 
 **`business_currencies`** (per-business currency configuration)
+
 ```typescript
 export const businessCurrencies = pgTable("business_currencies", {
   id: serial("id").primaryKey(),
@@ -83,42 +99,44 @@ export const businessCurrencies = pgTable("business_currencies", {
 
 Add `currency` column to all monetary tables. For KES-only existing data, default to `'KES'`:
 
-| Table | Columns to Add | New Columns |
-|---|---|---|
-| `accounts` | *(already has `currency`)* | — |
-| `expenses` | `currency` | `varchar(3) default 'KES'` |
-| `expense_items` | `currency` | `varchar(3) default 'KES'` |
-| `bills` | `currency` | `varchar(3) default 'KES'` |
-| `bill_items` | `currency` | `varchar(3) default 'KES'` |
-| `bill_payments` | `currency` | `varchar(3) default 'KES'` |
-| `daily_sales` | `currency` | `varchar(3) default 'KES'` |
-| `daily_sale_payments` | `currency` | `varchar(3) default 'KES'` |
-| `journal_lines` | `currency` | `varchar(3) default 'KES'` |
-| `ledger_entries` | `currency` | `varchar(3) default 'KES'` |
-| `payroll_entries` | `currency` | `varchar(3) default 'KES'` |
-| `payroll_advances` | `currency` | `varchar(3) default 'KES'` |
-| `suppliers` | `currency` | `varchar(3) default 'KES'` |
-| `budgets` | `currency` | `varchar(3) default 'KES'` |
-| `purchase_orders` | `currency` | `varchar(3) default 'KES'` |
-| `purchase_order_items` | `currency` | `varchar(3) default 'KES'` |
-| `items` | `currency` | `varchar(3) default 'KES'` |
-| `fixed_asset_depreciation` | `currency` | `varchar(3) default 'KES'` |
-| `partner_commissions` | `currency` | `varchar(3) default 'KES'` |
+| Table                      | Columns to Add               | New Columns                |
+| -------------------------- | ---------------------------- | -------------------------- |
+| `accounts`                 | *(already has* *`currency`)* | —                          |
+| `expenses`                 | `currency`                   | `varchar(3) default 'KES'` |
+| `expense_items`            | `currency`                   | `varchar(3) default 'KES'` |
+| `bills`                    | `currency`                   | `varchar(3) default 'KES'` |
+| `bill_items`               | `currency`                   | `varchar(3) default 'KES'` |
+| `bill_payments`            | `currency`                   | `varchar(3) default 'KES'` |
+| `daily_sales`              | `currency`                   | `varchar(3) default 'KES'` |
+| `daily_sale_payments`      | `currency`                   | `varchar(3) default 'KES'` |
+| `journal_lines`            | `currency`                   | `varchar(3) default 'KES'` |
+| `ledger_entries`           | `currency`                   | `varchar(3) default 'KES'` |
+| `payroll_entries`          | `currency`                   | `varchar(3) default 'KES'` |
+| `payroll_advances`         | `currency`                   | `varchar(3) default 'KES'` |
+| `suppliers`                | `currency`                   | `varchar(3) default 'KES'` |
+| `budgets`                  | `currency`                   | `varchar(3) default 'KES'` |
+| `purchase_orders`          | `currency`                   | `varchar(3) default 'KES'` |
+| `purchase_order_items`     | `currency`                   | `varchar(3) default 'KES'` |
+| `items`                    | `currency`                   | `varchar(3) default 'KES'` |
+| `fixed_asset_depreciation` | `currency`                   | `varchar(3) default 'KES'` |
+| `partner_commissions`      | `currency`                   | `varchar(3) default 'KES'` |
 
 Add `baseCurrency` and `baseAmount` columns to core reporting tables (for cross-currency aggregation):
 
-| Table | New Columns |
-|---|---|
-| `daily_sales` | `baseCurrency varchar(3), baseAmount numeric(15,2)` |
+| Table           | New Columns                                         |
+| --------------- | --------------------------------------------------- |
+| `daily_sales`   | `baseCurrency varchar(3), baseAmount numeric(15,2)` |
 | `journal_lines` | `baseCurrency varchar(3), baseAmount numeric(15,2)` |
-| `expenses` | `baseCurrency varchar(3), baseAmount numeric(15,2)` |
-| `bills` | `baseCurrency varchar(3), baseAmount numeric(15,2)` |
+| `expenses`      | `baseCurrency varchar(3), baseAmount numeric(15,2)` |
+| `bills`         | `baseCurrency varchar(3), baseAmount numeric(15,2)` |
 
 #### 1.1.3 Frontend Types Update
 
-- Update `src/lib/utils.ts`: Replace `formatKES()` with `formatCurrency(amount, currency, options?)` — currency-aware formatter using `Intl.NumberFormat` with the currency code
-- Add `SUPPORTED_CURRENCIES` constant in `src/const.ts` (derived from API on mount, with static fallback)
-- Add currency selector UI component (`CurrencySelect.tsx`)
+* Update `src/lib/utils.ts`: Replace `formatKES()` with `formatCurrency(amount, currency, options?)` — currency-aware formatter using `Intl.NumberFormat` with the currency code
+
+* Add `SUPPORTED_CURRENCIES` constant in `src/const.ts` (derived from API on mount, with static fallback)
+
+* Add currency selector UI component (`CurrencySelect.tsx`)
 
 ### 1.2 Multi-Currency: Core Services
 
@@ -160,22 +178,33 @@ class CurrencyConverter {
 ```
 
 **Key behaviors:**
-- In-memory cache with configurable TTL (default 300s)
-- Cache-busting on admin rate update
-- Stale-data safeguard: rates > 24h old trigger warning log
-- Fallback chain: cache → DB → external provider
-- For KES→KES, return 1.0 instantly (no DB hit)
-- All conversions return `Decimal` (not `number`) per codebase convention
+
+* In-memory cache with configurable TTL (default 300s)
+
+* Cache-busting on admin rate update
+
+* Stale-data safeguard: rates > 24h old trigger warning log
+
+* Fallback chain: cache → DB → external provider
+
+* For KES→KES, return 1.0 instantly (no DB hit)
+
+* All conversions return `Decimal` (not `number`) per codebase convention
 
 #### 1.2.2 Exchange Rate Sync Service
 
 **File:** `api/lib/exchange-rate-sync.ts`
 
-- Background job (runs hourly via `boot.ts` timer or cron endpoint)
-- Fetches from configured provider (ExchangeRate-API, Open Exchange Rates)
-- Upserts into `exchange_rates` table with `source`, `validFrom`/`validUntil`
-- Logs sync failures to audit log
-- Configurable via environment variables:
+* Background job (runs hourly via `boot.ts` timer or cron endpoint)
+
+* Fetches from configured provider (ExchangeRate-API, Open Exchange Rates)
+
+* Upserts into `exchange_rates` table with `source`, `validFrom`/`validUntil`
+
+* Logs sync failures to audit log
+
+* Configurable via environment variables:
+
   ```
   EXCHANGE_RATE_PROVIDER=exchange_rate_api|open_exchange_rates|manual
   EXCHANGE_RATE_API_KEY=your_key
@@ -188,6 +217,7 @@ class CurrencyConverter {
 #### 1.3.1 New Tables
 
 **`mobile_wallet_providers`** (registry)
+
 ```typescript
 export const mobileWalletProviders = pgTable("mobile_wallet_providers", {
   code: varchar("code", { length: 20 }).primaryKey(),     // 'mpesa', 'airtel_money', 'sasapay'
@@ -204,6 +234,7 @@ export const mobileWalletProviders = pgTable("mobile_wallet_providers", {
 ```
 
 **`mobile_wallet_transactions`** (replaces `mpesaTransactions`)
+
 ```typescript
 export const mobileWalletTransactions = pgTable("mobile_wallet_transactions", {
   id: serial("id").primaryKey(),
@@ -244,6 +275,7 @@ export const mobileWalletTransactions = pgTable("mobile_wallet_transactions", {
 ```
 
 **`mobile_wallet_daily_ledger`** (replaces `dailyMpesaLedger`)
+
 ```typescript
 export const mobileWalletDailyLedger = pgTable("mobile_wallet_daily_ledger", {
   id: serial("id").primaryKey(),
@@ -268,6 +300,7 @@ export const mobileWalletDailyLedger = pgTable("mobile_wallet_daily_ledger", {
 ```
 
 **`mobile_wallet_reconciliation`** (replaces `mpesaReconciliation`)
+
 ```typescript
 export const mobileWalletReconciliation = pgTable("mobile_wallet_reconciliation", {
   id: serial("id").primaryKey(),
@@ -284,6 +317,7 @@ export const mobileWalletReconciliation = pgTable("mobile_wallet_reconciliation"
 ```
 
 **`provider_configs`** (per-location provider configuration)
+
 ```typescript
 export const providerConfigs = pgTable("provider_configs", {
   id: serial("id").primaryKey(),
@@ -301,18 +335,21 @@ export const providerConfigs = pgTable("provider_configs", {
 #### 1.3.2 Enum Changes
 
 **`typeEnum`**: Add new account types for each mobile wallet provider
+
 ```typescript
 // Before: ["cash", "mpesa", "bank_account"]
 // After:  ["cash", "mpesa", "airtel_money", "sasapay", "bank_account"]
 ```
 
 **`paymentMethodEnum`**: Add new payment methods
+
 ```typescript
 // Before: ["cash", "mpesa", "bank_transfer"]
 // After:  ["cash", "mpesa", "airtel_money", "sasapay", "bank_transfer"]
 ```
 
 **`paymentMethod2Enum`**:
+
 ```typescript
 // Before: ["cash", "mpesa", "bank_transfer", "card"]
 // After:  ["cash", "mpesa", "airtel_money", "sasapay", "bank_transfer", "card"]
@@ -321,6 +358,7 @@ export const providerConfigs = pgTable("provider_configs", {
 #### 1.3.3 Data Migration Strategy
 
 Create migration script `scripts/migrate-mpesa-to-provider-framework.ts`:
+
 1. Seed `mobile_wallet_providers` with `{ code: 'mpesa', name: 'M-PESA', brandColor: '#C73E1D', ... }`
 2. Seed `supported_currencies` with 10-15 common African currencies
 3. Migrate `mpesaTransactions` → `mobile_wallet_transactions` (provider = 'mpesa', currency = 'KES')
@@ -514,6 +552,7 @@ export class MpesaProvider extends BaseWalletProvider {
 ```
 
 **Key behavior — KES-only currency lock:**
+
 ```typescript
 // In the provider's request validation
 validateCurrencyConstraint(provider: string, currency: string): boolean {
@@ -525,10 +564,14 @@ validateCurrencyConstraint(provider: string, currency: string): boolean {
 ```
 
 The M-PESA SMS parser logic is migrated from `api/mpesa-parser.ts` into this class, with:
-- All 7 SMS pattern recognizers preserved
-- Currency field defaults to 'KES'
-- `ParsedWalletSms` output type replaces old `ParsedMpesaSms`
-- Server-side and client-side parsers now unified via shared import
+
+* All 7 SMS pattern recognizers preserved
+
+* Currency field defaults to 'KES'
+
+* `ParsedWalletSms` output type replaces old `ParsedMpesaSms`
+
+* Server-side and client-side parsers now unified via shared import
 
 #### 1.4.4 Provider Templates (Boilerplate)
 
@@ -664,6 +707,7 @@ export async function handleWalletWebhook(payload: WalletWebhookPayload): Promis
 ```
 
 Mounted in `integrations-router.ts` as a new endpoint:
+
 ```
 POST /api/integrations/webhooks/wallet/:provider
 ```
@@ -756,22 +800,23 @@ export type WalletProviderCode = typeof WALLET_PROVIDERS[number]['code'];
 
 ### 1.9 Unit Tests (Phase 1)
 
-| Module | Test File | Coverage Target |
-|---|---|---|
-| `currency-converter.ts` | `api/lib/__tests__/currency-converter.test.ts` | 95% |
-| `exchange-rate-sync.ts` | `api/lib/__tests__/exchange-rate-sync.test.ts` | 90% |
-| `provider-interface.ts` | `api/lib/__tests__/provider-interface.test.ts` | 95% |
-| `provider-registry.ts` | `api/lib/__tests__/provider-registry.test.ts` | 95% |
-| `transaction-logger.ts` | `api/lib/__tests__/transaction-logger.test.ts` | 90% |
-| `webhook-handler.ts` | `api/lib/__tests__/webhook-handler.test.ts` | 90% |
-| `mpesa-provider.ts` | `api/lib/__tests__/mpesa-provider.test.ts` | 95% |
-| `currency.ts` (frontend) | `src/lib/__tests__/currency.test.ts` | 95% |
+| Module                   | Test File                                      | Coverage Target |
+| ------------------------ | ---------------------------------------------- | --------------- |
+| `currency-converter.ts`  | `api/lib/__tests__/currency-converter.test.ts` | 95%             |
+| `exchange-rate-sync.ts`  | `api/lib/__tests__/exchange-rate-sync.test.ts` | 90%             |
+| `provider-interface.ts`  | `api/lib/__tests__/provider-interface.test.ts` | 95%             |
+| `provider-registry.ts`   | `api/lib/__tests__/provider-registry.test.ts`  | 95%             |
+| `transaction-logger.ts`  | `api/lib/__tests__/transaction-logger.test.ts` | 90%             |
+| `webhook-handler.ts`     | `api/lib/__tests__/webhook-handler.test.ts`    | 90%             |
+| `mpesa-provider.ts`      | `api/lib/__tests__/mpesa-provider.test.ts`     | 95%             |
+| `currency.ts` (frontend) | `src/lib/__tests__/currency.test.ts`           | 95%             |
 
----
+***
 
 ## Phase 2: Migration (M-Pesa Refactoring & M-Pesa KES Lock)
 
 ### Goal
+
 Migrate all existing M-Pesa functionality to the new provider framework, enforce KES-only locking, and achieve full backward compatibility with zero regression.
 
 ### 2.1 Backend Router Migration
@@ -780,21 +825,21 @@ Migrate all existing M-Pesa functionality to the new provider framework, enforce
 
 **File:** `api/wallet-router.ts` (replaces `api/mpesa-router.ts`)
 
-| Procedure | Method | Purpose | Provider-Scoped? |
-|---|---|---|---|
-| `transactions.list` | query | List wallet transactions with provider/location/date/status filters | Yes |
-| `transactions.stats` | query | Aggregated stats by provider and currency | Yes |
-| `transactions.importSms` | mutation | Parse and import SMS for SMS-capable providers | Yes (validates provider) |
-| `transactions.tagToSupplier` | mutation | Link transaction to supplier | Provider-agnostic |
-| `transactions.createExpenseFromTxn` | mutation | Create expense from wallet transaction | Provider-agnostic |
-| `transactions.linkToAccount` | mutation | Link topup to bank account + wallet | Provider-agnostic |
-| `providers.list` | query | List all active providers for a location | — |
-| `providers.getConfig` | query | Get provider config for a location | Yes |
-| `providers.setDefault` | mutation | Set default wallet provider for location | Yes |
-| `dailyLedger.list` | query | List daily wallet ledger entries | Yes (by provider) |
-| `dailyLedger.create` | mutation | Upsert daily wallet ledger | Yes (by provider) |
-| `reconciliation.list` | query | List reconciliation records | Yes (by provider) |
-| `reconciliation.create` | mutation | Create reconciliation record | Yes (by provider) |
+| Procedure                           | Method   | Purpose                                                             | Provider-Scoped?         |
+| ----------------------------------- | -------- | ------------------------------------------------------------------- | ------------------------ |
+| `transactions.list`                 | query    | List wallet transactions with provider/location/date/status filters | Yes                      |
+| `transactions.stats`                | query    | Aggregated stats by provider and currency                           | Yes                      |
+| `transactions.importSms`            | mutation | Parse and import SMS for SMS-capable providers                      | Yes (validates provider) |
+| `transactions.tagToSupplier`        | mutation | Link transaction to supplier                                        | Provider-agnostic        |
+| `transactions.createExpenseFromTxn` | mutation | Create expense from wallet transaction                              | Provider-agnostic        |
+| `transactions.linkToAccount`        | mutation | Link topup to bank account + wallet                                 | Provider-agnostic        |
+| `providers.list`                    | query    | List all active providers for a location                            | —                        |
+| `providers.getConfig`               | query    | Get provider config for a location                                  | Yes                      |
+| `providers.setDefault`              | mutation | Set default wallet provider for location                            | Yes                      |
+| `dailyLedger.list`                  | query    | List daily wallet ledger entries                                    | Yes (by provider)        |
+| `dailyLedger.create`                | mutation | Upsert daily wallet ledger                                          | Yes (by provider)        |
+| `reconciliation.list`               | query    | List reconciliation records                                         | Yes (by provider)        |
+| `reconciliation.create`             | mutation | Create reconciliation record                                        | Yes (by provider)        |
 
 #### 2.1.2 M-PESA Router Deprecation
 
@@ -815,17 +860,22 @@ This ensures backward compatibility for any existing tRPC references while all n
 #### 2.1.3 Daily Ledger Router Migration
 
 **File:** `api/daily-ledger-router.ts` → Refactor to delegate to `wallet-router.dailyLedger`:
-- Old endpoint continues to work (proxy to wallet router with `provider = 'mpesa'`)
-- New unified `dailyLedger.*` procedures available
+
+* Old endpoint continues to work (proxy to wallet router with `provider = 'mpesa'`)
+
+* New unified `dailyLedger.*` procedures available
 
 #### 2.1.4 Dashboard Router Updates
 
 **File:** `api/dashboard-router.ts`
 
 Update M-PESA references in:
-- `overview` procedure: Aggregate across all active wallet providers (not just M-PESA)
-- `todayPayments` procedure: Include all wallet outflows (not just M-PESA)
-- `mpesaFeeAnalysis` → `walletFeeAnalysis`: Multi-provider fee breakdown
+
+* `overview` procedure: Aggregate across all active wallet providers (not just M-PESA)
+
+* `todayPayments` procedure: Include all wallet outflows (not just M-PESA)
+
+* `mpesaFeeAnalysis` → `walletFeeAnalysis`: Multi-provider fee breakdown
 
 ### 2.2 Frontend Migration
 
@@ -835,35 +885,45 @@ Update M-PESA references in:
 
 The `/mpesa` route continues to work as M-PESA-specific view. A new `/wallet` route provides the unified multi-provider view:
 
-- **`/mpesa`**: Shown when user only uses M-PESA or navigates from legacy link. Fetches M-PESA data only.
-- **`/wallet`**: Unified dashboard showing all active wallet providers with provider tabs/filtering.
+* **`/mpesa`**: Shown when user only uses M-PESA or navigates from legacy link. Fetches M-PESA data only.
+
+* **`/wallet`**: Unified dashboard showing all active wallet providers with provider tabs/filtering.
 
 Key UI changes:
-- Provider selector dropdown in transaction list
-- Currency column displayed in transaction table
-- Provider color-coded badges
-- SMS import shows which provider's parser is used
-- Stats panel shows per-provider and cross-provider breakdowns
+
+* Provider selector dropdown in transaction list
+
+* Currency column displayed in transaction table
+
+* Provider color-coded badges
+
+* SMS import shows which provider's parser is used
+
+* Stats panel shows per-provider and cross-provider breakdowns
 
 #### 2.2.2 Accounts Page
 
 **File:** `src/pages/Accounts.tsx`
 
 Update account type UI:
-- Add `airtel_money` and `sasapay` account types (with brand colors and icons)
-- Chart: Show wallet balances grouped by provider
-- Account creation: Wire to `mobileWalletProviders` for type validation
+
+* Add `airtel_money` and `sasapay` account types (with brand colors and icons)
+
+* Chart: Show wallet balances grouped by provider
+
+* Account creation: Wire to `mobileWalletProviders` for type validation
 
 #### 2.2.3 Other Frontend Pages
 
 Update references across:
-| Page | Change |
-|---|---|
-| `DailyPayments.tsx` | Show wallet payments across all providers, not just M-PESA |
-| `Locations.tsx` | `defaultMpesaAccountId` → generic default wallet provider config |
-| `Businesses.tsx` | Create default wallet accounts for all active providers (not just M-PESA) |
-| `Reports.tsx` | `exportMpesa` → `exportWalletTransactions(provider?)` |
-| `ChartOfAccounts.tsx` | Show wallet accounts grouped by provider type |
+
+| Page                  | Change                                                                    |
+| --------------------- | ------------------------------------------------------------------------- |
+| `DailyPayments.tsx`   | Show wallet payments across all providers, not just M-PESA                |
+| `Locations.tsx`       | `defaultMpesaAccountId` → generic default wallet provider config          |
+| `Businesses.tsx`      | Create default wallet accounts for all active providers (not just M-PESA) |
+| `Reports.tsx`         | `exportMpesa` → `exportWalletTransactions(provider?)`                     |
+| `ChartOfAccounts.tsx` | Show wallet accounts grouped by provider type                             |
 
 ### 2.3 M-Pesa Currency Lock Implementation
 
@@ -937,41 +997,50 @@ export async function ensureProviderCurrency(
 
 #### 2.3.2 Frontend Currency Lock UX
 
-- When user selects M-PESA as payment method with non-KES currency:
-  - Show conversion disclosure modal with rate, converted amount, and any fees
-  - Require explicit confirmation before proceeding
-  - If no conversion enabled, block with error message: "M-PESA only supports KES transactions. Please convert your funds or use a different provider."
+* When user selects M-PESA as payment method with non-KES currency:
+
+  * Show conversion disclosure modal with rate, converted amount, and any fees
+
+  * Require explicit confirmation before proceeding
+
+  * If no conversion enabled, block with error message: "M-PESA only supports KES transactions. Please convert your funds or use a different provider."
 
 ### 2.4 Business Reset Updates
 
 **File:** `api/lib/business-reset.ts`
 
 Update to reset new tables: `mobile_wallet_transactions`, `mobile_wallet_daily_ledger`, `mobile_wallet_reconciliation`
-- Preserve `mobile_wallet_providers` and `supported_currencies` (system-level, not tenant data)
-- Preserve `provider_configs` (config structure, reset credentials)
+
+* Preserve `mobile_wallet_providers` and `supported_currencies` (system-level, not tenant data)
+
+* Preserve `provider_configs` (config structure, reset credentials)
 
 ### 2.5 Tests (Phase 2)
 
-| Module | Test File | Coverage Target |
-|---|---|---|
-| `wallet-router.ts` | `api/__tests__/wallet-router.test.ts` | 90% |
-| M-PESA backward compat | `api/__tests__/mpesa-router-backward-compat.test.ts` | 95% |
-| Currency lock validation | `api/lib/__tests__/currency-lock.test.ts` | 95% |
-| Frontend Wallet page | `src/pages/__tests__/Wallet.test.tsx` | 85% |
-| Mpesa→Wallet migration script | `scripts/__tests__/migrate-mpesa.test.ts` | 90% |
+| Module                        | Test File                                            | Coverage Target |
+| ----------------------------- | ---------------------------------------------------- | --------------- |
+| `wallet-router.ts`            | `api/__tests__/wallet-router.test.ts`                | 90%             |
+| M-PESA backward compat        | `api/__tests__/mpesa-router-backward-compat.test.ts` | 95%             |
+| Currency lock validation      | `api/lib/__tests__/currency-lock.test.ts`            | 95%             |
+| Frontend Wallet page          | `src/pages/__tests__/Wallet.test.tsx`                | 85%             |
+| Mpesa→Wallet migration script | `scripts/__tests__/migrate-mpesa.test.ts`            | 90%             |
 
 ### 2.6 End-to-End Testing
 
-- Verify all existing M-PESA flows (list, import SMS, create expense, link topup, daily ledger, reconciliation) work identically after migration
-- Verify KES-only lock: attempt to import non-KES M-PESA SMS → blocked with error
-- Verify cross-provider aggregation in dashboard
-- Verify all routes continue to function (no 404 due to router refactoring)
+* Verify all existing M-PESA flows (list, import SMS, create expense, link topup, daily ledger, reconciliation) work identically after migration
 
----
+* Verify KES-only lock: attempt to import non-KES M-PESA SMS → blocked with error
+
+* Verify cross-provider aggregation in dashboard
+
+* Verify all routes continue to function (no 404 due to router refactoring)
+
+***
 
 ## Phase 3: Scale (Airtel Money & Sasapay Integration)
 
 ### Goal
+
 Integrate Airtel Money and Sasapay as first-class providers, complete UAT, and deploy with phased rollout.
 
 ### 3.1 Airtel Money Provider
@@ -1002,12 +1071,13 @@ export class AirtelMoneyProvider extends BaseWalletProvider {
 ```
 
 **SMS parser patterns for Airtel Money:**
-| Pattern | Detection | Direction | Type |
-|---|---|---|---|
-| "You have received [CURRENCY] [amount] from [sender]" | `includes("you have received")` | `in` | `payment` |
-| "[CURRENCY] [amount] sent to [recipient]" | `includes(" sent to ")` | `out` | `transfer` |
-| "[CURRENCY] [amount] withdrawn" | `includes("withdrawn")` | `out` | `withdrawal` |
-| Airtel Money cash power purchase | `includes("cashpower")` | `out` | `utility` |
+
+| Pattern                                                  | Detection                       | Direction | Type         |
+| -------------------------------------------------------- | ------------------------------- | --------- | ------------ |
+| "You have received \[CURRENCY] \[amount] from \[sender]" | `includes("you have received")` | `in`      | `payment`    |
+| "\[CURRENCY] \[amount] sent to \[recipient]"             | `includes(" sent to ")`         | `out`     | `transfer`   |
+| "\[CURRENCY] \[amount] withdrawn"                        | `includes("withdrawn")`         | `out`     | `withdrawal` |
+| Airtel Money cash power purchase                         | `includes("cashpower")`         | `out`     | `utility`    |
 
 **Key difference from M-PESA:** Airtel Money operates in multiple East African currencies (KES, UGX, TZS, MWK, ZMW, RWF). The parser must detect the currency code from the SMS text.
 
@@ -1070,11 +1140,16 @@ export class SasapayProvider extends BaseWalletProvider {
 ```
 
 **Sasapay-specific features:**
-- REST API with API key + secret authentication
-- Webhooks with HMAC signature verification
-- Supports both C2B (customer to business) and B2C (business to customer) payments
-- Real-time transaction status polling
-- Refund support via API
+
+* REST API with API key + secret authentication
+
+* Webhooks with HMAC signature verification
+
+* Supports both C2B (customer to business) and B2C (business to customer) payments
+
+* Real-time transaction status polling
+
+* Refund support via API
 
 ### 3.3 Unified Payment Selection UI
 
@@ -1104,50 +1179,61 @@ interface WalletPaymentSelectorProps {
 **File:** `src/pages/WalletAdmin.tsx` or embedded in existing Settings/Admin
 
 Features:
-- Multi-provider transaction feed with real-time filtering
-- Provider health status (last successful transaction per provider)
-- Daily settlement summaries by provider
-- Reconciliation tool: match provider statements against system records
-- Provider configuration: activate/deactivate, set API keys, default provider
+
+* Multi-provider transaction feed with real-time filtering
+
+* Provider health status (last successful transaction per provider)
+
+* Daily settlement summaries by provider
+
+* Reconciliation tool: match provider statements against system records
+
+* Provider configuration: activate/deactivate, set API keys, default provider
 
 ### 3.5 Provider Configuration API
 
 **File:** `api/wallet-management-router.ts` (admin-only, permission-protected)
 
-| Procedure | Method | Purpose |
-|---|---|---|
-| `providers.configure` | mutation | Set API keys, endpoints, webhook URLs for a provider at a location |
-| `providers.testConnection` | mutation | Test provider API connectivity |
-| `providers.activate` | mutation | Enable/disable a provider for a location |
-| `rates.manualUpdate` | mutation | Manually set exchange rate |
-| `rates.sync` | mutation | Force sync rates from external provider |
-| `rates.history` | query | View exchange rate history |
+| Procedure                  | Method   | Purpose                                                            |
+| -------------------------- | -------- | ------------------------------------------------------------------ |
+| `providers.configure`      | mutation | Set API keys, endpoints, webhook URLs for a provider at a location |
+| `providers.testConnection` | mutation | Test provider API connectivity                                     |
+| `providers.activate`       | mutation | Enable/disable a provider for a location                           |
+| `rates.manualUpdate`       | mutation | Manually set exchange rate                                         |
+| `rates.sync`               | mutation | Force sync rates from external provider                            |
+| `rates.history`            | query    | View exchange rate history                                         |
 
 ### 3.6 Multi-Currency Conversion UI
 
 **File:** `src/components/CurrencyConverterDialog.tsx`
 
 A dialog component for manual currency conversion:
-- Select from currency (auto-detected from transaction)
-- Select to currency (defaults to provider's supported currency)
-- Shows live exchange rate with last-updated timestamp
-- Shows converted amount
-- Shows conversion fee if applicable
-- "Apply Conversion" button with confirmation
+
+* Select from currency (auto-detected from transaction)
+
+* Select to currency (defaults to provider's supported currency)
+
+* Shows live exchange rate with last-updated timestamp
+
+* Shows converted amount
+
+* Shows conversion fee if applicable
+
+* "Apply Conversion" button with confirmation
 
 ### 3.7 Tests (Phase 3)
 
-| Module | Test File | Coverage Target |
-|---|---|---|
-| `airtel-money-provider.ts` | `api/lib/__tests__/airtel-money-provider.test.ts` | 90% |
-| `sasapay-provider.ts` | `api/lib/__tests__/sasapay-provider.test.ts` | 90% |
-| `WalletPaymentSelector.tsx` | `src/components/__tests__/WalletPaymentSelector.test.tsx` | 85% |
-| `WalletAdmin.tsx` | `src/pages/__tests__/WalletAdmin.test.tsx` | 80% |
-| Airtel Money SMS parser | `api/lib/__tests__/airtel-sms-parser.test.ts` | 95% |
-| Unified webhook (Sasapay) | `api/__tests__/wallet-webhook.test.ts` | 90% |
-| End-to-end wallet cycle | `e2e/__tests__/wallet-cycle.test.ts` | Coverage of primary flows |
+| Module                      | Test File                                                 | Coverage Target           |
+| --------------------------- | --------------------------------------------------------- | ------------------------- |
+| `airtel-money-provider.ts`  | `api/lib/__tests__/airtel-money-provider.test.ts`         | 90%                       |
+| `sasapay-provider.ts`       | `api/lib/__tests__/sasapay-provider.test.ts`              | 90%                       |
+| `WalletPaymentSelector.tsx` | `src/components/__tests__/WalletPaymentSelector.test.tsx` | 85%                       |
+| `WalletAdmin.tsx`           | `src/pages/__tests__/WalletAdmin.test.tsx`                | 80%                       |
+| Airtel Money SMS parser     | `api/lib/__tests__/airtel-sms-parser.test.ts`             | 95%                       |
+| Unified webhook (Sasapay)   | `api/__tests__/wallet-webhook.test.ts`                    | 90%                       |
+| End-to-end wallet cycle     | `e2e/__tests__/wallet-cycle.test.ts`                      | Coverage of primary flows |
 
----
+***
 
 ## Implementation Order & Dependencies
 
@@ -1194,32 +1280,33 @@ Phase 3: Scale
 └── 3.10 Post-deployment monitoring + documentation           [Operations]
 ```
 
----
+***
 
 ## Success Criteria Checklist
 
-| Criterion | Measurement | Target |
-|---|---|---|
-| All existing M-PESA functionality operational post-migration | E2E test pass rate | 100% |
-| Multi-currency conversion accuracy | Rate comparison vs source | 99.9% |
-| New provider integration time | Days from template to production | < 5 business days |
-| Zero-downtime deployment | Rolling update strategy | Confirmed |
-| Unit test coverage (new modules) | Vitest coverage report | ≥ 90% |
-| Backward compatibility | Old tRPC endpoints still work | All pass |
-| M-PESA KES lock enforcement | Test: non-KES txns blocked | 100% |
-| Cross-provider dashboard aggregation | Test: sums accurate across providers | Verified |
+| Criterion                                                    | Measurement                          | Target            |
+| ------------------------------------------------------------ | ------------------------------------ | ----------------- |
+| All existing M-PESA functionality operational post-migration | E2E test pass rate                   | 100%              |
+| Multi-currency conversion accuracy                           | Rate comparison vs source            | 99.9%             |
+| New provider integration time                                | Days from template to production     | < 5 business days |
+| Zero-downtime deployment                                     | Rolling update strategy              | Confirmed         |
+| Unit test coverage (new modules)                             | Vitest coverage report               | ≥ 90%             |
+| Backward compatibility                                       | Old tRPC endpoints still work        | All pass          |
+| M-PESA KES lock enforcement                                  | Test: non-KES txns blocked           | 100%              |
+| Cross-provider dashboard aggregation                         | Test: sums accurate across providers | Verified          |
 
----
+***
 
 ## Key Design Decisions & Rationale
 
-| Decision | Rationale |
-|---|---|
-| **Store original + base currency amounts** | Enables accurate cross-provider/currency reporting without losing traceability to original transaction |
-| **SMS parser stays provider-specific** | Each provider has unique SMS format; parser TDD per provider makes testing and maintenance easier |
-| **Abstract class over interface** | Shared utilities (`parseDecimal`, `validateCurrency`, `logError`) reduce boilerplate across providers |
-| **Provider registry as singleton** | Single source of truth for all active providers; simplifies dependency injection in routers |
-| **M-PESA router → proxy pattern** | Zero risk of breaking existing API consumers; gradual migration path |
-| **`numeric(18, 8)` for exchange rates** | Sufficient precision for all African currency pairs (KES→USD ~0.0075 requires high precision) |
-| **`Intl.NumberFormat` for frontend formatting** | Native browser API handles all locale-specific formatting (symbol position, decimal/group separators) |
-| **Per-provider `supportedCurrencies`** | Enables currency constraint validation at the provider level without hardcoding |
+| Decision                                            | Rationale                                                                                              |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Store original + base currency amounts**          | Enables accurate cross-provider/currency reporting without losing traceability to original transaction |
+| **SMS parser stays provider-specific**              | Each provider has unique SMS format; parser TDD per provider makes testing and maintenance easier      |
+| **Abstract class over interface**                   | Shared utilities (`parseDecimal`, `validateCurrency`, `logError`) reduce boilerplate across providers  |
+| **Provider registry as singleton**                  | Single source of truth for all active providers; simplifies dependency injection in routers            |
+| **M-PESA router → proxy pattern**                   | Zero risk of breaking existing API consumers; gradual migration path                                   |
+| **`numeric(18, 8)`** **for exchange rates**         | Sufficient precision for all African currency pairs (KES→USD \~0.0075 requires high precision)         |
+| **`Intl.NumberFormat`** **for frontend formatting** | Native browser API handles all locale-specific formatting (symbol position, decimal/group separators)  |
+| **Per-provider** **`supportedCurrencies`**          | Enables currency constraint validation at the provider level without hardcoding                        |
+
