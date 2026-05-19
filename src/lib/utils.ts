@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatKES(amount: string | number): string {
-  const num = typeof amount === "string" ? parseFloat(amount) : amount;
+  const num = typeof amount === "string" ? parseFloat(amount.replace(/,/g, "")) : amount;
   if (isNaN(num)) return "KES 0.00";
   return `KES ${num.toLocaleString("en-KE", {
     minimumFractionDigits: 2,
