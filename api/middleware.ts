@@ -38,6 +38,9 @@ export const PERMISSIONS = {
   PAYROLL_PROCESS: "payroll:process",
   MPESA_VIEW: "mpesa:view",
   MPESA_IMPORT: "mpesa:import",
+  WALLET_VIEW: "wallet:view",
+  WALLET_IMPORT: "wallet:import",
+  WALLET_ADMIN: "wallet:admin",
   REPORTS_VIEW: "reports:view",
   USERS_MANAGE: "users:manage",
   SETTINGS_MANAGE: "settings:manage",
@@ -357,6 +360,9 @@ export const payrollQuery = t.procedure.use(requirePermission(PERMISSIONS.PAYROL
 export const payrollProcess = t.procedure.use(requirePermission(PERMISSIONS.PAYROLL_PROCESS));
 export const mpesaQuery = t.procedure.use(requirePermission(PERMISSIONS.MPESA_VIEW));
 export const mpesaImport = t.procedure.use(requirePermission(PERMISSIONS.MPESA_IMPORT));
+export const walletQuery = t.procedure.use(requirePermission(PERMISSIONS.WALLET_VIEW));
+export const walletImport = t.procedure.use(requirePermission(PERMISSIONS.WALLET_IMPORT));
+export const walletAdmin = t.procedure.use(requirePermission(PERMISSIONS.WALLET_ADMIN));
 export const reportQuery = t.procedure.use(requirePermission(PERMISSIONS.REPORTS_VIEW));
 export const userManage = t.procedure.use(requirePermission(PERMISSIONS.USERS_MANAGE));
 export const settingsManage = t.procedure.use(requirePermission(PERMISSIONS.SETTINGS_MANAGE));

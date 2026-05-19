@@ -15,6 +15,10 @@ import { getDb, closePool } from "./queries/connection";
 import { sql } from "drizzle-orm";
 import { processTrialLifecycle, TRIAL_JOB_INTERVAL_MS } from "./lib/subscriptions";
 import { shouldStartStandaloneServer } from "./lib/server-runtime";
+import { walletRegistry } from "./lib/mobile-wallet/provider-registry";
+import { mpesaProvider } from "./lib/mobile-wallet/providers/mpesa-provider";
+import { startExchangeRateSync, validateEnvConfig } from "./lib/exchange-rate-sync";
+import { seedSupportedCurrencies } from "./lib/seed-currencies";
 // import { ensureDatabaseReady } from "./lib/db-startup";
 
 // await ensureDatabaseReady(env.databaseUrl);
@@ -136,6 +140,22 @@ if (runStandaloneServer) {
   trialLifecycleTimer.unref();
   void runTrialLifecycleJob();
 }
+
+// ── Startup initialization ──────────────────────────────────────────
+
+walletRegistry.register(mpesaProvider);
+console.log("[boot] Registered wallet providers:", walletRegistry.getAll().map((p) => p.code).join(", "));
+
+validateEnvConfig();
+
+if (process.env.EXCHANGE_RATE_PROVIDER && process.env.EXCHANGE_RATE_PROVIDER !== "manual") {
+  const syncTimer = startExchangeRateSync();
+  syncTimer.unref();
+}
+
+seedSupportedCurrencies().catch((err) => {
+  console.error("[boot] Failed to seed supported currencies:", err);
+});
 
 const port = parseInt(process.env.PORT || "3000");
 const server = runStandaloneServer
