@@ -30,6 +30,7 @@ import { journalRouter } from "./journal-router";
 import { itemsRouter } from "./items-router";
 import { depreciationRouter } from "./depreciation-router";
 import { chartOfAccountsRouter } from "./chart-of-accounts-router";
+import { walletRouter } from "./wallet-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -67,6 +68,7 @@ export const appRouter = createRouter({
   items: itemsRouter,
   depreciation: depreciationRouter,
   chartOfAccounts: chartOfAccountsRouter,
+  wallet: walletRouter,
 });
 
 export type AppRouter = typeof appRouter;

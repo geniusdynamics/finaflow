@@ -20,6 +20,7 @@ import {
   Menu,
   X,
   ChevronRight,
+  Wallet,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -40,6 +41,7 @@ export const mobileSecondaryNavItems = [
   { path: "/locations", label: "Branches", icon: Building2 },
   { path: "/payroll", label: "Payroll", icon: Users },
   { path: "/mpesa", label: "M-PESA", icon: Smartphone },
+  { path: "/wallet", label: "Wallet", icon: Wallet },
   { path: "/calendar", label: "Calendar", icon: CalendarDays },
   { path: "/reports", label: "Reports", icon: FileSpreadsheet },
   { path: "/users", label: "Users & Roles", icon: ShieldCheck },
