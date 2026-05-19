@@ -104,7 +104,7 @@ export function Feedback() {
           )}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-2">
           {questionnaires?.map(q => (
             <Card key={q.id} className="border-[#E8E0D8]">
               <CardHeader className="pb-3">

@@ -336,7 +336,7 @@ export function Settings() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                   {allPlans.map((planKey) => {
                     const plan = PLAN_DETAILS[planKey];
                     const isCurrent = subscription?.plan === planKey;

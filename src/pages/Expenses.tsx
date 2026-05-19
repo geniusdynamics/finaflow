@@ -538,7 +538,7 @@ export function Expenses() {
         </div>
 
         {/* Per-Branch Breakdown */}
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-2">
           {locations?.map(loc => {
             const locBalance = accountBalances?.byLocation[loc.id] ?? 0;
             const locIncome = prevDayIncome?.byBranch.find(b => b.locationId === loc.id)?.total ?? "0";

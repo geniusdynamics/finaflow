@@ -68,7 +68,7 @@ export function PartnerDashboard() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid gap-4 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Card className="border-[#E8E0D8]"><CardContent className="p-4">
             <div className="flex items-center gap-2"><Building className="h-4 w-4 text-[#2E7D32]"/><span className="text-xs uppercase text-[#8D8A87]">Clients</span></div>
             <p className="mt-2 font-mono text-2xl font-semibold text-[#2E7D32]">{clients?.length ?? 0}</p>

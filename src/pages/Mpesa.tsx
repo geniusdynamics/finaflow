@@ -255,7 +255,7 @@ export function Mpesa() {
           <Card className="border-[#E8E0D8] bg-white">
             <CardHeader className="pb-3"><CardTitle className="font-serif text-lg text-[#2D2A26]">Transaction Fee Analysis</CardTitle></CardHeader>
             <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {feeAnalysis.feesByType?.map((ft: { txnType: string; totalFees: string; count: number }) => (
                   <div key={ft.txnType} className="rounded-lg border border-[#E8E0D8] p-3">
                     <p className="text-xs uppercase tracking-wider text-[#8D8A87]">{ft.txnType}</p>

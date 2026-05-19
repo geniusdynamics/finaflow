@@ -57,7 +57,7 @@ export function Locations() {
           </Dialog>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {locations?.map(loc => {
             const mpesaAcct = accounts?.find(a => a.id === loc.defaultMpesaAccountId);
             const cashAcct = accounts?.find(a => a.id === loc.defaultCashAccountId);

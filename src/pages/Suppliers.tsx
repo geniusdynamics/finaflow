@@ -156,7 +156,7 @@ export function Suppliers() {
         {tab === "suppliers" && (
           <>
 
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Card className="border-[#E8E0D8] bg-white">
             <CardContent className="p-4">
               <div className="flex items-center gap-2">
@@ -343,7 +343,7 @@ export function Suppliers() {
             {alerts && alerts.length > 0 && (
               <div className="space-y-2">
                 <h2 className="text-sm font-medium text-[#D32F2F] flex items-center gap-2"><AlertTriangle className="h-4 w-4"/> Price Alerts ({alerts.length})</h2>
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {alerts.map((alert, i) => (
                     <Card key={i} className="border-[#D32F2F]/20 bg-[#D32F2F]/5"><CardContent className="p-3">
                       <p className="text-sm font-medium text-[#2D2A26]">{alert.itemName}</p>

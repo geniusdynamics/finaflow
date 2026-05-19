@@ -26,7 +26,7 @@ export function DailyPayments({ embedded }: { embedded?: boolean }) {
         <Input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="w-auto" />
       </div>
 
-        <div className="grid gap-4 sm:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <Card className="border-[#E8E0D8]"><CardContent className="p-4"><div className="flex items-center gap-2"><FileText className="h-4 w-4 text-[#ED6C02]"/><span className="text-xs uppercase text-[#8D8A87]">Bills Due</span></div><p className="mt-2 font-mono text-xl font-semibold text-[#ED6C02]">{formatKES(billsTotal)}</p><p className="text-xs text-[#8D8A87]">{payments?.billPayments?.length ?? 0} bills</p></CardContent></Card>
           <Card className="border-[#E8E0D8]"><CardContent className="p-4"><div className="flex items-center gap-2"><TrendingDown className="h-4 w-4 text-[#D32F2F]"/><span className="text-xs uppercase text-[#8D8A87]">Expenses</span></div><p className="mt-2 font-mono text-xl font-semibold text-[#D32F2F]">{formatKES(expensesTotal)}</p><p className="text-xs text-[#8D8A87]">{payments?.expenses?.length ?? 0} entries</p></CardContent></Card>
           <Card className="border-[#E8E0D8]"><CardContent className="p-4"><div className="flex items-center gap-2"><Landmark className="h-4 w-4 text-[#D4A854]"/><span className="text-xs uppercase text-[#8D8A87]">Payroll</span></div><p className="mt-2 font-mono text-xl font-semibold text-[#D4A854]">{formatKES(payrollTotal)}</p><p className="text-xs text-[#8D8A87]">{payments?.payroll?.length ?? 0} periods</p></CardContent></Card>
