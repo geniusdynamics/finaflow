@@ -1,7 +1,7 @@
 // ABOUTME: Verifies operational account creation stays simple while enforcing valid chart-account behavior.
 // ABOUTME: Protects location-scoped payment method links from crossing business and branch boundaries.
 import { afterEach, describe, expect, it } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { appRouter } from "../router";
 import {
@@ -162,8 +162,25 @@ describe("operational accounts and payment-method linking", () => {
       locationId: ctx.location.id,
       businessId: ctx.business.id,
       type: "cash",
+    });
+
+    expect(account.accountType).toBeNull();
+    expect(account.accountSubType).toBeNull();
+
+    const sysAccounts = await db
+      .select()
+      .from(accounts)
+      .where(and(
+        eq(accounts.businessId, ctx.business.id),
+        eq(accounts.systemKey, "asset:cash"),
+        isNull(accounts.deletedAt),
+      )).limit(1);
+
+    expect(sysAccounts.length).toBeGreaterThan(0);
+    expect(sysAccounts[0]).toMatchObject({
       accountType: "asset",
       accountSubType: "cash",
+      isSystemGenerated: true,
     });
   });
 
