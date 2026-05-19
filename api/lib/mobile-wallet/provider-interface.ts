@@ -107,8 +107,8 @@ export abstract class BaseWalletProvider {
   abstract processRefund(providerTxnId: string, amount?: string): Promise<WalletTransactionResult>;
   abstract balanceInquiry(accountId: number): Promise<WalletBalanceResult>;
 
-  abstract parseSms?(text: string, options?: Record<string, unknown>): Promise<ParsedWalletSms[]>;
-  abstract generateSmsPreview?(text: string, options?: Record<string, unknown>): Promise<ParsedWalletSms[]>;
+  parseSms?(text: string, options?: Record<string, unknown>): Promise<ParsedWalletSms[]>;
+  generateSmsPreview?(text: string, options?: Record<string, unknown>): Promise<ParsedWalletSms[]>;
 
   protected parseDecimal(value: string | number): Decimal {
     return d(value);

@@ -7,7 +7,7 @@ import { formatCurrency, formatKES, getCurrencyInfo, getCurrencySymbol, addCurre
 describe("formatCurrency", () => {
   it("formats KES amount with symbol", () => {
     const result = formatCurrency(1500, "KES");
-    expect(result).toContain("KSh");
+    expect(result).toContain("Ksh");
     expect(result).toContain("1,500");
   });
 

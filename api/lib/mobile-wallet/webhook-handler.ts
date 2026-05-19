@@ -7,8 +7,10 @@ import { WalletWebhookPayload, WalletWebhookResult } from "./provider-interface"
 
 export async function handleWalletWebhook(payload: WalletWebhookPayload): Promise<{ status: number; body: string }> {
   try {
-    const provider = walletRegistry.get(payload.provider);
-    if (!provider) {
+    let provider;
+    try {
+      provider = walletRegistry.get(payload.provider);
+    } catch {
       return {
         status: 404,
         body: JSON.stringify({ error: `Unknown provider: ${payload.provider}` }),
@@ -25,8 +27,8 @@ export async function handleWalletWebhook(payload: WalletWebhookPayload): Promis
     const result: WalletWebhookResult = await provider.processWebhook(payload);
 
     if (result.processed && result.transaction) {
+      const txn = result.transaction;
       try {
-        const txn = result.transaction;
         await logWalletTransaction({
           locationId: 0,
           provider: payload.provider,

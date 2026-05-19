@@ -72,7 +72,7 @@ export class MpesaProvider extends BaseWalletProvider {
     const rawTxnType = this.detectTxnType(lowerText, text);
     const direction = this.detectDirection(rawTxnType, lowerText);
     const partyName = this.extractPartyName(lowerText, rawTxnType, text);
-    const txnFee = this.extractKshValue(text, /(?:transaction\s+fee|charge)\s*:?\s*(?:ksh\s*)?([\d,]+(?:\.\d{1,2})?)/i) ?? "0.00";
+    const txnFee = this.extractKshValue(text, /(?:transaction\s+(?:fee|cost)|charge)\s*,?\s*:?\s*(?:ksh\s*)?([\d,]+(?:\.\d{1,2})?)/i) ?? "0.00";
 
     return {
       providerTxnId: txnId,
@@ -136,11 +136,12 @@ export class MpesaProvider extends BaseWalletProvider {
       }
       return "payment";
     }
+    if (lowerText.includes("airtime")) return "airtime";
+    if (lowerText.includes("utility") || lowerText.includes("till no") || lowerText.includes("till")) return "utility";
+    if (lowerText.includes("kplc") || lowerText.includes("cashpower")) return "utility";
+    if (lowerText.includes("withdrawn")) return "withdrawal";
     if (lowerText.includes("paid to")) return "payment";
     if (lowerText.includes("sent to")) return "transfer";
-    if (lowerText.includes("withdrawn")) return "withdrawal";
-    if (lowerText.includes("airtime")) return "airtime";
-    if (lowerText.includes("utility") || lowerText.includes("till no") || lowerText.includes("kplc") || lowerText.includes("cashpower")) return "utility";
     if (lowerText.includes("transferred to")) return "transfer";
     if (lowerText.includes("sent from") || lowerText.includes("deposited")) {
       if (lowerText.includes("kcb") || lowerText.includes("co-op") || lowerText.includes("equity") || lowerText.includes("bank")) {
@@ -164,14 +165,10 @@ export class MpesaProvider extends BaseWalletProvider {
       const bankMatch = originalText.match(/sent from\s+([A-Za-z\s]+?)(?:\s+to|\s+on\s+|$)/i);
       return bankMatch?.[1]?.trim() ?? null;
     }
-    const patterns = [
-      /(?:received|received from)\s+ksh[\d,.]+\s+from\s+(.+?)(?:\s+on\s+|\s+at\s+|\d{1,2}\/\d{1,2}|\s*$)/i,
-      /(?:paid to|sent to)\s+(.+?)(?:\s+(?:on|at|via|using)|(?:ksh[\d,.]+\s+balance)|$)/i,
-    ];
-    for (const pattern of patterns) {
-      const match = originalText.match(pattern);
-      if (match) return match[1].trim();
-    }
+    const receivedMatch = originalText.match(/ksh[\d,.\s]+\s+from\s+(.+?)(?:\s+on\s+|\s+at\s+|\d{1,2}\/\d{1,2}|\s*$)/i);
+    if (receivedMatch) return receivedMatch[1].trim();
+    const paidMatch = originalText.match(/(?:paid to|sent to)\s+(.+?)(?:\s+(?:on|at|via|using)|(?:ksh[\d,.]+\s+balance)|$)/i);
+    if (paidMatch) return paidMatch[1].trim();
     return null;
   }
 

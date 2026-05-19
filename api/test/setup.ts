@@ -65,7 +65,7 @@ async function ensureTestDatabase(): Promise<void> {
   try {
     const baseSchemaPath = path.resolve(
       import.meta.dirname,
-      "../../db/migrations/0000_flawless_jack_murdock.sql",
+      "../../db/migrations/0000_outgoing_christian_walker.sql",
     );
     if (!(await tableExists(testPool, "users"))) {
       let sql = fs.readFileSync(baseSchemaPath, "utf8");
@@ -87,24 +87,24 @@ async function ensureTestDatabase(): Promise<void> {
       }
     }
 
-    const constraintsPath = path.resolve(
+    const migration1Path = path.resolve(
       import.meta.dirname,
-      "../../db/migrations/0001_gifted_secret_warriors.sql",
+      "../../db/migrations/0001_misty_mulholland_black.sql",
     );
-    let constraintSql = fs.readFileSync(constraintsPath, "utf8").replaceAll("--> statement-breakpoint", "");
-    const constraintStatements = constraintSql.split(";").filter((s) => s.trim());
-    for (const stmt of constraintStatements) {
+    let migration1Sql = fs.readFileSync(migration1Path, "utf8").replaceAll("--> statement-breakpoint", "");
+    const migration1Statements = migration1Sql.split(";").filter((s) => s.trim());
+    for (const stmt of migration1Statements) {
       try {
         await testPool.query(stmt);
       } catch {
-        // Individual FK constraints may already exist;
+        // Individual DDL statements may already exist;
         // continue with the next statement for idempotent setup.
       }
     }
 
     const migration2Path = path.resolve(
       import.meta.dirname,
-      "../../db/migrations/0002_soft_flamingo.sql",
+      "../../db/migrations/0002_add_currency_columns.sql",
     );
     let migration2Sql = fs.readFileSync(migration2Path, "utf8").replaceAll("--> statement-breakpoint", "");
     const migration2Statements = migration2Sql.split(";").filter((s) => s.trim());

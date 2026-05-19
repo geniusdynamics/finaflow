@@ -89,7 +89,11 @@ export function formatAmountInput(amount: string, currency: string): string {
   const info = getCurrencyInfo(currency);
   const parts = amount.split(".");
   if (parts.length > 1 && parts[1].length > info.decimalPlaces) {
-    return `${parts[0]}.${parts[1].slice(0, info.decimalPlaces)}`;
+    const truncated = `${parts[0]}.${parts[1].slice(0, info.decimalPlaces)}`;
+    return info.decimalPlaces === 0 ? parts[0] : truncated;
+  }
+  if (parts.length > 1 && info.decimalPlaces === 0) {
+    return parts[0];
   }
   return amount;
 }
