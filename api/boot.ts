@@ -89,8 +89,8 @@ app.use("/api/trpc*", trpcRateLimiter, apiLimiter);
 
 app.use("/api/trpc*", async (c) => {
   const method = c.req.method;
-  const url = c.req.url;
-  console.log(`[trpc-server] --> ${method} ${url}`);
+  const path = new URL(c.req.url).pathname;
+  console.log(`→ ${method} ${path}`);
   try {
     const response = await fetchRequestHandler({
       endpoint: "/api/trpc",
@@ -98,14 +98,10 @@ app.use("/api/trpc*", async (c) => {
       router: appRouter,
       createContext,
     });
-    const clone = response.clone();
-    const bodyText = await clone.text().catch(() => "<could not read body>");
-    console.log(
-      `[trpc-server] <-- ${method} ${url} -> ${response.status} body=${bodyText.slice(0, 300)}`,
-    );
+    console.log(`← ${method} ${path} ${response.status}`);
     return response;
   } catch (err) {
-    console.error(`[trpc-server] <-- ${method} ${url} ERROR:`, err);
+    console.error(`✗ ${method} ${path}`, err);
     return c.json({ error: "Internal server error" }, 500);
   }
 });
