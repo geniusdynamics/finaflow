@@ -13,6 +13,7 @@ import {
   boolean,
   integer,
   json,
+  jsonb,
   index,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
@@ -1126,6 +1127,173 @@ export const webhookDeliveries = pgTable("webhook_deliveries", {
 });
 
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
+
+// ── Multi-Currency Support ──────────────────────────────────────────────
+
+export const supportedCurrencies = pgTable("supported_currencies", {
+  code: varchar("code", { length: 3 }).primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  symbol: varchar("symbol", { length: 10 }).notNull(),
+  decimalPlaces: integer("decimal_places").notNull().default(2),
+  isActive: boolean("is_active").default(true).notNull(),
+  isDefault: boolean("is_default").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type SupportedCurrency = typeof supportedCurrencies.$inferSelect;
+export type InsertSupportedCurrency = typeof supportedCurrencies.$inferInsert;
+
+export const exchangeRates = pgTable("exchange_rates", {
+  id: serial("id").primaryKey(),
+  fromCurrency: varchar("from_currency", { length: 3 }).notNull().references(() => supportedCurrencies.code, { onDelete: "no action" }),
+  toCurrency: varchar("to_currency", { length: 3 }).notNull().references(() => supportedCurrencies.code, { onDelete: "no action" }),
+  rate: numeric("rate", { precision: 18, scale: 8 }).notNull(),
+  source: varchar("source", { length: 50 }).default("manual"),
+  validFrom: timestamp("valid_from").notNull().defaultNow(),
+  validUntil: timestamp("valid_until"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type ExchangeRate = typeof exchangeRates.$inferSelect;
+export type InsertExchangeRate = typeof exchangeRates.$inferInsert;
+
+export const businessCurrencies = pgTable("business_currencies", {
+  id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }).notNull().references(() => businesses.id, { onDelete: "cascade" }),
+  currency: varchar("currency", { length: 3 }).notNull().references(() => supportedCurrencies.code, { onDelete: "no action" }),
+  isBaseCurrency: boolean("is_base_currency").default(false).notNull(),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type BusinessCurrency = typeof businessCurrencies.$inferSelect;
+export type InsertBusinessCurrency = typeof businessCurrencies.$inferInsert;
+
+// ── Mobile Wallet Aggregation Framework ────────────────────────────────
+
+export const mobileWalletProviders = pgTable("mobile_wallet_providers", {
+  code: varchar("code", { length: 20 }).primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  displayName: varchar("display_name", { length: 100 }),
+  brandColor: varchar("brand_color", { length: 7 }),
+  logoUrl: varchar("logo_url", { length: 255 }),
+  supportedCurrencies: varchar("supported_currencies", { length: 100 }),
+  isActive: boolean("is_active").default(true).notNull(),
+  requiresProvisioning: boolean("requires_provisioning").default(false),
+  configSchema: jsonb("config_schema"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+});
+
+export type MobileWalletProvider = typeof mobileWalletProviders.$inferSelect;
+export type InsertMobileWalletProvider = typeof mobileWalletProviders.$inferInsert;
+
+export const mobileWalletTransactions = pgTable("mobile_wallet_transactions", {
+  id: serial("id").primaryKey(),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  provider: varchar("provider", { length: 20 }).notNull().references(() => mobileWalletProviders.code, { onDelete: "no action" }),
+  providerTxnId: varchar("provider_txn_id", { length: 100 }).notNull(),
+  providerRef: varchar("provider_ref", { length: 100 }),
+  txnDate: date("txnDate").notNull(),
+  txnTime: varchar("txnTime", { length: 10 }),
+  txnType: varchar("txn_type", { length: 30 }).notNull(),
+  direction: varchar("direction", { length: 5 }).notNull(),
+  partyName: varchar("partyName", { length: 255 }),
+  partyIdentifier: varchar("party_identifier", { length: 100 }),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 3 }).default("KES").notNull(),
+  txnFee: numeric("txnFee", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  balance: numeric("balance", { precision: 15, scale: 2 }),
+  description: text("description"),
+  rawText: text("rawText"),
+  rawPayload: jsonb("raw_payload"),
+  status: varchar("status", { length: 20 }).default("completed").notNull(),
+  isReconciled: boolean("is_reconciled").default(false).notNull(),
+  isLinked: boolean("is_linked").default(false).notNull(),
+  linkedExpenseId: bigint("linkedExpenseId", { mode: "number" }),
+  linkedBillId: bigint("linkedBillId", { mode: "number" }),
+  linkedSupplierId: bigint("linkedSupplierId", { mode: "number" }),
+  sourceAccountId: bigint("sourceAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
+  destinationAccountId: bigint("destinationAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
+  importedBy: bigint("importedBy", { mode: "number" }),
+  baseCurrency: varchar("base_currency", { length: 3 }),
+  baseAmount: numeric("base_amount", { precision: 15, scale: 2 }),
+  conversionRate: numeric("conversion_rate", { precision: 18, scale: 8 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  uniqueProviderTxn: uniqueIndex("idx_wallet_txn_provider_txn").on(table.provider, table.providerTxnId),
+  walletTxnLocationIdx: index("idx_wallet_txn_location").on(table.locationId),
+  walletTxnStatusIdx: index("idx_wallet_txn_status").on(table.status),
+}));
+
+export type MobileWalletTransaction = typeof mobileWalletTransactions.$inferSelect;
+export type InsertMobileWalletTransaction = typeof mobileWalletTransactions.$inferInsert;
+
+export const mobileWalletDailyLedger = pgTable("mobile_wallet_daily_ledger", {
+  id: serial("id").primaryKey(),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  provider: varchar("provider", { length: 20 }).notNull().references(() => mobileWalletProviders.code, { onDelete: "no action" }),
+  accountId: bigint("accountId", { mode: "number" }).notNull().references(() => accounts.id, { onDelete: "no action" }),
+  ledgerDate: date("ledgerDate").notNull(),
+  openingBalance: numeric("openingBalance", { precision: 15, scale: 2 }).notNull(),
+  totalInflow: numeric("totalInflow", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  totalOutflow: numeric("totalOutflow", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  totalFees: numeric("totalFees", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  closingBalance: numeric("closingBalance", { precision: 15, scale: 2 }).notNull(),
+  transactionCount: integer("transactionCount").default(0),
+  notes: text("notes"),
+  baseCurrency: varchar("base_currency", { length: 3 }),
+  baseClosingBalance: numeric("base_closing_balance", { precision: 15, scale: 2 }),
+  enteredBy: bigint("enteredBy", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  uniqueProviderLedger: uniqueIndex("idx_wallet_ledger_provider_date").on(table.locationId, table.provider, table.accountId, table.ledgerDate),
+}));
+
+export type MobileWalletDailyLedger = typeof mobileWalletDailyLedger.$inferSelect;
+export type InsertMobileWalletDailyLedger = typeof mobileWalletDailyLedger.$inferInsert;
+
+export const mobileWalletReconciliation = pgTable("mobile_wallet_reconciliation", {
+  id: serial("id").primaryKey(),
+  provider: varchar("provider", { length: 20 }).notNull().references(() => mobileWalletProviders.code, { onDelete: "no action" }),
+  txnDate: date("txnDate").notNull(),
+  orphanCount: integer("orphanCount").default(0),
+  orphanTotal: numeric("orphanTotal", { precision: 15, scale: 2 }).default("0.00"),
+  matchedCount: integer("matchedCount").default(0),
+  matchedTotal: numeric("matchedTotal", { precision: 15, scale: 2 }).default("0.00"),
+  status: statusEnum("status").default("open").notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  resolvedAt: timestamp("resolvedAt"),
+});
+
+export type MobileWalletReconciliation = typeof mobileWalletReconciliation.$inferSelect;
+export type InsertMobileWalletReconciliation = typeof mobileWalletReconciliation.$inferInsert;
+
+export const providerConfigs = pgTable("provider_configs", {
+  id: serial("id").primaryKey(),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  provider: varchar("provider", { length: 20 }).notNull().references(() => mobileWalletProviders.code, { onDelete: "no action" }),
+  accountId: bigint("accountId", { mode: "number" }).notNull().references(() => accounts.id, { onDelete: "no action" }),
+  isDefault: boolean("is_default").default(false).notNull(),
+  config: jsonb("config"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  uniqueProviderConfig: uniqueIndex("idx_provider_config_loc_prov_acct").on(table.locationId, table.provider, table.accountId),
+}));
+
+export type ProviderConfig = typeof providerConfigs.$inferSelect;
+export type InsertProviderConfig = typeof providerConfigs.$inferInsert;
 
 // Partner commission tracking
 export const partnerCommissions = pgTable("partner_commissions", {
