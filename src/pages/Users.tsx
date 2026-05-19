@@ -348,7 +348,7 @@ export function Users() {
             <Card className="border-[#E8E0D8] bg-white">
               <CardHeader className="pb-3"><CardTitle className="font-serif text-lg flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-[#D4A854]"/>Role Reference</CardTitle></CardHeader>
               <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {[
                     { role: "Owner", desc: "Full access to everything. Can reset all transactions." },
                     { role: "Admin", desc: "Full access except owner-only actions like transaction reset." },

@@ -315,14 +315,14 @@ function KpiCard({
 }) {
   return (
     <Card className="border-[#E8E0D8] bg-white">
-      <CardContent className="p-5">
+      <CardContent className="p-3 sm:p-5">
         <div className="flex items-start justify-between">
-          <div className="space-y-3">
-            <p className="text-xs uppercase tracking-wider text-[#8D8A87]">
+          <div className="space-y-1.5 sm:space-y-3">
+            <p className="text-[10px] sm:text-xs uppercase tracking-wider text-[#8D8A87]">
               {title}
             </p>
             <p
-              className={`font-mono text-2xl font-bold ${
+              className={`font-mono text-base sm:text-2xl font-bold ${
                 trend === "positive"
                   ? "text-[#2E7D32]"
                   : trend === "negative"
@@ -332,9 +332,9 @@ function KpiCard({
             >
               {formatKES(value)}
             </p>
-            <p className="text-xs text-[#8D8A87]">{subtitle}</p>
+            <p className="text-[10px] sm:text-xs text-[#8D8A87]">{subtitle}</p>
           </div>
-          <div className="rounded-lg bg-[#F5EDE6] p-2">{icon}</div>
+          <div className="rounded-lg bg-[#F5EDE6] p-1.5 sm:p-2 shrink-0">{icon}</div>
         </div>
       </CardContent>
     </Card>

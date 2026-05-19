@@ -81,7 +81,7 @@ export function ChartOfAccounts({ embedded }: { embedded?: boolean }) {
       </div>
 
         {/* Summary Cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {Object.entries(accountTypeLabels).map(([type, info]) => {
             const Icon = info.icon;
             const stats = summary[type as keyof typeof summary] || { count: 0, total: 0 };
@@ -300,7 +300,7 @@ function AccountForm({ onSuccess, businessId }: { onSuccess: () => void; busines
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
         <div>
           <label className="text-sm text-[#8D8A87]">Account Type</label>
           <select
@@ -353,7 +353,7 @@ function AccountForm({ onSuccess, businessId }: { onSuccess: () => void; busines
         </select>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
         <div>
           <label className="text-sm text-[#8D8A87]">Opening Balance</label>
           <Input

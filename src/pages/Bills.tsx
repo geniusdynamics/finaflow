@@ -266,7 +266,7 @@ export function Bills() {
 
         {/* Bills Dashboard */}
         {billsSummary && (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card className="border-[#E8E0D8] bg-white">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2"><FileText className="h-4 w-4 text-[#ED6C02]" /><span className="text-xs uppercase tracking-wider text-[#8D8A87]">Bills This Week</span></div>

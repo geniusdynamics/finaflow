@@ -263,7 +263,7 @@ export function Accounts() {
                 <DialogContent className="bg-white">
                   <DialogHeader><DialogTitle className="font-serif text-xl text-[#2D2A26]">Add Account</DialogTitle></DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
                       <div className="space-y-2"><Label>Location</Label>
                         <select value={form.locationId} onChange={(e) => setForm(p => ({ ...p, locationId: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" required>
                           <option value="">Select</option>
