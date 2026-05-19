@@ -27,15 +27,22 @@ export function Accounts() {
   const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.ACCOUNTS_MANAGE);
   const [searchParams, setSearchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");
+  const tabParam = searchParams.get("tab");
   const [section, setSection] = useState<"accounts" | "chart-of-accounts" | "journal-entries">(
     sectionParam === "chart-of-accounts" || sectionParam === "journal-entries" ? sectionParam : "accounts"
   );
-  const [tab, setTab] = useState<"accounts" | "payment-methods">("accounts");
+  const [tab, setTab] = useState<"accounts" | "payment-methods">(
+    tabParam === "payment-methods" ? "payment-methods" : "accounts"
+  );
 
   useEffect(() => {
     const sp = searchParams.get("section");
     if (sp === "chart-of-accounts" || sp === "journal-entries") {
       setSection(sp);
+    }
+    const tp = searchParams.get("tab");
+    if (tp === "payment-methods") {
+      setTab("payment-methods");
     }
   }, [searchParams]);
 
