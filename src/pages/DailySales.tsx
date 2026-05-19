@@ -251,7 +251,7 @@ export function DailySales() {
                 )}
                 {selectedLocation && (!locPaymentMethods || locPaymentMethods.length === 0) && (
                   <div className="rounded-lg bg-[#F5EDE6] p-4 text-center text-sm text-[#8D8A87]">
-                    No payment methods tagged to this branch. <a href="/payment-methods" className="text-[#C73E1D] underline">Go to Payment Methods</a> to set them up.
+                    No payment methods tagged to this branch. <a href="/accounts?tab=payment-methods" className="text-[#C73E1D] underline">Go to Payment Methods</a> to set them up.
                   </div>
                 )}
 
