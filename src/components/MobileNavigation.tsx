@@ -38,7 +38,6 @@ export const mobileSecondaryNavItems = [
   { path: "/suppliers", label: "Suppliers", icon: Building },
   { path: "/bills", label: "Bills", icon: FileText },
   { path: "/accounts", label: "Accounts", icon: CreditCard },
-  { path: "/locations", label: "Branches", icon: Building2 },
   { path: "/payroll", label: "Payroll", icon: Users },
   { path: "/mpesa", label: "M-PESA", icon: Smartphone },
   { path: "/wallet", label: "Wallet", icon: Wallet },
