@@ -56,7 +56,7 @@ export function startExchangeRateSync(intervalMs: number = 3_600_000): ReturnTyp
 
 export function validateEnvConfig(): boolean {
   const provider = process.env.EXCHANGE_RATE_PROVIDER;
-  if (provider && provider !== "manual" && !process.env.EXCHANGE_RATE_API_KEY) {
+  if (provider && provider !== "manual" && provider !== "frankfurter" && !process.env.EXCHANGE_RATE_API_KEY) {
     console.warn(`[ExchangeRateSync] Provider "${provider}" configured but EXCHANGE_RATE_API_KEY is missing. Using manual mode.`);
     return false;
   }

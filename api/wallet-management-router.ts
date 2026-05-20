@@ -190,11 +190,10 @@ export const walletManagementRouter = createRouter({
 
     sync: walletAdmin
       .mutation(async () => {
-        const { startExchangeRateSync } = await import("./lib/exchange-rate-sync");
-        const { refreshRates } = await import("./lib/currency-converter");
+        const { currencyConverter } = await import("./lib/currency-converter");
         try {
-          await refreshRates();
-          return { success: true, message: "Rates refreshed from configured provider" };
+          await currencyConverter.refreshRates();
+          return { success: true, message: "Rates refreshed from Frankfurter" };
         } catch (err) {
           return { success: false, error: err instanceof Error ? err.message : "Sync failed" };
         }

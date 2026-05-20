@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Settings as SettingsIcon, Camera, Briefcase, Shield, Crown, Award, ArrowUpCircle, ArrowDownCircle, Users, MapPin, Gift, Clock, Key, Trash2, Plus, Copy, CheckCircle, Webhook, AlertCircle, Plug, MessageSquare, Eye } from "lucide-react";
+import { Settings as SettingsIcon, Camera, Briefcase, Shield, Crown, Award, ArrowUpCircle, ArrowDownCircle, Users, MapPin, Gift, Clock, Key, Trash2, Plus, Copy, CheckCircle, Webhook, AlertCircle, Plug, MessageSquare, Eye, RefreshCw, DollarSign } from "lucide-react";
 import { toast } from "sonner";
 
 const PLAN_DETAILS: Record<string, { label: string; price: string; businesses: number; branches: number; users: number; transactions: string; payroll: string; support: string; color: string; features: string[] }> = {
@@ -117,6 +117,11 @@ export function Settings() {
   });
   const updateHook = trpc.integrations.updateWebhook.useMutation({ onSuccess: () => refetchHooks() });
   const deleteHook = trpc.integrations.deleteWebhook.useMutation({ onSuccess: () => { refetchHooks(); toast.success("Webhook deleted"); } });
+
+  const syncRates = trpc.walletManagement.rates.sync.useMutation({
+    onSuccess: (data) => { if (data.success) toast.success(data.message); else toast.error(data.error || "Sync failed"); },
+    onError: (err) => toast.error(err.message),
+  });
 
   const toggle = (key: string) => {
     const current = settings?.[key] === "true";
@@ -496,6 +501,41 @@ export function Settings() {
                     </div>
                   ))}
                   {(!hooks || hooks.length === 0) && <p className="text-sm text-[#8D8A87]">No webhooks configured.</p>}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Currency Exchanges */}
+            <Card className="border-[#E8E0D8]"><CardHeader className="pb-3">
+              <CardTitle className="font-serif text-lg flex items-center gap-2"><DollarSign className="h-5 w-5 text-[#2E7D32]"/>Currency Exchanges</CardTitle>
+            </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-lg border border-[#E8E0D8] px-4 py-3">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-[#2D2A26]">Frankfurter</p>
+                      <p className="text-xs text-[#8D8A87]">https://api.frankfurter.dev</p>
+                    </div>
+                    <span className="rounded-full bg-[#2E7D32]/10 px-2.5 py-0.5 text-xs font-medium text-[#2E7D32]">Active</span>
+                  </div>
+                  <p className="mb-3 text-xs text-[#8D8A87]">
+                    Frankfurter is a free, open-source exchange rate API. You can self-host it and change the endpoint later.
+                  </p>
+                  <div className="flex items-center justify-between rounded-lg bg-[#F5EDE6] px-3 py-2">
+                    <span className="text-xs text-[#2D2A26]">API URL</span>
+                    <code className="font-mono text-xs text-[#8D8A87]">https://api.frankfurter.dev/v2/rates</code>
+                  </div>
+                  <div className="mt-3">
+                    <Button
+                      size="sm"
+                      onClick={() => syncRates.mutate()}
+                      disabled={syncRates.isPending}
+                      className="gap-1 bg-[#C73E1D]"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${syncRates.isPending ? "animate-spin" : ""}`} />
+                      {syncRates.isPending ? "Syncing..." : "Sync Now"}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

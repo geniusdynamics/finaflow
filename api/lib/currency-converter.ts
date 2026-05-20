@@ -37,17 +37,20 @@ export class CurrencyConverter {
   private baseCurrency: string;
   private apiKey?: string;
   private provider: string;
+  private providerUrl?: string;
 
   constructor(config?: {
     cacheTTL?: number;
     baseCurrency?: string;
     apiKey?: string;
     provider?: string;
+    providerUrl?: string;
   }) {
     this.cacheTTL = config?.cacheTTL ?? DEFAULT_CACHE_TTL;
     this.baseCurrency = config?.baseCurrency ?? DEFAULT_BASE_CURRENCY;
     this.apiKey = config?.apiKey;
     this.provider = config?.provider ?? "manual";
+    this.providerUrl = config?.providerUrl;
   }
 
   private cacheKey(from: string, to: string): string {
@@ -81,7 +84,7 @@ export class CurrencyConverter {
       return d(dbRate.rate);
     }
 
-    if (this.provider !== "manual" && this.apiKey) {
+    if (this.provider !== "manual" && (this.apiKey || this.provider === "frankfurter")) {
       const externalRate = await this.fetchRateFromProvider(from, to);
       if (externalRate) {
         const rate = d(externalRate);
@@ -141,7 +144,14 @@ export class CurrencyConverter {
   async refreshRates(): Promise<void> {
     this.cache.clear();
 
-    if (this.provider !== "manual" && this.apiKey) {
+    if (this.provider === "manual") return;
+
+    if (this.provider === "frankfurter") {
+      await this.refreshRatesFromFrankfurter();
+      return;
+    }
+
+    if (this.apiKey) {
       const currencies = await this.getActiveCurrencies();
       for (const currency of currencies) {
         if (currency.code === this.baseCurrency) continue;
@@ -156,6 +166,34 @@ export class CurrencyConverter {
           console.error(`[CurrencyConverter] Failed to refresh rate for ${currency.code}:`, err);
         }
       }
+    }
+  }
+
+  private async refreshRatesFromFrankfurter(): Promise<void> {
+    try {
+      const baseUrl = this.providerUrl ?? "https://api.frankfurter.dev/v2/rates";
+      const url = `${baseUrl}?base=${this.baseCurrency}`;
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.error(`[CurrencyConverter] Frankfurter API returned ${response.status}`);
+        return;
+      }
+      const data = await response.json() as { rates: Record<string, number>; date?: string };
+      if (!data.rates) {
+        console.error(`[CurrencyConverter] Frankfurter API response missing rates`);
+        return;
+      }
+      let count = 0;
+      for (const [code, rate] of Object.entries(data.rates)) {
+        const rateStr = rate.toString();
+        await this.persistRate(this.baseCurrency, code, rateStr, "frankfurter");
+        const inverse = d(1).div(d(rateStr));
+        await this.persistRate(code, this.baseCurrency, inverse.toFixed(8), "frankfurter (inverse)");
+        count++;
+      }
+      console.log(`[CurrencyConverter] Synced ${count} rates from Frankfurter (base: ${this.baseCurrency})`);
+    } catch (err) {
+      console.error(`[CurrencyConverter] Frankfurter sync error:`, err);
     }
   }
 
@@ -229,6 +267,15 @@ export class CurrencyConverter {
 
   private async fetchRateFromProvider(from: string, to: string): Promise<string | null> {
     try {
+      if (this.provider === "frankfurter") {
+        const baseUrl = this.providerUrl ?? "https://api.frankfurter.dev/v2/rates";
+        const url = `${baseUrl}?base=${from}&symbols=${to}`;
+        const response = await fetch(url);
+        if (!response.ok) return null;
+        const data = await response.json() as { rates: Record<string, number> };
+        if (data.rates?.[to]) return data.rates[to].toString();
+        return null;
+      }
       const url = `https://v6.exchangerate-api.com/v6/${this.apiKey}/pair/${from}/${to}`;
       const response = await fetch(url);
       if (!response.ok) return null;
@@ -262,7 +309,8 @@ export class CurrencyConverter {
 }
 
 export const currencyConverter = new CurrencyConverter({
-  provider: process.env.EXCHANGE_RATE_PROVIDER ?? "manual",
+  provider: process.env.EXCHANGE_RATE_PROVIDER ?? "frankfurter",
   apiKey: process.env.EXCHANGE_RATE_API_KEY,
   baseCurrency: process.env.EXCHANGE_RATE_BASE_CURRENCY ?? "KES",
+  providerUrl: process.env.FRANKFURTER_API_URL ?? "https://api.frankfurter.dev/v2/rates",
 });
