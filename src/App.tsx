@@ -27,6 +27,7 @@ const Users = lazy(() => import("./pages/Users").then(m => ({ default: m.Users }
 const Locations = lazy(() => import("./pages/Locations").then(m => ({ default: m.Locations })));
 const Settings = lazy(() => import("./pages/Settings").then(m => ({ default: m.Settings })));
 const Businesses = lazy(() => import("./pages/Businesses"));
+const BusinessOverview = lazy(() => import("./pages/BusinessOverview").then(m => ({ default: m.BusinessOverview })));
 const BusinessDetails = lazy(() => import("./pages/BusinessDetails").then(m => ({ default: m.BusinessDetails })));
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard").then(m => ({ default: m.PartnerDashboard })));
 
@@ -64,6 +65,7 @@ export default function App() {
         <Route path="/settings" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><Settings /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/feedback" element={<Navigate to="/settings?tab=feedback" replace />} />
         <Route path="/businesses" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><Businesses /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/businesses/:id" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><BusinessOverview /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/businesses/:id/details" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><BusinessDetails /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/partner" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="partner:view"><PartnerDashboard /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="*" element={<Suspense fallback={<PageSkeleton />}><NotFound /></Suspense>} />

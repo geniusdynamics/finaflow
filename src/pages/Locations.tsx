@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -6,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, MapPin, Pencil, Trash2, Building2, Smartphone, Wallet } from "lucide-react";
+import { Plus, MapPin, Pencil, Trash2, Building2, Smartphone, Wallet, ChevronLeft } from "lucide-react";
 
 export function Locations() {
   const [open, setOpen] = useState(false);
@@ -14,6 +15,7 @@ export function Locations() {
   const [form, setForm] = useState({ name: "", slug: "", address: "", phone: "", email: "" });
   const [editForm, setEditForm] = useState({ name: "", slug: "", address: "", phone: "", email: "", isActive: true, defaultMpesaAccountId: "", defaultCashAccountId: "" });
 
+  const navigate = useNavigate();
   const { data: locations } = trpc.locations.list.useQuery();
   const { data: accounts } = trpc.accounts.list.useQuery();
 
@@ -32,6 +34,10 @@ export function Locations() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
+            <button onClick={() => navigate("/businesses")} className="mb-1 flex items-center gap-1 text-xs text-[#8D8A87] hover:text-[#C73E1D]">
+              <ChevronLeft className="h-3 w-3" />
+              Back to Businesses
+            </button>
             <h1 className="font-serif text-2xl font-bold text-[#2D2A26]">Branches & Locations</h1>
             <p className="mt-1 text-sm text-[#8D8A87]">Manage business branches, HQ, and default wallets</p>
           </div>

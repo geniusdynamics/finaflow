@@ -259,8 +259,8 @@ export function Businesses() {
                       )}
                       {isActive && user?.role === "owner" && (
                         <>
-                          <Button size="sm" variant="outline" onClick={() => navigate(`/businesses/${b.id}/details`)}>
-                            <Building className="mr-1 h-3 w-3" /> Details
+                          <Button size="sm" variant="outline" onClick={() => navigate(`/businesses/${b.id}`)}>
+                            <Building2 className="mr-1 h-3 w-3" /> Overview
                           </Button>
                           <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
                             <DialogTrigger asChild>
