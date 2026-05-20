@@ -23,6 +23,7 @@ export function Wallet() {
   const [smsProvider, setSmsProvider] = useState("mpesa");
   const [parsedPreview, setParsedPreview] = useState<any[]>([]);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [previewed, setPreviewed] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: locations } = trpc.locations.list.useQuery();
@@ -54,14 +55,14 @@ export function Wallet() {
     setIsPreviewing(true);
     try {
       const result = await previewSmsQuery.refetch();
-      if (result.data) setParsedPreview(result.data);
+      if (result.data) { setParsedPreview(result.data); setPreviewed(true); }
     } catch {
       setParsedPreview([]);
     }
     setIsPreviewing(false);
   };
 
-  useEffect(() => { setParsedPreview([]); }, [smsText, smsProvider, selectedLocation]);
+  useEffect(() => { setParsedPreview([]); setPreviewed(false); }, [smsText, smsProvider, selectedLocation]);
 
   const providerColors: Record<string, string> = {
     mpesa: "bg-green-600",
@@ -125,7 +126,7 @@ export function Wallet() {
                     <Button onClick={handlePreviewSms} variant="outline" className="border-[#D4A854] text-[#D4A854]" disabled={!selectedLocation || !smsText.trim() || isPreviewing}>
                       {isPreviewing ? "Parsing..." : "Preview"}
                     </Button>
-                    <Button onClick={handleImportSms} disabled={!selectedLocation || !smsText.trim() || importSms.isPending} className="flex-1 bg-[#C73E1D]">
+                    <Button onClick={handleImportSms} disabled={!selectedLocation || !smsText.trim() || !previewed || importSms.isPending} className="flex-1 bg-[#C73E1D]">
                       <Upload className="mr-2 h-4 w-4" />
                       {importSms.isPending ? "Importing..." : `Import ${parsedPreview.length > 0 ? parsedPreview.length + ' Records' : 'SMS'}`}
                     </Button>
