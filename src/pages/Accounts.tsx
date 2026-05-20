@@ -73,7 +73,7 @@ export function Accounts() {
   const todayDate = getLocalDateString();
 
   const [form, setForm] = useState({
-    locationId: "", name: "", type: "cash" as "cash" | "mpesa" | "bank_account",
+    locationId: "", name: "",     type: "cash" as "cash" | "wallet" | "bank_account",
     accountCode: "", accountNumber: "", openingBalance: "0.00", isPaymentMethod: true,
     accountType: "asset" as CoaAccountType, accountSubType: "" as OperationalSubType, isContra: false, linkToCoa: false,
   });
@@ -160,7 +160,7 @@ export function Accounts() {
   const getAccountIcon = (type: string) => {
     switch (type) {
       case "cash": return <Wallet className="h-5 w-5" />;
-      case "mpesa": return <Smartphone className="h-5 w-5" />;
+      case "wallet": return <Wallet className="h-5 w-5" />;
       case "bank_account": return <Landmark className="h-5 w-5" />;
       default: return <CreditCard className="h-5 w-5" />;
     }
@@ -169,7 +169,7 @@ export function Accounts() {
   const getAccountColor = (type: string) => {
     switch (type) {
       case "cash": return "bg-[#2E7D32]/10 text-[#2E7D32]";
-      case "mpesa": return "bg-[#C73E1D]/10 text-[#C73E1D]";
+      case "wallet": return "bg-[#C73E1D]/10 text-[#C73E1D]";
       case "bank_account": return "bg-[#D4A854]/10 text-[#D4A854]";
       default: return "bg-[#8D8A87]/10 text-[#8D8A87]";
     }
@@ -179,7 +179,7 @@ export function Accounts() {
     const config: ChartConfig = {
       cashTotal: { label: "Cash Total", color: "#2E7D32" },
       bankTotal: { label: "Bank Total", color: "#D4A854" },
-      mpesaTotal: { label: "M-PESA Total", color: "#C73E1D" },
+      walletTotal: { label: "Wallet Total", color: "#C73E1D" },
       totalBalance: { label: "All Accounts Total", color: "#2D2A26" },
     };
     balanceHistory?.accountMeta?.forEach((account, index) => {
@@ -271,8 +271,8 @@ export function Accounts() {
                         </select>
                       </div>
                       <div className="space-y-2"><Label>Type</Label>
-                        <select value={form.type} onChange={(e) => setForm(p => ({ ...p, type: e.target.value as "cash" | "mpesa" | "bank_account" }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
-                          <option value="cash">Cash</option><option value="mpesa">M-PESA</option><option value="bank_account">Bank Account</option>
+                        <select value={form.type} onChange={(e) => setForm(p => ({ ...p, type: e.target.value as "cash" | "wallet" | "bank_account" }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
+                          <option value="cash">Cash</option><option value="wallet">Wallet</option><option value="bank_account">Bank Account</option>
                         </select>
                       </div>
                     </div>
@@ -486,9 +486,9 @@ export function Accounts() {
                   />
                   <Area
                     type="monotone"
-                    dataKey="mpesaTotal"
-                    stroke="var(--color-mpesaTotal)"
-                    fill="var(--color-mpesaTotal)"
+                    dataKey="walletTotal"
+                    stroke="var(--color-walletTotal)"
+                    fill="var(--color-walletTotal)"
                     fillOpacity={0.2}
                     strokeWidth={2}
                   />

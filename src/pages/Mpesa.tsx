@@ -48,7 +48,7 @@ export function Mpesa() {
   const { data: categories, refetch: refetchCategories } = trpc.expenses.categories.useQuery();
   const { data: suppliers } = trpc.suppliers.list.useQuery();
   const { data: accounts } = trpc.accounts.list.useQuery();
-  const mpesaAccounts = accounts?.filter(a => a.type === "mpesa" && a.isActive && !a.deletedAt) ?? [];
+  const mpesaAccounts = accounts?.filter(a => a.type === "wallet" && a.isActive && !a.deletedAt) ?? [];
   
   // Always pass the date parameters to ensure proper filtering
   const { data: transactions, refetch } = trpc.mpesa.list.useQuery({
@@ -341,11 +341,11 @@ export function Mpesa() {
                                       </select>
                                     </div>
                                     <div className="space-y-2">
-                                      <Label>Destination M-PESA Wallet</Label>
-                                      <p className="text-xs text-[#8D8A87]">Select the M-PESA wallet/account that received this topup. The system will credit this account.</p>
+                                      <Label>Destination Wallet</Label>
+                                      <p className="text-xs text-[#8D8A87]">Select the wallet account that received this topup. The system will credit this account.</p>
                                       <select value={linkForm.destinationAccountId} onChange={(e) => setLinkForm(p => ({...p, destinationAccountId: e.target.value}))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
                                         <option value="">Auto (no specific wallet)</option>
-                                        {accounts?.filter(a => a.type === "mpesa" && a.isActive && !a.deletedAt).map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {loc ? `· ${loc}` : ""} · Bal: {formatKES(a.currentBalance)}</option>; })}
+                                        {accounts?.filter(a => a.type === "wallet" && a.isActive && !a.deletedAt).map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {loc ? `· ${loc}` : ""} · Bal: {formatKES(a.currentBalance)}</option>; })}
                                       </select>
                                     </div>
                                     <Button onClick={() => linkTopup.mutate({ mpesaTxnId: txn.id, sourceAccountId: parseInt(linkForm.sourceAccountId), destinationAccountId: linkForm.destinationAccountId ? parseInt(linkForm.destinationAccountId) : undefined })} disabled={!linkForm.sourceAccountId || linkTopup.isPending} className="w-full bg-[#C73E1D]">

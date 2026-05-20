@@ -84,10 +84,10 @@ export function Locations() {
                             <div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label>Name</Label><Input value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} required /></div><div className="space-y-2"><Label>Slug</Label><Input value={editForm.slug} onChange={e => setEditForm(p => ({ ...p, slug: e.target.value }))} required /></div></div>
                             <div className="space-y-2"><Label>Address</Label><Input value={editForm.address} onChange={e => setEditForm(p => ({ ...p, address: e.target.value }))} /></div>
                             <div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label>Phone</Label><Input value={editForm.phone} onChange={e => setEditForm(p => ({ ...p, phone: e.target.value }))} /></div><div className="space-y-2"><Label>Email</Label><Input value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} /></div></div>
-                            <div className="space-y-2"><Label>Default M-PESA Wallet</Label>
+                            <div className="space-y-2"><Label>Default Wallet</Label>
                               <select value={editForm.defaultMpesaAccountId} onChange={e => setEditForm(p => ({ ...p, defaultMpesaAccountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
                                 <option value="">Select wallet</option>
-                                {locAccounts.filter(a => a.type === "mpesa").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                {locAccounts.filter(a => a.type === "wallet").map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                               </select>
                             </div>
                             <div className="space-y-2"><Label>Default Cash Account</Label>
@@ -114,9 +114,9 @@ export function Locations() {
                     <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Default Accounts</p>
                     <div className="flex gap-2">
                       {mpesaAcct ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[#C73E1D]/10 px-2 py-1 text-xs text-[#C73E1D]"><Smartphone className="h-3 w-3" />{mpesaAcct.name}</span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#C73E1D]/10 px-2 py-1 text-xs text-[#C73E1D]"><Wallet className="h-3 w-3" />{mpesaAcct.name}</span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-[#F5EDE6] px-2 py-1 text-xs text-[#8D8A87]"><Smartphone className="h-3 w-3" />No M-PESA wallet</span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-[#F5EDE6] px-2 py-1 text-xs text-[#8D8A87]"><Wallet className="h-3 w-3" />No wallet</span>
                       )}
                       {cashAcct ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-[#2E7D32]/10 px-2 py-1 text-xs text-[#2E7D32]"><Wallet className="h-3 w-3" />{cashAcct.name}</span>
@@ -129,7 +129,7 @@ export function Locations() {
                     <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Accounts ({locAccounts.length})</p>
                     <div className="flex flex-wrap gap-1">
                       {locAccounts.map(a => (
-                        <span key={a.id} className={`inline-block rounded-full px-2 py-0.5 text-xs ${a.type === "mpesa" ? "bg-[#C73E1D]/10 text-[#C73E1D]" : a.type === "cash" ? "bg-[#2E7D32]/10 text-[#2E7D32]" : "bg-[#D4A854]/10 text-[#D4A854]"}`}>
+                        <span key={a.id} className={`inline-block rounded-full px-2 py-0.5 text-xs ${a.type === "wallet" ? "bg-[#C73E1D]/10 text-[#C73E1D]" : a.type === "cash" ? "bg-[#2E7D32]/10 text-[#2E7D32]" : "bg-[#D4A854]/10 text-[#D4A854]"}`}>
                           {a.name} · {a.currentBalance}
                         </span>
                       ))}

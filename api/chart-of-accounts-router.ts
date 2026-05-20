@@ -59,7 +59,7 @@ export const chartOfAccountsRouter = createRouter({
         isContra: z.boolean().default(false),
         parentAccountId: z.number().optional(),
         openingBalance: z.string().default("0.00"),
-        type: z.enum(["cash", "mpesa", "bank_account"]).optional(),
+        type: z.enum(["cash", "wallet", "bank_account"]).optional(),
         isPaymentMethod: z.boolean().default(false),
       })
     )

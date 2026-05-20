@@ -30,7 +30,7 @@ export const createExpenseInputSchema = z.object({
   amount: z.string(),
   description: z.string().min(1),
   expenseDate: notFutureDateString("Expense date"),
-  paymentMethod: z.enum(["cash", "mpesa", "bank_transfer", "card"]),
+  paymentMethod: z.enum(["cash", "wallet", "bank_transfer", "card"]),
   accountId: z.number().optional(),
   receiptImageUrl: z.string().optional(),
   mpesaTxnId: z.string().optional(),
@@ -60,7 +60,7 @@ export const updateExpenseInputSchema = z.object({
   amount: z.string().optional(),
   description: z.string().optional(),
   expenseDate: optionalNotFutureDateString("Expense date"),
-  paymentMethod: z.enum(["cash", "mpesa", "bank_transfer", "card"]).optional(),
+  paymentMethod: z.enum(["cash", "wallet", "bank_transfer", "card"]).optional(),
 });
 
 export const expensesRouter = createRouter({
@@ -301,7 +301,7 @@ export const expensesRouter = createRouter({
         }
 
         if (!accountId) {
-          const typeMap: Record<string, string> = { cash: "cash", mpesa: "cash", bank_transfer: "bank", card: "bank" };
+          const typeMap: Record<string, string> = { cash: "cash", wallet: "cash", bank_transfer: "bank", card: "bank" };
           const accts = await tx.select().from(accounts).where(
             and(eq(accounts.locationId, input.locationId), eq(accounts.type, typeMap[input.paymentMethod] as any), isNull(accounts.deletedAt))
           ).limit(1);

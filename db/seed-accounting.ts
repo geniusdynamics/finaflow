@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 const defaultAccounts = [
   { accountCode: "1000", name: "Cash - Main", accountType: "asset", accountSubType: "cash", type: "cash" as const, openingBalance: "0.00" },
   { accountCode: "1100", name: "Bank - Current Account", accountType: "asset", accountSubType: "bank", type: "bank_account" as const, openingBalance: "0.00" },
-  { accountCode: "1200", name: "M-Pesa Account", accountType: "asset", accountSubType: "cash", type: "mpesa" as const, openingBalance: "0.00" },
+  { accountCode: "1200", name: "Wallet Account", accountType: "asset", accountSubType: "cash", type: "wallet" as const, openingBalance: "0.00" },
   { accountCode: "1300", name: "Accounts Receivable", accountType: "asset", accountSubType: "accounts_receivable", type: "bank_account" as const, openingBalance: "0.00" },
   { accountCode: "1400", name: "Inventory", accountType: "asset", accountSubType: "inventory", type: "bank_account" as const, openingBalance: "0.00" },
   { accountCode: "1500", name: "Prepaid Expenses", accountType: "asset", accountSubType: "prepaid_expense", type: "bank_account" as const, openingBalance: "0.00" },

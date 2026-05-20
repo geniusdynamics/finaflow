@@ -445,7 +445,7 @@ export function Expenses() {
                   </div>
                   <div><Label>Payment Method</Label>
                     <select value={form.paymentMethod} onChange={e => setForm(p => ({ ...p, paymentMethod: e.target.value as any }))} className="w-full rounded border px-3 py-2 text-sm">
-                      <option value="cash">Cash</option><option value="mpesa">M-PESA</option><option value="bank_transfer">Bank Transfer</option><option value="card">Card</option>
+                      <option value="cash">Cash</option><option value="wallet">Wallet</option><option value="bank_transfer">Bank Transfer</option><option value="card">Card</option>
                     </select>
                   </div>
                 </div>

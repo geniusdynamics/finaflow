@@ -2,8 +2,8 @@
 // ABOUTME: Keeps expense, bills, and payment flows aligned on valid account sub-type behavior.
 import type { AccountingClass, AccountSubType } from "@db/schema";
 
-export type OperationalAccountType = "cash" | "mpesa" | "bank_account";
-export type SupportedPaymentMethod = "cash" | "mpesa" | "bank_transfer" | "card";
+export type OperationalAccountType = "cash" | "wallet" | "bank_account";
+export type SupportedPaymentMethod = "cash" | "wallet" | "bank_transfer" | "card";
 
 const EXPENSE_SUBTYPE_BY_CLASS: Record<AccountingClass, AccountSubType> = {
   cogs: "cogs",
@@ -21,7 +21,7 @@ const PAYMENT_METHOD_ACCOUNT_CONFIG: Record<
   { operationalType: OperationalAccountType; assetSubType: Extract<AccountSubType, "cash" | "bank"> }
 > = {
   cash: { operationalType: "cash", assetSubType: "cash" },
-  mpesa: { operationalType: "mpesa", assetSubType: "cash" },
+  wallet: { operationalType: "wallet", assetSubType: "cash" },
   bank_transfer: { operationalType: "bank_account", assetSubType: "bank" },
   card: { operationalType: "bank_account", assetSubType: "bank" },
 };
@@ -31,7 +31,7 @@ const OPERATIONAL_LINK_REQUIREMENTS: Record<
   { accountType: "asset"; accountSubType: Extract<AccountSubType, "cash" | "bank"> }
 > = {
   cash: { accountType: "asset", accountSubType: "cash" },
-  mpesa: { accountType: "asset", accountSubType: "cash" },
+  wallet: { accountType: "asset", accountSubType: "cash" },
   bank_account: { accountType: "asset", accountSubType: "bank" },
 };
 
