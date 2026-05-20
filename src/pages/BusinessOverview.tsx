@@ -78,6 +78,7 @@ export function BusinessOverview() {
     { businessId: businessId! },
     { enabled: !!businessId }
   );
+  const { data: accounts } = trpc.accounts.list.useQuery();
 
   const downloadDocumentMutation = trpc.businesses.downloadDocument.useMutation();
   const uploadDocMutation = trpc.businesses.uploadDocument.useMutation();
@@ -113,7 +114,7 @@ export function BusinessOverview() {
   const [locDialogOpen, setLocDialogOpen] = useState(false);
   const [locForm, setLocForm] = useState({ name: "", slug: "", address: "", phone: "", email: "" });
   const [editLocId, setEditLocId] = useState<number | null>(null);
-  const [editLocForm, setEditLocForm] = useState({ name: "", slug: "", address: "", phone: "", email: "" });
+  const [editLocForm, setEditLocForm] = useState({ name: "", slug: "", address: "", phone: "", email: "", isActive: true, defaultMpesaAccountId: "", defaultCashAccountId: "" });
 
   const [uploading, setUploading] = useState(false);
   const [uploadingLogo, setUploadingLogo] = useState(false);
@@ -130,7 +131,17 @@ export function BusinessOverview() {
   };
 
   const handleUpdateLocation = (locId: number) => {
-    updateLoc.mutate({ id: locId, ...editLocForm });
+    updateLoc.mutate({
+      id: locId,
+      name: editLocForm.name,
+      slug: editLocForm.slug,
+      address: editLocForm.address || undefined,
+      phone: editLocForm.phone || undefined,
+      email: editLocForm.email || undefined,
+      isActive: editLocForm.isActive,
+      defaultMpesaAccountId: editLocForm.defaultMpesaAccountId ? +editLocForm.defaultMpesaAccountId : undefined,
+      defaultCashAccountId: editLocForm.defaultCashAccountId ? +editLocForm.defaultCashAccountId : undefined,
+    });
   };
 
   const startEditLocation = (loc: any) => {
@@ -141,6 +152,9 @@ export function BusinessOverview() {
       address: loc.address || "",
       phone: loc.phone || "",
       email: loc.email || "",
+      isActive: loc.isActive,
+      defaultMpesaAccountId: loc.defaultMpesaAccountId?.toString() ?? "",
+      defaultCashAccountId: loc.defaultCashAccountId?.toString() ?? "",
     });
   };
 
@@ -643,6 +657,41 @@ export function BusinessOverview() {
                             <Input value={editLocForm.phone} onChange={(e) => setEditLocForm((p) => ({ ...p, phone: e.target.value }))} placeholder="Phone" className="text-sm" />
                             <Input value={editLocForm.email} onChange={(e) => setEditLocForm((p) => ({ ...p, email: e.target.value }))} placeholder="Email" className="text-sm" />
                           </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-[#8D8A87]">Default Wallet</Label>
+                            <select
+                              value={editLocForm.defaultMpesaAccountId}
+                              onChange={(e) => setEditLocForm((p) => ({ ...p, defaultMpesaAccountId: e.target.value }))}
+                              className="w-full rounded border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26]"
+                            >
+                              <option value="">Select wallet</option>
+                              {(accounts?.filter((a) => a.type === "wallet") ?? []).map((a) => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-xs text-[#8D8A87]">Default Cash Account</Label>
+                            <select
+                              value={editLocForm.defaultCashAccountId}
+                              onChange={(e) => setEditLocForm((p) => ({ ...p, defaultCashAccountId: e.target.value }))}
+                              className="w-full rounded border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26]"
+                            >
+                              <option value="">Select cash account</option>
+                              {(accounts?.filter((a) => a.type === "cash") ?? []).map((a) => (
+                                <option key={a.id} value={a.id}>{a.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={editLocForm.isActive}
+                              onChange={(e) => setEditLocForm((p) => ({ ...p, isActive: e.target.checked }))}
+                              className="rounded"
+                            />
+                            <Label className="mb-0 text-sm">Active</Label>
+                          </div>
                           <Button size="sm" className="w-full bg-[#2E7D32]" onClick={() => handleUpdateLocation(loc.id)} disabled={updateLoc.isPending}>
                             <Save className="mr-1 h-3 w-3" />
                             {updateLoc.isPending ? "Saving..." : "Save"}
@@ -652,9 +701,57 @@ export function BusinessOverview() {
                         <>
                           {loc.address && <p className="text-sm text-[#8D8A87]"><MapPin className="mr-1 inline h-3 w-3" />{loc.address}</p>}
                           {loc.phone && <p className="text-sm text-[#8D8A87]">{loc.phone}</p>}
-                          <div className="flex items-center gap-1">
-                            <div className={`h-2 w-2 rounded-full ${loc.isActive ? "bg-green-600" : "bg-red-600"}`} />
-                            <span className="text-xs text-[#8D8A87]">{loc.isActive ? "Active" : "Inactive"}</span>
+                          <div className="space-y-1">
+                            <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Default Accounts</p>
+                            <div className="flex gap-2">
+                              {(() => {
+                                const mpesaAcct = accounts?.find((a) => a.id === loc.defaultMpesaAccountId);
+                                const cashAcct = accounts?.find((a) => a.id === loc.defaultCashAccountId);
+                                return (
+                                  <>
+                                    {mpesaAcct ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-[#C73E1D]/10 px-2 py-1 text-xs text-[#C73E1D]">
+                                        <Wallet className="h-3 w-3" />{mpesaAcct.name}
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-[#F5EDE6] px-2 py-1 text-xs text-[#8D8A87]">
+                                        <Wallet className="h-3 w-3" />No wallet
+                                      </span>
+                                    )}
+                                    {cashAcct ? (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-[#2E7D32]/10 px-2 py-1 text-xs text-[#2E7D32]">
+                                        <Wallet className="h-3 w-3" />{cashAcct.name}
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-[#F5EDE6] px-2 py-1 text-xs text-[#8D8A87]">
+                                        <Wallet className="h-3 w-3" />No cash account
+                                      </span>
+                                    )}
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Accounts ({accounts?.filter((a) => a.locationId === loc.id && !a.deletedAt).length ?? 0})</p>
+                            <div className="flex flex-wrap gap-1">
+                              {accounts
+                                ?.filter((a) => a.locationId === loc.id && !a.deletedAt)
+                                .map((a) => (
+                                  <span
+                                    key={a.id}
+                                    className={`inline-block rounded-full px-2 py-0.5 text-xs ${
+                                      a.type === "wallet"
+                                        ? "bg-[#C73E1D]/10 text-[#C73E1D]"
+                                        : a.type === "cash"
+                                          ? "bg-[#2E7D32]/10 text-[#2E7D32]"
+                                          : "bg-[#D4A854]/10 text-[#D4A854]"
+                                    }`}
+                                  >
+                                    {a.name} &middot; {a.currentBalance}
+                                  </span>
+                                ))}
+                            </div>
                           </div>
                         </>
                       )}
