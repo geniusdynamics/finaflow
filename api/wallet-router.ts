@@ -15,22 +15,57 @@ export const walletRouter = createRouter({
   providers: createRouter({
     list: walletQuery.query(async ({ ctx }) => {
       const db = getDb();
-      return db.select().from(mobileWalletProviders).where(eq(mobileWalletProviders.isActive, true));
+      const registryProviders = walletRegistry.getAll();
+      let dbMap = new Map<string, any>();
+      try {
+        const dbRows = await db.select().from(mobileWalletProviders).where(eq(mobileWalletProviders.isActive, true));
+        dbMap = new Map(dbRows.map((r) => [r.code, r]));
+      } catch {
+        // table may not exist (pre-migration)
+      }
+      return registryProviders.map((rp) => {
+        const dbRow = dbMap.get(rp.code);
+        return {
+          code: rp.code,
+          name: rp.displayName,
+          displayName: rp.displayName,
+          supportedCurrencies: rp.supportedCurrencies.join(","),
+          isActive: dbRow?.isActive ?? true,
+          brandColor: dbRow?.brandColor ?? null,
+          features: rp.features,
+        };
+      });
     }),
 
     listForLocation: walletQuery
       .input(z.object({ locationId: z.number() }))
       .query(async ({ input }) => {
         const db = getDb();
-        const configs = await db.select().from(providerConfigs).where(
-          and(eq(providerConfigs.locationId, input.locationId), eq(providerConfigs.isActive, true), isNull(providerConfigs.deletedAt))
-        );
-        const providers = await db.select().from(mobileWalletProviders);
-        return providers.map((p) => ({
-          ...p,
-          configured: configs.some((c) => c.provider === p.code),
-          config: configs.find((c) => c.provider === p.code) ?? null,
-        }));
+        let configs: any[] = [];
+        let providers: any[] = [];
+        try {
+          configs = await db.select().from(providerConfigs).where(
+            and(eq(providerConfigs.locationId, input.locationId), eq(providerConfigs.isActive, true), isNull(providerConfigs.deletedAt))
+          );
+          providers = await db.select().from(mobileWalletProviders);
+        } catch {
+          // table may not exist (pre-migration)
+        }
+        const registryProviders = walletRegistry.getAll();
+        return registryProviders.map((rp) => {
+          const p = providers.find((x) => x.code === rp.code);
+          return {
+            code: rp.code,
+            name: rp.displayName,
+            displayName: rp.displayName,
+            supportedCurrencies: rp.supportedCurrencies.join(","),
+            isActive: p?.isActive ?? true,
+            brandColor: p?.brandColor ?? null,
+            features: rp.features,
+            configured: configs.some((c) => c.provider === rp.code),
+            config: configs.find((c) => c.provider === rp.code) ?? null,
+          };
+        });
       }),
 
     setDefault: walletAdmin
@@ -67,8 +102,9 @@ export const walletRouter = createRouter({
         offset: z.number().optional(),
       }))
       .query(async ({ input, ctx }) => {
-        const db = getDb();
-        const conditions = [isNull(mobileWalletTransactions.deletedAt)];
+        try {
+          const db = getDb();
+          const conditions = [isNull(mobileWalletTransactions.deletedAt)];
 
         if (input?.provider) conditions.push(eq(mobileWalletTransactions.provider, input.provider));
 
@@ -95,6 +131,9 @@ export const walletRouter = createRouter({
           .orderBy(desc(mobileWalletTransactions.txnDate), desc(mobileWalletTransactions.txnTime))
           .limit(input?.limit ?? 100)
           .offset(input?.offset ?? 0);
+        } catch {
+          return [];
+        }
       }),
 
     stats: walletQuery
@@ -105,7 +144,8 @@ export const walletRouter = createRouter({
         dateTo: z.string().optional(),
       }))
       .query(async ({ input, ctx }) => {
-        const db = getDb();
+        try {
+          const db = getDb();
         const conditions = [isNull(mobileWalletTransactions.deletedAt)];
 
         if (input?.provider) conditions.push(eq(mobileWalletTransactions.provider, input.provider));
@@ -143,6 +183,9 @@ export const walletRouter = createRouter({
         }).from(mobileWalletTransactions).where(and(...conditions, sql`${mobileWalletTransactions.direction} = 'out'`)).groupBy(mobileWalletTransactions.partyName).orderBy(sql`SUM(ABS(CAST(${mobileWalletTransactions.amount} AS DECIMAL))) DESC`).limit(10);
 
         return { summary: rows[0], feesByType, topRecipients };
+        } catch {
+          return { summary: { totalIn: "0", totalOut: "0", totalFees: "0", countIn: 0, countOut: 0 }, feesByType: [], topRecipients: [] };
+        }
       }),
 
     importSms: walletImport
@@ -200,6 +243,25 @@ export const walletRouter = createRouter({
         }
 
         return { imported, skipped, totalParsed: parsed.length, errors, success: true };
+      }),
+
+    previewSms: walletQuery
+      .input(z.object({ locationId: z.number(), provider: z.string(), smsText: z.string() }))
+      .query(async ({ input }) => {
+        const provider = walletRegistry.get(input.provider);
+        if (!provider.parseSms) throw new Error(`Provider ${input.provider} does not support SMS import`);
+        const parsed = await provider.parseSms(input.smsText);
+        return parsed.map((txn: any) => ({
+          txnId: txn.providerTxnId,
+          providerTxnId: txn.providerTxnId,
+          partyName: txn.partyName,
+          amount: txn.amount,
+          direction: txn.direction,
+          txnType: txn.txnType,
+          currency: txn.currency,
+          date: txn.date,
+          time: txn.time,
+        }));
       }),
 
     tagToSupplier: walletQuery
@@ -367,25 +429,29 @@ export const walletRouter = createRouter({
         dateTo: z.string().optional(),
       }))
       .query(async ({ input, ctx }) => {
-        const db = getDb();
-        const conditions = [isNull(mobileWalletDailyLedger.deletedAt)];
+        try {
+          const db = getDb();
+          const conditions = [isNull(mobileWalletDailyLedger.deletedAt)];
 
-        if (input?.provider) conditions.push(eq(mobileWalletDailyLedger.provider, input.provider));
-        if (input?.accountId) conditions.push(eq(mobileWalletDailyLedger.accountId, input.accountId));
+          if (input?.provider) conditions.push(eq(mobileWalletDailyLedger.provider, input.provider));
+          if (input?.accountId) conditions.push(eq(mobileWalletDailyLedger.accountId, input.accountId));
 
-        if (input?.locationId) {
-          conditions.push(eq(mobileWalletDailyLedger.locationId, input.locationId));
-        } else {
-          const locIds = await getCurrentBusinessLocationIds(ctx);
-          if (locIds.length > 0) {
-            conditions.push(sql`${mobileWalletDailyLedger.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`);
+          if (input?.locationId) {
+            conditions.push(eq(mobileWalletDailyLedger.locationId, input.locationId));
+          } else {
+            const locIds = await getCurrentBusinessLocationIds(ctx);
+            if (locIds.length > 0) {
+              conditions.push(sql`${mobileWalletDailyLedger.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`);
+            }
           }
-        }
-        if (input?.dateFrom && input?.dateTo) {
-          conditions.push(sql`${mobileWalletDailyLedger.ledgerDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`);
-        }
+          if (input?.dateFrom && input?.dateTo) {
+            conditions.push(sql`${mobileWalletDailyLedger.ledgerDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`);
+          }
 
-        return db.select().from(mobileWalletDailyLedger).where(and(...conditions)).orderBy(desc(mobileWalletDailyLedger.ledgerDate));
+          return db.select().from(mobileWalletDailyLedger).where(and(...conditions)).orderBy(desc(mobileWalletDailyLedger.ledgerDate));
+        } catch {
+          return [];
+        }
       }),
 
     create: walletImport

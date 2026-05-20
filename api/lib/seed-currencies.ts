@@ -1,8 +1,9 @@
 // ABOUTME: Seeds the supported_currencies table with common African and global currencies on first run.
 // ABOUTME: Idempotent — skips already-seeded currencies using ON CONFLICT DO NOTHING.
 
-import { supportedCurrencies } from "@db/schema";
+import { supportedCurrencies, exchangeRates } from "@db/schema";
 import { getDb } from "../queries/connection";
+import { eq, isNull } from "drizzle-orm";
 
 const DEFAULT_CURRENCIES = [
   { code: "KES", name: "Kenyan Shilling", symbol: "KSh", decimalPlaces: 2, isDefault: true },
@@ -27,6 +28,16 @@ const DEFAULT_CURRENCIES = [
   { code: "XOF", name: "CFA Franc BCEAO", symbol: "CFA", decimalPlaces: 0, isDefault: false },
 ];
 
+const DEFAULT_RATES = [
+  { fromCurrency: "USD", toCurrency: "KES", rate: "130.00000000", source: "manual" },
+  { fromCurrency: "EUR", toCurrency: "KES", rate: "142.00000000", source: "manual" },
+  { fromCurrency: "GBP", toCurrency: "KES", rate: "165.00000000", source: "manual" },
+  { fromCurrency: "UGX", toCurrency: "KES", rate: "0.02800000", source: "manual" },
+  { fromCurrency: "TZS", toCurrency: "KES", rate: "0.05000000", source: "manual" },
+  { fromCurrency: "ZAR", toCurrency: "KES", rate: "7.00000000", source: "manual" },
+  { fromCurrency: "RWF", toCurrency: "KES", rate: "0.09100000", source: "manual" },
+];
+
 export async function seedSupportedCurrencies(): Promise<void> {
   const db = getDb();
   for (const currency of DEFAULT_CURRENCIES) {
@@ -36,4 +47,25 @@ export async function seedSupportedCurrencies(): Promise<void> {
       .onConflictDoNothing({ target: supportedCurrencies.code });
   }
   console.log(`[seed] Seeded ${DEFAULT_CURRENCIES.length} supported currencies`);
+}
+
+export async function seedDefaultExchangeRates(): Promise<void> {
+  const db = getDb();
+  let seeded = 0;
+  for (const rate of DEFAULT_RATES) {
+    const existing = await db
+      .select()
+      .from(exchangeRates)
+      .where(eq(exchangeRates.fromCurrency, rate.fromCurrency))
+      .where(eq(exchangeRates.toCurrency, rate.toCurrency))
+      .where(isNull(exchangeRates.validUntil))
+      .limit(1);
+    if (existing.length > 0) continue;
+    await db.insert(exchangeRates).values({
+      ...rate,
+      validFrom: new Date(),
+    } as any);
+    seeded++;
+  }
+  console.log(`[seed] Seeded ${seeded} exchange rates`);
 }

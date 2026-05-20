@@ -1,6 +1,6 @@
 // ABOUTME: Multi-provider mobile wallet dashboard showing all configured wallet providers and their transactions.
 // ABOUTME: Uses the unified wallet API (trpc.wallet.*) for provider-agnostic wallet management.
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
@@ -20,6 +20,9 @@ export function Wallet() {
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
   const [smsText, setSmsText] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
+  const [smsProvider, setSmsProvider] = useState("mpesa");
+  const [parsedPreview, setParsedPreview] = useState<any[]>([]);
+  const [isPreviewing, setIsPreviewing] = useState(false);
 
   const utils = trpc.useUtils();
   const { data: locations } = trpc.locations.list.useQuery();
@@ -38,8 +41,27 @@ export function Wallet() {
   });
 
   const importSms = trpc.wallet.transactions.importSms.useMutation({
-    onSuccess: () => { setSmsText(""); refetch(); utils.wallet.transactions.stats.invalidate(); },
+    onSuccess: () => { setSmsText(""); setParsedPreview([]); refetch(); utils.wallet.transactions.stats.invalidate(); },
   });
+
+  const previewSmsQuery = trpc.wallet.transactions.previewSms.useQuery(
+    { locationId: parseInt(selectedLocation), provider: smsProvider, smsText },
+    { enabled: false },
+  );
+
+  const handlePreviewSms = async () => {
+    if (!selectedLocation || !smsText.trim()) return;
+    setIsPreviewing(true);
+    try {
+      const result = await previewSmsQuery.refetch();
+      if (result.data) setParsedPreview(result.data);
+    } catch {
+      setParsedPreview([]);
+    }
+    setIsPreviewing(false);
+  };
+
+  useEffect(() => { setParsedPreview([]); }, [smsText, smsProvider, selectedLocation]);
 
   const providerColors: Record<string, string> = {
     mpesa: "bg-green-600",
@@ -60,7 +82,7 @@ export function Wallet() {
 
   const handleImportSms = () => {
     if (!selectedLocation || !smsText.trim()) return;
-    importSms.mutate({ locationId: parseInt(selectedLocation), provider: "mpesa", smsText });
+    importSms.mutate({ locationId: parseInt(selectedLocation), provider: smsProvider, smsText });
   };
 
   return (
@@ -88,15 +110,40 @@ export function Wallet() {
                   </div>
                   <div className="space-y-2">
                     <Label>Provider</Label>
-                    <div className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-[#2D2A26]">M-PESA</div>
+                    <select value={smsProvider} onChange={(e) => setSmsProvider(e.target.value)} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
+                      {providers?.filter((p: any) => p.features?.smsImport).map((p: any) => (
+                        <option key={p.code} value={p.code}>{p.displayName || p.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <Label>SMS Text</Label>
-                    <textarea value={smsText} onChange={(e) => setSmsText(e.target.value)} rows={6} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" placeholder="Paste M-PESA SMS messages here..." />
+                    <p className="text-xs text-[#8D8A87]">Paste multiple SMS messages. Each line should contain one transaction.</p>
+                    <textarea value={smsText} onChange={(e) => setSmsText(e.target.value)} rows={8} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 font-mono text-xs text-[#2D2A26]" placeholder="UDU9H2OPIS Confirmed. Ksh3,500.00 sent to PAUL MAKAU 0790583667 on 30/4/26 at 10:33 PM. New M-PESA balance is Ksh155.70. Transaction cost, Ksh53.00." />
                   </div>
-                  <Button onClick={handleImportSms} disabled={!selectedLocation || !smsText.trim() || importSms.isPending} className="w-full bg-[#C73E1D]">
-                    {importSms.isPending ? "Importing..." : "Import Transactions"}
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button onClick={handlePreviewSms} variant="outline" className="border-[#D4A854] text-[#D4A854]" disabled={!selectedLocation || !smsText.trim() || isPreviewing}>
+                      {isPreviewing ? "Parsing..." : "Preview"}
+                    </Button>
+                    <Button onClick={handleImportSms} disabled={!selectedLocation || !smsText.trim() || importSms.isPending} className="flex-1 bg-[#C73E1D]">
+                      <Upload className="mr-2 h-4 w-4" />
+                      {importSms.isPending ? "Importing..." : `Import ${parsedPreview.length > 0 ? parsedPreview.length + ' Records' : 'SMS'}`}
+                    </Button>
+                  </div>
+                  {parsedPreview.length > 0 && (
+                    <div className="rounded-lg bg-[#F5EDE6] p-3">
+                      <p className="text-sm font-medium text-[#2D2A26]">Preview: {parsedPreview.length} transactions</p>
+                      <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
+                        {parsedPreview.slice(0, 10).map((p: any, i: number) => (
+                          <div key={i} className="flex items-center justify-between text-xs">
+                            <span className="text-[#2D2A26]">{p.txnId} · {p.partyName || "-"}</span>
+                            <span className={p.direction === "in" ? "text-[#2E7D32]" : "text-[#D32F2F]"}>{p.currency || "KES"} {p.amount} · {p.txnType}</span>
+                          </div>
+                        ))}
+                        {parsedPreview.length > 10 && <p className="text-xs text-[#8D8A87]">... and {parsedPreview.length - 10} more</p>}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </DialogContent>
             </Dialog>

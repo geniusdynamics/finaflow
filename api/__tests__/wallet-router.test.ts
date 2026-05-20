@@ -23,15 +23,16 @@ type SeededCtx = {
 
 async function seedWalletTestCtx(seed: string): Promise<SeededCtx> {
   const db = getTestDb();
-  const accountId = `WLT-${seed}`;
+  const ts = Date.now();
+  const accountId = `WLT-${ts}-${seed}`;
 
   const [business] = await db.insert(businesses).values({
-    accountId, name: `Wallet Test ${seed}`, slug: `wallet-${seed.toLowerCase()}`,
+    accountId, name: `Wallet Test ${seed}`, slug: `wallet-${ts}-${seed.toLowerCase()}`,
     plan: "pro", maxBranches: 5, maxUsers: 10, isActive: true,
   } as any).returning();
 
   const [user] = await db.insert(users).values({
-    username: `wallet-owner-${seed.toLowerCase()}`, name: `Wallet Owner ${seed}`,
+    username: `wallet-owner-${ts}-${seed.toLowerCase()}`, name: `Wallet Owner ${seed}`,
     role: "owner", isActive: true, currentBusinessId: business.id, accountId,
   } as any).returning();
 
@@ -39,7 +40,7 @@ async function seedWalletTestCtx(seed: string): Promise<SeededCtx> {
 
   const [location] = await db.insert(locations).values({
     businessId: business.id, name: `Wallet Branch ${seed}`,
-    slug: `wallet-branch-${seed.toLowerCase()}`, isActive: true,
+    slug: `wallet-branch-${ts}-${seed.toLowerCase()}`, isActive: true,
   } as any).returning();
 
   return {

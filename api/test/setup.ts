@@ -15,6 +15,9 @@ process.env.NHIF_RATE = "2.75";
 process.env.BCRYPT_ROUNDS = "4";
 
 import { clearRateLimitStore } from "../lib/rate-limit";
+import { walletRegistry } from "../lib/mobile-wallet/provider-registry";
+import { mpesaProvider } from "../lib/mobile-wallet/providers/mpesa-provider";
+import { airtelMoneyProvider } from "../lib/mobile-wallet/providers/airtel-money-provider";
 
 const skipTestDatabaseBootstrap = process.env.SKIP_API_TEST_DB === "1";
 
@@ -123,6 +126,10 @@ async function ensureTestDatabase(): Promise<void> {
 
 beforeAll(async () => {
   clearRateLimitStore();
+  if (walletRegistry.getAll().length === 0) {
+    walletRegistry.register(mpesaProvider);
+    walletRegistry.register(airtelMoneyProvider);
+  }
   if (skipTestDatabaseBootstrap) {
     return;
   }

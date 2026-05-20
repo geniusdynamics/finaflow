@@ -20,6 +20,7 @@ const Accounts = lazy(() => import("./pages/Accounts").then(m => ({ default: m.A
 const Payroll = lazy(() => import("./pages/Payroll").then(m => ({ default: m.Payroll })));
 const Mpesa = lazy(() => import("./pages/Mpesa").then(m => ({ default: m.Mpesa })));
 const Wallet = lazy(() => import("./pages/Wallet").then(m => ({ default: m.Wallet })));
+const WalletAdmin = lazy(() => import("./pages/WalletAdmin").then(m => ({ default: m.WalletAdmin })));
 const Calendar = lazy(() => import("./pages/Calendar").then(m => ({ default: m.Calendar })));
 const Reports = lazy(() => import("./pages/Reports").then(m => ({ default: m.Reports })));
 const Users = lazy(() => import("./pages/Users").then(m => ({ default: m.Users })));
@@ -54,6 +55,7 @@ export default function App() {
         <Route path="/payroll" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="payroll:view"><Payroll /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/mpesa" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="mpesa:view"><Mpesa /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/wallet" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="wallet:view"><Wallet /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/admin/wallet" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="wallet:admin"><WalletAdmin /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/daily-payments" element={<Navigate to="/calendar?section=payments" replace />} />
         <Route path="/calendar" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="calendar:view"><Calendar /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/reports" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="reports:view"><Reports /></ProtectedPage></SuspendedPage></ErrorBoundary>} />

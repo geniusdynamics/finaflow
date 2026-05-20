@@ -17,8 +17,11 @@ import { processTrialLifecycle, TRIAL_JOB_INTERVAL_MS } from "./lib/subscription
 import { shouldStartStandaloneServer } from "./lib/server-runtime";
 import { walletRegistry } from "./lib/mobile-wallet/provider-registry";
 import { mpesaProvider } from "./lib/mobile-wallet/providers/mpesa-provider";
+import { airtelMoneyProvider } from "./lib/mobile-wallet/providers/airtel-money-provider";
+import { SasapayProvider } from "./lib/mobile-wallet/providers/sasapay-provider";
 import { startExchangeRateSync, validateEnvConfig } from "./lib/exchange-rate-sync";
-import { seedSupportedCurrencies } from "./lib/seed-currencies";
+import { seedSupportedCurrencies, seedDefaultExchangeRates } from "./lib/seed-currencies";
+import { seedWalletProviders } from "./lib/seed-wallet-providers";
 // import { ensureDatabaseReady } from "./lib/db-startup";
 
 // await ensureDatabaseReady(env.databaseUrl);
@@ -144,6 +147,21 @@ if (runStandaloneServer) {
 // ── Startup initialization ──────────────────────────────────────────
 
 walletRegistry.register(mpesaProvider);
+walletRegistry.register(airtelMoneyProvider);
+
+if (process.env.SASAPAY_API_KEY && process.env.SASAPAY_API_SECRET) {
+  const sasapayProvider = new SasapayProvider({
+    apiKey: process.env.SASAPAY_API_KEY,
+    apiSecret: process.env.SASAPAY_API_SECRET,
+    merchantCode: process.env.SASAPAY_MERCHANT_CODE,
+    callbackUrl: process.env.SASAPAY_CALLBACK_URL,
+  });
+  walletRegistry.register(sasapayProvider);
+  console.log("[boot] Sasapay provider registered with API credentials");
+} else {
+  console.log("[boot] Sasapay provider not registered (SASAPAY_API_KEY/SASAPAY_API_SECRET not set)");
+}
+
 console.log("[boot] Registered wallet providers:", walletRegistry.getAll().map((p) => p.code).join(", "));
 
 validateEnvConfig();
@@ -155,6 +173,12 @@ if (process.env.EXCHANGE_RATE_PROVIDER && process.env.EXCHANGE_RATE_PROVIDER !==
 
 seedSupportedCurrencies().catch((err) => {
   console.error("[boot] Failed to seed supported currencies:", err);
+});
+seedWalletProviders().catch((err) => {
+  console.error("[boot] Failed to seed wallet providers:", err);
+});
+seedDefaultExchangeRates().catch((err) => {
+  console.error("[boot] Failed to seed exchange rates:", err);
 });
 
 const port = parseInt(process.env.PORT || "3000");
