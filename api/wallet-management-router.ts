@@ -141,24 +141,9 @@ export const walletManagementRouter = createRouter({
     latest: walletQuery
       .input(z.object({ from: z.string().optional(), to: z.string().optional() }))
       .query(async ({ input }) => {
-        const db = getDb();
-        const currencies = await db.select().from(supportedCurrencies).where(eq(supportedCurrencies.isActive, true));
-        const results = [];
-        for (const from of currencies) {
-          for (const to of currencies) {
-            if (from.code === to.code) continue;
-            const rows = await db.select().from(exchangeRates)
-              .where(and(
-                eq(exchangeRates.fromCurrency, from.code),
-                eq(exchangeRates.toCurrency, to.code),
-                isNull(exchangeRates.validUntil),
-              ))
-              .orderBy(desc(exchangeRates.validFrom))
-              .limit(1);
-            if (rows[0]) results.push(rows[0]);
-          }
-        }
-        if (results.length > 0) return results;
+        const { currencyConverter } = await import("./lib/currency-converter");
+        const rates = await currencyConverter.getLatestRates();
+        if (rates.length > 0) return rates;
         return [
           { fromCurrency: "USD", toCurrency: "KES", rate: "130.00000000", source: "default" },
           { fromCurrency: "EUR", toCurrency: "KES", rate: "142.00000000", source: "default" },
@@ -175,17 +160,9 @@ export const walletManagementRouter = createRouter({
         rate: z.string().regex(/^\d+(\.\d+)?$/),
       }))
       .mutation(async ({ input }) => {
-        const db = getDb();
-        await db.update(exchangeRates).set({ validUntil: new Date() } as any)
-          .where(and(eq(exchangeRates.fromCurrency, input.fromCurrency), eq(exchangeRates.toCurrency, input.toCurrency), isNull(exchangeRates.validUntil)));
-        const [row] = await db.insert(exchangeRates).values({
-          fromCurrency: input.fromCurrency,
-          toCurrency: input.toCurrency,
-          rate: input.rate,
-          source: "manual",
-          validFrom: new Date(),
-        } as any).returning();
-        return { success: true, rate: row };
+        const { currencyConverter } = await import("./lib/currency-converter");
+        await currencyConverter["persistRate"](input.fromCurrency, input.toCurrency, input.rate, "manual");
+        return { success: true, message: `Manual rate saved: ${input.fromCurrency}→${input.toCurrency} = ${input.rate}` };
       }),
 
     sync: walletAdmin
@@ -205,7 +182,7 @@ export const walletManagementRouter = createRouter({
     list: walletQuery.query(async () => {
       const db = getDb();
       try {
-        const rows = await db.select().from(supportedCurrencies).where(eq(supportedCurrencies.isActive, true));
+        const rows = await db.select().from(supportedCurrencies).orderBy(supportedCurrencies.code);
         if (rows.length > 0) return rows;
       } catch {
         // table may not exist (pre-migration)
@@ -223,6 +200,20 @@ export const walletManagementRouter = createRouter({
         { code: "RWF", name: "Rwandan Franc", symbol: "FRw", decimalPlaces: 0, isDefault: false, isActive: true },
       ];
     }),
+
+    toggle: walletAdmin
+      .input(z.object({ code: z.string().min(3).max(3), isActive: z.boolean() }))
+      .mutation(async ({ input }) => {
+        const db = getDb();
+        try {
+          await db.update(supportedCurrencies).set({ isActive: input.isActive } as any)
+            .where(eq(supportedCurrencies.code, input.code));
+          return { success: true };
+        } catch {
+          // table may not exist
+          return { success: false, error: "Could not update currency" };
+        }
+      }),
 
     create: walletAdmin
       .input(z.object({

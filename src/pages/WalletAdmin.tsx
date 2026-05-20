@@ -34,6 +34,8 @@ export function WalletAdmin() {
   const { data: providers } = trpc.walletManagement.providers.list.useQuery();
   const { data: rates, refetch: refetchRates } = trpc.walletManagement.rates.latest.useQuery({});
   const { data: currencies } = trpc.walletManagement.currencies.list.useQuery();
+  const createCurrency = trpc.walletManagement.currencies.create.useMutation({ onSuccess: () => currencies.refetch() });
+  const toggleCurrency = trpc.walletManagement.currencies.toggle.useMutation({ onSuccess: () => currencies.refetch() });
 
   const syncRates = trpc.walletManagement.rates.sync.useMutation({
     onSuccess: (res) => {
@@ -246,10 +248,19 @@ export function WalletAdmin() {
                       <td className="px-4 py-3 text-sm text-[#8D8A87]">{c.symbol}</td>
                       <td className="px-4 py-3 text-sm text-[#8D8A87]">{c.decimalPlaces}</td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 text-xs ${c.isActive ? "text-[#2E7D32]" : "text-[#8D8A87]"}`}>
+                        <button
+                          onClick={() => toggleCurrency.mutate({ code: c.code, isActive: !c.isActive })}
+                          disabled={c.isDefault}
+                          className={`inline-flex items-center gap-1 text-xs rounded-full px-2 py-0.5 border ${
+                            c.isActive
+                              ? "border-[#2E7D32] bg-[#2E7D32]/10 text-[#2E7D32]"
+                              : "border-[#8D8A87] bg-transparent text-[#8D8A87]"
+                          } ${c.isDefault ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:opacity-80"}`}
+                        >
                           {c.isActive ? <CheckCircle2 className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
                           {c.isActive ? "Active" : "Inactive"}
-                        </span>
+                        </button>
+                        {c.isDefault && <span className="ml-1 text-[10px] text-[#8D8A87]">(default)</span>}
                       </td>
                     </tr>
                   ))}

@@ -33,6 +33,8 @@ const DEFAULT_BASE_CURRENCY = "KES";
 
 export class CurrencyConverter {
   private cache = new Map<string, CacheEntry>();
+  private memoryRates: Record<string, { from: string; to: string; rate: string; source: string; validFrom: Date }> = {};
+  private manualMemoryRates: Record<string, { from: string; to: string; rate: string; source: string; validFrom: Date }> = {};
   private cacheTTL: number;
   private baseCurrency: string;
   private apiKey?: string;
@@ -185,6 +187,9 @@ export class CurrencyConverter {
       }
       let count = 0;
       for (const [code, rate] of Object.entries(data.rates)) {
+        const directKey = `${this.baseCurrency}→${code}`;
+        const inverseKey = `${code}→${this.baseCurrency}`;
+        if (this.manualMemoryRates[directKey] || this.manualMemoryRates[inverseKey]) continue;
         const rateStr = rate.toString();
         await this.persistRate(this.baseCurrency, code, rateStr, "frankfurter");
         const inverse = d(1).div(d(rateStr));
@@ -198,20 +203,47 @@ export class CurrencyConverter {
   }
 
   async getLatestRates(): Promise<ExchangeRateData[]> {
-    const rows = await getDb()
-      .select()
-      .from(exchangeRates)
-      .where(isNull(exchangeRates.validUntil))
-      .orderBy(desc(exchangeRates.createdAt));
+    const result: ExchangeRateData[] = [];
+    const seenPairs = new Set<string>();
 
-    return rows.map((r) => ({
-      fromCurrency: r.fromCurrency,
-      toCurrency: r.toCurrency,
-      rate: r.rate,
-      source: r.source ?? "manual",
-      validFrom: r.validFrom,
-      validUntil: r.validUntil,
-    }));
+    // 1. Manual rates first (highest priority)
+    for (const r of Object.values(this.manualMemoryRates)) {
+      seenPairs.add(`${r.from}→${r.to}`);
+      result.push({
+        fromCurrency: r.from, toCurrency: r.to, rate: r.rate, source: r.source, validFrom: r.validFrom, validUntil: null,
+      });
+    }
+
+    // 2. Synced rates (Frankfurter, etc.) — skip pairs with manual overrides
+    for (const r of Object.values(this.memoryRates)) {
+      const pairKey = `${r.from}→${r.to}`;
+      if (seenPairs.has(pairKey)) continue;
+      seenPairs.add(pairKey);
+      result.push({
+        fromCurrency: r.from, toCurrency: r.to, rate: r.rate, source: r.source, validFrom: r.validFrom, validUntil: null,
+      });
+    }
+
+    // 3. DB rates (if available) — skip pairs already covered by memory
+    try {
+      const rows = await getDb()
+        .select()
+        .from(exchangeRates)
+        .where(isNull(exchangeRates.validUntil))
+        .orderBy(desc(exchangeRates.createdAt));
+      for (const r of rows) {
+        const pairKey = `${r.fromCurrency}→${r.toCurrency}`;
+        if (seenPairs.has(pairKey)) continue;
+        seenPairs.add(pairKey);
+        result.push({
+          fromCurrency: r.fromCurrency, toCurrency: r.toCurrency, rate: r.rate, source: r.source ?? "database", validFrom: r.validFrom, validUntil: r.validUntil,
+        });
+      }
+    } catch {
+      // DB not available — memory only is fine
+    }
+
+    return result;
   }
 
   invalidateCache(from?: string, to?: string): void {
@@ -288,15 +320,25 @@ export class CurrencyConverter {
   }
 
   private async persistRate(from: string, to: string, rate: string, source: string): Promise<void> {
-    await getDb()
-      .insert(exchangeRates)
-      .values({
-        fromCurrency: from,
-        toCurrency: to,
-        rate,
-        source,
-        validFrom: new Date(),
-      });
+    const key = `${from}→${to}`;
+    if (source === "manual") {
+      this.manualMemoryRates[key] = { from, to, rate, source, validFrom: new Date() };
+    } else {
+      this.memoryRates[key] = { from, to, rate, source, validFrom: new Date() };
+    }
+    try {
+      await getDb()
+        .insert(exchangeRates)
+        .values({
+          fromCurrency: from,
+          toCurrency: to,
+          rate,
+          source,
+          validFrom: new Date(),
+        } as any);
+    } catch {
+      // DB table may not exist yet — in-memory store is used as fallback
+    }
   }
 
   private async getActiveCurrencies(): Promise<Array<{ code: string }>> {

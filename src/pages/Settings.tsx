@@ -210,6 +210,24 @@ export function Settings() {
                 </div>
               </CardContent>
             </Card>
+
+            <Card className="border-[#E8E0D8]">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 font-serif text-lg">
+                  <DollarSign className="h-5 w-5 text-[#2E7D32]" />
+                  Multi-Currency
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg border border-[#E8E0D8] px-4 py-3">
+                  <div>
+                    <Label className="text-sm font-medium">Enable Multi-Currency Support</Label>
+                    <p className="text-xs text-[#8D8A87]">Allow transacting in multiple currencies with live exchange rates</p>
+                  </div>
+                  <Switch checked={settings?.multiCurrency === "true"} onCheckedChange={() => toggle("multiCurrency")} disabled={!canManage} />
+                </div>
+              </CardContent>
+            </Card>
           </>
         )}
 
