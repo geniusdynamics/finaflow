@@ -26,7 +26,7 @@ async function syncOperationalToCoaBalance(
 
   const typeToSystemKey: Record<string, string> = {
     cash: "asset:cash",
-    mpesa: "asset:cash",
+    wallet: "asset:cash",
     bank_account: "asset:bank",
   };
 
@@ -103,7 +103,7 @@ export const accountsRouter = createRouter({
     .input(z.object({
       locationId: z.number(),
       name: z.string().min(1).max(100),
-      type: z.enum(["cash", "mpesa", "bank_account"]),
+      type: z.enum(["cash", "wallet", "bank_account"]),
       accountCode: z.string().max(20).optional(),
       accountNumber: z.string().max(100).optional(),
       openingBalance: z.string().optional(),
@@ -147,8 +147,8 @@ export const accountsRouter = createRouter({
         name:
           classification.accountSubType === "bank"
             ? "Bank Accounts"
-            : input.type === "mpesa"
-              ? "M-Pesa Accounts"
+            : input.type === "wallet"
+              ? "Wallet Accounts"
               : "Cash Accounts",
       });
 
@@ -534,7 +534,7 @@ export const accountsRouter = createRouter({
         const dateKey = toLocalDateKey(cursor);
         let cashTotal = d(0);
         let bankTotal = d(0);
-        let mpesaTotal = d(0);
+        let walletTotal = d(0);
         const row: Record<string, string | number> = { date: dateKey };
 
         for (const account of scopedAccounts) {
@@ -546,14 +546,14 @@ export const accountsRouter = createRouter({
           const colKey = `account_${account.id}`;
           if (account.type === "cash") cashTotal = cashTotal.plus(bal);
           else if (account.type === "bank_account") bankTotal = bankTotal.plus(bal);
-          else if (account.type === "mpesa") mpesaTotal = mpesaTotal.plus(bal);
+          else if (account.type === "wallet") walletTotal = walletTotal.plus(bal);
           row[colKey] = bal.toNumber();
         }
 
         row.cashTotal = cashTotal.toNumber();
         row.bankTotal = bankTotal.toNumber();
-        row.mpesaTotal = mpesaTotal.toNumber();
-        row.totalBalance = cashTotal.plus(bankTotal).plus(mpesaTotal).toNumber();
+        row.walletTotal = walletTotal.toNumber();
+        row.totalBalance = cashTotal.plus(bankTotal).plus(walletTotal).toNumber();
         series.push(row);
 
         cursor.setDate(cursor.getDate() + 1);

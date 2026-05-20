@@ -130,15 +130,15 @@ export function Dashboard() {
                         className={`flex h-9 w-9 items-center justify-center rounded-lg ${
                           account.type === "cash"
                             ? "bg-[#2E7D32]/10"
-                            : account.type === "mpesa"
+                            : account.type === "wallet"
                             ? "bg-[#C73E1D]/10"
                             : "bg-[#D4A854]/10"
                         }`}
                       >
                         {account.type === "cash" ? (
                           <Wallet className="h-4 w-4 text-[#2E7D32]" />
-                        ) : account.type === "mpesa" ? (
-                          <Smartphone className="h-4 w-4 text-[#C73E1D]" />
+                        ) : account.type === "wallet" ? (
+                          <Wallet className="h-4 w-4 text-[#C73E1D]" />
                         ) : (
                           <CreditCard className="h-4 w-4 text-[#D4A854]" />
                         )}

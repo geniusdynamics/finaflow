@@ -27,6 +27,7 @@ async function migrateExistingData(businessId: number, locationIds: number[]) {
     const typeMap: Record<string, { type: string; subType: string; code: string }> = {
       cash: { type: "asset", subType: "cash", code: "1000" },
       mpesa: { type: "asset", subType: "cash", code: "1200" },
+      wallet: { type: "asset", subType: "cash", code: "1200" },
       bank_account: { type: "asset", subType: "bank", code: "1100" },
     };
 

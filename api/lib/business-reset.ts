@@ -25,6 +25,7 @@
 //   - expenses, expenseItems
 //   - bills, billItems, billPayments
 //   - mpesaTransactions, dailyMpesaLedger
+//   - mobileWalletTransactions, mobileWalletDailyLedger, mobileWalletReconciliation, providerConfigs
 //   - payrollPeriods, payrollEntries, payrollAdvances
 //   - ledgerEntries, journalEntries, journalLines
 //   - budgets, purchaseOrders, purchaseOrderItems
@@ -55,12 +56,16 @@ import {
   journalLines,
   ledgerEntries,
   locations,
+  mobileWalletTransactions,
+  mobileWalletDailyLedger,
+  mobileWalletReconciliation,
   mpesaReconciliation,
   mpesaTransactions,
   notifications,
   payrollAdvances,
   payrollEntries,
   payrollPeriods,
+  providerConfigs,
   purchaseOrderItems,
   purchaseOrders,
   quickActionsLog,
@@ -171,6 +176,9 @@ export async function createResetSnapshot(input: {
     snapshot.expenses = await countTable(expenses, expenses.locationId, isNull(expenses.deletedAt));
     snapshot.bills = await countTable(bills, bills.locationId, isNull(bills.deletedAt));
     snapshot.mpesaTransactions = await countTable(mpesaTransactions, mpesaTransactions.locationId, isNull(mpesaTransactions.deletedAt));
+    snapshot.mobileWalletTransactions = await countTable(mobileWalletTransactions, mobileWalletTransactions.locationId, isNull(mobileWalletTransactions.deletedAt));
+    snapshot.mobileWalletDailyLedger = await countTable(mobileWalletDailyLedger, mobileWalletDailyLedger.locationId, isNull(mobileWalletDailyLedger.deletedAt));
+    snapshot.providerConfigs = await countTable(providerConfigs, providerConfigs.locationId, isNull(providerConfigs.deletedAt));
     snapshot.payrollPeriods = await countTable(payrollPeriods, payrollPeriods.locationId, isNull(payrollPeriods.deletedAt));
     snapshot.employees = await countTable(employees, employees.locationId, isNull(employees.deletedAt));
     snapshot.purchaseOrders = await countTable(purchaseOrders, purchaseOrders.locationId, isNull(purchaseOrders.deletedAt));
@@ -239,7 +247,8 @@ export async function resetBusinessTransactions(input: {
         "daily_sale_payments", "purchase_order_items", "bill_items", "bill_payments",
         "attachments", "payroll_entries", "payroll_advances", "daily_sales",
         "expenses", "expense_items", "bills", "mpesa_transactions",
-        "payroll_periods", "daily_mpesa_ledger", "recurring_bill_templates",
+        "mobile_wallet_transactions", "mobile_wallet_daily_ledger", "mobile_wallet_reconciliation",
+        "provider_configs", "payroll_periods", "daily_mpesa_ledger", "recurring_bill_templates",
         "budgets", "purchase_orders", "locations", "supplier_price_history",
         "notifications", "quick_actions_log", "webhook_deliveries",
         "mpesa_reconciliation", "financial_reports",
@@ -472,6 +481,8 @@ export async function resetBusinessTransactions(input: {
       balanceDue: "0.00",
     });
     await softDeleteLocationScoped("mpesa_transactions", mpesaTransactions);
+    await softDeleteLocationScoped("mobile_wallet_transactions", mobileWalletTransactions);
+    await softDeleteLocationScoped("mobile_wallet_daily_ledger", mobileWalletDailyLedger);
 
     await softDeleteLocationScoped("payroll_periods", payrollPeriods, {
       status: "cancelled",
@@ -511,7 +522,22 @@ export async function resetBusinessTransactions(input: {
       .returning({ id: mpesaReconciliation.id });
     results.mpesa_reconciliation = { count: mpesaRecDeleted.length };
 
-    // 7e. financial_reports (generated data, business-scoped)
+    // 7e. mobile_wallet_reconciliation (transient)
+    const walletRecDeleted = await tx
+      .delete(mobileWalletReconciliation)
+      .where(sql`1=1`)
+      .returning({ id: mobileWalletReconciliation.id });
+    results.mobile_wallet_reconciliation = { count: walletRecDeleted.length };
+
+    // 7f. provider_configs (location-scoped, clear on reset)
+    const configDeleted = await tx
+      .update(providerConfigs)
+      .set({ deletedAt: now, isActive: false } as any)
+      .where(sql`1=1`)
+      .returning({ id: providerConfigs.id });
+    results.provider_configs = { count: configDeleted.length };
+
+    // 7g. financial_reports (generated data, business-scoped)
     const frDeleted = await tx
       .delete(financialReports)
       .where(eq(financialReports.businessId, input.businessId))
@@ -666,6 +692,7 @@ function getPreservedTableList(): string[] {
     "refresh_tokens",
     "business_documents",
     "business_logos",
+    "mobile_wallet_providers",
     "allocation_invites",
     "partner_allocations",
     "partner_commissions",

@@ -38,3 +38,4 @@ build/
 # Test coverage
 coverage/
 .nyc_output/
+.kilo/kilo.json

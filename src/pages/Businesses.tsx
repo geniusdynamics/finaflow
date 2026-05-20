@@ -12,9 +12,40 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Building2, Building, Trash2, Users, CheckCircle, RotateCcw, MapPin, Edit3, Save, X, Key, AlertTriangle, Shield, Database, Clock } from "lucide-react";
+import { Plus, Building2, Building, Trash2, Users, CheckCircle, RotateCcw, MapPin, Edit3, Save, X, Key, AlertTriangle, Shield, Database, Clock, DollarSign } from "lucide-react";
 import { AllocationManagement } from "@/components/partner/AllocationManagement";
 import { toast } from "sonner";
+
+const CURRENCIES = [
+  { code: "KES", name: "Kenyan Shilling" },
+  { code: "USD", name: "US Dollar" },
+  { code: "UGX", name: "Ugandan Shilling" },
+  { code: "TZS", name: "Tanzanian Shilling" },
+  { code: "EUR", name: "Euro" },
+  { code: "GBP", name: "British Pound" },
+  { code: "ZAR", name: "South African Rand" },
+  { code: "MWK", name: "Malawian Kwacha" },
+  { code: "ZMW", name: "Zambian Kwacha" },
+  { code: "RWF", name: "Rwandan Franc" },
+];
+
+function DefaultCurrencySelect({ businessId }: { businessId: number }) {
+  const { data: currentCurrency } = trpc.settings.get.useQuery({ key: "defaultCurrency", businessId }, { initialData: "KES" });
+  const setCurrency = trpc.settings.set.useMutation({
+    onSuccess: () => toast.success("Default currency updated"),
+  });
+  return (
+    <select
+      value={currentCurrency || "KES"}
+      onChange={(e) => setCurrency.mutate({ key: "defaultCurrency", value: e.target.value, businessId })}
+      className="w-full bg-transparent text-sm text-[#2D2A26] outline-none"
+    >
+      {CURRENCIES.map((c) => (
+        <option key={c.code} value={c.code}>{c.code} - {c.name}</option>
+      ))}
+    </select>
+  );
+}
 
 export function Businesses() {
   const navigate = useNavigate();
@@ -48,7 +79,13 @@ export function Businesses() {
     onError: (err) => toast.error(err.message),
   });
   const deleteBiz = trpc.businesses.delete.useMutation({
-    onSuccess: () => { utils.businesses.list.invalidate(); toast.success("Business deleted"); },
+    onSuccess: () => { refetchBusinesses(); toast.success("Business deleted"); },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const setBizCurrency = trpc.settings.set.useMutation({
+    onSuccess: () => { utils.businesses.list.invalidate(); },
+    onError: (err) => toast.error(err.message),
   });
   const switchBiz = trpc.businesses.switch.useMutation({
     onSuccess: () => { window.location.reload(); },
@@ -191,6 +228,10 @@ export function Businesses() {
                           <Input value={editForm.phone} onChange={e => setEditForm(p => ({ ...p, phone: e.target.value }))} placeholder="Phone" className="text-sm" />
                           <Input value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} placeholder="Email" className="text-sm" />
                         </div>
+                        <div className="flex items-center gap-2 rounded-lg border border-[#E8E0D8] px-3 py-2">
+                          <DollarSign className="h-4 w-4 text-[#8D8A87]" />
+                          <DefaultCurrencySelect businessId={b.id} />
+                        </div>
                         <Button size="sm" className="w-full bg-[#2E7D32]" onClick={() => saveEdit(b.id)} disabled={updateBiz.isPending}>
                           <Save className="mr-1 h-3 w-3" /> {updateBiz.isPending ? "Saving..." : "Save"}
                         </Button>
@@ -218,8 +259,8 @@ export function Businesses() {
                       )}
                       {isActive && user?.role === "owner" && (
                         <>
-                          <Button size="sm" variant="outline" onClick={() => navigate(`/businesses/${b.id}/details`)}>
-                            <Building className="mr-1 h-3 w-3" /> Details
+                          <Button size="sm" variant="outline" onClick={() => navigate(`/businesses/${b.id}`)}>
+                            <Building2 className="mr-1 h-3 w-3" /> Overview
                           </Button>
                           <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
                             <DialogTrigger asChild>

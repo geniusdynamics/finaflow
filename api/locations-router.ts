@@ -17,6 +17,15 @@ export const locationsRouter = createRouter({
     ).orderBy(locations.name);
   }),
 
+  listByBusinessId: authedQuery
+    .input(z.object({ businessId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      return db.select().from(locations).where(
+        and(eq(locations.businessId, input.businessId), isNull(locations.deletedAt))
+      ).orderBy(locations.name);
+    }),
+
   create: settingsManage
     .input(z.object({
       name: z.string().min(1).max(255),

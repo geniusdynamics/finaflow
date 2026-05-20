@@ -276,7 +276,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     employeeId: employee.id,
     basicPay: "50000.00",
     netPay: "45000.00",
-    paymentMethod: "mpesa",
+    paymentMethod: "wallet",
   } as any);
 
   await db.insert(payrollAdvances).values({

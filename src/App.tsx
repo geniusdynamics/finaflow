@@ -19,12 +19,15 @@ const Bills = lazy(() => import("./pages/Bills").then(m => ({ default: m.Bills }
 const Accounts = lazy(() => import("./pages/Accounts").then(m => ({ default: m.Accounts })));
 const Payroll = lazy(() => import("./pages/Payroll").then(m => ({ default: m.Payroll })));
 const Mpesa = lazy(() => import("./pages/Mpesa").then(m => ({ default: m.Mpesa })));
+const Wallet = lazy(() => import("./pages/Wallet").then(m => ({ default: m.Wallet })));
+const WalletAdmin = lazy(() => import("./pages/WalletAdmin").then(m => ({ default: m.WalletAdmin })));
 const Calendar = lazy(() => import("./pages/Calendar").then(m => ({ default: m.Calendar })));
 const Reports = lazy(() => import("./pages/Reports").then(m => ({ default: m.Reports })));
 const Users = lazy(() => import("./pages/Users").then(m => ({ default: m.Users })));
 const Locations = lazy(() => import("./pages/Locations").then(m => ({ default: m.Locations })));
 const Settings = lazy(() => import("./pages/Settings").then(m => ({ default: m.Settings })));
 const Businesses = lazy(() => import("./pages/Businesses"));
+const BusinessOverview = lazy(() => import("./pages/BusinessOverview").then(m => ({ default: m.BusinessOverview })));
 const BusinessDetails = lazy(() => import("./pages/BusinessDetails").then(m => ({ default: m.BusinessDetails })));
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard").then(m => ({ default: m.PartnerDashboard })));
 
@@ -52,6 +55,8 @@ export default function App() {
         <Route path="/locations" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><Locations /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/payroll" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="payroll:view"><Payroll /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/mpesa" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="mpesa:view"><Mpesa /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/wallet" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="wallet:view"><Wallet /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/admin/wallet" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="wallet:admin"><WalletAdmin /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/daily-payments" element={<Navigate to="/calendar?section=payments" replace />} />
         <Route path="/calendar" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="calendar:view"><Calendar /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/reports" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="reports:view"><Reports /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
@@ -60,6 +65,7 @@ export default function App() {
         <Route path="/settings" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><Settings /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/feedback" element={<Navigate to="/settings?tab=feedback" replace />} />
         <Route path="/businesses" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><Businesses /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/businesses/:id" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><BusinessOverview /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/businesses/:id/details" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><BusinessDetails /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/partner" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="partner:view"><PartnerDashboard /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="*" element={<Suspense fallback={<PageSkeleton />}><NotFound /></Suspense>} />

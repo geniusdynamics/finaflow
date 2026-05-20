@@ -22,8 +22,8 @@ describe("accounting mapping foundations", () => {
       operationalType: "cash",
       assetSubType: "cash",
     });
-    expect(getPaymentMethodAccountConfig("mpesa")).toEqual({
-      operationalType: "mpesa",
+    expect(getPaymentMethodAccountConfig("wallet")).toEqual({
+      operationalType: "wallet",
       assetSubType: "cash",
     });
     expect(getPaymentMethodAccountConfig("card")).toEqual({
@@ -47,7 +47,7 @@ describe("accounting mapping foundations", () => {
     expect(isOperationalLinkSubTypeAllowed("cash", "cash")).toBe(true);
     expect(isOperationalLinkSubTypeAllowed("bank_account", "bank")).toBe(true);
     expect(isOperationalLinkSubTypeAllowed("cash", "accounts_payable")).toBe(false);
-    expect(isOperationalLinkSubTypeAllowed("mpesa", "accounts_payable")).toBe(false);
+    expect(isOperationalLinkSubTypeAllowed("wallet", "accounts_payable")).toBe(false);
   });
 });
 

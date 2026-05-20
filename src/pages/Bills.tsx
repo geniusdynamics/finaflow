@@ -21,6 +21,19 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+/** Maps payment method to allowed account type values in the DB */
+const PAYMENT_METHOD_ACCOUNT_TYPES: Record<string, string[]> = {
+  cash: ["cash"],
+  wallet: ["mpesa", "wallet"],
+  bank_transfer: ["bank_account"],
+  card: ["bank_account"],
+};
+
+function getFundingAccounts(paymentMethod: string, allAccounts: any[] | undefined, locationId?: number): any[] {
+  const allowedTypes = PAYMENT_METHOD_ACCOUNT_TYPES[paymentMethod] ?? [];
+  return (allAccounts ?? []).filter(a => allowedTypes.includes(a.type) && !a.deletedAt && (!locationId || a.locationId === locationId));
+}
+
 export function Bills() {
   const { user } = useAuth();
   const role = user?.role ?? "viewer";
@@ -95,9 +108,24 @@ export function Bills() {
     frequency: "monthly" as const,
     nextDueDate: "",
   });
-  const [payForm, setPayForm] = useState({ paymentMethod: "mpesa" as const, amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" });
+  const [payForm, setPayForm] = useState({ paymentMethod: "wallet" as const, amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" });
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const todayDate = getLocalDateString();
+
+  // Auto-detect funding source when payment dialog opens or payment method changes
+  useEffect(() => {
+    const bill = bills?.find(b => b.id === paymentOpen);
+    if (!bill) return;
+    const matches = getFundingAccounts(payForm.paymentMethod, accounts, bill.locationId);
+    if (matches.length === 1) {
+      setPayForm(p => ({ ...p, accountId: String(matches[0].id) }));
+    } else if (payForm.accountId) {
+      const stillValid = matches.some(a => String(a.id) === payForm.accountId);
+      if (!stillValid) {
+        setPayForm(p => ({ ...p, accountId: "" }));
+      }
+    }
+  }, [paymentOpen, payForm.paymentMethod, accounts, bills]);
 
   // Item form with autocomplete
   const [itemForm, setItemForm] = useState({ itemName: "", quantity: "1", unitPrice: "", totalPrice: "", categoryId: "", notes: "" });
@@ -323,13 +351,13 @@ export function Bills() {
                     {canCreate && <Button size="sm" variant="ghost" onClick={() => setItemsOpen(itemsOpen === bill.id ? null : bill.id)}><Package className="h-4 w-4 text-[#D4A854]"/></Button>}
                     {canPay && bill.status !== "paid" && (
                       <Dialog open={paymentOpen === bill.id} onOpenChange={v => { setPaymentOpen(v ? bill.id : null); setPaymentError(null); }}>
-                        <DialogTrigger asChild><Button size="sm" variant="outline" className="border-[#C73E1D] text-[#C73E1D]" onClick={() => { setPayForm({ paymentMethod: "mpesa" as const, amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" }); setPaymentError(null); }}>Pay</Button></DialogTrigger>
+                        <DialogTrigger asChild><Button size="sm" variant="outline" className="border-[#C73E1D] text-[#C73E1D]" onClick={() => { setPayForm({ paymentMethod: "wallet" as const, amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" }); setPaymentError(null); }}>Pay</Button></DialogTrigger>
                         <DialogContent className="bg-white"><DialogHeader><DialogTitle className="font-serif text-xl">Record Payment</DialogTitle></DialogHeader>
                           <form onSubmit={handlePayment(bill.id)} className="space-y-3">
                             <div className="rounded bg-[#F5EDE6] p-3"><p className="text-sm font-medium">{bill.description}</p><p className="text-xs text-[#8D8A87]">Supplier: {suppliers?.find(s => s.id === bill.supplierId)?.name ?? "-"} · Balance: {formatKES(bill.balanceDue)}</p></div>
-                            <div className="grid grid-cols-2 gap-3"><div><Label>Amount</Label><Input type="number" step="0.01" max={parseFloat(bill.balanceDue)} value={payForm.amount} onChange={e => setPayForm(p => ({...p, amount: e.target.value}))} required /></div><div><Label>Method</Label><select value={payForm.paymentMethod} onChange={e => setPayForm(p => ({...p, paymentMethod: e.target.value as any}))} className="w-full rounded border px-3 py-2 text-sm"><option value="cash">Cash</option><option value="mpesa">M-PESA</option><option value="bank_transfer">Bank</option><option value="card">Card</option></select></div></div>
+                            <div className="grid grid-cols-2 gap-3"><div><Label>Amount</Label><Input type="number" step="0.01" max={parseFloat(bill.balanceDue)} value={payForm.amount} onChange={e => setPayForm(p => ({...p, amount: e.target.value}))} required /></div><div><Label>Method</Label><select value={payForm.paymentMethod} onChange={e => setPayForm(p => ({...p, paymentMethod: e.target.value as any}))} className="w-full rounded border px-3 py-2 text-sm"><option value="cash">Cash</option><option value="wallet">Wallet</option><option value="bank_transfer">Bank</option><option value="card">Card</option></select></div></div>
                             <div><Label>Payment Date</Label><Input type="date" value={payForm.paymentDate} max={todayDate} onChange={e => setPayForm(p => ({ ...p, paymentDate: e.target.value }))} required /></div>
-                            <div className="grid grid-cols-2 gap-3"><div><Label>Funding Source</Label><select value={payForm.accountId} onChange={e => setPayForm(p => ({...p, accountId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Auto-detect</option>{accounts?.filter(a => a.isPaymentMethod && a.locationId === bill.locationId)?.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name}{loc ? ` (${loc})` : ""}</option>; })}</select></div><div><Label>Reference</Label><Input value={payForm.reference} onChange={e => setPayForm(p => ({...p, reference: e.target.value}))} placeholder="M-PESA code"/></div></div>
+                            <div className="grid grid-cols-2 gap-3"><div><Label>Funding Source</Label><select value={payForm.accountId} onChange={e => setPayForm(p => ({...p, accountId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Auto-detect</option>{getFundingAccounts(payForm.paymentMethod, accounts, bill.locationId)?.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name}{loc ? ` (${loc})` : ""}</option>; })}</select></div><div><Label>Reference</Label><Input value={payForm.reference} onChange={e => setPayForm(p => ({...p, reference: e.target.value}))} placeholder="Reference code"/></div></div>
                             {paymentError && (
                               <div role="alert" className="flex items-start gap-2 rounded-md border border-[#D32F2F]/30 bg-[#D32F2F]/5 p-3 text-sm text-[#D32F2F]">
                                 <OctagonX className="mt-0.5 h-4 w-4 shrink-0" />

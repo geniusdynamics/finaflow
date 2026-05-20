@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, authedQuery, ownerQuery, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
-import { dailySales, expenses, bills, billItems, billPayments, accounts, mpesaTransactions, recurringBillTemplates, payrollPeriods, payrollEntries, payrollAdvances, ledgerEntries, dailyMpesaLedger, suppliers, attachments, locations } from "@db/schema";
+import { dailySales, expenses, bills, billItems, billPayments, accounts, mpesaTransactions, mobileWalletTransactions, recurringBillTemplates, payrollPeriods, payrollEntries, payrollAdvances, ledgerEntries, dailyMpesaLedger, suppliers, attachments, locations } from "@db/schema";
 import { eq, and, isNull, sql, desc } from "drizzle-orm";
 import { d, Decimal } from "./lib/decimal";
 import { resetBusinessTransactions, validatePreReset, createResetSnapshot, type ResetResult } from "./lib/business-reset";
@@ -40,6 +40,12 @@ export const dashboardRouter = createRouter({
         totalFees: sql<string>`COALESCE(SUM(${mpesaTransactions.txnFee}), 0)`,
       }).from(mpesaTransactions).where(and(sql`${mpesaTransactions.txnDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`, isNull(mpesaTransactions.deletedAt), sql`${mpesaTransactions.locationId} IN (${locIdSql})`));
 
+      const walletR = await db.select({
+        totalIn: sql<string>`COALESCE(SUM(CASE WHEN ${mobileWalletTransactions.direction} = 'in' THEN CAST(${mobileWalletTransactions.amount} AS DECIMAL) ELSE 0 END), 0)`,
+        totalOut: sql<string>`COALESCE(SUM(CASE WHEN ${mobileWalletTransactions.direction} = 'out' THEN CAST(${mobileWalletTransactions.amount} AS DECIMAL) ELSE 0 END), 0)`,
+        totalFees: sql<string>`COALESCE(SUM(CAST(${mobileWalletTransactions.txnFee} AS DECIMAL)), 0)`,
+      }).from(mobileWalletTransactions).where(and(sql`${mobileWalletTransactions.txnDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`, isNull(mobileWalletTransactions.deletedAt), sql`${mobileWalletTransactions.locationId} IN (${locIdSql})`));
+
       return {
         totalSales: salesR[0]?.total ?? "0", totalExpenses: expR[0]?.total ?? "0",
         totalBillsDue: billsR[0]?.total ?? "0",
@@ -47,6 +53,7 @@ export const dashboardRouter = createRouter({
         netCashflow: d(salesR[0]?.total ?? "0").minus(d(expR[0]?.total ?? "0")).toFixed(2),
         accounts: accts.map((a) => ({ id: a.id, name: a.name, type: a.type, currentBalance: a.currentBalance })),
         mpesa: { totalIn: mpR[0]?.totalIn ?? "0", totalOut: mpR[0]?.totalOut ?? "0", totalFees: mpR[0]?.totalFees ?? "0" },
+        wallet: { totalIn: walletR[0]?.totalIn ?? "0", totalOut: walletR[0]?.totalOut ?? "0", totalFees: walletR[0]?.totalFees ?? "0" },
       };
     }),
 
@@ -139,7 +146,10 @@ export const dashboardRouter = createRouter({
       const mpesaConditions = [sql`DATE(${mpesaTransactions.txnDate}) = ${date}`, isNull(mpesaTransactions.deletedAt), sql`${mpesaTransactions.locationId} IN (${locIdSql})`];
       const mpesaToday = await db.select().from(mpesaTransactions).where(and(...mpesaConditions)).orderBy(desc(mpesaTransactions.txnDate));
 
-      return { billPayments: billPaymentsToday, expenses: expensesToday, payroll: payrollToday, mpesa: mpesaToday };
+      const walletConditions = [sql`DATE(${mobileWalletTransactions.txnDate}) = ${date}`, isNull(mobileWalletTransactions.deletedAt), sql`${mobileWalletTransactions.locationId} IN (${locIdSql})`];
+      const walletToday = await db.select().from(mobileWalletTransactions).where(and(...walletConditions)).orderBy(desc(mobileWalletTransactions.txnDate));
+
+      return { billPayments: billPaymentsToday, expenses: expensesToday, payroll: payrollToday, mpesa: mpesaToday, wallet: walletToday };
     }),
 
   previousDayIncome: authedQuery
