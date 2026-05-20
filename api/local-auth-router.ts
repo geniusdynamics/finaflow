@@ -613,7 +613,7 @@ export const localAuthRouter = createRouter({
 
           const defaultAccountValues: InsertAccount[] = [
             { name: "Cash Drawer", type: "cash", locationId: locationRow.id, openingBalance: "0.00", currentBalance: "0.00", isActive: true },
-            { name: "M-PESA Till", type: "mpesa", locationId: locationRow.id, openingBalance: "0.00", currentBalance: "0.00", isActive: true },
+            { name: "Wallet", type: "wallet", locationId: locationRow.id, openingBalance: "0.00", currentBalance: "0.00", isActive: true },
             { name: "Bank Account", type: "bank_account", locationId: locationRow.id, openingBalance: "0.00", currentBalance: "0.00", isActive: true },
           ];
           await tx.insert(accounts).values(defaultAccountValues);
@@ -771,10 +771,10 @@ export const localAuthRouter = createRouter({
     const malindiLocId = locMap["Malindi Branch"];
     const demoAccounts: Array<Pick<InsertAccount, "name" | "type" | "locationId">> = [
       { name: "Cash Drawer", type: "cash", locationId: mainLocId },
-      { name: "M-PESA Till", type: "mpesa", locationId: mainLocId },
+      { name: "Wallet", type: "wallet", locationId: mainLocId },
       { name: "Bank (KCB)", type: "bank_account", locationId: mainLocId },
       { name: "Cash Drawer (Malindi)", type: "cash", locationId: malindiLocId },
-      { name: "M-PESA Till (Malindi)", type: "mpesa", locationId: malindiLocId },
+      { name: "Wallet (Malindi)", type: "wallet", locationId: malindiLocId },
     ];
     const existingAccts = await db.select().from(accounts)
       .where(and(sql`${accounts.locationId} IN (${sql.join([mainLocId, malindiLocId].map(id => sql`${id}`), sql`, `)})`, isNull(accounts.deletedAt)));

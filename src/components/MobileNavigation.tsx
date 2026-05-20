@@ -10,9 +10,7 @@ import {
   Users,
   Settings,
   Handshake,
-  Briefcase,
   Building,
-  Building2,
   Smartphone,
   ShieldCheck,
   Bell,
@@ -20,6 +18,7 @@ import {
   Menu,
   X,
   ChevronRight,
+  Wallet,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -37,14 +36,13 @@ export const mobileSecondaryNavItems = [
   { path: "/suppliers", label: "Suppliers", icon: Building },
   { path: "/bills", label: "Bills", icon: FileText },
   { path: "/accounts", label: "Accounts", icon: CreditCard },
-  { path: "/locations", label: "Branches", icon: Building2 },
   { path: "/payroll", label: "Payroll", icon: Users },
   { path: "/mpesa", label: "M-PESA", icon: Smartphone },
+  { path: "/wallet", label: "Wallet", icon: Wallet },
   { path: "/calendar", label: "Calendar", icon: CalendarDays },
   { path: "/reports", label: "Reports", icon: FileSpreadsheet },
   { path: "/users", label: "Users & Roles", icon: ShieldCheck },
   { path: "/settings", label: "Settings", icon: Settings },
-  { path: "/businesses", label: "Businesses", icon: Briefcase },
   { path: "/partner", label: "Partner", icon: Handshake },
 ];
 

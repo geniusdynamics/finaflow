@@ -76,7 +76,7 @@ export async function getLiabilityAccountForRecurring(
 
 export const billPaymentInputSchema = z.object({
   billId: z.number(),
-  paymentMethod: z.enum(["cash", "mpesa", "bank_transfer", "card"]),
+  paymentMethod: z.enum(["cash", "wallet", "bank_transfer", "card"]),
   amount: z.string(),
   paymentDate: notFutureDateString("Payment date"),
   reference: z.string().optional(),
@@ -87,7 +87,7 @@ export const billPaymentInputSchema = z.object({
 
 export const batchBillPaymentInputSchema = z.object({
   billIds: z.array(z.number()),
-  paymentMethod: z.enum(["cash", "mpesa", "bank_transfer", "card"]),
+  paymentMethod: z.enum(["cash", "wallet", "bank_transfer", "card"]),
   paymentDate: notFutureDateString("Payment date"),
   accountId: z.number(),
   reference: z.string().optional(),
@@ -335,7 +335,7 @@ export const billsRouter = createRouter({
 
         let cashAccountId = input.accountId;
         if (!cashAccountId) {
-          const typeMap: Record<string, string> = { cash: "cash", mpesa: "cash", bank_transfer: "bank", card: "bank" };
+          const typeMap: Record<string, string> = { cash: "cash", wallet: "cash", bank_transfer: "bank", card: "bank" };
           const defaultAccount = await tx.select().from(accounts).where(
             and(
               eq(accounts.locationId, bill.locationId),

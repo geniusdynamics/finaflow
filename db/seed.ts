@@ -27,14 +27,14 @@ async function seed() {
   await db.insert(accounts).values([
     // Corner accounts
     { locationId: cornerId, name: "Cash Drawer", type: "cash", accountCode: "CASH", openingBalance: "0.00", currentBalance: "0.00", isPaymentMethod: true, isActive: true },
-    { locationId: cornerId, name: "M-PESA Till", type: "mpesa", accountCode: "MPESA", openingBalance: "0.00", currentBalance: "0.00", isPaymentMethod: true, isActive: true },
+    { locationId: cornerId, name: "Wallet", type: "wallet", accountCode: "WALLET", openingBalance: "0.00", currentBalance: "0.00", isPaymentMethod: true, isActive: true },
     { locationId: cornerId, name: "KCB Bank", type: "bank_account", accountCode: "KCB", openingBalance: "0.00", currentBalance: "0.00", isPaymentMethod: true, isActive: true },
     { locationId: cornerId, name: "Equity Bank", type: "bank_account", accountCode: "EQUITY", openingBalance: "0.00", currentBalance: "0.00", isPaymentMethod: true, isActive: true },
     { locationId: cornerId, name: "Family Bank", type: "bank_account", accountCode: "FAMILY", openingBalance: "0.00", currentBalance: "0.00", isPaymentMethod: true, isActive: true },
     { locationId: cornerId, name: "COOP Bank", type: "bank_account", accountCode: "COOP", openingBalance: "0.00", currentBalance: "0.00", isPaymentMethod: true, isActive: true },
     // Golden accounts
     { locationId: goldenId, name: "Cash Drawer", type: "cash", accountCode: "CASH", openingBalance: "0.00", currentBalance: "0.00", isPaymentMethod: true, isActive: true },
-    { locationId: goldenId, name: "M-PESA Till", type: "mpesa", accountCode: "MPESA", openingBalance: "0.00", currentBalance: "0.00", isPaymentMethod: true, isActive: true },
+    { locationId: goldenId, name: "Wallet", type: "wallet", accountCode: "WALLET", openingBalance: "0.00", currentBalance: "0.00", isPaymentMethod: true, isActive: true },
     { locationId: goldenId, name: "KCB Bank", type: "bank_account", accountCode: "KCB", openingBalance: "0.00", currentBalance: "0.00", isPaymentMethod: true, isActive: true },
     { locationId: goldenId, name: "Equity Bank", type: "bank_account", accountCode: "EQUITY", openingBalance: "0.00", currentBalance: "0.00", isPaymentMethod: true, isActive: true },
     { locationId: goldenId, name: "Family Bank", type: "bank_account", accountCode: "FAMILY", openingBalance: "0.00", currentBalance: "0.00", isPaymentMethod: true, isActive: true },

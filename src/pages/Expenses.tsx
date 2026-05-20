@@ -50,6 +50,19 @@ function getPeriodDates(period: PeriodFilter, customFrom?: string, customTo?: st
   }
 }
 
+/** Maps payment method to allowed account type values in the DB */
+const PAYMENT_METHOD_ACCOUNT_TYPES: Record<string, string[]> = {
+  cash: ["cash"],
+  wallet: ["mpesa", "wallet"],
+  bank_transfer: ["bank_account"],
+  card: ["bank_account"],
+};
+
+function getFundingAccounts(paymentMethod: string, allAccounts: any[] | undefined): any[] {
+  const allowedTypes = PAYMENT_METHOD_ACCOUNT_TYPES[paymentMethod] ?? [];
+  return (allAccounts ?? []).filter(a => allowedTypes.includes(a.type) && !a.deletedAt);
+}
+
 export function Expenses() {
   const { user } = useAuth();
   const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.EXPENSES_MANAGE);
@@ -189,6 +202,19 @@ export function Expenses() {
       }));
     }
   }, [form.billId, form.categoryIds, selectedSupplier?.autoCategoryId]);
+
+  // Auto-detect funding source: when payment method changes and only one matching account exists
+  useEffect(() => {
+    const matches = getFundingAccounts(form.paymentMethod, accounts);
+    if (matches.length === 1) {
+      setForm(p => ({ ...p, accountId: String(matches[0].id) }));
+    } else if (form.accountId) {
+      const stillValid = matches.some(a => String(a.id) === form.accountId);
+      if (!stillValid) {
+        setForm(p => ({ ...p, accountId: "" }));
+      }
+    }
+  }, [form.paymentMethod, accounts]);
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -445,14 +471,14 @@ export function Expenses() {
                   </div>
                   <div><Label>Payment Method</Label>
                     <select value={form.paymentMethod} onChange={e => setForm(p => ({ ...p, paymentMethod: e.target.value as any }))} className="w-full rounded border px-3 py-2 text-sm">
-                      <option value="cash">Cash</option><option value="mpesa">M-PESA</option><option value="bank_transfer">Bank Transfer</option><option value="card">Card</option>
+                      <option value="cash">Cash</option><option value="wallet">Wallet</option><option value="bank_transfer">Bank Transfer</option><option value="card">Card</option>
                     </select>
                   </div>
                 </div>
                 <div><Label>Funding Source</Label>
                   <select value={form.accountId} onChange={e => setForm(p => ({ ...p, accountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
                     <option value="">Auto-detect</option>
-                    {accounts?.filter(a => a.isPaymentMethod)?.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name}{loc ? ` (${loc})` : ""}</option>; })}
+                    {getFundingAccounts(form.paymentMethod, accounts)?.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name}{loc ? ` (${loc})` : ""}</option>; })}
                   </select>
                 </div>
                 <div><Label>Supplier {form.billId ? <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span> : ""}</Label>

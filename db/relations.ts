@@ -23,6 +23,13 @@ import {
   mpesaTransactions,
   ledgerEntries,
   paymentMethods,
+  supportedCurrencies,
+  exchangeRates,
+  businessCurrencies,
+  mobileWalletTransactions,
+  mobileWalletDailyLedger,
+  mobileWalletProviders,
+  providerConfigs,
 } from "./schema";
 
 export const customerAccountsRelations = relations(customerAccounts, ({ many }) => ({
@@ -195,5 +202,68 @@ export const paymentMethodsRelations = relations(paymentMethods, ({ one }) => ({
   account: one(customerAccounts, {
     fields: [paymentMethods.accountRefId],
     references: [customerAccounts.id],
+  }),
+}));
+
+// ── Multi-Currency Relations ──────────────────────────────────────────────
+
+export const exchangeRatesRelations = relations(exchangeRates, ({ one }) => ({
+  fromCurrencyRef: one(supportedCurrencies, {
+    fields: [exchangeRates.fromCurrency],
+    references: [supportedCurrencies.code],
+  }),
+  toCurrencyRef: one(supportedCurrencies, {
+    fields: [exchangeRates.toCurrency],
+    references: [supportedCurrencies.code],
+  }),
+}));
+
+export const businessCurrenciesRelations = relations(businessCurrencies, ({ one }) => ({
+  business: one(businesses, {
+    fields: [businessCurrencies.businessId],
+    references: [businesses.id],
+  }),
+  currencyRef: one(supportedCurrencies, {
+    fields: [businessCurrencies.currency],
+    references: [supportedCurrencies.code],
+  }),
+}));
+
+// ── Mobile Wallet Relations ────────────────────────────────────────────────
+
+export const mobileWalletTransactionsRelations = relations(mobileWalletTransactions, ({ one }) => ({
+  location: one(locations, {
+    fields: [mobileWalletTransactions.locationId],
+    references: [locations.id],
+  }),
+  sourceAccount: one(accounts, {
+    fields: [mobileWalletTransactions.sourceAccountId],
+    references: [accounts.id],
+  }),
+  destinationAccount: one(accounts, {
+    fields: [mobileWalletTransactions.destinationAccountId],
+    references: [accounts.id],
+  }),
+}));
+
+export const mobileWalletDailyLedgerRelations = relations(mobileWalletDailyLedger, ({ one }) => ({
+  location: one(locations, {
+    fields: [mobileWalletDailyLedger.locationId],
+    references: [locations.id],
+  }),
+  account: one(accounts, {
+    fields: [mobileWalletDailyLedger.accountId],
+    references: [accounts.id],
+  }),
+}));
+
+export const providerConfigsRelations = relations(providerConfigs, ({ one }) => ({
+  location: one(locations, {
+    fields: [providerConfigs.locationId],
+    references: [locations.id],
+  }),
+  account: one(accounts, {
+    fields: [providerConfigs.accountId],
+    references: [accounts.id],
   }),
 }));

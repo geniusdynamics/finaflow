@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Settings as SettingsIcon, Camera, Briefcase, Shield, Crown, Award, ArrowUpCircle, ArrowDownCircle, Users, MapPin, Gift, Clock, Key, Trash2, Plus, Copy, CheckCircle, Webhook, AlertCircle, Plug, MessageSquare, Eye } from "lucide-react";
+import { Settings as SettingsIcon, Camera, Briefcase, Shield, Crown, Award, ArrowUpCircle, ArrowDownCircle, Users, MapPin, Gift, Clock, Key, Trash2, Plus, Copy, CheckCircle, Webhook, AlertCircle, Plug, MessageSquare, Eye, RefreshCw, DollarSign, Wallet, Smartphone, Activity, TrendingUp, AlertCircle as AlertCircleIcon, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 const PLAN_DETAILS: Record<string, { label: string; price: string; businesses: number; branches: number; users: number; transactions: string; payroll: string; support: string; color: string; features: string[] }> = {
@@ -23,12 +23,14 @@ const PLAN_DETAILS: Record<string, { label: string; price: string; businesses: n
 type PlanKey = "free" | "starter" | "growth" | "pro";
 
 export function Settings() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.SETTINGS_MANAGE);
   const utils = trpc.useUtils();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabParam = searchParams.get("tab") as "features" | "account" | "integrations" | "feedback" | null;
-  const [tab, setTab] = useState<"features" | "account" | "integrations" | "feedback">(tabParam || "features");
+  const tabParam = searchParams.get("tab") as "features" | "account" | "integrations" | "feedback" | "wallets" | null;
+  const [tab, setTab] = useState<"features" | "account" | "integrations" | "feedback" | "wallets">(tabParam || "features");
+  const [walletSubTab, setWalletSubTab] = useState<"providers" | "rates" | "currencies">("providers");
 
   const handleTabChange = (newTab: typeof tab) => {
     setTab(newTab);
@@ -118,6 +120,11 @@ export function Settings() {
   const updateHook = trpc.integrations.updateWebhook.useMutation({ onSuccess: () => refetchHooks() });
   const deleteHook = trpc.integrations.deleteWebhook.useMutation({ onSuccess: () => { refetchHooks(); toast.success("Webhook deleted"); } });
 
+  const syncRates = trpc.walletManagement.rates.sync.useMutation({
+    onSuccess: (data) => { if (data.success) toast.success(data.message); else toast.error(data.error || "Sync failed"); },
+    onError: (err) => toast.error(err.message),
+  });
+
   const toggle = (key: string) => {
     const current = settings?.[key] === "true";
     setSetting.mutate({ key, value: String(!current) });
@@ -128,6 +135,44 @@ export function Settings() {
   };
 
   const allPlans: PlanKey[] = ["free", "starter", "growth", "pro"];
+
+  // Wallet management queries and mutations
+  const { data: health, refetch: refetchHealth } = trpc.walletManagement.providers.health.useQuery({});
+  const { data: providers } = trpc.walletManagement.providers.list.useQuery();
+  const { data: rates } = trpc.walletManagement.rates.list.useQuery();
+  const { data: currencies } = trpc.walletManagement.currencies.list.useQuery();
+  const manualUpdateRate = trpc.walletManagement.rates.manualUpdate.useMutation({
+    onSuccess: () => { toast.success("Rate updated"); },
+    onError: (err) => { toast.error(err.message); },
+  });
+  const toggleCurrency = trpc.walletManagement.currencies.toggle.useMutation({
+    onSuccess: () => { toast.success("Currency toggled"); },
+    onError: (err) => { toast.error(err.message); },
+  });
+
+  const [rateForm, setRateForm] = useState({ fromCurrency: "USD", toCurrency: "KES", rate: "" });
+
+  const handleRateUpdate = () => {
+    if (!rateForm.rate) return;
+    manualUpdateRate.mutate({
+      fromCurrency: rateForm.fromCurrency,
+      toCurrency: rateForm.toCurrency,
+      rate: rateForm.rate,
+    });
+    setRateForm({ fromCurrency: "USD", toCurrency: "KES", rate: "" });
+  };
+
+  const PROVIDER_COLORS: Record<string, string> = {
+    mpesa: "bg-[#25B266]",
+    airtel_money: "bg-[#E30613]",
+    sasapay: "bg-[#00A651]",
+  };
+
+  const PROVIDER_ICONS: Record<string, React.ReactNode> = {
+    mpesa: <Smartphone className="h-5 w-5" />,
+    airtel_money: <Smartphone className="h-5 w-5" />,
+    sasapay: <Wallet className="h-5 w-5" />,
+  };
 
   return (
     <Layout>
@@ -144,6 +189,9 @@ export function Settings() {
           </button>
           <button onClick={() => handleTabChange("account")} className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${tab === "account" ? "bg-[#C73E1D] text-white" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
             <Shield className="inline h-4 w-4 mr-1" />Account
+          </button>
+          <button onClick={() => handleTabChange("wallets")} className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${tab === "wallets" ? "bg-[#C73E1D] text-white" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <Wallet className="inline h-4 w-4 mr-1" />Wallets
           </button>
           <button onClick={() => handleTabChange("integrations")} className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${tab === "integrations" ? "bg-[#C73E1D] text-white" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
             <Plug className="inline h-4 w-4 mr-1" />Integrations
@@ -203,6 +251,52 @@ export function Settings() {
                   </div>
                   <Switch checked={settings?.multiBusiness === "true"} onCheckedChange={() => toggle("multiBusiness")} disabled={!canManage} />
                 </div>
+                <div className="flex items-center justify-between rounded-lg border border-[#E8E0D8] px-4 py-3">
+                  <div>
+                    <Label className="text-sm font-medium">Manage Businesses</Label>
+                    <p className="text-xs text-[#8D8A87]">Create, edit, and switch between businesses</p>
+                  </div>
+                  <Button size="sm" onClick={() => navigate("/businesses")} className="bg-[#2E7D32]">
+                    <Briefcase className="mr-1 h-4 w-4" />
+                    Open Businesses
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-[#E8E0D8]">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 font-serif text-lg">
+                  <DollarSign className="h-5 w-5 text-[#2E7D32]" />
+                  Multi-Currency
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between rounded-lg border border-[#E8E0D8] px-4 py-3">
+                  <div>
+                    <Label className="text-sm font-medium">Enable Multi-Currency Support</Label>
+                    <p className="text-xs text-[#8D8A87]">Allow transacting in multiple currencies with live exchange rates</p>
+                  </div>
+                  <Switch checked={settings?.multiCurrency === "true"} onCheckedChange={() => toggle("multiCurrency")} disabled={!canManage} />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-[#E8E0D8]">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 font-serif text-lg">
+                  <MapPin className="h-5 w-5 text-[#C73E1D]" />
+                  Branches & Locations
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="mb-4 text-sm text-[#8D8A87]">
+                  Create and manage business branches, set default wallets and cash accounts, and view all linked accounts per location.
+                </p>
+                <Button onClick={() => navigate("/locations")} className="bg-[#C73E1D]">
+                  <MapPin className="mr-1 h-4 w-4" />
+                  Manage Branches
+                </Button>
               </CardContent>
             </Card>
           </>
@@ -390,6 +484,199 @@ export function Settings() {
           </>
         )}
 
+        {tab === "wallets" && (
+          <>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h2 className="font-serif text-xl font-bold text-[#2D2A26]">Wallet Management</h2>
+                <p className="text-sm text-[#8D8A87]">Provider configuration, exchange rates, and currency management</p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => refetchHealth()} className="gap-2">
+                <RefreshCw className="h-4 w-4" /> Refresh
+              </Button>
+            </div>
+
+            <div className="mb-4 flex flex-wrap gap-2 border-b border-[#E8E0D8] pb-4">
+              {(["providers", "rates", "currencies"] as const).map((t) => (
+                <button key={t} onClick={() => setWalletSubTab(t)} className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${walletSubTab === t ? "bg-[#C73E1D] text-white" : "bg-[#F5EDE6] text-[#2D2A26] hover:bg-[#E8E0D8]"}`}>
+                  {t.charAt(0).toUpperCase() + t.slice(1)}
+                </button>
+              ))}
+            </div>
+
+            {walletSubTab === "providers" && (
+              <>
+                <div className="mb-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {health?.map((h: any) => (
+                    <Card key={h.provider} className="border-[#E8E0D8]">
+                      <CardContent className="p-4">
+                        <div className="mb-3 flex items-center gap-3">
+                          <div className={`flex h-10 w-10 items-center justify-center rounded-lg text-white ${PROVIDER_COLORS[h.provider] || "bg-gray-500"}`}>
+                            {PROVIDER_ICONS[h.provider] || <Activity className="h-5 w-5" />}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-[#2D2A26]">{h.displayName}</p>
+                            <p className="text-xs text-[#8D8A87]">{h.provider}</p>
+                          </div>
+                          <div className="ml-auto flex items-center gap-1">
+                            <div className={`h-2 w-2 rounded-full ${h.features?.initiatePayment ? "bg-[#2E7D32]" : "bg-[#D4A854]"}`} />
+                            <span className="text-xs text-[#8D8A87]">{h.features?.initiatePayment ? "API" : "SMS"}</span>
+                          </div>
+                        </div>
+                        <div className="space-y-1 text-xs text-[#8D8A87]">
+                          <p>Currencies: {(h.supportedCurrencies || []).join(", ")}</p>
+                          <p>Last txn: {h.lastTransactionDate || "No transactions"}</p>
+                        </div>
+                        <div className="mt-3 flex flex-wrap gap-1">
+                          {Object.entries(h.features || {}).filter(([, v]) => v).map(([k]) => (
+                            <span key={k} className="rounded bg-[#F5EDE6] px-1.5 py-0.5 text-[10px] text-[#8D8A87]">{k}</span>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  {(!health || health.length === 0) && (
+                    <p className="col-span-full text-sm text-[#8D8A87]">No providers registered</p>
+                  )}
+                </div>
+
+                <Card className="border-[#E8E0D8]">
+                  <CardHeader><CardTitle className="text-sm">Available Providers</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {providers?.map((p: any) => (
+                        <div key={p.code} className="flex items-center justify-between rounded-lg border border-[#E8E0D8] p-3">
+                          <div>
+                            <p className="text-sm font-medium text-[#2D2A26]">{p.displayName || p.name} ({p.code})</p>
+                            <p className="text-xs text-[#8D8A87]">{p.supportedCurrencies} · {p.isActive ? "Active" : "Inactive"}</p>
+                          </div>
+                        </div>
+                      ))}
+                      {(!providers || providers.length === 0) && (
+                        <p className="text-sm text-[#8D8A87]">No providers available</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+
+            {walletSubTab === "rates" && (
+              <Card className="border-[#E8E0D8]">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm">Exchange Rates</CardTitle>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="outline" onClick={() => syncRates.mutate()} disabled={syncRates.isPending} className="gap-1">
+                        <RefreshCw className={`h-4 w-4 ${syncRates.isPending ? "animate-spin" : ""}`} />
+                        {syncRates.isPending ? "Syncing..." : "Sync from Frankfurter"}
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-lg border border-[#E8E0D8] bg-[#F5EDE6] p-4">
+                    <p className="mb-3 text-xs text-[#8D8A87]">Manual Rate Override</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-[#8D8A87]">From Currency</Label>
+                        <select value={rateForm.fromCurrency} onChange={(e) => setRateForm(f => ({ ...f, fromCurrency: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm">
+                          {currencies?.map((c: any) => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
+                        </select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-[#8D8A87]">To Currency</Label>
+                        <select value={rateForm.toCurrency} onChange={(e) => setRateForm(f => ({ ...f, toCurrency: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm">
+                          {currencies?.map((c: any) => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-1 mt-3">
+                      <Label className="text-xs text-[#8D8A87]">Exchange Rate</Label>
+                      <Input type="number" step="0.0001" value={rateForm.rate} onChange={(e) => setRateForm(f => ({ ...f, rate: e.target.value }))} placeholder="e.g. 153.25" className="text-sm" />
+                    </div>
+                    <Button onClick={handleRateUpdate} disabled={!rateForm.rate || manualUpdateRate.isPending} className="w-full mt-3 bg-[#C73E1D]">
+                      {manualUpdateRate.isPending ? "Saving..." : "Save Rate"}
+                    </Button>
+                  </div>
+
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-[#E8E0D8] text-left text-xs uppercase text-[#8D8A87]">
+                        <th className="px-4 py-3 font-medium">From</th>
+                        <th className="px-4 py-3 font-medium">To</th>
+                        <th className="px-4 py-3 font-medium">Rate</th>
+                        <th className="px-4 py-3 font-medium">Source</th>
+                        <th className="px-4 py-3 font-medium">Last Updated</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rates?.map((r: any) => (
+                        <tr key={`${r.fromCurrency}-${r.toCurrency}`} className="border-b border-[#E8E0D8] hover:bg-[#F5EDE6]/50">
+                          <td className="px-4 py-3 text-sm font-medium text-[#2D2A26]">{r.fromCurrency}</td>
+                          <td className="px-4 py-3 text-sm text-[#2D2A26]">{r.toCurrency}</td>
+                          <td className="px-4 py-3 font-mono text-sm text-[#2D2A26]">{r.rate}</td>
+                          <td className="px-4 py-3 text-xs text-[#8D8A87]">{r.source || "Manual"}</td>
+                          <td className="px-4 py-3 text-xs text-[#8D8A87]">{r.updatedAt ? new Date(r.updatedAt).toLocaleDateString() : "-"}</td>
+                        </tr>
+                      ))}
+                      {(!rates || rates.length === 0) && (
+                        <tr>
+                          <td colSpan={5} className="px-4 py-8 text-center text-sm text-[#8D8A87]">No exchange rates configured</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            )}
+
+            {walletSubTab === "currencies" && (
+              <Card className="border-[#E8E0D8]">
+                <CardHeader><CardTitle className="text-sm">Supported Currencies</CardTitle></CardHeader>
+                <CardContent className="p-0">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-[#E8E0D8] text-left text-xs uppercase text-[#8D8A87]">
+                        <th className="px-4 py-3 font-medium">Code</th>
+                        <th className="px-4 py-3 font-medium">Name</th>
+                        <th className="px-4 py-3 font-medium">Symbol</th>
+                        <th className="px-4 py-3 font-medium">Decimals</th>
+                        <th className="px-4 py-3 font-medium">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currencies?.map((c: any) => (
+                        <tr key={c.code} className="border-b border-[#E8E0D8] hover:bg-[#F5EDE6]/50">
+                          <td className="px-4 py-3 font-mono text-sm font-medium text-[#2D2A26]">{c.code}</td>
+                          <td className="px-4 py-3 text-sm text-[#2D2A26]">{c.name}</td>
+                          <td className="px-4 py-3 text-sm text-[#8D8A87]">{c.symbol}</td>
+                          <td className="px-4 py-3 text-sm text-[#8D8A87]">{c.decimalPlaces}</td>
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => toggleCurrency.mutate({ code: c.code, isActive: !c.isActive })}
+                              disabled={c.isDefault}
+                              className={`inline-flex items-center gap-1 text-xs rounded-full px-2 py-0.5 border ${
+                                c.isActive
+                                  ? "border-[#2E7D32] bg-[#2E7D32]/10 text-[#2E7D32]"
+                                  : "border-[#8D8A87] bg-transparent text-[#8D8A87]"
+                              } ${c.isDefault ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:opacity-80"}`}
+                            >
+                              {c.isActive ? <CheckCircle2 className="h-3 w-3" /> : <AlertCircleIcon className="h-3 w-3" />}
+                              {c.isActive ? "Active" : "Inactive"}
+                            </button>
+                            {c.isDefault && <span className="ml-1 text-[10px] text-[#8D8A87]">(default)</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            )}
+          </>
+        )}
+
         {tab === "integrations" && (
           <>
             {/* API Keys */}
@@ -496,6 +783,41 @@ export function Settings() {
                     </div>
                   ))}
                   {(!hooks || hooks.length === 0) && <p className="text-sm text-[#8D8A87]">No webhooks configured.</p>}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Currency Exchanges */}
+            <Card className="border-[#E8E0D8]"><CardHeader className="pb-3">
+              <CardTitle className="font-serif text-lg flex items-center gap-2"><DollarSign className="h-5 w-5 text-[#2E7D32]"/>Currency Exchanges</CardTitle>
+            </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="rounded-lg border border-[#E8E0D8] px-4 py-3">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-[#2D2A26]">Frankfurter</p>
+                      <p className="text-xs text-[#8D8A87]">https://api.frankfurter.dev</p>
+                    </div>
+                    <span className="rounded-full bg-[#2E7D32]/10 px-2.5 py-0.5 text-xs font-medium text-[#2E7D32]">Active</span>
+                  </div>
+                  <p className="mb-3 text-xs text-[#8D8A87]">
+                    Frankfurter is a free, open-source exchange rate API. You can self-host it and change the endpoint later.
+                  </p>
+                  <div className="flex items-center justify-between rounded-lg bg-[#F5EDE6] px-3 py-2">
+                    <span className="text-xs text-[#2D2A26]">API URL</span>
+                    <code className="font-mono text-xs text-[#8D8A87]">https://api.frankfurter.dev/v2/rates</code>
+                  </div>
+                  <div className="mt-3">
+                    <Button
+                      size="sm"
+                      onClick={() => syncRates.mutate()}
+                      disabled={syncRates.isPending}
+                      className="gap-1 bg-[#C73E1D]"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${syncRates.isPending ? "animate-spin" : ""}`} />
+                      {syncRates.isPending ? "Syncing..." : "Sync Now"}
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
