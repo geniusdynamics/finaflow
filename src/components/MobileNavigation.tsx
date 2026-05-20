@@ -10,9 +10,7 @@ import {
   Users,
   Settings,
   Handshake,
-  Briefcase,
   Building,
-  Building2,
   Smartphone,
   ShieldCheck,
   Bell,
@@ -45,7 +43,6 @@ export const mobileSecondaryNavItems = [
   { path: "/reports", label: "Reports", icon: FileSpreadsheet },
   { path: "/users", label: "Users & Roles", icon: ShieldCheck },
   { path: "/settings", label: "Settings", icon: Settings },
-  { path: "/businesses", label: "Businesses", icon: Briefcase },
   { path: "/partner", label: "Partner", icon: Handshake },
 ];
 

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useSearchParams } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
@@ -23,6 +23,7 @@ const PLAN_DETAILS: Record<string, { label: string; price: string; businesses: n
 type PlanKey = "free" | "starter" | "growth" | "pro";
 
 export function Settings() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.SETTINGS_MANAGE);
   const utils = trpc.useUtils();
@@ -250,6 +251,16 @@ export function Settings() {
                   </div>
                   <Switch checked={settings?.multiBusiness === "true"} onCheckedChange={() => toggle("multiBusiness")} disabled={!canManage} />
                 </div>
+                <div className="flex items-center justify-between rounded-lg border border-[#E8E0D8] px-4 py-3">
+                  <div>
+                    <Label className="text-sm font-medium">Manage Businesses</Label>
+                    <p className="text-xs text-[#8D8A87]">Create, edit, and switch between businesses</p>
+                  </div>
+                  <Button size="sm" onClick={() => navigate("/businesses")} className="bg-[#2E7D32]">
+                    <Briefcase className="mr-1 h-4 w-4" />
+                    Open Businesses
+                  </Button>
+                </div>
               </CardContent>
             </Card>
 
@@ -268,6 +279,24 @@ export function Settings() {
                   </div>
                   <Switch checked={settings?.multiCurrency === "true"} onCheckedChange={() => toggle("multiCurrency")} disabled={!canManage} />
                 </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border-[#E8E0D8]">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 font-serif text-lg">
+                  <MapPin className="h-5 w-5 text-[#C73E1D]" />
+                  Branches & Locations
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="mb-4 text-sm text-[#8D8A87]">
+                  Create and manage business branches, set default wallets and cash accounts, and view all linked accounts per location.
+                </p>
+                <Button onClick={() => navigate("/locations")} className="bg-[#C73E1D]">
+                  <MapPin className="mr-1 h-4 w-4" />
+                  Manage Branches
+                </Button>
               </CardContent>
             </Card>
           </>

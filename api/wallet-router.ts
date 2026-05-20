@@ -224,7 +224,7 @@ export const walletRouter = createRouter({
               direction: txn.direction,
               partyName: txn.partyName,
               partyIdentifier: txn.partyIdentifier,
-              amount: txn.direction === "out" ? `-${txn.amount}` : txn.amount,
+              amount: Math.abs(parseFloat(txn.amount)).toFixed(2),
               currency: txn.currency,
               txnFee: txn.txnFee ?? "0.00",
               balance: txn.balance,
@@ -234,7 +234,7 @@ export const walletRouter = createRouter({
               isLinked: false,
               importedBy,
               baseCurrency: txn.currency,
-              baseAmount: txn.direction === "out" ? `-${txn.amount}` : txn.amount,
+              baseAmount: Math.abs(parseFloat(txn.amount)).toFixed(2),
             });
             imported++;
           } catch (e) {

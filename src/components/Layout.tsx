@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Receipt, TrendingDown, Users, FileText,
   CreditCard, CalendarDays, Smartphone, Menu, X, LogOut,
   Building2, ChevronRight, FileSpreadsheet,
-  ShieldCheck, Settings, Briefcase,
+  ShieldCheck, Settings,
   Building, Bell, Handshake, Wallet,
   PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
@@ -29,7 +29,6 @@ const allNavItems = [
   { path: "/users", label: "Users & Roles", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },
   
   { path: "/settings", label: "Settings", icon: Settings, perms: [PERMISSIONS.SETTINGS_MANAGE] },
-  { path: "/businesses", label: "Businesses", icon: Briefcase, perms: [PERMISSIONS.BUSINESS_MANAGE] },
   { path: "/partner", label: "Partner", icon: Handshake, perms: [PERMISSIONS.PARTNER_VIEW] },
 ];
 

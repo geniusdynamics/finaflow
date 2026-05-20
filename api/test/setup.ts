@@ -119,6 +119,21 @@ async function ensureTestDatabase(): Promise<void> {
         // continue with the next statement for idempotent setup.
       }
     }
+
+    const migration4Path = path.resolve(
+      import.meta.dirname,
+      "../../db/migrations/0004_add_wallet_account_type.sql",
+    );
+    let migration4Sql = fs.readFileSync(migration4Path, "utf8").replaceAll("--> statement-breakpoint", "");
+    const migration4Statements = migration4Sql.split(";").filter((s) => s.trim());
+    for (const stmt of migration4Statements) {
+      try {
+        await testPool.query(stmt);
+      } catch {
+        // Individual DDL statements may already exist;
+        // continue with the next statement for idempotent setup.
+      }
+    }
   } finally {
     await testPool.end();
   }
