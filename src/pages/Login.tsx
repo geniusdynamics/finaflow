@@ -47,7 +47,7 @@ export default function Login() {
   );
   const [showPassword, setShowPassword] = useState(false);
 
-  const [accountId, setAccountId] = useState(() => detectAccountFromSubdomain() || "");
+  const [accountId, setAccountId] = useState("");
   const [foundBusiness, setFoundBusiness] = useState<Record<string, unknown> | null>(null);
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [signupForm, setSignupForm] = useState({
