@@ -6,7 +6,7 @@ import { createRouter, publicQuery, authedQuery, businessManage } from "./middle
 import { getDb } from "./queries/connection";
 import { businesses, userBusinesses, users, locations, dailySales, expenses, bills, accounts, businessDocuments, businessLogos, customerAccounts, type InsertCustomerAccount } from "@db/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
-import { logAudit } from "./lib/audit";
+import { logAudit, logCrossAccountAccess } from "./lib/audit";
 import { base64SizeBytes, resolveMimeType, sanitizeDownloadFileName } from "./lib/business-documents";
 import { assertAllowedLogoMimeType, assertLogoMaxSize } from "./lib/logo-validation";
 import { assertCanCreateBusiness } from "./lib/subscription-enforcement";
@@ -113,9 +113,11 @@ export const businessesRouter = createRouter({
 
   get: authedQuery
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
-      const row = await db.select().from(businesses).where(and(eq(businesses.id, input.id), isNull(businesses.deletedAt))).limit(1);
+      const accountId = ctx.user?.accountId;
+      if (!accountId) return null;
+      const row = await db.select().from(businesses).where(and(eq(businesses.id, input.id), eq(businesses.accountId, accountId), isNull(businesses.deletedAt))).limit(1);
       return row[0] ?? null;
     }),
 
@@ -516,9 +518,26 @@ export const businessesRouter = createRouter({
 
   addMember: businessManage
     .input(z.object({ businessId: z.number(), userId: z.number(), role: z.string().default("admin") }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const [biz] = await db.select().from(businesses).where(eq(businesses.id, input.businessId)).limit(1);
+      const accountId = ctx.user?.accountId;
+      if (!accountId) throw new Error("Account context required");
+      const [biz] = await db.select().from(businesses).where(and(eq(businesses.id, input.businessId), eq(businesses.accountId, accountId))).limit(1);
+      if (!biz) throw new Error("Business not found in this account");
+      const [targetUser] = await db.select({ id: users.id, accountId: users.accountId })
+        .from(users).where(and(eq(users.id, input.userId), isNull(users.deletedAt))).limit(1);
+      if (!targetUser || targetUser.accountId !== accountId) {
+        await logCrossAccountAccess({
+          userId: ctx.user!.id,
+          userAccountId: accountId,
+          targetResourceType: "users",
+          targetId: input.userId,
+          targetAccountId: targetUser?.accountId ?? undefined,
+          action: "addMember",
+          reason: "Cross-account user added to business attempt blocked",
+        });
+        throw new Error("User not found in this account");
+      }
       const maxUsers = biz?.maxUsers ?? 1;
       const currentUsers = await db.select({ count: sql<number>`COUNT(*)` }).from(userBusinesses)
         .where(and(eq(userBusinesses.businessId, input.businessId), eq(userBusinesses.isActive, true)));
@@ -545,16 +564,26 @@ export const businessesRouter = createRouter({
 
   removeMember: businessManage
     .input(z.object({ businessId: z.number(), userId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const accountId = ctx.user?.accountId;
+      if (!accountId) throw new Error("Account context required");
+      const [biz] = await db.select({ id: businesses.id }).from(businesses)
+        .where(and(eq(businesses.id, input.businessId), eq(businesses.accountId, accountId))).limit(1);
+      if (!biz) throw new Error("Business not found in this account");
       await db.update(userBusinesses).set({ isActive: false }).where(and(eq(userBusinesses.userId, input.userId), eq(userBusinesses.businessId, input.businessId)));
       return { success: true };
     }),
 
   members: businessManage
     .input(z.object({ businessId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
+      const accountId = ctx.user?.accountId;
+      if (!accountId) return [];
+      const [biz] = await db.select({ id: businesses.id }).from(businesses)
+        .where(and(eq(businesses.id, input.businessId), eq(businesses.accountId, accountId))).limit(1);
+      if (!biz) throw new Error("Business not found in this account");
       const junctions = await db.select().from(userBusinesses).where(and(eq(userBusinesses.businessId, input.businessId), eq(userBusinesses.isActive, true)));
       if (junctions.length === 0) return [];
       const userIds = junctions.map(j => j.userId);

@@ -584,6 +584,10 @@ export const billsRouter = createRouter({
       if (input?.locationId) {
         await requireAuthorizedLocation(ctx, input.locationId);
         conditions.push(eq(recurringBillTemplates.locationId, input.locationId));
+      } else {
+        const locIds = await getCurrentBusinessLocationIds(ctx);
+        if (locIds.length === 0) return [];
+        conditions.push(sql`${recurringBillTemplates.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`);
       }
       return db.select().from(recurringBillTemplates).where(and(...conditions)).orderBy(desc(recurringBillTemplates.createdAt));
     }),
@@ -632,8 +636,9 @@ export const billsRouter = createRouter({
       liabilityAccountId: z.number().optional(),
       isActive: z.boolean().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      await requireAuthorizedEntity(ctx, recurringBillTemplates, input.id);
       const { id, ...updates } = input;
       await db.update(recurringBillTemplates).set({
         ...updates as any,
@@ -644,8 +649,9 @@ export const billsRouter = createRouter({
 
   deleteRecurring: billCreate
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      await requireAuthorizedEntity(ctx, recurringBillTemplates, input.id);
       await db.update(recurringBillTemplates).set({ deletedAt: new Date() }).where(eq(recurringBillTemplates.id, input.id));
       return { success: true };
     }),

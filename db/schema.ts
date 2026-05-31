@@ -453,10 +453,10 @@ export type BillPayment = typeof billPayments.$inferSelect;
 // Recurring bill templates
 export const recurringBillTemplates = pgTable("recurring_bill_templates", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number" }).notNull(),
-  businessId: bigint("businessId", { mode: "number" }),
-  supplierId: bigint("supplierId", { mode: "number" }),
-  categoryId: bigint("categoryId", { mode: "number" }),
+  locationId: bigint("locationId", { mode: "number" }).notNull().references(() => locations.id, { onDelete: "cascade" }),
+  businessId: bigint("businessId", { mode: "number" }).references(() => businesses.id, { onDelete: "cascade" }),
+  supplierId: bigint("supplierId", { mode: "number" }).references(() => suppliers.id, { onDelete: "set null" }),
+  categoryId: bigint("categoryId", { mode: "number" }).references(() => expenseCategories.id, { onDelete: "set null" }),
   liabilityAccountId: bigint("liabilityAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   description: text("description").notNull(),
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
