@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, CreditCard, AlertTriangle, CheckCircle, Clock, Trash2, Package, Search, Camera, Calendar, Repeat, FileText, RotateCcw, OctagonX } from "lucide-react";
+import { LocationSelector } from "@/components/LocationSelector";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -243,7 +244,16 @@ export function Bills() {
                 <DialogTrigger asChild><Button variant="outline" className="border-[#D4A854] text-[#D4A854]"><Plus className="mr-2 h-4 w-4" /> Recurring</Button></DialogTrigger>
                 <DialogContent className="bg-white max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle className="font-serif text-xl">Add Recurring Bill</DialogTitle></DialogHeader>
                   <form onSubmit={handleRecurring} className="space-y-3">
-                    <div><Label>Location</Label><select value={recForm.locationId} onChange={e => setRecForm(p => ({...p, locationId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm" required><option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
+                    <div>
+                      <LocationSelector
+                         locations={locations}
+                         userLocationId={user?.locationId}
+                         value={recForm.locationId}
+                         onChange={v => setRecForm(p => ({...p, locationId: v}))}
+                         enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
+                         required
+                       />
+                    </div>
                     <div><Label>Description</Label><Input value={recForm.description} onChange={e => setRecForm(p => ({...p, description: e.target.value}))} placeholder="e.g. Rent, License" required /></div>
                     <div><Label>Default Category</Label><select value={recForm.categoryId} onChange={e => setRecForm(p => ({...p, categoryId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Optional</option>{categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                     <div className="grid grid-cols-2 gap-3"><div><Label>Amount</Label><Input type="number" step="0.01" value={recForm.amount} onChange={e => setRecForm(p => ({...p, amount: e.target.value}))} required /></div><div><Label>Frequency</Label><select value={recForm.frequency} onChange={e => setRecForm(p => ({...p, frequency: e.target.value as any}))} className="w-full rounded border px-3 py-2 text-sm"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div></div>
@@ -256,7 +266,16 @@ export function Bills() {
                 <DialogTrigger asChild><Button className="bg-[#C73E1D]"><Plus className="mr-2 h-4 w-4" /> Add Bill</Button></DialogTrigger>
                 <DialogContent className="bg-white max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle className="font-serif text-xl">Add Bill</DialogTitle></DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3"><div><Label>Location</Label><select value={form.locationId} onChange={e => setForm(p => ({...p, locationId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm" required><option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div><div><Label>Supplier</Label><select value={form.supplierId} onChange={e => setForm(p => ({...p, supplierId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Optional</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div></div>
+                    <div className="grid grid-cols-2 gap-3"><div>
+                      <LocationSelector
+                        locations={locations}
+                        userLocationId={user?.locationId}
+                        value={form.locationId}
+                        onChange={v => setForm(p => ({...p, locationId: v}))}
+                        enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
+                        required
+                      />
+                    </div><div><Label>Supplier</Label><select value={form.supplierId} onChange={e => setForm(p => ({...p, supplierId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Optional</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div></div>
                     <div><Label>Category</Label><select value={form.categoryId} onChange={e => setForm(p => ({...p, categoryId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Use supplier/default logic</option>{categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                     <div><Label>Description</Label><Input value={form.description} onChange={e => setForm(p => ({...p, description: e.target.value}))} required /></div>
                     <div className="grid grid-cols-2 gap-3">

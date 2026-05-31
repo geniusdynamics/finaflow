@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { Plus, Wallet, CreditCard, Smartphone, Landmark, BookOpen, ArrowDownLeft, ArrowUpRight, Pencil, Trash2, ArrowRightLeft, BarChart3, AlertTriangle, Tag, CheckCircle, FileText } from "lucide-react";
+import { LocationSelector } from "@/components/LocationSelector";
 import { toast } from "sonner";
 import { ChartOfAccounts } from "./ChartOfAccounts";
 import { JournalEntries } from "./JournalEntries";
@@ -25,6 +26,7 @@ export function Accounts() {
 
   const { user } = useAuth();
   const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.ACCOUNTS_MANAGE);
+  const { data: settings } = trpc.settings.list.useQuery();
   const [searchParams, setSearchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");
   const tabParam = searchParams.get("tab");
@@ -264,11 +266,15 @@ export function Accounts() {
                   <DialogHeader><DialogTitle className="font-serif text-xl text-[#2D2A26]">Add Account</DialogTitle></DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
-                      <div className="space-y-2"><Label>Location</Label>
-                        <select value={form.locationId} onChange={(e) => setForm(p => ({ ...p, locationId: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" required>
-                          <option value="">Select</option>
-                          {locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                        </select>
+                      <div className="space-y-2">
+                        <LocationSelector
+                        locations={locations}
+                        userLocationId={user?.locationId}
+                        value={form.locationId}
+                        onChange={v => setForm(p => ({ ...p, locationId: v }))}
+                        enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
+                          required
+                         />
                       </div>
                       <div className="space-y-2"><Label>Type</Label>
                         <select value={form.type} onChange={(e) => setForm(p => ({ ...p, type: e.target.value as "cash" | "wallet" | "bank_account" }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">

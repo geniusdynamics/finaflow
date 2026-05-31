@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Trash2, Receipt, Tag, Pencil, X, AlertCircle, Camera, FileText, Download, Printer, Wallet, TrendingUp, Filter, BookOpen, RotateCcw } from "lucide-react";
+import { LocationSelector } from "@/components/LocationSelector";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -400,10 +401,15 @@ export function Expenses() {
               <DialogHeader><DialogTitle className="font-serif text-xl text-[#2D2A26]">Add Expense</DialogTitle></DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Location</Label>
-                    <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required>
-                      <option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                    </select>
+                  <div>
+                    <LocationSelector
+                      locations={locations}
+                      userLocationId={user?.locationId}
+                      value={form.locationId}
+                      onChange={v => setForm(p => ({ ...p, locationId: v }))}
+                      enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
+                      required
+                    />
                   </div>
                   {!hasMultiCategoryItems && (
                     <div>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/hooks/useAuth";
 import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,8 +11,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Smartphone, Upload, ArrowUpRight, ArrowDownRight, Tag, Receipt, Wallet as WalletIcon, Landmark, Plus, Link2, BookOpen, LayoutDashboard } from "lucide-react";
+import { LocationSelector } from "@/components/LocationSelector";
 
 export function Wallet() {
+  const { user } = useAuth();
+  const { data: settings } = trpc.settings.list.useQuery();
   const [tab, setTab] = useState<"overview" | "transactions" | "ledger" | "import">("overview");
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [dateFrom, setDateFrom] = useState(() => {
@@ -147,11 +151,13 @@ export function Wallet() {
   const smsImportSection = (fullPage?: boolean) => (
     <div className={fullPage ? "space-y-6" : "space-y-4"}>
       <div className="space-y-2">
-        <Label>Location</Label>
-        <select value={selectedLocation} onChange={(e) => setSelectedLocation(e.target.value)} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
-          <option value="">Select location</option>
-          {locations?.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
+        <LocationSelector
+        locations={locations}
+        userLocationId={user?.locationId}
+        value={selectedLocation}
+        onChange={(e) => setSelectedLocation(e)}
+          enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
+         />
         {locations && locations.length === 0 && (
           <p className="text-xs text-[#D32F2F]">No locations found for your current business. Please create a location first in Settings.</p>
         )}
@@ -489,11 +495,14 @@ export function Wallet() {
                                         </select>
                                       </div>
                                       <div className="space-y-2">
-                                        <Label>Location *</Label>
-                                        <select value={expenseForm.locationId} onChange={(e) => setExpenseForm((p) => ({ ...p, locationId: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" required>
-                                          <option value="">Select</option>
-                                          {locations?.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-                                        </select>
+                                        <LocationSelector
+                                        locations={locations}
+                                        userLocationId={user?.locationId}
+                                        value={expenseForm.locationId}
+                                        onChange={v => setExpenseForm(p => ({ ...p, locationId: v }))}
+                                        enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
+                                          required
+                                         />
                                       </div>
                                       <Button onClick={() => createExpenseFromTxn.mutate({
                                         walletTxnId: txn.id,
@@ -560,11 +569,14 @@ export function Wallet() {
                   <form onSubmit={handleLedgerSubmit} className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
-                        <Label>Location</Label>
-                        <select value={ledgerForm.locationId} onChange={e => setLedgerForm(p => ({ ...p, locationId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required>
-                          <option value="">Select</option>
-                          {locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-                        </select>
+                        <LocationSelector
+                        locations={locations}
+                        userLocationId={user?.locationId}
+                        value={ledgerForm.locationId}
+                        onChange={v => setLedgerForm(p => ({ ...p, locationId: v }))}
+                        enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
+                          required
+                         />
                       </div>
                       <div className="space-y-2">
                         <Label>Provider</Label>
