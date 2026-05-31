@@ -21,6 +21,8 @@ import {
   Wallet,
 } from "lucide-react";
 import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { resetQueryClient, trpc } from "@/providers/trpc";
 
 // Primary navigation items - always visible at bottom
 export const mobileBottomNavItems = [
@@ -88,6 +90,15 @@ export function MobileHamburgerMenu({
   onClose: () => void;
 }) {
   const location = useLocation();
+  const { user } = useAuth();
+  const { data: businesses } = trpc.businesses.list.useQuery();
+  const switchBusiness = trpc.businesses.switch.useMutation({
+    onSuccess: () => {
+      trpc.useUtils().invalidate();
+      window.location.reload();
+    },
+  });
+  const [bizOpen, setBizOpen] = useState(false);
 
   return (
     <>
@@ -140,13 +151,52 @@ export function MobileHamburgerMenu({
         </nav>
 
         <div className="border-t border-[#E8E0D8] p-4">
-          {/* Business selector */}
-          <div className="mb-3 flex items-center gap-2 rounded-lg border border-[#E8E0D8] bg-[#F5EDE6] px-3 py-2">
-            <Building className="h-4 w-4 text-[#8D8A87]" />
-            <span className="text-sm font-medium text-[#2D2A26]">
-              Business
-            </span>
-          </div>
+          {businesses && businesses.length > 1 && (
+            <div className="mb-3">
+              <button
+                onClick={() => setBizOpen(!bizOpen)}
+                className="flex w-full items-center gap-2 rounded-lg border border-[#E8E0D8] px-3 py-2.5 text-sm text-[#2D2A26] hover:bg-[#F5EDE6]"
+              >
+                <Building className="h-4 w-4 shrink-0 text-[#8D8A87]" />
+                <span className="flex-1 truncate text-left">{user?.currentBusiness?.name ?? "Select Business"}</span>
+                <ChevronRight className={`h-4 w-4 shrink-0 text-[#8D8A87] transition-transform ${bizOpen ? "rotate-90" : ""}`} />
+              </button>
+              {bizOpen && (
+                <div className="mt-1 space-y-0.5 rounded-lg border border-[#E8E0D8] bg-white">
+                  {businesses.map((b) => (
+                    <button
+                      key={b.id}
+                      onClick={() => {
+                        setBizOpen(false);
+                        onClose();
+                        if (b.id !== user?.currentBusinessId) {
+                          switchBusiness.mutate(
+                            { businessId: b.id },
+                            {
+                              onSuccess: () => {
+                                resetQueryClient();
+                                window.location.reload();
+                              },
+                            },
+                          );
+                        }
+                      }}
+                      className={`flex w-full items-center gap-2 px-3 py-2.5 text-sm text-left hover:bg-[#F5EDE6] first:rounded-t-lg last:rounded-b-lg ${b.id === user?.currentBusinessId ? "text-[#C73E1D] font-medium" : "text-[#2D2A26]"}`}
+                    >
+                      <Building className="h-4 w-4 shrink-0" />
+                      <span className="flex-1">{b.name}</span>
+                      {b.isDemo && (
+                        <span className="rounded bg-[#8D8A87]/10 px-1.5 py-0 text-[10px] text-[#8D8A87]">DEMO</span>
+                      )}
+                      {(b as any).allocationSource && (
+                        <span className="rounded bg-[#0288D1]/10 px-1.5 py-0.5 text-[10px] text-[#0288D1]">Allocated</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </>
