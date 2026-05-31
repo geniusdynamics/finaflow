@@ -53,6 +53,7 @@ export function OperationsReportsPanel() {
   const cogsQuery = trpc.reports.cogsAnalysis.useQuery({ year, month, locationId: selectedLocationId });
   const cogsTargetQuery = trpc.reports.getCogsTarget.useQuery({ locationId: selectedLocationId });
   const { data: categories } = trpc.expenses.categories.useQuery();
+  const { data: suppliers } = trpc.suppliers.list.useQuery();
 
   const { data: salesData } = trpc.dailySales.list.useQuery({
     dateFrom: `${year}-${String(month).padStart(2, "0")}-01`,
@@ -64,7 +65,7 @@ export function OperationsReportsPanel() {
     dateTo: `${year}-${String(month).padStart(2, "0")}-31`,
     locationId: selectedLocationId,
   });
-  const { data: mpesaData } = trpc.mpesa.list.useQuery({
+  const { data: walletTxns } = trpc.wallet.transactions.list.useQuery({
     dateFrom: `${year}-${String(month).padStart(2, "0")}-01`,
     dateTo: `${year}-${String(month).padStart(2, "0")}-31`,
     locationId: selectedLocationId,
@@ -78,12 +79,13 @@ export function OperationsReportsPanel() {
   const cogs = cogsQuery.data;
   const cogsTarget = cogsTargetQuery.data;
 
-  const { exportSales, exportExpenses, exportMpesa, exportConsolidated } = useReportExports({
+  const { exportSales, exportExpenses, exportWalletTxns, exportConsolidated } = useReportExports({
     salesData: salesData ?? [],
     expenseData: expenseData ?? [],
-    mpesaData: mpesaData ?? [],
+    walletTxns: walletTxns ?? [],
     locations: locations ?? [],
     categories: categories ?? [],
+    suppliers: suppliers ?? [],
     pl,
     year,
     month,
@@ -323,11 +325,11 @@ export function OperationsReportsPanel() {
                   </div>
                   <Download className="ml-auto h-4 w-4 text-gray-500" />
                 </button>
-                <button onClick={exportMpesa} className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-left hover:bg-[#F5EDE6] transition-colors">
+                <button onClick={exportWalletTxns} className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-left hover:bg-[#F5EDE6] transition-colors">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-600/10"><Smartphone className="h-5 w-5 text-orange-600" /></div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">Export M-PESA</p>
-                    <p className="text-xs text-gray-500">{mpesaData?.length ?? 0} records</p>
+                    <p className="text-sm font-medium text-gray-900">Export wallet txns</p>
+                    <p className="text-xs text-gray-500">{walletTxns?.length ?? 0} records</p>
                   </div>
                   <Download className="ml-auto h-4 w-4 text-gray-500" />
                 </button>

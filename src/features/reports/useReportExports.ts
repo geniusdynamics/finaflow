@@ -6,16 +6,17 @@ import { toast } from "sonner";
 export interface ExportParams {
   salesData: any[];
   expenseData: any[];
-  mpesaData: any[];
+  walletTxns: any[];
   locations: any[];
   categories: any[];
+  suppliers: any[];
   pl: any;
   year: number;
   month: number;
 }
 
 export function useReportExports(params: ExportParams) {
-  const { salesData, expenseData, mpesaData, locations, categories, pl, year, month } = params;
+  const { salesData, expenseData, walletTxns, locations, categories, suppliers, pl, year, month } = params;
 
   const downloadCSV = (filename: string, headers: string[], rows: string[][]) => {
     const escape = (s: string) => `"${String(s).replace(/"/g, '""')}"`;
@@ -71,27 +72,52 @@ export function useReportExports(params: ExportParams) {
     toast.success(`Exported ${expenseData.length} expense records`);
   }, [expenseData, locations, categories, year, month]);
 
-  const exportMpesa = useCallback(() => {
-    if (!mpesaData?.length) {
-      toast.error("No M-PESA data to export");
+  const exportWalletTxns = useCallback(() => {
+    if (!walletTxns?.length) {
+      toast.error("No wallet transaction data to export");
       return;
     }
-    const headers = ["Date", "Txn ID", "Type", "Description", "Party Name", "Amount", "Fee", "Balance", "Location", "Status"];
-    const rows = mpesaData.map((t: any) => [
-      t.txnDate,
-      t.txnId,
-      t.txnType,
-      t.description ?? "",
-      t.partyName ?? "",
-      t.amount,
-      t.txnFee ?? "",
-      t.balance ?? "",
-      locations?.find((l: any) => l.id === t.locationId)?.name ?? "",
-      t.isReconciled ? "Reconciled" : "Pending",
-    ]);
-    downloadCSV(`mpesa-${year}-${String(month).padStart(2, "0")}.csv`, headers, rows);
-    toast.success(`Exported ${mpesaData.length} M-PESA records`);
-  }, [mpesaData, locations, year, month]);
+
+    const resolveSupplierName = (txn: any) => {
+      if (!txn.linkedSupplierId) return "";
+      const supplier = suppliers?.find((s: any) => s.id === txn.linkedSupplierId);
+      return supplier?.name ?? "";
+    };
+
+    const resolveExpenseCategory = (txn: any) => {
+      if (!txn.linkedExpenseId) return "";
+      const expense = expenseData?.find((e: any) => e.id === txn.linkedExpenseId);
+      if (!expense || !expense.categoryId) return "";
+      const cat = categories?.find((c: any) => c.id === expense.categoryId);
+      return cat?.name ?? "";
+    };
+
+    const headers = ["Date", "Txn ID", "Provider", "Type", "Description", "Party Name", "Amount", "Fee", "Balance", "Currency", "Direction", "Wallet Tag", "Expense Category", "Location", "Status"];
+    const rows = walletTxns.map((t: any) => {
+      const amt = Math.abs(parseFloat(t.amount));
+      const isOut = t.direction === "out" || parseFloat(t.amount) < 0;
+      const displayAmount = isOut ? `-${amt.toFixed(2)}` : amt.toFixed(2);
+      return [
+        t.txnDate,
+        t.providerTxnId ?? t.txnId ?? "",
+        t.provider ?? "mpesa",
+        t.txnType,
+        t.description ?? "",
+        t.partyName ?? "",
+        displayAmount,
+        t.txnFee ?? "",
+        t.balance ?? "",
+        t.currency ?? "KES",
+        t.direction ?? (isOut ? "out" : "in"),
+        resolveSupplierName(t),
+        resolveExpenseCategory(t),
+        locations?.find((l: any) => l.id === t.locationId)?.name ?? "",
+        t.isReconciled ? "Reconciled" : t.status === "completed" ? "Completed" : (t.status ?? "Pending"),
+      ];
+    });
+    downloadCSV(`wallet-txns-${year}-${String(month).padStart(2, "0")}.csv`, headers, rows);
+    toast.success(`Exported ${walletTxns.length} wallet transaction records`);
+  }, [walletTxns, expenseData, locations, categories, suppliers, year, month]);
 
   const exportConsolidated = useCallback(() => {
     const periodLabel = `${year}-${String(month).padStart(2, "0")}`;
@@ -108,5 +134,5 @@ export function useReportExports(params: ExportParams) {
     toast.success("Consolidated report exported");
   }, [salesData, expenseData, pl, year, month]);
 
-  return { exportSales, exportExpenses, exportMpesa, exportConsolidated };
+  return { exportSales, exportExpenses, exportWalletTxns, exportConsolidated };
 }

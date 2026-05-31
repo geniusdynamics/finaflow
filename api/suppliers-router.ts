@@ -40,7 +40,7 @@ export const suppliersRouter = createRouter({
       const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
       if (!businessId) throw new Error("No active business available.");
       
-      let targetLocationId = input.locationId;
+      const targetLocationId = input.locationId;
       if (targetLocationId) {
         await requireAuthorizedLocation(ctx, targetLocationId);
       }
