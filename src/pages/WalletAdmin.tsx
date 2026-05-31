@@ -34,8 +34,8 @@ export function WalletAdmin() {
   const { data: providers } = trpc.walletManagement.providers.list.useQuery();
   const { data: rates, refetch: refetchRates } = trpc.walletManagement.rates.latest.useQuery({});
   const { data: currencies } = trpc.walletManagement.currencies.list.useQuery();
-  const createCurrency = trpc.walletManagement.currencies.create.useMutation({ onSuccess: () => currencies.refetch() });
-  const toggleCurrency = trpc.walletManagement.currencies.toggle.useMutation({ onSuccess: () => currencies.refetch() });
+  const createCurrency = trpc.walletManagement.currencies.create.useMutation({ onSuccess: () => utils.walletManagement.currencies.list.invalidate() });
+  const toggleCurrency = trpc.walletManagement.currencies.toggle.useMutation({ onSuccess: () => utils.walletManagement.currencies.list.invalidate() });
 
   const syncRates = trpc.walletManagement.rates.sync.useMutation({
     onSuccess: (res) => {
@@ -64,6 +64,13 @@ export function WalletAdmin() {
       refetchHealth();
     },
     onError: (err) => { toast.error(err.message); },
+  });
+
+  const testConnection = trpc.walletManagement.providers.testConnection.useMutation({
+    onSuccess: (res) => {
+      if (res.success) { toast.success(`Connection OK`); } else { toast.error(`Connection failed: ${res.error}`); }
+    },
+    onError: (err) => toast.error(err.message),
   });
 
   return (
@@ -135,7 +142,7 @@ export function WalletAdmin() {
                       </div>
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => {}} className="text-xs">Configure</Button>
-                        <Button size="sm" variant="outline" onClick={() => utils.walletManagement.providers.testConnection.mutate({ provider: p.code }).catch(() => {}) } className="gap-1 text-xs">
+                        <Button size="sm" variant="outline" onClick={() => testConnection.mutate({ provider: p.code, locationId: 0 })} className="gap-1 text-xs">
                           <CheckCircle2 className="h-3 w-3" /> Test
                         </Button>
                       </div>
@@ -153,7 +160,7 @@ export function WalletAdmin() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-[#2D2A26]">Exchange Rates</h2>
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => syncRates.mutate()} loading={syncRates.isPending} className="gap-1 bg-[#C73E1D]">
+                <Button size="sm" onClick={() => syncRates.mutate()} disabled={syncRates.isPending} className="gap-1 bg-[#C73E1D]">
                   <RefreshCw className="h-4 w-4" /> Sync Rates
                 </Button>
                 <Dialog open={rateDialogOpen} onOpenChange={setRateDialogOpen}>
@@ -186,7 +193,7 @@ export function WalletAdmin() {
                         fromCurrency: rateForm.fromCurrency,
                         toCurrency: rateForm.toCurrency,
                         rate: rateForm.rate,
-                      })} disabled={!rateForm.rate} className="w-full bg-[#C73E1D]" loading={manualUpdateRate.isPending}>
+                      })} disabled={!rateForm.rate} className="w-full bg-[#C73E1D]">
                         Save Rate
                       </Button>
                     </div>

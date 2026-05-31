@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Receipt,
   CreditCard,
-  Smartphone,
   Users,
   ArrowUpRight,
   ArrowDownRight,
@@ -183,7 +182,7 @@ export function Dashboard() {
                 <QuickActionLink to="/daily-sales" icon={<Receipt className="h-4 w-4" />} label="Record Daily Sales" />
                 <QuickActionLink to="/expenses" icon={<TrendingDown className="h-4 w-4" />} label="Log Expense" />
                 <QuickActionLink to="/bills" icon={<AlertTriangle className="h-4 w-4" />} label="Record Bill Payment" />
-                <QuickActionLink to="/mpesa" icon={<Smartphone className="h-4 w-4" />} label="Import M-PESA" />
+                <QuickActionLink to="/wallet" icon={<Wallet className="h-4 w-4" />} label="Import Mobile Wallet" />
                 <QuickActionLink to="/payroll" icon={<Users className="h-4 w-4" />} label="Process Payroll" />
               </div>
             </CardContent>

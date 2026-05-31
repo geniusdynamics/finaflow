@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Smartphone, Upload, ArrowUpRight, ArrowDownRight, Tag, Receipt, Wallet as WalletIcon, Landmark, Plus, Link2, BookOpen } from "lucide-react";
+import { Smartphone, Upload, ArrowUpRight, ArrowDownRight, Tag, Receipt, Wallet as WalletIcon, Landmark, Plus, Link2, BookOpen, LayoutDashboard } from "lucide-react";
 
 export function Wallet() {
   const [tab, setTab] = useState<"overview" | "transactions" | "ledger" | "import">("overview");
@@ -233,12 +233,19 @@ export function Wallet() {
           </div>
         </div>
 
-        <div className="mb-4 flex flex-wrap gap-2">
-          {["overview", "transactions", "ledger", "import"].map((t) => (
-            <button key={t} onClick={() => setTab(t as any)} className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === t ? "bg-[#C73E1D] text-white" : "bg-[#F5EDE6] text-[#2D2A26] hover:bg-[#E8E0D8]"}`}>
-              {t === "overview" ? "Overview" : t === "transactions" ? "Transactions" : t === "ledger" ? "Daily Ledger" : "Import"}
-            </button>
-          ))}
+        <div className="flex items-center gap-2 border-b border-[#E8E0D8]">
+          <button onClick={() => setTab("overview")} className={`px-4 py-2 text-sm font-medium ${tab === "overview" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <LayoutDashboard className="mr-1 inline h-4 w-4"/>Overview
+          </button>
+          <button onClick={() => setTab("transactions")} className={`px-4 py-2 text-sm font-medium ${tab === "transactions" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <ArrowUpRight className="mr-1 inline h-4 w-4"/>Transactions
+          </button>
+          <button onClick={() => setTab("ledger")} className={`px-4 py-2 text-sm font-medium ${tab === "ledger" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <BookOpen className="mr-1 inline h-4 w-4"/>Daily Ledger
+          </button>
+          <button onClick={() => setTab("import")} className={`px-4 py-2 text-sm font-medium ${tab === "import" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <Upload className="mr-1 inline h-4 w-4"/>Import
+          </button>
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-3">

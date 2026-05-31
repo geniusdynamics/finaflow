@@ -40,7 +40,7 @@ export const walletManagementRouter = createRouter({
         locationId: z.number(),
         provider: z.string(),
         accountId: z.number(),
-        config: z.record(z.unknown()).optional(),
+        config: z.record(z.string(), z.unknown()).optional(),
       }))
       .mutation(async ({ input }) => {
         const db = getDb();
@@ -95,7 +95,7 @@ export const walletManagementRouter = createRouter({
       .query(async ({ input, ctx }) => {
         const db = getDb();
         const providers = walletRegistry.getAll();
-        const healthResults = [];
+        const healthResults: { provider: string; displayName: string; supportedCurrencies: string[]; features: any; lastTransactionAt: any; lastTransactionDate: any }[] = [];
 
         for (const provider of providers) {
           let lastTxn: any = null;
@@ -128,7 +128,7 @@ export const walletManagementRouter = createRouter({
       .input(z.object({ from: z.string().optional(), to: z.string().optional(), limit: z.number().optional() }).optional())
       .query(async ({ input }) => {
         const db = getDb();
-        const conditions = [];
+        const conditions: ReturnType<typeof sql>[] = [];
         if (input?.from) conditions.push(sql`${exchangeRates.validFrom} >= ${input.from}`);
         if (input?.to) conditions.push(sql`${exchangeRates.validUntil} <= ${input.to}`);
         const results = await db.select().from(exchangeRates)

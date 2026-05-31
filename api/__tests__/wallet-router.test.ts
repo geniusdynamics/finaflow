@@ -106,7 +106,7 @@ describe("Wallet Router - Multi-Provider", () => {
     expect(Array.isArray(providers)).toBe(true);
     const mpesa = providers.find((p: any) => p.code === "mpesa");
     expect(mpesa).toBeDefined();
-    expect(mpesa.isActive).toBe(true);
+    expect(mpesa!.isActive).toBe(true);
   });
 
   it("wallet.transactions.list returns empty array with no transactions", async () => {

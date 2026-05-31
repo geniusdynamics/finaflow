@@ -3,7 +3,7 @@
 
 import { supportedCurrencies, exchangeRates } from "@db/schema";
 import { getDb } from "../queries/connection";
-import { eq, isNull } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 
 const DEFAULT_CURRENCIES = [
   { code: "KES", name: "Kenyan Shilling", symbol: "KSh", decimalPlaces: 2, isDefault: true },
@@ -56,9 +56,11 @@ export async function seedDefaultExchangeRates(): Promise<void> {
     const existing = await db
       .select()
       .from(exchangeRates)
-      .where(eq(exchangeRates.fromCurrency, rate.fromCurrency))
-      .where(eq(exchangeRates.toCurrency, rate.toCurrency))
-      .where(isNull(exchangeRates.validUntil))
+      .where(and(
+        eq(exchangeRates.fromCurrency, rate.fromCurrency),
+        eq(exchangeRates.toCurrency, rate.toCurrency),
+        isNull(exchangeRates.validUntil),
+      ))
       .limit(1);
     if (existing.length > 0) continue;
     await db.insert(exchangeRates).values({

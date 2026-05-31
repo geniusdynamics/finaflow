@@ -159,15 +159,16 @@ export function Expenses() {
   const itemCategories = billItems ? getCategoriesFromBillItems(billItems) : [];
   const hasMultiCategoryItems = !!form.billId && !!billItems && billItems.length > 0 && itemCategories.length > 1;
 
-  const groupBillItemsByCategory = (items: typeof billItems): Map<number | undefined, typeof billItems> => {
-    const grouped = new Map<number | undefined, typeof billItems>();
+  const groupBillItemsByCategory = (items: NonNullable<typeof billItems>): Map<number | null | undefined, NonNullable<typeof billItems>> => {
+    const grouped = new Map<number | null | undefined, NonNullable<typeof billItems>>();
     if (!items) return grouped;
     for (const item of items) {
       const catId = item.categoryId;
       if (!grouped.has(catId)) {
         grouped.set(catId, []);
       }
-      grouped.get(catId)!.push(item);
+      const existing = grouped.get(catId);
+      if (existing) existing.push(item);
     }
     return grouped;
   };
@@ -198,7 +199,7 @@ export function Expenses() {
     if (!form.billId && form.categoryIds.length === 0 && selectedSupplier?.autoCategoryId) {
       setForm((previous) => ({
         ...previous,
-        categoryIds: [selectedSupplier.autoCategoryId],
+        categoryIds: [selectedSupplier.autoCategoryId].filter((id): id is number => id !== null),
       }));
     }
   }, [form.billId, form.categoryIds, selectedSupplier?.autoCategoryId]);

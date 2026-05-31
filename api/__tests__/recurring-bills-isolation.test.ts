@@ -142,7 +142,7 @@ describe("Recurring Bills Data Isolation", () => {
       currentBalance: "1000.00",
       openingBalance: "1000.00",
       isActive: true,
-    } as any).returning();
+    } as any).returning() as any;
 
     // Create cash account for B
     await db.insert(accounts).values({

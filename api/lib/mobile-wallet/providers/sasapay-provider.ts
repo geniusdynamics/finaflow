@@ -280,7 +280,7 @@ export class SasapayProvider extends BaseWalletProvider {
     }
   }
 
-  private mapStatus(raw: string): WalletStatusResult["status"] {
+  public mapStatus(raw: string): WalletStatusResult["status"] {
     const s = (raw ?? "").toLowerCase();
     if (s.includes("success") || s.includes("completed") || s.includes("successful")) return "completed";
     if (s.includes("pending") || s.includes("processing") || s.includes("initiated")) return "pending";

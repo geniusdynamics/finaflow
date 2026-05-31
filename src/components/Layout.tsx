@@ -4,7 +4,7 @@ import { resetQueryClient } from "@/providers/trpc";
 import { trpc } from "@/providers/trpc";
 import {
   LayoutDashboard, Receipt, TrendingDown, Users, FileText,
-  CreditCard, CalendarDays, Smartphone, Menu, X, LogOut,
+  CreditCard, CalendarDays, Menu, X, LogOut,
   Building2, ChevronRight, FileSpreadsheet,
   ShieldCheck, Settings,
   Building, Bell, Handshake, Wallet,
@@ -22,7 +22,6 @@ const allNavItems = [
   { path: "/bills", label: "Bills", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW] },
   { path: "/accounts", label: "Accounts", icon: CreditCard, perms: [PERMISSIONS.ACCOUNTS_VIEW] },
   { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW] },
-  { path: "/mpesa", label: "M-PESA", icon: Smartphone, perms: [PERMISSIONS.MPESA_VIEW] },
   { path: "/wallet", label: "Wallet", icon: Wallet, perms: [PERMISSIONS.WALLET_VIEW] },
   { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
   { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },

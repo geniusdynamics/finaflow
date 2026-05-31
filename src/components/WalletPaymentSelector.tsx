@@ -2,6 +2,7 @@
 // ABOUTME: Shows all active providers with brand colors, disables unsupported currencies, indicates defaults.
 import { useState } from "react";
 import { trpc } from "@/providers/trpc";
+import { skipToken } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { Smartphone, Wallet, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -122,7 +123,7 @@ export function WalletPaymentSelector({
 }: WalletPaymentSelectorProps) {
   const { data: providers } = trpc.wallet.providers.list.useQuery();
   const { data: locationProviders } = trpc.wallet.providers.listForLocation.useQuery(
-    locationId ? { locationId } : undefined,
+    locationId ? { locationId } : skipToken,
     { enabled: !!locationId }
   );
 

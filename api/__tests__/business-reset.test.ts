@@ -253,7 +253,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
   // Create M-PESA transaction (txnId limited to varchar(20))
   await db.insert(mpesaTransactions).values({
     locationId: location.id,
-    txnId: `MPESA-${seed}`.slice(0, 20),
+    txnId: `TXN-${seed}`.slice(0, 20),
     txnDate: "2026-05-16",
     txnType: "topup",
     amount: "500.00",
