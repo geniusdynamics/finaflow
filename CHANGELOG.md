@@ -1,5 +1,30 @@
 # Changelog
 
+## [Unreleased] — Location Selector Consolidation + Add Bill Unification + Pay Supplier
+
+### Added
+- **`PaySupplierDialog` component** (`src/pages/Suppliers.tsx`) — Shared payment dialog rendered on the suppliers page when a supplier has pending unpaid bills. Reuses the `trpc.bills.recordPayment` mutation with the same core payment logic.
+- **"Pay" button on supplier cards** — Conditionally rendered only when `supplier.currentBalance > 0`. Opens the PaySupplierDialog with supplier pre-selected, bill selector limited to that supplier's pending bills.
+- **Account-level funding source filtering** — `getFundingAccounts()` helper extracted into the suppliers page, matching the Bills page behavior
+
+### Changed
+- **Suppliers page Add Bill** — Refactored from a simplified inline form with `trpc.suppliers.createBill` to a full-featured form matching the main Bills page:
+  - Uses `<LocationSelector>` component instead of inline `<select>` (consistent with other pages)
+  - Uses `trpc.bills.create` mutation (creates ledger entries for full accounting trail)
+  - Added Category field (using `trpc.expenses.listCategories`)
+  - Supplier selector is pre-filled and disabled — the only allowed difference from the main Bills page
+- **Suppliers page imports** — Added `useAuth`, `LocationSelector`, `CheckCircle`, `OctagonX` icons, and `useEffect` hook
+
+### Fixed
+- **Location selector on "Create Bill" under suppliers module** — Replaced inline `<select>` with the shared `<LocationSelector>` component, matching the design and behavior used everywhere else in the system
+- **Per-business bill creation** — Bills created from the suppliers page now go through `trpc.bills.create` which creates proper double-entry ledger entries (debit expense, credit accounts payable), instead of the simplified `trpc.suppliers.createBill` which only updated supplier balances
+
+### Testing
+- Regression: Add Bill on suppliers page (supplier pre-selected, cannot change) → verify it creates bill with full accounting trail
+- Regression: Add Bill on main bills page (full supplier selection) → verify unchanged behavior
+- Conditional visibility: Pay button only appears when `supplier.currentBalance > 0`
+- Pay Supplier: Record payment works with pre-populated supplier, bill selector shows only that supplier's pending bills
+
 ## [Unreleased] — Business Bootstrap Refactoring + Bill Payment Consolidation
 
 ### Added
