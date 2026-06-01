@@ -66,7 +66,7 @@ export async function seedDefaultExchangeRates(): Promise<void> {
     await db.insert(exchangeRates).values({
       ...rate,
       validFrom: new Date(),
-    } as any);
+    } satisfies typeof exchangeRates.$inferInsert);
     seeded++;
   }
   console.log(`[seed] Seeded ${seeded} exchange rates`);

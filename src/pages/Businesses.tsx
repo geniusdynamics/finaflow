@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Building2, Building, Trash2, Users, CheckCircle, RotateCcw, MapPin, Edit3, Save, X, Key, AlertTriangle, Shield, Database, Clock, DollarSign } from "lucide-react";
+import { Plus, Building2, Trash2, CheckCircle, RotateCcw, MapPin, Edit3, Save, X, Key, AlertTriangle, Shield, Database, Clock, DollarSign } from "lucide-react";
 import { AllocationManagement } from "@/components/partner/AllocationManagement";
 import { toast } from "sonner";
 
@@ -83,10 +83,6 @@ export function Businesses() {
     onError: (err) => toast.error(err.message),
   });
 
-  const setBizCurrency = trpc.settings.set.useMutation({
-    onSuccess: () => { utils.businesses.list.invalidate(); },
-    onError: (err) => toast.error(err.message),
-  });
   const switchBiz = trpc.businesses.switch.useMutation({
     onSuccess: () => { window.location.reload(); },
   });
@@ -117,7 +113,7 @@ export function Businesses() {
     },
   });
 
-  const startEdit = (b: any) => {
+  const startEdit = (b: { id: number; name?: string; address?: string; phone?: string; email?: string }) => {
     setEditId(b.id);
     setEditForm({
       name: b.name || "", address: b.address || "", phone: b.phone || "", email: b.email || "",
@@ -125,7 +121,7 @@ export function Businesses() {
   };
 
   const saveEdit = (id: number) => {
-    updateBiz.mutate({ id, ...editForm } as any);
+    updateBiz.mutate({ id, ...editForm });
   };
 
   const openResetDialog = () => {
@@ -176,7 +172,7 @@ export function Businesses() {
                     <input type="checkbox" checked={form.isMultiLocation} onChange={e => setForm(p => ({ ...p, isMultiLocation: e.target.checked }))} />
                     <Label className="text-sm">Multi-location support</Label>
                   </div>
-                  <Button onClick={() => createBiz.mutate(form as any)} disabled={!form.name || !form.slug || createBiz.isPending} className="w-full bg-[#2E7D32]">
+                  <Button onClick={() => createBiz.mutate(form)} disabled={!form.name || !form.slug || createBiz.isPending} className="w-full bg-[#2E7D32]">
                     {createBiz.isPending ? "Creating..." : "Create Business"}
                   </Button>
                 </div>
@@ -217,7 +213,7 @@ export function Businesses() {
                         )}
                       </div>
                     </div>
-                    <p className="text-xs text-[#8D8A87]">{b.slug} · {(b as any).plan || "free"}</p>
+                    <p className="text-xs text-[#8D8A87]">{b.slug} · {(b as { plan?: string }).plan || "free"}</p>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {isEditing ? (
@@ -246,7 +242,7 @@ export function Businesses() {
                         {/* Branch count display */}
                         <div className="flex items-center gap-1.5 text-xs text-[#8D8A87]">
                           <MapPin className="h-3 w-3" />
-                          <span>{(b as any).branchCount ?? 0} branch{(b as any).branchCount !== 1 ? "es" : ""}</span>
+                          <span>{(b as { branchCount?: number }).branchCount ?? 0} branch{(b as { branchCount?: number }).branchCount !== 1 ? "es" : ""}</span>
                         </div>
                       </>
                     )}
@@ -313,7 +309,7 @@ export function Businesses() {
                                       </h4>
                                       <div className="grid grid-cols-2 gap-2">
                                         {Object.entries(resetInfo.snapshot.tableCounts)
-                                          .filter(([_, count]) => count > 0)
+                                          .filter(([_key, count]) => count > 0)
                                           .sort(([, a], [, b]) => b - a)
                                           .map(([table, count]) => (
                                             <div key={table} className="flex items-center justify-between rounded-lg border border-[#E8E0D8] px-3 py-2">
@@ -321,7 +317,7 @@ export function Businesses() {
                                               <Badge variant="destructive" className="text-[10px]">{count}</Badge>
                                             </div>
                                           ))}
-                                        {Object.entries(resetInfo.snapshot.tableCounts).filter(([_, count]) => count > 0).length === 0 && (
+                                        {Object.entries(resetInfo.snapshot.tableCounts).filter(([_key, count]) => count > 0).length === 0 && (
                                           <p className="col-span-2 text-sm text-[#8D8A87]">No records found to reset.</p>
                                         )}
                                       </div>

@@ -5,7 +5,6 @@
 import { createHmac } from "node:crypto";
 import {
   BaseWalletProvider,
-  ParsedWalletSms,
   WalletTransactionRequest,
   WalletTransactionResult,
   WalletStatusResult,

@@ -2,9 +2,11 @@ import { and, eq, isNull } from "drizzle-orm";
 import { accounts, bills, billPayments, expenses, suppliers, ledgerEntries } from "@db/schema";
 import { d } from "./decimal";
 import { ensureSystemAccount } from "./accounting-accounts";
+import type { DbClient } from "./account-subscriptions";
+import type { AccountType } from "@db/schema";
 
 export interface PayBillInput {
-  db: any;
+  db: DbClient;
   billId: number;
   paymentMethod: "cash" | "wallet" | "bank_transfer" | "card";
   amount: string;
@@ -33,6 +35,7 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
   const { db: tx, billId, paymentMethod, amount, paymentDate, reference, notes, accountId, liabilityAccountId, categoryId, enteredBy, businessId, locationId, supplierId, billNumber, description, skipExpenseCreation } = input;
 
   const paymentAmount = d(amount);
+  const paymentDateStr = new Date(paymentDate).toISOString().split("T")[0];
 
   const [billRecord] = await tx.select().from(bills).where(eq(bills.id, billId)).limit(1);
   const bill = billRecord;
@@ -46,10 +49,10 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
 
   const [paymentResult] = await tx.insert(billPayments).values({
     billId, paymentMethod,
-    amount, paymentDate: new Date(paymentDate),
+    amount, paymentDate: paymentDateStr,
     reference, notes,
     accountId, enteredBy,
-  } as any).returning();
+  } satisfies typeof billPayments.$inferInsert).returning();
   const paymentId = paymentResult.id;
 
   const resolvedSupplierId = supplierId ?? bill?.supplierId ?? null;
@@ -68,7 +71,7 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
     const [defaultAccount] = await tx.select().from(accounts).where(
       and(
         eq(accounts.locationId, locationId),
-        eq(accounts.type, typeMap[paymentMethod] as any),
+        eq(accounts.type, typeMap[paymentMethod] as AccountType),
         isNull(accounts.deletedAt)
       )
     ).limit(1);
@@ -79,7 +82,6 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
     const [acct] = await tx.select().from(accounts).where(eq(accounts.id, cashAccountId)).limit(1);
     if (acct) {
       const newBal = d(acct.currentBalance || "0").minus(paymentAmount);
-      const paymentDateStr = new Date(paymentDate).toISOString().split("T")[0];
       const refNo = billNumber ?? `BILL-${String(billId).padStart(4, "0")}`;
       await tx.insert(ledgerEntries).values({
         accountId: cashAccountId, transactionType: "bill_payment",
@@ -87,7 +89,7 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
         amount, balanceAfter: newBal.toFixed(2),
         entryDate: paymentDateStr, createdBy: enteredBy,
         refNo,
-      } as any).returning();
+      } satisfies typeof ledgerEntries.$inferInsert).returning();
       await tx.update(accounts).set({ currentBalance: newBal.toFixed(2) }).where(eq(accounts.id, cashAccountId));
     }
   }
@@ -98,7 +100,7 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
       : await tx.select().from(accounts).where(
           and(
             eq(accounts.businessId, businessId),
-            eq(accounts.accountSubType, "accounts_payable" as any),
+            eq(accounts.accountSubType, "accounts_payable"),
             isNull(accounts.deletedAt)
           )
         ).limit(1);
@@ -107,14 +109,13 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
       const billBalanceDue = d(bill?.balanceDue || "0");
       const apDebitAmount = paymentAmount.lte(billBalanceDue) ? paymentAmount : billBalanceDue;
       const prepaymentAmount = paymentAmount.gt(billBalanceDue) ? paymentAmount.minus(billBalanceDue) : d(0);
-      const paymentDateStr = new Date(paymentDate).toISOString().split("T")[0];
       const desc = `Bill Payment: ${reference || description || ""}`;
 
       if (apDebitAmount.gt(0)) {
         const apNewBal = d(existingAp[0].currentBalance || "0").minus(apDebitAmount);
         await tx.insert(ledgerEntries).values({
           accountId: existingAp[0].id,
-          transactionType: "bill_payment" as any,
+          transactionType: "bill_payment",
           transactionId: paymentId,
           entryType: "debit",
           amount: apDebitAmount.toFixed(2),
@@ -122,7 +123,7 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
           entryDate: paymentDateStr,
           createdBy: enteredBy,
           description: desc,
-        } as any).returning();
+        } satisfies typeof ledgerEntries.$inferInsert).returning();
         await tx.update(accounts).set({ currentBalance: apNewBal.toFixed(2) }).where(eq(accounts.id, existingAp[0].id));
       }
 
@@ -140,7 +141,7 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
           const prepayNewBal = d(prepayAcct.currentBalance || "0").plus(prepaymentAmount);
           await tx.insert(ledgerEntries).values({
             accountId: prepayAcct.id,
-            transactionType: "bill_payment" as any,
+            transactionType: "bill_payment",
             transactionId: paymentId,
             entryType: "debit",
             amount: prepaymentAmount.toFixed(2),
@@ -148,7 +149,7 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
             entryDate: paymentDateStr,
             createdBy: enteredBy,
             description: `Supplier Overpayment (${reference || description || ""})`,
-          } as any).returning();
+          } satisfies typeof ledgerEntries.$inferInsert).returning();
           await tx.update(accounts).set({ currentBalance: prepayNewBal.toFixed(2) }).where(eq(accounts.id, prepayAcct.id));
         }
       }
@@ -166,12 +167,12 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
       billId,
       amount,
       description: `Bill Payment: ${reference || description || ""}`,
-      expenseDate: new Date(paymentDate),
+      expenseDate: paymentDateStr,
       paymentMethod,
       accountId: cashAccountId ?? null,
       enteredBy,
       refNo: billNumber ?? `BILL-${String(billId).padStart(4, "0")}`,
-    } as any).returning();
+    } satisfies typeof expenses.$inferInsert).returning();
   }
 
   return { paymentId, newBalanceDue: newBalance.toFixed(2), status };

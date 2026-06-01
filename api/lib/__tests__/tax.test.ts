@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computePaye, computeNhif, computeNssf, computeHousingLevy, PAYE_BANDS, PERSONAL_RELIEF } from "../tax";
+import { computePaye, computeNhif, computeNssf, computeHousingLevy } from "../tax";
 
 describe("PAYE Calculation (2026 bands)", () => {
   it("should return 0 for income below personal relief threshold", () => {

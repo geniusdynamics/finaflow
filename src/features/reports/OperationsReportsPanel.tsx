@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { BarChart3, PiggyBank, Receipt, TrendingUp, TrendingDown, PieChart, ArrowUpRight, ArrowDownRight, AlertTriangle, Target, Wallet, Download, FileSpreadsheet, Smartphone, Plus } from "lucide-react";
+import { BarChart3, PiggyBank, Receipt, TrendingDown, PieChart, ArrowUpRight, ArrowDownRight, AlertTriangle, Target, Wallet, Download, FileSpreadsheet, Smartphone, Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 import { MonthlyTrendChart } from "./MonthlyTrendChart";
@@ -28,9 +28,9 @@ import { useReportExports } from "./useReportExports";
 
 export function OperationsReportsPanel() {
   const now = new Date();
-  const [year, setYear] = useState(now.getFullYear());
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [branchFilter, setBranchFilter] = useState<string>("");
+  const [year] = useState(now.getFullYear());
+  const [month] = useState(now.getMonth() + 1);
+  const [branchFilter] = useState<string>("");
   const [opsTab, setOpsTab] = useState<"overview" | "budgeting">("overview");
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [cogsOpen, setCogsOpen] = useState(false);
@@ -103,7 +103,7 @@ export function OperationsReportsPanel() {
 
   useEffect(() => {
     if (cogsTarget) {
-      setCogsForm({ target: cogsTarget.targetFoodCostPercent, alert: cogsTarget.alertThresholdPercent });
+      setCogsForm(() => ({ target: cogsTarget.targetFoodCostPercent, alert: cogsTarget.alertThresholdPercent }));
     }
   }, [cogsTarget]);
 
@@ -133,7 +133,7 @@ export function OperationsReportsPanel() {
   );
   const activeSelectedBudgetCategoryId = useMemo(
     () =>
-      budgetActualData.legendItems.some((item: any) => item.key === selectedBudgetCategoryId)
+      budgetActualData.legendItems.some((item: { key: number }) => item.key === selectedBudgetCategoryId)
         ? selectedBudgetCategoryId
         : null,
     [budgetActualData.legendItems, selectedBudgetCategoryId],
@@ -143,10 +143,6 @@ export function OperationsReportsPanel() {
     [activeSelectedBudgetCategoryId, bva],
   );
 
-  const resetChartSelections = () => {
-    setSelectedFlowKey(null);
-    setSelectedBudgetCategoryId(null);
-  };
   const budgetSectionTotals = bva ?? {
     categories: [],
     totalBudgeted: budgetActualData.totalBudgeted,

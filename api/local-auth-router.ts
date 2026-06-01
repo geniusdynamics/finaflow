@@ -453,7 +453,6 @@ export const localAuthRouter = createRouter({
       let businessName = input.businessName;
       const trialExpiry = new Date(Date.now() + DEFAULT_TRIAL_DAYS * 24 * 60 * 60 * 1000);
       let plan = "pro";
-      let maxBranches = getPlanConfig("pro").maxBranches;
       let maxUsers = getPlanConfig("pro").maxUsers;
       let maxTransactionsPerMonth = getPlanConfig("pro").transactionQuota;
       let subscriptionStatus: string = "trial";
@@ -462,7 +461,6 @@ export const localAuthRouter = createRouter({
       if (input.userType === "partner") {
         businessName = businessName || `${input.name}'s Consulting`;
         plan = "partner";
-        maxBranches = getPlanConfig("partner").maxBranches;
         maxUsers = getPlanConfig("partner").maxUsers;
         maxTransactionsPerMonth = getPlanConfig("partner").transactionQuota;
         subscriptionStatus = "active";
@@ -470,7 +468,6 @@ export const localAuthRouter = createRouter({
       } else if (input.createDemo) {
         businessName = businessName || "Demo Business";
         plan = "pro";
-        maxBranches = getPlanConfig("pro").maxBranches;
         maxUsers = getPlanConfig("pro").maxUsers;
         maxTransactionsPerMonth = getPlanConfig("pro").transactionQuota;
         subscriptionStatus = "active";
@@ -483,7 +480,6 @@ export const localAuthRouter = createRouter({
 
       if (firstMonthDiscountApplied) plan = "growth";
       const planConfig = getPlanConfig(plan);
-      maxBranches = planConfig.maxBranches;
       maxUsers = planConfig.maxUsers;
       maxTransactionsPerMonth = planConfig.transactionQuota;
 

@@ -6,7 +6,6 @@ import { getDb } from "../queries/connection";
 import {
   accounts,
   businesses,
-  customerAccounts,
   expenseCategories,
   locations,
   suppliers,
@@ -14,7 +13,7 @@ import {
   users,
   recurringBillTemplates,
 } from "@db/schema";
-import { eq, isNull, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 // Create an authenticated caller directly from a user record, bypassing JWT
 function makeAuthedCaller(user: typeof users.$inferSelect, business: typeof businesses.$inferSelect, bizIds: number[]) {
@@ -23,8 +22,10 @@ function makeAuthedCaller(user: typeof users.$inferSelect, business: typeof busi
     resHeaders: new Headers(),
     user: {
       ...user,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       currentBusiness: { ...business, accountRefId: null } as any,
       businessIds: bizIds,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       allocationRightsProfile: null as any,
       accessSource: "owned" as const,
     },
@@ -41,7 +42,7 @@ describe("Recurring Bills Data Isolation", () => {
   let userA: typeof users.$inferSelect;
   let userB: typeof users.$inferSelect;
   let supA: typeof suppliers.$inferSelect;
-  let catA: typeof expenseCategories.$inferSelect;
+  let _catA: typeof expenseCategories.$inferSelect;
   let accA: typeof accounts.$inferSelect;
   let recurringIdA: number;
 
@@ -74,6 +75,7 @@ describe("Recurring Bills Data Isolation", () => {
       slug: "ISOBILLS_A_main",
       plan: "pro",
       isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     [bizB] = await db.insert(businesses).values({
@@ -82,6 +84,7 @@ describe("Recurring Bills Data Isolation", () => {
       slug: "ISOBILLS_B_main",
       plan: "pro",
       isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     // Create locations
@@ -92,6 +95,7 @@ describe("Recurring Bills Data Isolation", () => {
       isActive: true,
       nextBillNumber: 1,
       nextExpenseNumber: 1,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     [locB] = await db.insert(locations).values({
@@ -101,6 +105,7 @@ describe("Recurring Bills Data Isolation", () => {
       isActive: true,
       nextBillNumber: 1,
       nextExpenseNumber: 1,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     // Create users
@@ -109,6 +114,7 @@ describe("Recurring Bills Data Isolation", () => {
       role: "owner",
       isActive: true,
       currentBusinessId: bizA.id,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     [userB] = await db.insert(users).values({
@@ -116,6 +122,7 @@ describe("Recurring Bills Data Isolation", () => {
       role: "owner",
       isActive: true,
       currentBusinessId: bizB.id,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     // Link users to businesses
@@ -124,6 +131,7 @@ describe("Recurring Bills Data Isolation", () => {
       businessId: bizA.id,
       role: "owner",
       isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     await db.insert(userBusinesses).values({
@@ -131,6 +139,7 @@ describe("Recurring Bills Data Isolation", () => {
       businessId: bizB.id,
       role: "owner",
       isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
 
     // Create a default cash account for A
@@ -142,6 +151,7 @@ describe("Recurring Bills Data Isolation", () => {
       currentBalance: "1000.00",
       openingBalance: "1000.00",
       isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning() as any;
 
     // Create cash account for B
@@ -153,6 +163,7 @@ describe("Recurring Bills Data Isolation", () => {
       currentBalance: "2000.00",
       openingBalance: "2000.00",
       isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     // Create expense categories for A
@@ -163,6 +174,7 @@ describe("Recurring Bills Data Isolation", () => {
       color: "#C73E1D",
       defaultAccountId: accA.id,
       isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     // Create expense category for B
@@ -175,6 +187,7 @@ describe("Recurring Bills Data Isolation", () => {
       color: "#2E7D32",
       defaultAccountId: accB.id,
       isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     // Create suppliers
@@ -184,6 +197,7 @@ describe("Recurring Bills Data Isolation", () => {
       currentBalance: "0.00",
       totalBilled: "0.00",
       totalPaid: "0.00",
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     const [supB] = await db.insert(suppliers).values({
@@ -192,6 +206,7 @@ describe("Recurring Bills Data Isolation", () => {
       currentBalance: "0.00",
       totalBilled: "0.00",
       totalPaid: "0.00",
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     // Create recurring bill for A via API
@@ -320,6 +335,7 @@ describe("Recurring Bills Data Isolation", () => {
     const [supTemp] = await db.insert(suppliers).values({
       businessId: bizA.id, name: "Temp Sup", currentBalance: "0.00",
       totalBilled: "0.00", totalPaid: "0.00",
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     const callerA = makeAuthedCaller(userA, bizA, [bizA.id]);
@@ -346,11 +362,13 @@ describe("Recurring Bills Data Isolation", () => {
     const [supA2] = await db.insert(suppliers).values({
       businessId: bizA.id, name: "Sup A2", currentBalance: "0.00",
       totalBilled: "0.00", totalPaid: "0.00",
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     const [supB2] = await db.insert(suppliers).values({
       businessId: bizB.id, name: "Sup B2", currentBalance: "0.00",
       totalBilled: "0.00", totalPaid: "0.00",
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     const dueDate = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];

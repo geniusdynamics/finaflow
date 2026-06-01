@@ -1,3 +1,4 @@
+// eslint-disable react-refresh/only-export-components
 import { useAuth } from "@/hooks/useAuth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -116,11 +117,8 @@ function AuthLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const activeMenuItem = menuItems.find(item => item.path === location.pathname);
   const isMobile = useIsMobile();
-
   useEffect(() => {
-    if (isCollapsed) {
-      setIsResizing(false);
-    }
+    setIsResizing((prev) => isCollapsed ? false : prev);
   }, [isCollapsed]);
 
   useEffect(() => {

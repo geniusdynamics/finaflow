@@ -16,6 +16,8 @@ import {
   suppliers,
   userBusinesses,
   users,
+  accountSubTypeEnum,
+  transactionTypeEnum,
 } from "@db/schema";
 import { ensureSystemAccount } from "../lib/accounting-accounts";
 import { getTestDb } from "../test/db";
@@ -800,7 +802,6 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
   it("updates supplier totalPaid and currentBalance when paying via expense", async () => {
     const { caller, paymentAccount, createdBill, supplier } = await seedPathBTest(`SUPP${Date.now()}`);
     const db = getTestDb();
-    const initialAmount = d(createdBill.amount || "0");
 
     const [prePay] = await db.select().from(suppliers).where(eq(suppliers.id, supplier.id)).limit(1);
 
@@ -832,20 +833,18 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
 
     const apAccount = await db.query.accounts.findFirst({
       where: and(
-        eq(accounts.accountSubType, "accounts_payable" as any),
+        eq(accounts.accountSubType, accountSubTypeEnum.enumValues[9]),
         eq(accounts.businessId, ctx.business.id),
         isNull(accounts.deletedAt)
       ),
     });
-
-    const apPreBalance = d(apAccount?.currentBalance || "0");
 
     const category = await caller.expenses.createCategory({
       name: `AP Ledger Cat ${Date.now()}`,
       accountingClass: "operating_expense",
     });
 
-    const expense = await caller.expenses.create({
+    await caller.expenses.create({
       locationId: paymentAccount.locationId,
       categoryId: category.id,
       amount: "200.00",
@@ -857,17 +856,12 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
       supplierId: createdBill.supplierId,
     });
 
-    const billPaymentRecords = await db
-      .select()
-      .from(billPayments)
-      .where(eq(billPayments.billId, createdBill.id));
-
     const apLedgerEntries = await db
       .select()
       .from(ledgerEntries)
       .where(
         and(
-          eq(ledgerEntries.transactionType, "bill_payment" as any),
+          eq(ledgerEntries.transactionType, transactionTypeEnum.enumValues[2]),
           eq(ledgerEntries.entryType, "debit"),
           eq(ledgerEntries.accountId, apAccount!.id),
         )
@@ -878,7 +872,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
   });
 
   it("blocks standalone expense when supplier has outstanding bills (no billId)", async () => {
-    const { caller, paymentAccount, createdBill, supplier } = await seedPathBTest(`BLK${Date.now()}`);
+    const { caller, paymentAccount, supplier } = await seedPathBTest(`BLK${Date.now()}`);
 
     const category = await caller.expenses.createCategory({
       name: `Block Cat ${Date.now()}`,
@@ -925,7 +919,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
   it("produces identical billPayments records from both payment paths", async () => {
     // Path A: bills.recordPayment
     const seedA = `PA-${Date.now()}`;
-    let ctxA = await seedExpenseContext(seedA);
+    const ctxA = await seedExpenseContext(seedA);
     seededAccountIds.push(ctxA.accountId);
     const callerA = appRouter.createCaller({
       req: new Request("http://localhost"),
@@ -1005,9 +999,6 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
     });
 
     const allPayments = await db.select().from(billPayments);
-    const expensePayments = allPayments.filter(p =>
-      p.billId === null || p.notes?.includes(String(category.id))
-    );
     expect(allPayments.length).toBeGreaterThanOrEqual(0);
   });
 });

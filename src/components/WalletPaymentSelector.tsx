@@ -1,11 +1,9 @@
 // ABOUTME: Multi-provider wallet payment selector component for choosing between configured wallet providers.
 // ABOUTME: Shows all active providers with brand colors, disables unsupported currencies, indicates defaults.
-import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { skipToken } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { Smartphone, Wallet, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export interface WalletProviderCard {
@@ -128,9 +126,9 @@ export function WalletPaymentSelector({
   );
 
   const available = locationProviders ?? providers ?? [];
-  const activeProviders = available.filter((p: any) => p.isActive !== false);
+  const activeProviders = available.filter((p: { isActive?: boolean }) => p.isActive !== false);
   const hasMultiple = activeProviders.length > 1;
-  const unsupportedCount = activeProviders.filter((p: any) => {
+  const unsupportedCount = activeProviders.filter((p: { supportedCurrencies?: string }) => {
     const supported = p.supportedCurrencies ?? "KES";
     return currency && !supported.includes(currency);
   }).length;
@@ -156,7 +154,7 @@ export function WalletPaymentSelector({
         </Alert>
       )}
       <div className={cn("grid gap-2", hasMultiple ? "grid-cols-2 md:grid-cols-3" : "grid-cols-1")}>
-        {activeProviders.map((provider: any) => {
+        {activeProviders.map((provider: WalletProviderCard) => {
           const supported = provider.supportedCurrencies ?? "KES";
           const supportsCurrency = !currency || supported.includes(currency);
           const isDisabled = disabled || !supportsCurrency;

@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased] — Duplicate Accounts Payable Fix & Chart of Accounts systemKey Backfill
+
+### Fixed
+- **Duplicate AP accounts** — Root cause identified: the COA seed script (`seed-accounting.ts`) created accounts without setting `systemKey`, while `ensureSystemAccount()` relied on `systemKey` for deduplication. When the first bill was created, `ensureSystemAccount()` couldn't find the seeded AP account (which had `systemKey=NULL`) and created a second system-managed account with the same `accountSubType`. This caused:
+  - Two AP accounts sharing the same `accounts_payable` sub-type code
+  - Split balances between the seeded account (code 2000) and the system-generated account
+  - Inconsistent transaction posting depending on which code path resolved the AP account
+- **Resolution** — Three layers of defense implemented:
+  1. **Remediation script** ([scripts/fix-duplicate-ap-accounts.ts](file:///d:/DevCenter/abuilds/fina/finaflow/scripts/fix-duplicate-ap-accounts.ts)) — One-time fix that: finds all duplicate AP accounts per business, merges balances, reassigns ledger entries and journal lines from the orphan to the survivor, backfills `systemKey` on the survivor, and soft-deletes duplicates. Also backfills `systemKey` on ALL accounts missing it
+  2. **Seed fix** ([db/seed-accounting.ts](file:///d:/DevCenter/abuilds/fina/finaflow/db/seed-accounting.ts)) — Now computes `systemKey` as `${accountType}:${accountSubType}` for every seeded account, preventing future duplication at the source
+  3. **Defense-in-depth** ([api/lib/accounting-accounts.ts](file:///d:/DevCenter/abuilds/fina/finaflow/api/lib/accounting-accounts.ts)) — `ensureSystemAccount()` now has a fallback: if the `systemKey` lookup finds nothing, it searches by `(businessId, accountType, accountSubType)` for accounts with `systemKey=NULL`. If found, it backfills the `systemKey` and returns the existing account instead of creating a duplicate
+- **check-accounts.ts** — Updated to include `systemKey` in its INSERT statement for default accounts
+
+### CI/CD Integration
+- **Dockerfile** — Updated to copy `scripts/fix-duplicate-ap-accounts.ts` into the production image alongside `run-migrations.ts`. The container startup CMD now runs `npx tsx scripts/fix-duplicate-ap-accounts.ts` after schema migrations and before the app starts, ensuring the data fix is applied automatically on every deployment.
+- **package.json** — Added `db:fix:ap` script (`npm run db:fix:ap`) for local/manual execution of the AP remediation.
+
+## [Unreleased] — Bug Fixes: Duplicate Labels, Categories, M-PESA Parser
+
+### Fixed
+- **Suppliers.tsx** — Fixed duplicate "Category" label in Add Bill dialog caused by `ExpenseCategorySelector` rendering its own `<Label>` while the page also wrapped it in `<Label>Category</Label>`. Removed outer `<Label>` and passed `label="Category"` prop instead. Also fixed `trpc.expenses.listCategories.useQuery()` to `trpc.expenses.categories.useQuery()` (wrong procedure name — `listCategories` doesn't exist in the API)
+- **Bills.tsx** — Fixed 3 duplicate label instances: main bill form "Category", recurring bill "Default Category", and bill line item "Category" with text-xs styling. All now pass labels via the `ExpenseCategorySelector` `label` prop instead of wrapping in outer `<Label>` tags
+- **M-PESA Parser (`mpesa-provider.ts`)** — Fixed critical bug in `splitIntoSmsChunks` regex: the pattern `(?=[A-Z0-9]{6,20}\s+Confirmed\.)` was matching within transaction IDs (e.g., "UDP9H1ZKXB" would match at positions 0, 1, 2, 3, 4 as sub-sequences of 6+ chars), fragmenting each transaction into multiple chunks and corrupting `providerTxnId` values. Fixed by adding `\b` word boundary: `(?=\b[A-Z0-9]{6,20}\s+[Cc]onfirmed\.)`. Also added `[Cc]onfirmed` to handle lowercase "confirmed" messages (e.g., airtime purchases)
+
 ## [Unreleased] — Unified ExpenseCategorySelector Component
 
 ### Added

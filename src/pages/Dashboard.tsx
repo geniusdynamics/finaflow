@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
-import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
+import { formatDate, getLocalDateString, formatKES } from "@/lib/utils";
 import {
   TrendingUp,
   TrendingDown,
@@ -16,15 +16,13 @@ import {
   ArrowDownRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 
 export function Dashboard() {
-  const [dateRange, setDateRange] = useState({
+  const [dateRange, setDateRange] = useState(() => ({
     from: getLocalDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
     to: getLocalDateString(),
-  });
+  }));
 
-  const utils = trpc.useUtils();
   const { data: summary } = trpc.dashboard.summary.useQuery({
     dateFrom: dateRange.from,
     dateTo: dateRange.to,

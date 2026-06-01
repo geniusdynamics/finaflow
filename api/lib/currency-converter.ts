@@ -4,7 +4,7 @@
 import { d, Decimal } from "./decimal";
 import { getDb } from "../queries/connection";
 import { exchangeRates, supportedCurrencies } from "@db/schema";
-import { eq, and, desc, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, isNull } from "drizzle-orm";
 
 export interface ConversionResult {
   converted: Decimal;
@@ -335,7 +335,7 @@ export class CurrencyConverter {
           rate,
           source,
           validFrom: new Date(),
-        } as any);
+        } satisfies typeof exchangeRates.$inferInsert);
     } catch {
       // DB table may not exist yet — in-memory store is used as fallback
     }

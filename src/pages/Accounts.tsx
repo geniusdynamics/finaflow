@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart";
 import { Area, AreaChart, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
-import { Plus, Wallet, CreditCard, Smartphone, Landmark, BookOpen, ArrowDownLeft, ArrowUpRight, Pencil, Trash2, ArrowRightLeft, BarChart3, AlertTriangle, Tag, CheckCircle, FileText } from "lucide-react";
+import { Plus, Wallet, CreditCard, Landmark, BookOpen, ArrowDownLeft, ArrowUpRight, Pencil, Trash2, ArrowRightLeft, BarChart3, AlertTriangle, Tag, CheckCircle, FileText } from "lucide-react";
 import { LocationSelector } from "@/components/LocationSelector";
 import { toast } from "sonner";
 import { ChartOfAccounts } from "./ChartOfAccounts";
@@ -153,7 +153,7 @@ export function Accounts() {
       locationId: parseInt(form.locationId), name: form.name, type: form.type,
       accountCode: form.accountCode || undefined, accountNumber: form.accountNumber || undefined,
       openingBalance: form.openingBalance, isPaymentMethod: form.isPaymentMethod,
-      accountType: form.linkToCoa ? (form.accountType as any || undefined) : undefined,
+      accountType: form.linkToCoa ? (form.accountType || undefined) : undefined,
       accountSubType: form.linkToCoa ? (form.accountSubType || undefined) : undefined,
       isContra: form.linkToCoa ? form.isContra : undefined,
     });

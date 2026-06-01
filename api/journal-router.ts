@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { createRouter, accountManage, publicQuery } from "./middleware";
+import { createRouter, accountManage } from "./middleware";
 import { getDb } from "./queries/connection";
 import { journalEntries, journalLines } from "@db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import type { JournalLineInput } from "./lib/journal";
 import {
   createJournalEntry,
@@ -27,8 +27,7 @@ export const journalRouter = createRouter({
         isPosted: z.boolean().optional(),
       })
     )
-    .query(async ({ input, ctx }) => {
-      
+    .query(async ({ input }) => {
 
       const result = await getJournalEntries({
         businessId: input.businessId,
@@ -51,8 +50,8 @@ export const journalRouter = createRouter({
         businessId: z.number(),
       })
     )
-    .query(async ({ input, ctx }) => {
-      
+    .query(async ({ input }) => {
+
       return getJournalEntryWithLines(input.id);
     }),
 
@@ -124,7 +123,7 @@ export const journalRouter = createRouter({
           .optional(),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input, _ctx }) => {
       const db = getDb();
       
 
@@ -135,7 +134,7 @@ export const journalRouter = createRouter({
 
       if (!entry) throw new Error("Journal entry not found");
       if (entry.isPosted) throw new Error("Cannot edit a posted journal entry");
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updates: any = {};
       if (input.entryDate) updates.entryDate = input.entryDate;
       if (input.description) updates.description = input.description;
@@ -160,6 +159,7 @@ export const journalRouter = createRouter({
             credit: line.credit || "0.00",
             description: line.description,
             lineNumber: i + 1,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any);
         }
       }
@@ -214,8 +214,7 @@ export const journalRouter = createRouter({
         sourceId: z.number(),
       })
     )
-    .query(async ({ input, ctx }) => {
-      
+    .query(async ({ input }) => {
 
       const entries = await getJournalEntries({
         businessId: input.businessId,

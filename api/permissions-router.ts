@@ -172,6 +172,7 @@ export const permissionsRouter = createRouter({
       const existing = await db.select().from(rolePermissions).where(eq(rolePermissions.roleKey, input.roleKey)).limit(1);
       if (existing.length > 0) {
         await db.update(rolePermissions).set({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
           permissions: input.permissions as any,
           isActive: true,
         }).where(eq(rolePermissions.id, existing[0].id));
@@ -180,6 +181,7 @@ export const permissionsRouter = createRouter({
       }
       const [result] = await db.insert(rolePermissions).values({
         roleKey: input.roleKey, roleLabel: input.roleLabel,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         permissions: input.permissions as any,
       }).returning();
       invalidateRolePermissionCache();
@@ -196,6 +198,7 @@ export const permissionsRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...updates } = input;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (updates.permissions) updates.permissions = updates.permissions as any;
       await db.update(rolePermissions).set(updates).where(eq(rolePermissions.id, id));
       invalidateRolePermissionCache();

@@ -164,10 +164,6 @@ function getRolePermissionsWithCache(role: string): Permission[] {
   return ROLE_PERMISSIONS[role] || [];
 }
 
-function hasPermissionWithCache(role: string, permission: Permission): boolean {
-  return getRolePermissionsWithCache(role).includes(permission);
-}
-
 function getPermissionAction(permission: string): string {
   if (permission.includes(":")) {
     return permission.split(":").at(-1)?.toLowerCase() ?? "";

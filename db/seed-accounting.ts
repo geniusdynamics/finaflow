@@ -108,14 +108,18 @@ export async function seedAccountingData(businessId: number, locationId?: number
         locationId,
         name: account.name,
         accountCode: account.accountCode,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         accountType: account.accountType as any,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         accountSubType: account.accountSubType as any,
         type: account.type,
+        systemKey: `${account.accountType}:${account.accountSubType}`,
         openingBalance: account.openingBalance,
         currentBalance: account.openingBalance,
         isContra: account.isContra || false,
         isPaymentMethod: account.accountSubType === "cash" || account.accountSubType === "bank",
         isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
     }
   }
@@ -142,8 +146,10 @@ export async function seedAccountingData(businessId: number, locationId?: number
         ...cat,
         businessId,
         locationId,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         accountingClass: (mapping?.accountingClass || "operating_expense") as any,
         defaultAccountId: defaultAccountId || 1,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any);
     }
   }
@@ -164,6 +170,7 @@ export async function seedAccountingData(businessId: number, locationId?: number
       if (account && category.defaultAccountId !== account.id) {
         await db.update(expenseCategories).set({
           defaultAccountId: account.id,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).where(eq(expenseCategories.id, category.id));
       }
     }

@@ -1,3 +1,4 @@
+// eslint-disable react-refresh/only-export-components
 import { Link, useLocation } from "react-router";
 import {
   LayoutDashboard,
@@ -12,9 +13,6 @@ import {
   Handshake,
   Building,
   ShieldCheck,
-  Bell,
-  LogOut,
-  Menu,
   X,
   ChevronRight,
   Wallet,
@@ -46,19 +44,13 @@ export const mobileSecondaryNavItems = [
   { path: "/partner", label: "Partner", icon: Handshake },
 ];
 
-type MobileNavItem = {
-  path: string;
-  label: string;
-  icon: any;
-};
-
 export function MobileBottomNavigation() {
   const location = useLocation();
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#E8E0D8] bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
       <div className="flex h-16 items-center justify-around px-2">
-        {mobileBottomNavItems.map((item, index) => {
+        {mobileBottomNavItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link
@@ -186,7 +178,7 @@ export function MobileHamburgerMenu({
                       {b.isDemo && (
                         <span className="rounded bg-[#8D8A87]/10 px-1 py-0 text-[10px] text-[#8D8A87]">DEMO</span>
                       )}
-                      {(b as any).allocationSource && (
+                      {(b as { allocationSource?: unknown }).allocationSource && (
                         <span className="rounded bg-[#0288D1]/10 px-1 py-0.5 text-[10px] text-[#0288D1]">Allocated</span>
                       )}
                     </button>

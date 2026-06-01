@@ -46,10 +46,11 @@ async function checkAndCreateAccounts() {
       ];
       
       for (const acc of defaultAccounts) {
+        const systemKey = `${acc.type}:${acc.subtype}`;
         await client.query(`
-          INSERT INTO accounts ("locationId", "businessId", name, "accountCode", "accountType", "accountSubType", type, "openingBalance", "currentBalance", "isActive")
-          VALUES ($1, $2, $3, $4, $5, $6, 'bank_account', '0.00', '0.00', true)
-        `, [locationId, businessId, acc.name, acc.code, acc.type, acc.subtype]);
+          INSERT INTO accounts ("locationId", "businessId", name, "accountCode", "accountType", "accountSubType", "systemKey", type, "openingBalance", "currentBalance", "isActive")
+          VALUES ($1, $2, $3, $4, $5, $6, $7, 'bank_account', '0.00', '0.00', true)
+        `, [locationId, businessId, acc.name, acc.code, acc.type, acc.subtype, systemKey]);
         console.log(`  Created: ${acc.code} - ${acc.name}`);
       }
       

@@ -438,7 +438,7 @@ export function DailySales() {
                   {/* Payment breakdown from child records */}
                   {sale.payments && sale.payments.length > 0 ? (
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                      {sale.payments.map((p: any) => {
+{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                      {sale.payments.map((p: any) => {
                         const pm = allPaymentMethods?.find(m => m.id === p.paymentMethodId);
                         return (
                           <div key={p.id} className="flex justify-between">

@@ -1,15 +1,20 @@
 import { z } from "zod";
 import { createRouter, billQuery, billCreate, billPay, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, expenseCategories, expenses } from "@db/schema";
+import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, expenseCategories } from "@db/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { notFutureDateString } from "./lib/future-date";
-import { logAudit } from "./lib/audit";
 import { ensureSystemAccount } from "./lib/accounting-accounts";
 import { getExpenseAccountSubType } from "./lib/accounting-maps";
 import { reverseLedgerEntriesForTransaction } from "./lib/accounting-reversal";
 import { payBill } from "./lib/bill-payment";
+
+type Db = ReturnType<typeof getDb>;
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+type BillInsert = typeof bills.$inferInsert;
+type LedgerEntryInsert = typeof ledgerEntries.$inferInsert;
+type AttachmentInsert = typeof attachments.$inferInsert;
 
 const LIABILITY_ACCOUNT_MAP: Record<string, { accountCode: string; description: string }> = {
   rent: { accountCode: "2110", description: "Rent Payable" },
@@ -67,7 +72,7 @@ export async function getLiabilityAccountForRecurring(
   const apAccount = await db.select().from(accounts).where(
     and(
       eq(accounts.businessId, businessId),
-      eq(accounts.accountSubType, "accounts_payable" as any),
+      eq(accounts.accountSubType, "accounts_payable"),
       isNull(accounts.deletedAt)
     )
   ).limit(1);
@@ -94,7 +99,7 @@ export const batchBillPaymentInputSchema = z.object({
   reference: z.string().optional(),
 });
 
-async function resolveBillCategoryId(tx: any, billId: number, supplierId?: number | null) {
+async function resolveBillCategoryId(tx: Tx, billId: number, supplierId?: number | null) {
   const itemCategories = await tx
     .select({ categoryId: billItems.categoryId })
     .from(billItems)
@@ -168,7 +173,7 @@ export const billsRouter = createRouter({
       const db = getDb();
       let billNumber = input.billNumber;
       let billId = 0;
-      const enteredBy = (ctx as any).user?.id ?? 1;
+      const enteredBy = ctx.user?.id ?? 1;
 
       await requireAuthorizedLocation(ctx, input.locationId);
 
@@ -193,7 +198,7 @@ export const billsRouter = createRouter({
           billNumber, description: input.description,
           amount: input.amount, balanceDue: input.amount,
           issueDate: new Date(input.issueDate), dueDate: new Date(input.dueDate),
-        } as any).returning();
+        } as BillInsert).returning();
         billId = result.id;
 
         if (input.attachments && input.attachments.length > 0) {
@@ -201,7 +206,7 @@ export const billsRouter = createRouter({
             await tx.insert(attachments).values({
               recordType: "bill", recordId: billId,
               imageData: att.imageData, mimeType: att.mimeType, caption: att.caption,
-            } as any).returning();
+            } as AttachmentInsert).returning();
           }
         }
 
@@ -230,7 +235,7 @@ export const billsRouter = createRouter({
           expenseAccountId = await ensureSystemAccount({
             businessId,
             accountType: "expense",
-            accountSubType: getExpenseAccountSubType(accountingClass as any),
+            accountSubType: getExpenseAccountSubType(accountingClass),
             name: expenseCategory[0]?.name || input.description,
           });
         }
@@ -256,7 +261,7 @@ export const billsRouter = createRouter({
 
           await tx.insert(ledgerEntries).values({
             accountId: expenseAccountId,
-            transactionType: "expense" as any,
+            transactionType: "expense",
             transactionId: billId,
             entryType: "debit",
             amount: input.amount,
@@ -264,12 +269,12 @@ export const billsRouter = createRouter({
             entryDate: issueDateStr,
             createdBy: enteredBy,
             description: `Bill: ${input.description}`,
-          } as any).returning();
+          } as LedgerEntryInsert).returning();
           await tx.update(accounts).set({ currentBalance: expenseNewBal.toFixed(2) }).where(eq(accounts.id, expenseAccountId));
 
           await tx.insert(ledgerEntries).values({
             accountId: apAccount.id,
-            transactionType: "bill_payment" as any,
+            transactionType: "bill_payment",
             transactionId: billId,
             entryType: "credit",
             amount: input.amount,
@@ -277,7 +282,7 @@ export const billsRouter = createRouter({
             entryDate: issueDateStr,
             createdBy: enteredBy,
             description: `Bill: ${input.description}`,
-          } as any).returning();
+          } as LedgerEntryInsert).returning();
           await tx.update(accounts).set({ currentBalance: apNewBal.toFixed(2) }).where(eq(accounts.id, apAccount.id));
         }
       });
@@ -289,6 +294,7 @@ export const billsRouter = createRouter({
     .input(billPaymentInputSchema)
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const enteredBy = (ctx as any).user?.id ?? 1;
 
       const bill = await requireAuthorizedEntity(ctx, bills, input.billId);
@@ -372,6 +378,7 @@ export const billsRouter = createRouter({
         await reverseLedgerEntriesForTransaction({
           db: tx,
           transactionId: input.id,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
           userId: (ctx as any).user?.id ?? 1,
           reason: input.reason,
         });
@@ -380,6 +387,7 @@ export const billsRouter = createRouter({
           .update(bills)
           .set({
             reversedAt: new Date(),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
             reversedBy: (ctx as any).user?.id ?? 1,
             status: "cancelled",
             balanceDue: "0.00",
@@ -407,6 +415,7 @@ export const billsRouter = createRouter({
         billId: input.billId, itemName: input.itemName,
         quantity: input.quantity, unitPrice: input.unitPrice,
         totalPrice: input.totalPrice, categoryId: input.categoryId, notes: input.notes,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
 
       const existing = await db.select().from(masterItems).where(eq(masterItems.name, input.itemName)).limit(1);
@@ -419,6 +428,7 @@ export const billsRouter = createRouter({
         await db.insert(masterItems).values({
           name: input.itemName, lastUnitPrice: input.unitPrice,
           lastCategoryId: input.categoryId, usageCount: 1,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
       }
       return { id: result.id, success: true };
@@ -500,6 +510,7 @@ export const billsRouter = createRouter({
         amount: input.amount, 
         frequency: input.frequency,
         nextDueDate: new Date(input.nextDueDate),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { id: result.id, success: true };
     }),
@@ -520,6 +531,7 @@ export const billsRouter = createRouter({
       await requireAuthorizedEntity(ctx, recurringBillTemplates, input.id);
       const { id, ...updates } = input;
       await db.update(recurringBillTemplates).set({
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         ...updates as any,
         nextDueDate: updates.nextDueDate ? new Date(updates.nextDueDate) : undefined,
       }).where(eq(recurringBillTemplates.id, id));

@@ -4,6 +4,8 @@ import { getDb } from "./queries/connection";
 import { alertsConfig, alertsLog, accounts, bills, locations } from "@db/schema";
 import { eq, and, isNull, sql, desc } from "drizzle-orm";
 
+type AlertsConfigInsert = typeof alertsConfig.$inferInsert;
+
 export const alertsRouter = createRouter({
   // Config CRUD
   listConfig: authedQuery.query(async () => {
@@ -22,7 +24,7 @@ export const alertsRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const [result] = await db.insert(alertsConfig).values(input as any).returning();
+      const [result] = await db.insert(alertsConfig).values(input as AlertsConfigInsert).returning();
       return { id: result.id, success: true };
     }),
 
@@ -31,7 +33,7 @@ export const alertsRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...updates } = input;
-      await db.update(alertsConfig).set(updates as any).where(eq(alertsConfig.id, id));
+      await db.update(alertsConfig).set(updates as Partial<AlertsConfigInsert>).where(eq(alertsConfig.id, id));
       return { success: true };
     }),
 

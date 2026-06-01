@@ -82,6 +82,7 @@ export const usersRouter = createRouter({
       const passwordHash = await hashPassword(input.password);
       const values = buildCreateUserValues(input, accountId, currentBusinessId, passwordHash);
       const [result] = await db.transaction(async (tx) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         const [createdUser] = await tx.insert(users).values(values as any).returning();
         if (currentBusinessId) {
           await tx.insert(userBusinesses).values({
@@ -89,6 +90,7 @@ export const usersRouter = createRouter({
             businessId: currentBusinessId,
             role: input.role,
             isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any);
         }
         return [createdUser];

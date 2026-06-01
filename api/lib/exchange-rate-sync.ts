@@ -2,9 +2,6 @@
 // ABOUTME: Runs on configurable interval, logs sync results to console, falls back gracefully on errors.
 
 import { currencyConverter } from "./currency-converter";
-import { getDb } from "../queries/connection";
-import { exchangeRates } from "@db/schema";
-import { eq, and, isNull } from "drizzle-orm";
 
 export interface SyncResult {
   success: boolean;

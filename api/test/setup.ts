@@ -51,6 +51,7 @@ async function ensureTestDatabase(): Promise<void> {
   // "42P04" (duplicate_database) and any "duplicate key" errors.
   try {
     await adminPool.query('CREATE DATABASE "finaflow_test"');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     const msg = (error?.message ?? "").toLowerCase();
     const isDupDb = error?.code === "42P04" || msg.includes("already exists") || msg.includes("duplicate key");

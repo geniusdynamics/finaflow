@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 import { accounts, businesses, locations, users, userBusinesses } from "@db/schema";
-import { d } from "./decimal";
 import { getAccountSubscription, type DbClient } from "./account-subscriptions";
 
 export interface ProvisionBusinessInput {
@@ -28,13 +27,6 @@ export interface ProvisionBusinessResult {
   businessId: number;
   locationId: number;
   accountRefId: number | null;
-}
-
-function generateReferralCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
-  return code;
 }
 
 export async function provisionBusiness(input: ProvisionBusinessInput): Promise<ProvisionBusinessResult> {
@@ -68,7 +60,7 @@ export async function provisionBusiness(input: ProvisionBusinessInput): Promise<
     subscriptionStatus: subscriptionStatus ?? null,
     subscriptionExpiry: subscriptionExpiry ?? null,
     phone: phone ?? null,
-  } as any).returning();
+  } satisfies typeof businesses.$inferInsert).returning();
   const businessId = businessRow.id;
 
   await tx.insert(userBusinesses).values({
@@ -76,7 +68,7 @@ export async function provisionBusiness(input: ProvisionBusinessInput): Promise<
     businessId,
     role: "owner",
     isActive: true,
-  } as any);
+  } satisfies typeof userBusinesses.$inferInsert);
 
   const resolvedAccountRefId = accountRefId ?? businessRow.accountRefId ?? null;
   await tx.update(users).set({
@@ -89,7 +81,7 @@ export async function provisionBusiness(input: ProvisionBusinessInput): Promise<
     name: "Main Branch",
     slug: `main-${businessId}`,
     isActive: true,
-  } as any).returning();
+  } satisfies typeof locations.$inferInsert).returning();
   const locationId = locResult.id;
 
   if (testFailPoint === "before-default-accounts") {
@@ -98,9 +90,9 @@ export async function provisionBusiness(input: ProvisionBusinessInput): Promise<
 
   const openingBal = defaultAccountOpeningBalance ?? "0.00";
   await tx.insert(accounts).values([
-    { name: "Cash Drawer", type: "cash", locationId, openingBalance: openingBal, currentBalance: openingBal, isActive: true } as any,
-    { name: "Wallet", type: "wallet", locationId, openingBalance: openingBal, currentBalance: openingBal, isActive: true } as any,
-    { name: "Bank Account", type: "bank_account", locationId, openingBalance: openingBal, currentBalance: openingBal, isActive: true } as any,
+    { name: "Cash Drawer", type: "cash" as "cash" | "mpesa" | "bank_account", locationId, openingBalance: openingBal, currentBalance: openingBal, isActive: true } satisfies typeof accounts.$inferInsert,
+    { name: "Wallet", type: "wallet" as "cash" | "mpesa" | "bank_account", locationId, openingBalance: openingBal, currentBalance: openingBal, isActive: true } satisfies typeof accounts.$inferInsert,
+    { name: "Bank Account", type: "bank_account", locationId, openingBalance: openingBal, currentBalance: openingBal, isActive: true } satisfies typeof accounts.$inferInsert,
   ]);
 
   return { businessId, locationId, accountRefId: resolvedAccountRefId };
