@@ -9,6 +9,7 @@ import { logAudit } from "./lib/audit";
 import { ensureSystemAccount } from "./lib/accounting-accounts";
 import { getExpenseAccountSubType } from "./lib/accounting-maps";
 import { reverseLedgerEntriesForTransaction } from "./lib/accounting-reversal";
+import { payBill } from "./lib/bill-payment";
 
 const LIABILITY_ACCOUNT_MAP: Record<string, { accountCode: string; description: string }> = {
   rent: { accountCode: "2110", description: "Rent Payable" },
@@ -291,7 +292,7 @@ export const billsRouter = createRouter({
       const enteredBy = (ctx as any).user?.id ?? 1;
 
       const bill = await requireAuthorizedEntity(ctx, bills, input.billId);
-      
+
       if (input.accountId) {
         const acct = await requireAuthorizedEntity(ctx, accounts, input.accountId);
         if (acct.locationId !== bill.locationId) {
@@ -299,155 +300,33 @@ export const billsRouter = createRouter({
         }
       }
 
-      const paymentAmount = d(input.amount);
-      const currentPaid = d(bill.amountPaid);
-      const totalAmount = d(bill.amount);
-      const newPaid = currentPaid.plus(paymentAmount);
-      const newBalance = d(Math.max(0, d(totalAmount).minus(currentPaid).minus(paymentAmount).toNumber()));
-      const status = newBalance.lte(0) ? "paid" as const : "partial" as const;
-
       const resolvedCategoryId = await resolveBillCategoryId(db, input.billId, bill.supplierId);
       if (!resolvedCategoryId) {
         throw new Error("No category is defined for this bill. Kindly define one before processing payment.");
       }
 
-      let paymentId = 0;
-
-      await db.transaction(async (tx) => {
-        await tx.update(bills).set({ amountPaid: newPaid.toFixed(2), balanceDue: newBalance.toFixed(2), status }).where(eq(bills.id, input.billId));
-
-        const [result] = await tx.insert(billPayments).values({
-          billId: input.billId, paymentMethod: input.paymentMethod,
-          amount: input.amount, paymentDate: new Date(input.paymentDate),
-          reference: input.reference, notes: input.notes,
-          accountId: input.accountId, enteredBy,
-        } as any).returning();
-        paymentId = result.id;
-
-        if (bill.supplierId) {
-          const sup = await tx.select().from(suppliers).where(eq(suppliers.id, bill.supplierId)).limit(1);
-          if (sup[0]) {
-            const newPaidSup = d(sup[0].totalPaid).plus(paymentAmount);
-            const newBalSup = d(Math.max(0, d(sup[0].currentBalance).minus(paymentAmount).toNumber()));
-            await tx.update(suppliers).set({ totalPaid: newPaidSup.toFixed(2), currentBalance: newBalSup.toFixed(2) }).where(eq(suppliers.id, bill.supplierId));
-          }
-        }
-
-        let cashAccountId = input.accountId;
-        if (!cashAccountId) {
-          const typeMap: Record<string, string> = { cash: "cash", wallet: "cash", bank_transfer: "bank", card: "bank" };
-          const defaultAccount = await tx.select().from(accounts).where(
-            and(
-              eq(accounts.locationId, bill.locationId),
-              eq(accounts.type, typeMap[input.paymentMethod] as any),
-              isNull(accounts.deletedAt)
-            )
-          ).limit(1);
-          if (defaultAccount[0]) cashAccountId = defaultAccount[0].id;
-        }
-
-        if (cashAccountId) {
-          const acct = await tx.select().from(accounts).where(eq(accounts.id, cashAccountId)).limit(1);
-          if (acct[0]) {
-            const newBal = d(acct[0].currentBalance || "0").minus(paymentAmount);
-            const paymentDateStr = new Date(input.paymentDate).toISOString().split("T")[0];
-            await tx.insert(ledgerEntries).values({
-              accountId: cashAccountId, transactionType: "bill_payment",
-              transactionId: paymentId, entryType: "credit",
-              amount: input.amount, balanceAfter: newBal.toFixed(2),
-              entryDate: paymentDateStr, createdBy: enteredBy,
-              refNo: bill.billNumber ?? `BILL-${String(bill.id).padStart(4, "0")}`,
-            } as any).returning();
-            await tx.update(accounts).set({ currentBalance: newBal.toFixed(2) }).where(eq(accounts.id, cashAccountId));
-          }
-        }
-
-        if (bill.businessId) {
-          const liabilityAcctId = input.liabilityAccountId;
-          const existingAp = liabilityAcctId
-            ? await tx.select().from(accounts).where(and(eq(accounts.id, liabilityAcctId), isNull(accounts.deletedAt))).limit(1)
-            : await tx.select().from(accounts).where(
-                and(
-                  eq(accounts.businessId, bill.businessId),
-                  eq(accounts.accountSubType, "accounts_payable" as any),
-                  isNull(accounts.deletedAt)
-                )
-              ).limit(1);
-
-          if (existingAp[0]) {
-            const billBalanceDue = d(bill.balanceDue || "0");
-            const apDebitAmount = paymentAmount.lte(billBalanceDue) ? paymentAmount : billBalanceDue;
-            const prepaymentAmount = paymentAmount.gt(billBalanceDue) ? paymentAmount.minus(billBalanceDue) : d(0);
-            const paymentDateStr = new Date(input.paymentDate).toISOString().split("T")[0];
-
-            if (apDebitAmount.gt(0)) {
-              const apNewBal = d(existingAp[0].currentBalance || "0").minus(apDebitAmount);
-              await tx.insert(ledgerEntries).values({
-                accountId: existingAp[0].id,
-                transactionType: "bill_payment" as any,
-                transactionId: paymentId,
-                entryType: "debit",
-                amount: apDebitAmount.toFixed(2),
-                balanceAfter: apNewBal.toFixed(2),
-                entryDate: paymentDateStr,
-                createdBy: enteredBy,
-                description: `Bill Payment: ${input.reference || bill.description}`,
-              } as any).returning();
-              await tx.update(accounts).set({ currentBalance: apNewBal.toFixed(2) }).where(eq(accounts.id, existingAp[0].id));
-            }
-
-            if (prepaymentAmount.gt(0)) {
-              const prepayAccountId = await ensureSystemAccount({
-                businessId: bill.businessId,
-                accountType: "asset",
-                accountSubType: "prepaid_expense",
-                name: "Supplier Prepayments",
-              });
-              const prepayAcct = await tx.query.accounts.findFirst({
-                where: and(
-                  eq(accounts.id, prepayAccountId),
-                  eq(accounts.businessId, bill.businessId),
-                  isNull(accounts.deletedAt)
-                ),
-              });
-              if (prepayAcct) {
-                const prepayNewBal = d(prepayAcct.currentBalance || "0").plus(prepaymentAmount);
-                await tx.insert(ledgerEntries).values({
-                  accountId: prepayAcct.id,
-                  transactionType: "bill_payment" as any,
-                  transactionId: paymentId,
-                  entryType: "debit",
-                  amount: prepaymentAmount.toFixed(2),
-                  balanceAfter: prepayNewBal.toFixed(2),
-                  entryDate: paymentDateStr,
-                  createdBy: enteredBy,
-                  description: `Supplier Overpayment (${input.reference || bill.description})`,
-                } as any).returning();
-                await tx.update(accounts).set({ currentBalance: prepayNewBal.toFixed(2) }).where(eq(accounts.id, prepayAcct.id));
-              }
-            }
-          }
-        }
-
-        const expenseNumber = `EXP-BP-${String(paymentId).padStart(6, "0")}`;
-        await tx.insert(expenses).values({
-          locationId: bill.locationId,
-          businessId: bill.businessId,
-          categoryId: resolvedCategoryId,
-          supplierId: bill.supplierId,
-          expenseNumber,
+      const result = await db.transaction(async (tx) => {
+        return payBill({
+          db: tx,
           billId: input.billId,
-          amount: input.amount,
-          description: `Bill Payment: ${input.reference || bill.description}`,
-          expenseDate: new Date(input.paymentDate),
           paymentMethod: input.paymentMethod,
-          accountId: cashAccountId ?? null,
+          amount: input.amount,
+          paymentDate: input.paymentDate,
+          reference: input.reference,
+          notes: input.notes,
+          accountId: input.accountId,
+          liabilityAccountId: input.liabilityAccountId,
+          categoryId: resolvedCategoryId,
           enteredBy,
-          refNo: bill.billNumber ?? `BILL-${String(bill.id).padStart(4, "0")}`,
-        } as any).returning();
+          businessId: bill.businessId!,
+          locationId: bill.locationId!,
+          supplierId: bill.supplierId,
+          billNumber: bill.billNumber,
+          description: bill.description,
+        });
       });
 
-      return { id: paymentId, newBalanceDue: newBalance.toFixed(2), status, success: true };
+      return { id: result.paymentId, newBalanceDue: result.newBalanceDue, status: result.status, success: true };
     }),
 
   delete: billCreate

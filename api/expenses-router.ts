@@ -8,6 +8,7 @@ import { notFutureDateString, optionalNotFutureDateString } from "./lib/future-d
 import { logAudit } from "./lib/audit";
 import { ensureSystemAccount } from "./lib/accounting-accounts";
 import { getExpenseAccountSubType } from "./lib/accounting-maps";
+import { payBill } from "./lib/bill-payment";
 import { reverseLedgerEntriesForTransaction } from "./lib/accounting-reversal";
 
 export const expenseItemInputSchema = z.object({
@@ -284,7 +285,7 @@ export const expensesRouter = createRouter({
       await db.transaction(async (tx) => {
         await tx.update(locations).set({ nextExpenseNumber: nextNum + 1 }).where(eq(locations.id, input.locationId));
 
-        if (input.supplierId) {
+        if (!input.billId && input.supplierId) {
           const sup = await tx.select().from(suppliers).where(eq(suppliers.id, input.supplierId)).limit(1);
           if (sup[0]) {
             const supplierBills = await tx.select().from(bills).where(
@@ -378,45 +379,21 @@ export const expensesRouter = createRouter({
                 await tx.update(accounts).set({ currentBalance: assetNewBal.toFixed(2) }).where(eq(accounts.id, input.assetAccountId));
               }
             } else if (input.billId) {
-              const apAccount = await tx.query.accounts.findFirst({
-                where: and(
-                  eq(accounts.accountSubType, "accounts_payable" as any),
-                  eq(accounts.businessId, businessId),
-                  isNull(accounts.deletedAt)
-                ),
+              await payBill({
+                db: tx,
+                billId: input.billId,
+                paymentMethod: input.paymentMethod,
+                amount: input.amount,
+                paymentDate: input.expenseDate,
+                reference: input.description,
+                accountId: accountId!,
+                categoryId: input.categoryId,
+                enteredBy: userId,
+                businessId,
+                locationId: input.locationId,
+                supplierId: input.supplierId,
+                skipExpenseCreation: true,
               });
-              const billRecord = await tx.select().from(bills).where(eq(bills.id, input.billId)).limit(1);
-              const billBalanceDue = d(billRecord[0]?.balanceDue || "0");
-              const paymentAmount = d(input.amount);
-              const apDebitAmount = paymentAmount.lte(billBalanceDue) ? paymentAmount : billBalanceDue;
-              const prepaymentAmount = d(input.amount).gt(billBalanceDue) ? d(input.amount).minus(billBalanceDue) : d(0);
-              if (apAccount && apAccount.id !== accountId && apDebitAmount.gt(0)) {
-                const apNewBal = d(apAccount.currentBalance || "0").minus(apDebitAmount);
-                await tx.insert(ledgerEntries).values({
-                  accountId: apAccount.id, transactionType: "bill_payment" as any, transactionId: expenseId,
-                  entryType: "debit", amount: apDebitAmount.toFixed(2), balanceAfter: apNewBal.toFixed(2),
-                  entryDate: new Date(input.expenseDate), createdBy: userId, refNo: expenseNumber,
-                } as any).returning();
-                await tx.update(accounts).set({ currentBalance: apNewBal.toFixed(2) }).where(eq(accounts.id, apAccount.id));
-              }
-              if (prepaymentAmount.gt(0)) {
-                const prepayAcct = await tx.query.accounts.findFirst({
-                  where: and(
-                    eq(accounts.accountCode, "1550"),
-                    eq(accounts.businessId, businessId),
-                    isNull(accounts.deletedAt)
-                  ),
-                });
-                if (prepayAcct) {
-                  const prepayNewBal = d(prepayAcct.currentBalance || "0").plus(prepaymentAmount);
-                  await tx.insert(ledgerEntries).values({
-                    accountId: prepayAcct.id, transactionType: "bill_payment" as any, transactionId: expenseId,
-                    entryType: "debit", amount: prepaymentAmount.toFixed(2), balanceAfter: prepayNewBal.toFixed(2),
-                    entryDate: new Date(input.expenseDate), createdBy: userId, refNo: expenseNumber,
-                  } as any).returning();
-                  await tx.update(accounts).set({ currentBalance: prepayNewBal.toFixed(2) }).where(eq(accounts.id, prepayAcct.id));
-                }
-              }
             } else {
               const category = await tx.select().from(expenseCategories).where(
                 and(eq(expenseCategories.id, input.categoryId), isNull(expenseCategories.deletedAt))
@@ -447,7 +424,7 @@ export const expensesRouter = createRouter({
           }
         }
 
-        if (input.supplierId) {
+        if (!input.billId && input.supplierId) {
           const sup = await tx.select().from(suppliers).where(eq(suppliers.id, input.supplierId)).limit(1);
           if (sup[0]) {
             const newPaid = d(sup[0].totalPaid).plus(d(input.amount));
@@ -456,18 +433,6 @@ export const expensesRouter = createRouter({
           }
         }
 
-        if (input.billId) {
-          const bill = await tx.select().from(bills).where(eq(bills.id, input.billId)).limit(1);
-          if (bill[0]) {
-            const currentPaid = d(bill[0].amountPaid);
-            const paymentAmount = d(input.amount);
-            const totalAmount = d(bill[0].amount);
-            const newPaid = currentPaid.plus(paymentAmount);
-            const newBalance = d(Math.max(0, totalAmount.minus(currentPaid).minus(paymentAmount).toNumber()));
-            const newStatus = newBalance.lte(0) ? "paid" : (newPaid.gt(0) ? "partial" : "pending");
-            await tx.update(bills).set({ amountPaid: newPaid.toFixed(2), balanceDue: newBalance.toFixed(2), status: newStatus }).where(eq(bills.id, input.billId));
-          }
-        }
       });
 
       return { id: expenseId, expenseNumber, success: true };
