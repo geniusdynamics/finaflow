@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Smartphone, Upload, ArrowUpRight, ArrowDownRight, Tag, Receipt, Wallet as WalletIcon, Landmark, Plus, Link2, BookOpen, LayoutDashboard } from "lucide-react";
 import { LocationSelector } from "@/components/LocationSelector";
+import { ExpenseCategorySelector } from "@/components/ExpenseCategorySelector";
 
 export function Wallet() {
   const { user } = useAuth();
@@ -474,14 +475,14 @@ export function Wallet() {
                                         <p className="text-xs text-[#8D8A87]">{txn.partyName} · {formatKES(amt.toFixed(2))}</p>
                                       </div>
                                       <div className="space-y-2">
-                                        <Label>Expense Category *</Label>
-                                        <select value={expenseForm.categoryId} onChange={(e) => setExpenseForm((p) => ({ ...p, categoryId: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" required>
-                                          <option value="">{categories && categories.length > 0 ? "Select category" : "Loading categories..."}</option>
-                                          {categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                        </select>
-                                        {categories && categories.length === 0 && (
-                                          <p className="text-xs text-[#D32F2F]">No categories found. Please create categories in the Expenses page first.</p>
-                                        )}
+                                      <ExpenseCategorySelector
+                                          categories={categories}
+                                          value={expenseForm.categoryId}
+                                          onChange={(v) => setExpenseForm((p) => ({ ...p, categoryId: v }))}
+                                          label="Expense Category *"
+                                          required
+                                          hint={categories && categories.length === 0 ? "No categories found. Please create categories in the Expenses page first." : undefined}
+                                        />
                                       </div>
                                       <div className="space-y-2">
                                         <Label>Description</Label>

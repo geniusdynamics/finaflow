@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Trash2, Receipt, Tag, Pencil, X, AlertCircle, Camera, FileText, Download, Printer, Wallet, TrendingUp, Filter, BookOpen, RotateCcw } from "lucide-react";
 import { LocationSelector } from "@/components/LocationSelector";
+import { ExpenseCategorySelector } from "@/components/ExpenseCategorySelector";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -413,17 +414,13 @@ export function Expenses() {
                   </div>
                   {!hasMultiCategoryItems && (
                     <div>
-                      <Label>Category {form.billId && selectedBill?.categoryId && <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span>}</Label>
-                      <select
-                        value={form.categoryIds[0] ?? ""}
-                        onChange={e => setForm(p => ({ ...p, categoryIds: e.target.value ? [parseInt(e.target.value)] : [] }))}
-                        className="w-full rounded border px-3 py-2 text-sm"
-                      >
-                        <option value="">{catsLoading ? "Loading..." : categories?.length ? "Select a category" : "No categories"}</option>
-                        {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                      {form.billId && selectedBill?.categoryId && <p className="mt-1 text-xs text-[#2E7D32]">Category from linked bill.</p>}
-                      {form.billId && !selectedBill?.categoryId && selectedSupplier?.autoCategoryId && <p className="mt-1 text-xs text-[#2E7D32]">Using supplier default.</p>}
+                      <ExpenseCategorySelector
+                        categories={categories}
+                        value={form.categoryIds[0]?.toString() ?? ""}
+                        onChange={v => setForm(p => ({ ...p, categoryIds: v ? [parseInt(v)] : [] }))}
+                        label={<>Category {form.billId && selectedBill?.categoryId && <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span>}</>}
+                        hint={form.billId ? (selectedBill?.categoryId ? "Category from linked bill." : (selectedSupplier?.autoCategoryId ? "Using supplier default." : undefined)) : undefined}
+                      />
                     </div>
                   )}
                 </div>

@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased] — Unified ExpenseCategorySelector Component
+
+### Added
+- **`ExpenseCategorySelector` component** ([src/components/ExpenseCategorySelector.tsx](file:///d:/DevCenter/abuilds/fina/finaflow/src/components/ExpenseCategorySelector.tsx)) — Reusable UI component modeled after `LocationSelector` for centralized expense category selection. Features:
+  - Auto-selects the single category when only one exists
+  - Accepts `categories`, `value`, `onChange`, `label`, `hint`, `required`, `disabled`, `placeholder` props
+  - `label` prop supports `ReactNode` for rich labels (e.g., hint text next to label)
+
+### Changed
+- **Bills.tsx** — Replaced 3 inline `<select>` category selectors (main bill form, recurring bill, bill line item) with `<ExpenseCategorySelector>`
+- **Expenses.tsx** — Replaced inline `<select>` category selector with `<ExpenseCategorySelector>`, preserving bill-linked category hint behavior
+- **Suppliers.tsx** — Replaced inline `<select>` category selector in Add Bill dialog with `<ExpenseCategorySelector>`
+- **Wallet.tsx** — Replaced inline `<select>` category selector in Tag Transaction dialog with `<ExpenseCategorySelector>`
+
 ## [Unreleased] — Location Selector Consolidation + Add Bill Unification + Pay Supplier
 
 ### Added

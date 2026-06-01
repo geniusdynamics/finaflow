@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, CreditCard, AlertTriangle, CheckCircle, Clock, Trash2, Package, Search, Camera, Calendar, Repeat, FileText, RotateCcw, OctagonX } from "lucide-react";
 import { LocationSelector } from "@/components/LocationSelector";
+import { ExpenseCategorySelector } from "@/components/ExpenseCategorySelector";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -255,7 +256,7 @@ export function Bills() {
                        />
                     </div>
                     <div><Label>Description</Label><Input value={recForm.description} onChange={e => setRecForm(p => ({...p, description: e.target.value}))} placeholder="e.g. Rent, License" required /></div>
-                    <div><Label>Default Category</Label><select value={recForm.categoryId} onChange={e => setRecForm(p => ({...p, categoryId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Optional</option>{categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                    <div><Label>Default Category</Label><ExpenseCategorySelector categories={categories} value={recForm.categoryId} onChange={v => setRecForm(p => ({...p, categoryId: v}))} placeholder="Optional" /></div>
                     <div className="grid grid-cols-2 gap-3"><div><Label>Amount</Label><Input type="number" step="0.01" value={recForm.amount} onChange={e => setRecForm(p => ({...p, amount: e.target.value}))} required /></div><div><Label>Frequency</Label><select value={recForm.frequency} onChange={e => setRecForm(p => ({...p, frequency: e.target.value as any}))} className="w-full rounded border px-3 py-2 text-sm"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div></div>
                     <div><Label>Next Due</Label><Input type="date" value={recForm.nextDueDate} onChange={e => setRecForm(p => ({...p, nextDueDate: e.target.value}))} required /></div>
                     <Button type="submit" className="w-full bg-[#C73E1D]" disabled={createRecurring.isPending}>{createRecurring.isPending ? "Saving..." : "Add Recurring"}</Button>
@@ -276,7 +277,7 @@ export function Bills() {
                         required
                       />
                     </div><div><Label>Supplier</Label><select value={form.supplierId} onChange={e => setForm(p => ({...p, supplierId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Optional</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div></div>
-                    <div><Label>Category</Label><select value={form.categoryId} onChange={e => setForm(p => ({...p, categoryId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Use supplier/default logic</option>{categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                    <div><Label>Category</Label><ExpenseCategorySelector categories={categories} value={form.categoryId} onChange={v => setForm(p => ({...p, categoryId: v}))} placeholder="Use supplier/default logic" /></div>
                     <div><Label>Description</Label><Input value={form.description} onChange={e => setForm(p => ({...p, description: e.target.value}))} required /></div>
                     <div className="grid grid-cols-2 gap-3">
                       <div><Label>Bill Number <span className="text-[#8D8A87] font-normal">(optional)</span></Label><Input value={form.billNumber} onChange={e => setForm(p => ({...p, billNumber: e.target.value}))} placeholder="Auto: BILL-0001" /></div>
@@ -453,7 +454,7 @@ export function Bills() {
                   <div className="grid grid-cols-4 gap-2 items-end">
                     <div><Label className="text-xs">Qty</Label><Input type="number" step="0.001" value={itemForm.quantity} onChange={e => setItemForm(p => ({...p, quantity: e.target.value}))} required /></div>
                     <div><Label className="text-xs">Unit Price</Label><Input type="number" step="0.01" value={itemForm.unitPrice} onChange={e => setItemForm(p => ({...p, unitPrice: e.target.value}))} required /></div>
-                    <div><Label className="text-xs">Category</Label><select value={itemForm.categoryId} onChange={e => setItemForm(p => ({...p, categoryId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Select</option>{categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                    <div><Label className="text-xs">Category</Label><ExpenseCategorySelector categories={categories} value={itemForm.categoryId} onChange={v => setItemForm(p => ({...p, categoryId: v}))} placeholder="Select" /></div>
                     <Button type="submit" className="bg-[#C73E1D]" disabled={addItem.isPending}><Plus className="h-4 w-4"/></Button>
                   </div>
                   {matchedMasterItem && (

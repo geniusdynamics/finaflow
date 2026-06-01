@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Users, Phone, Mail, CreditCard, TrendingDown, AlertTriangle, FileText, TrendingUp, Search, Trash2, Target, Package, CheckCircle, OctagonX } from "lucide-react";
 import { LocationSelector } from "@/components/LocationSelector";
+import { ExpenseCategorySelector } from "@/components/ExpenseCategorySelector";
 import { toast } from "sonner";
 
 const PAYMENT_METHOD_ACCOUNT_TYPES: Record<string, string[]> = {
@@ -392,7 +393,7 @@ export function Suppliers() {
                   <option value={billForm.supplierId}>{suppliers?.find(s => s.id === billForm.supplierId)?.name}</option>
                 </select>
               </div></div>
-              <div><Label>Category</Label><select value={billForm.categoryId} onChange={e => setBillForm(p => ({...p, categoryId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Use supplier/default logic</option>{categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+              <div><Label>Category</Label><ExpenseCategorySelector categories={categories} value={billForm.categoryId} onChange={v => setBillForm(p => ({...p, categoryId: v}))} placeholder="Use supplier/default logic" /></div>
               <div><Label>Description</Label><Input value={billForm.description} onChange={e => setBillForm(p => ({ ...p, description: e.target.value }))} required /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Bill Number <span className="text-[#8D8A87] font-normal">(optional)</span></Label><Input value={billForm.billNumber} onChange={e => setBillForm(p => ({ ...p, billNumber: e.target.value }))} placeholder="Auto: BILL-0001" /></div>
