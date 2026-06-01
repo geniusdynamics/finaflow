@@ -334,11 +334,9 @@ export async function checkUserLimit(businessId: number, requestedCount: number 
   const db = getDb();
   const [biz] = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
   if (!biz) return false;
-  const maxUsers = biz.maxUsers ?? 1;
-  const current = await db.select({ count: sql<number>`COUNT(*)` }).from(userBusinesses)
-    .where(and(eq(userBusinesses.businessId, businessId), eq(userBusinesses.isActive, true)));
-  const currentCount = current[0]?.count ?? 0;
-  return currentCount + requestedCount <= maxUsers;
+  const { checkUserLimitForAccount } = await import("./lib/account-subscriptions");
+  const result = await checkUserLimitForAccount(db, biz.accountId, businessId, biz.accountRefId, requestedCount);
+  return result.allowed;
 }
 
 export const authedQuery = t.procedure.use(requireAuth);

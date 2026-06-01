@@ -43,7 +43,7 @@ async function createAuthedCaller(token: string) {
       ...userRecord,
       currentBusiness,
       businessIds: bizIds,
-      allocationRightsProfile: null as any,
+      allocationRightsProfile: null,
       accessSource: "owned" as const,
     },
   };

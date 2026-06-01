@@ -46,7 +46,7 @@ async function seedBusiness(accountId: string, overrides?: Partial<typeof busine
     subscriptionStatus,
     subscriptionExpiry,
     isActive: true,
-  } as any).returning();
+  } satisfies typeof customerAccounts.$inferInsert).returning();
 
   const [business] = await db.insert(businesses).values({
     accountId,
@@ -61,7 +61,7 @@ async function seedBusiness(accountId: string, overrides?: Partial<typeof busine
     subscriptionExpiry,
     isActive: true,
     ...overrides,
-  } as any).returning();
+  } satisfies typeof businesses.$inferInsert).returning();
 
   const [user] = await db.insert(users).values({
     name: `${accountId} Owner`,
@@ -72,21 +72,37 @@ async function seedBusiness(accountId: string, overrides?: Partial<typeof busine
     currentBusinessId: business.id!,
     accountId,
     accountRefId: account.id,
-  } as any).returning();
+  } satisfies typeof users.$inferInsert).returning();
 
   await db.insert(userBusinesses).values({
     userId: user.id,
     businessId: business.id,
     role: "owner",
     isActive: true,
-  } as any);
+  } satisfies typeof userBusinesses.$inferInsert);
 
   return { account, business, user };
 }
 
+interface CallerUser {
+  id: number;
+  role: string;
+  currentBusinessId: number;
+  accountId: string;
+  accountRefId: number | null;
+  currentBusiness: typeof businesses.$inferSelect;
+  businessIds: number[];
+}
+
+interface CallerContext {
+  req: Request;
+  resHeaders: Headers;
+  user: CallerUser;
+}
+
 function createAuthedCaller(
   user: { id: number; role: string; currentBusinessId: number; accountId: string; accountRefId: number | null },
-  business: any,
+  business: typeof businesses.$inferSelect,
 ) {
   return appRouter.createCaller({
     req: new Request("http://localhost/api/trpc/businesses.myTier"),
@@ -96,7 +112,7 @@ function createAuthedCaller(
       currentBusiness: business,
       businessIds: [business.id],
     },
-  } as any);
+  } as CallerContext);
 }
 
 describe("Subscription lifecycle", () => {
@@ -177,7 +193,7 @@ describe("Subscription lifecycle", () => {
       name: "Visa Card",
       code: "CARD",
       isActive: true,
-    } as any);
+    } satisfies typeof paymentMethods.$inferInsert);
 
     const result = await processTrialLifecycle(db, new Date());
     expect(result.activated).toBe(1);
