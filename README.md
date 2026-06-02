@@ -1,6 +1,6 @@
 # FinaFlow
 
-Business cashflow management platform built for African small and medium enterprises. Track daily sales, manage expenses, process payroll, handle M-Pesa payments, and generate real-time financial reports — all in one place.
+Business cashflow management platform built for African small and medium enterprises. Track daily sales, manage expenses, process payroll, handle M-Pesa and Mobile wallet payments, and generate real-time financial reports — all in one place.
 
 ## Features
 
@@ -15,29 +15,6 @@ Business cashflow management platform built for African small and medium enterpr
 - **Role-based Access Control** — Granular permissions (32 permissions, 5 roles)
 - **Subscriptions** — Account subscription management with usage enforcement
 
-## Screenshots
-
-### Dashboard Overview
-![Dashboard Overview](resources/cashflow%20dash.png)
-
-### Accounts Management
-![Accounts Management](resources/accounts.png)
-
-### Bills & Payables
-![Bills & Payables](resources/bills.png)
-
-### Expenses Management
-![Expenses Management](resources/expenses.png)
-
-### Transactions
-![Transactions](resources/transactions.png)
-
-### Reports & Analytics
-![Reports & Analytics](resources/reports.png)
-
-### Budget Planning
-![Budget Planning](resources/budget.png)
-
 ## Tech Stack
 
 | Layer | Technology |
@@ -47,119 +24,48 @@ Business cashflow management platform built for African small and medium enterpr
 | **Database** | PostgreSQL 16, Drizzle ORM |
 | **Auth** | JWT (httpOnly cookies), bcrypt, CSRF protection |
 | **Testing** | Vitest, Playwright, MSW |
-| **Build** | Vite, esbuild |
+| **Build** | Vite, esbuild, Docker |
 
 ## Prerequisites
 
-- **Node.js 20+** — `node --version`
-- **PostgreSQL 16+** — `psql --version`
-- **npm** — `npm --version`
-- **OpenSSL** *(Windows only)* — required by Portless (HTTPS dev server)
-
-### Windows OpenSSL Note
-
-Portless needs `openssl.exe` on PATH for local HTTPS certificates. Install from [slproweb.com/products/Win32OpenSSL.html](https://slproweb.com/products/Win32OpenSSL.html).
-
-The dev script (`scripts/dev.cmd`) wires the paths automatically:
-- Binary: `C:\Program Files\OpenSSL-Win64\bin\openssl.exe`
-- Config: `C:\Program Files\OpenSSL-Win64\bin\cnf\openssl.cnf`
-
-If you don't want to install OpenSSL, use `npm run dev:app` instead (HTTP only).
+- Node.js 20+
+- PostgreSQL 16+
+- npm
 
 ## Quick Start
 
-### 1. Clone and install
-
-```bash
-git clone <repo-url>
-cd finaflow
-npm install
-```
-
-### 2. Set up environment
+### Using Docker Compose (recommended)
 
 ```bash
 cp .env.example .env
-```
-
-Edit `.env` with these required values:
-
-| Variable | Required | Example | Purpose |
-|----------|----------|---------|---------|
-| `DATABASE_URL` | ✅ | `postgresql://postgres:pass@localhost:5432/finaflow_dev` | PostgreSQL connection |
-| `APP_ID` | ✅ | `finaflow-dev` | Application identifier |
-| `APP_SECRET` | ✅ | `a-strong-32-char-random-secret` | JWT signing secret |
-
-### 3. Create the database
-
-```bash
-createdb -U postgres finaflow_dev
-```
-
-Or via psql:
-
-```bash
-psql -U postgres -c "CREATE DATABASE finaflow_dev;"
-```
-
-### 4. Run migrations
-
-```bash
-npm run db:migrate:run
-```
-
-This applies all migration files from `db/migrations/` in sequence. Creates **61 tables**, **27 enum types**, indexes, and **19 foreign key constraints**.
-
-### 5. Seed demo data
-
-```bash
-node db/seed-demo.cjs
-```
-
-Creates a complete demo environment with realistic data:
-
-| Data | Details |
-|------|---------|
-| Business | 1 restaurant business, 2 branches |
-| Accounts | M-PESA till, cash drawers, bank accounts (12 total) |
-| Payment methods | Cash, M-PESA, Bank Transfer — linked to branches and accounts |
-| Daily sales | 72 days of sales data across both branches |
-| Expenses | Supplier-linked expense records |
-| Suppliers | 15 realistic suppliers |
-| Employees | 5 employees with salary structures |
-| Payroll | 3 periods, 15 payroll entries with full tax calculations |
-| Budgets | 6 categories × 3 months |
-| Ledger | 107 entries tracking all money movement |
-| M-PESA | 15 transaction records |
-
-Log in after seeding with the credentials shown in the script output.
-
-### 6. Start the dev server
-
-**With HTTPS (recommended):**
-
-```bash
-npm run dev
-```
-
-First run generates a local CA certificate — accept the prompt to trust it.
-
-**Without HTTPS:**
-
-```bash
+docker compose up -d
+npm run db:migrate
 npm run dev:app
 ```
 
-### 7. Open the app
+### Manual Setup
 
-The app will be available at:
+```bash
+# 1. Clone and install dependencies
+git clone <repo-url>
+cd finaflow
+npm install
 
-| URL | Mode |
-|-----|------|
-| `https://finaflow.localhost` | Portless (HTTPS) |
-| `http://localhost:5173` | Direct Vite |
+# 2. Set up environment
+cp .env.example .env
+# Edit .env and set your DATABASE_URL
 
-Log in with the demo credentials from the seeder output and explore the Dashboard, Sales, Expenses, Payroll, Reports, and other modules.
+# 3. Create the database
+createdb finaflow_dev
+
+# 4. Run database migrations
+npm run db:migrate
+
+# 5. Start development servers
+npm run dev
+```
+
+The app will be available at `https://finaflow.localhost` (with Portless) or `http://localhost:5173`.
 
 ## Available Scripts
 
@@ -174,33 +80,10 @@ Log in with the demo credentials from the seeder output and explore the Dashboar
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run lint` | Lint all files with ESLint |
 | `npm run format` | Format all files with Prettier |
-| `npm run check` | TypeScript type-check (`tsc -b`) |
-| `npm run db:generate` | Generate new Drizzle migration from schema changes |
-| `npm run db:migrate:run` | Apply pending migrations using the custom runner |
-| `npm run db:push` | Push schema directly to DB (dev only, no migration files) |
-
-## Seeding Options
-
-There are three seed scripts for different purposes:
-
-| Script | Command | What it creates |
-|--------|---------|----------------|
-| **Full demo** | `node db/seed-demo.cjs` | Complete demo business with all data (recommended for testing) |
-| **Minimal seed** | `npx tsx db/seed.ts` | Basic locations, accounts, categories, suppliers |
-| **Accounting COA** | `npx tsx db/seed-accounting.ts` | Full chart of accounts with GL classification |
-
-## Common Issues
-
-| Symptom | Likely Cause | Fix |
-|---------|-------------|-----|
-| `DATABASE_URL is not set` | Missing or incomplete `.env` | `cp .env.example .env` and fill in values |
-| `ECONNREFUSED :5432` | PostgreSQL not running | Start PostgreSQL service or check `pg_isready` |
-| `relation "accounts" does not exist` | Migrations not run | `npm run db:migrate:run` |
-| `openssl: command not found` *(Windows)* | OpenSSL not on PATH | Install OpenSSL or use `npm run dev:app` |
-| Port 3000 in use | Another process on that port | Kill the process or set `PORT` env var |
-| `Cannot find module 'tsx'` | Dependencies not installed | `npm install` |
-| CORS errors in browser | `APP_URL` mismatch | Set `APP_URL` to match your browser URL |
-| Portless fails to start | CA certificate not trusted | Run `npx portless trust` or use `npm run dev:app` |
+| `npm run check` | Type-check with TypeScript |
+| `npm run db:generate` | Generate a new Drizzle migration |
+| `npm run db:migrate` | Apply pending migrations |
+| `npm run db:push` | Push schema changes directly (dev only) |
 
 ## Project Structure
 
@@ -227,17 +110,13 @@ resources/        Screenshots and design documents
 
 Key configuration is documented in `.env.example`. Essential variables:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | — | PostgreSQL connection string |
-| `APP_ID` | — | Application identifier |
-| `APP_SECRET` | — | JWT signing secret |
-| `APP_URL` | `http://localhost:5173` | Frontend URL for CORS |
-| `BCRYPT_ROUNDS` | `12` | Password hashing cost factor |
-| `NHIF_RATE` | `2.75` | NHIF/SHIF contribution rate (%) |
-| `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window in ms |
-| `RATE_LIMIT_MAX_LOGIN` | `10` | Max login attempts per window |
-| `RATE_LIMIT_MAX_API` | `100` | Max API requests per window |
+| Variable | Description |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection string |
+| `APP_ID` | Application identifier |
+| `APP_SECRET` | JWT signing secret |
+| `KIMI_AUTH_URL` | OAuth server URL |
+| `BCRYPT_ROUNDS` | Password hashing cost factor |
 
 ## Contributing
 

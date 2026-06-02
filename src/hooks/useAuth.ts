@@ -11,16 +11,13 @@ export interface AuthUser {
   isActive: boolean;
   userType: string | null;
   currentBusinessId: number | null;
-  currentBusiness: any | null;
+  currentBusiness: { id: number; name: string; slug: string } | null;
   businessIds: number[];
   businessRole: string;
   accountId: string | null;
 }
 
-let csrfTokenFromResponse: string | null = null;
-
 export function setCsrfFromResponse(token: string | null) {
-  csrfTokenFromResponse = token;
   setCsrfToken(token);
 }
 

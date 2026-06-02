@@ -27,6 +27,24 @@ type SeededContext = {
   location: { id: number };
 };
 
+type Row = { id: number };
+
+interface CallerUser {
+  id: number;
+  role: string;
+  currentBusinessId: number;
+  accountId: string;
+  accountRefId: number | null;
+  currentBusiness: { id: number; accountId: string; accountRefId: number | null; plan: string; maxBranches: number | null; maxUsers: number | null; features: unknown };
+  businessIds: number[];
+}
+
+interface CallerContext {
+  req: Request;
+  resHeaders: Headers;
+  user: CallerUser;
+}
+
 async function seedAccountingContext(seed: string): Promise<SeededContext> {
   const db = getTestDb();
   const accountId = `JRN-${seed}`;
@@ -39,7 +57,7 @@ async function seedAccountingContext(seed: string): Promise<SeededContext> {
     maxBranches: 5,
     maxUsers: 10,
     isActive: true,
-  } as any).returning();
+  } satisfies typeof businesses.$inferInsert).returning();
 
   const [user] = await db.insert(users).values({
     username: `owner-jrn-${seed.toLowerCase()}`,
@@ -48,21 +66,21 @@ async function seedAccountingContext(seed: string): Promise<SeededContext> {
     isActive: true,
     currentBusinessId: business.id,
     accountId,
-  } as any).returning();
+  } satisfies typeof users.$inferInsert).returning();
 
   await db.insert(userBusinesses).values({
     userId: user.id,
     businessId: business.id,
     role: "owner",
     isActive: true,
-  } as any);
+  } satisfies typeof userBusinesses.$inferInsert);
 
   const [location] = await db.insert(locations).values({
     businessId: business.id,
     name: `Sales Branch ${seed}`,
     slug: `sales-branch-${seed.toLowerCase()}`,
     isActive: true,
-  } as any).returning();
+  } satisfies typeof locations.$inferInsert).returning();
 
   return {
     accountId,
@@ -140,7 +158,7 @@ function createCaller(ctx: SeededContext) {
       currentBusiness: ctx.business,
       businessIds: [ctx.business.id],
     },
-  } as any);
+  } as CallerContext);
 }
 
 describe("journal router and daily sales posting", () => {
@@ -171,8 +189,8 @@ describe("journal router and daily sales posting", () => {
       accountSubType: "cash",
       currentBalance: "0.00",
       openingBalance: "0.00",
-    } as any).returning();
-    const [debitAccount] = debitRows as any[];
+    } satisfies typeof accounts.$inferInsert).returning();
+    const [debitAccount] = debitRows as Row[];
 
     const creditRows = await db.insert(accounts).values({
       businessId: ctx.business.id,
@@ -183,8 +201,8 @@ describe("journal router and daily sales posting", () => {
       accountSubType: "sales_revenue",
       currentBalance: "0.00",
       openingBalance: "0.00",
-    } as any).returning();
-    const [creditAccount] = creditRows as any[];
+    } satisfies typeof accounts.$inferInsert).returning();
+    const [creditAccount] = creditRows as Row[];
 
     const entry = await caller.journal.create({
       businessId: ctx.business.id,
@@ -231,8 +249,8 @@ describe("journal router and daily sales posting", () => {
       accountSubType: "sales_revenue",
       currentBalance: "0.00",
       openingBalance: "0.00",
-    } as any).returning();
-    const [revenueAccount] = revenueRows as any[];
+    } satisfies typeof accounts.$inferInsert).returning();
+    const [revenueAccount] = revenueRows as Row[];
 
     const cashMethod = await caller.paymentMethods.create({
       name: "Cash",

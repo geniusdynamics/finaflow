@@ -51,6 +51,7 @@ async function ensureTestDatabase(): Promise<void> {
   // "42P04" (duplicate_database) and any "duplicate key" errors.
   try {
     await adminPool.query('CREATE DATABASE "finaflow_test"');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (error: any) {
     const msg = (error?.message ?? "").toLowerCase();
     const isDupDb = error?.code === "42P04" || msg.includes("already exists") || msg.includes("duplicate key");
@@ -94,7 +95,7 @@ async function ensureTestDatabase(): Promise<void> {
       import.meta.dirname,
       "../../db/migrations/0001_misty_mulholland_black.sql",
     );
-    let migration1Sql = fs.readFileSync(migration1Path, "utf8").replaceAll("--> statement-breakpoint", "");
+    const migration1Sql = fs.readFileSync(migration1Path, "utf8").replaceAll("--> statement-breakpoint", "");
     const migration1Statements = migration1Sql.split(";").filter((s) => s.trim());
     for (const stmt of migration1Statements) {
       try {
@@ -109,7 +110,7 @@ async function ensureTestDatabase(): Promise<void> {
       import.meta.dirname,
       "../../db/migrations/0002_add_currency_columns.sql",
     );
-    let migration2Sql = fs.readFileSync(migration2Path, "utf8").replaceAll("--> statement-breakpoint", "");
+    const migration2Sql = fs.readFileSync(migration2Path, "utf8").replaceAll("--> statement-breakpoint", "");
     const migration2Statements = migration2Sql.split(";").filter((s) => s.trim());
     for (const stmt of migration2Statements) {
       try {
@@ -124,7 +125,7 @@ async function ensureTestDatabase(): Promise<void> {
       import.meta.dirname,
       "../../db/migrations/0004_add_wallet_account_type.sql",
     );
-    let migration4Sql = fs.readFileSync(migration4Path, "utf8").replaceAll("--> statement-breakpoint", "");
+    const migration4Sql = fs.readFileSync(migration4Path, "utf8").replaceAll("--> statement-breakpoint", "");
     const migration4Statements = migration4Sql.split(";").filter((s) => s.trim());
     for (const stmt of migration4Statements) {
       try {

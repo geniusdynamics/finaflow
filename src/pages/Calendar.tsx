@@ -28,8 +28,8 @@ export function Calendar() {
     setSearchParams(newSection === "calendar" ? {} : { section: newSection });
   };
 
-  const today = getLocalDateString();
-  const futureDate = getLocalDateString(new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000));
+  const [today] = useState(() => getLocalDateString());
+  const [futureDate] = useState(() => getLocalDateString(new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000)));
 
   const { data: sales } = trpc.dailySales.list.useQuery({});
   const { data: expenses } = trpc.expenses.list.useQuery({});
@@ -88,7 +88,7 @@ export function Calendar() {
             <p className="mt-1 text-sm text-[#8D8A87]">All financial events and upcoming bills</p>
           </div>
           <div className="flex items-center gap-2">
-            <select value={view} onChange={(e) => setView(e.target.value as any)} className="rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26]">
+            <select value={view} onChange={(e) => setView(e.target.value as "all" | "bills" | "sales" | "payroll")} className="rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26]">
               <option value="all">All Events</option><option value="bills">Bills Only</option><option value="sales">Sales Only</option><option value="payroll">Payroll Only</option>
             </select>
             <select value={daysAhead} onChange={(e) => setDaysAhead(Number(e.target.value))} className="rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26]">
@@ -136,29 +136,30 @@ export function Calendar() {
               <div className="space-y-2">
                 {allEvents.filter((e) => e.type === "bill").slice(0, 15).map((event) => {
                   const daysUntil = Math.ceil((new Date(event.date).getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24));
+                  const billEvent = event as { isOverdue?: boolean; status?: string };
                   return (
                     <div key={`bill-${event.id}`} className={`flex items-center gap-3 rounded-lg border p-3 ${
-                      (event as any).isOverdue ? "border-[#D32F2F] bg-[#D32F2F]/5" :
+                      billEvent.isOverdue ? "border-[#D32F2F] bg-[#D32F2F]/5" :
                       event.priority === 2 ? "border-[#ED6C02] bg-[#ED6C02]/5" :
                       "border-[#E8E0D8] bg-white"
                     }`}>
                       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-                        (event as any).isOverdue ? "bg-[#D32F2F]/10" :
+                        billEvent.isOverdue ? "bg-[#D32F2F]/10" :
                         event.priority === 2 ? "bg-[#ED6C02]/10" :
                         "bg-[#8D8A87]/10"
                       }`}>
-                        {(event as any).isOverdue ? <AlertTriangle className="h-5 w-5 text-[#D32F2F]" /> :
+                        {billEvent.isOverdue ? <AlertTriangle className="h-5 w-5 text-[#D32F2F]" /> :
                          event.priority === 2 ? <Clock className="h-5 w-5 text-[#ED6C02]" /> :
                          <FileText className="h-5 w-5 text-[#8D8A87]" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
-                            (event as any).isOverdue ? "bg-[#D32F2F]/10 text-[#D32F2F]" :
+                            billEvent.isOverdue ? "bg-[#D32F2F]/10 text-[#D32F2F]" :
                             event.priority === 2 ? "bg-[#ED6C02]/10 text-[#ED6C02]" :
-                            (event as any).status === "partial" ? "bg-[#D4A854]/10 text-[#D4A854]" :
+                            billEvent.status === "partial" ? "bg-[#D4A854]/10 text-[#D4A854]" :
                             "bg-[#8D8A87]/10 text-[#8D8A87]"
-                          }`}>{(event as any).isOverdue ? "OVERDUE" : event.priority === 2 ? "DUE SOON" : (event as any).status === "partial" ? "PARTIAL" : "UPCOMING"}</span>
+                          }`}>{billEvent.isOverdue ? "OVERDUE" : event.priority === 2 ? "DUE SOON" : billEvent.status === "partial" ? "PARTIAL" : "UPCOMING"}</span>
                           <span className="text-xs text-[#8D8A87]">{formatDate(event.date)} · {daysUntil <= 0 ? "Today" : `${daysUntil} days`}</span>
                         </div>
                         <p className="mt-1 truncate text-sm font-medium text-[#2D2A26]">{event.title}</p>
@@ -178,7 +179,6 @@ export function Calendar() {
         {/* All Events Timeline */}
         <div className="space-y-6">
           {Object.entries(grouped).map(([month, monthEvents]) => {
-            const monthTotal = monthEvents.reduce((sum, e) => sum + parseFloat(e.amount || "0"), 0);
             const monthIncome = monthEvents.filter(e => e.type === "sale").reduce((sum, e) => sum + parseFloat(e.amount || "0"), 0);
             const monthOutflow = monthEvents.filter(e => e.type === "expense" || e.type === "bill").reduce((sum, e) => sum + parseFloat(e.amount || "0"), 0);
             return (
@@ -192,18 +192,20 @@ export function Calendar() {
                 </div>
               </div>
               <div className="space-y-2">
-                {monthEvents.map((event) => (
+                {monthEvents.map((event) => {
+                  const billEvent = event as { isOverdue?: boolean; status?: string };
+                  return (
                   <Card key={`${event.type}-${event.id}`} className="border-[#E8E0D8] bg-white">
                     <CardContent className="flex items-center gap-4 p-4">
                       <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
                         event.type === "sale" ? "bg-[#2E7D32]/10" :
                         event.type === "expense" ? "bg-[#D32F2F]/10" :
-                        event.type === "bill" ? (event as any).isOverdue ? "bg-[#D32F2F]/10" : event.priority >= 2 ? "bg-[#ED6C02]/10" : "bg-[#8D8A87]/10" :
+                        event.type === "bill" ? billEvent.isOverdue ? "bg-[#D32F2F]/10" : event.priority >= 2 ? "bg-[#ED6C02]/10" : "bg-[#8D8A87]/10" :
                         "bg-[#D4A854]/10"
                       }`}>
                         {event.type === "sale" ? <Receipt className="h-5 w-5 text-[#2E7D32]" /> :
                          event.type === "expense" ? <TrendingDown className="h-5 w-5 text-[#D32F2F]" /> :
-                         event.type === "bill" ? (event as any).isOverdue ? <AlertTriangle className="h-5 w-5 text-[#D32F2F]" /> : <FileText className="h-5 w-5 text-[#ED6C02]" /> :
+                         event.type === "bill" ? billEvent.isOverdue ? <AlertTriangle className="h-5 w-5 text-[#D32F2F]" /> : <FileText className="h-5 w-5 text-[#ED6C02]" /> :
                          <Landmark className="h-5 w-5 text-[#D4A854]" />}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -211,16 +213,16 @@ export function Calendar() {
                           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${
                             event.type === "sale" ? "bg-[#2E7D32]/10 text-[#2E7D32]" :
                             event.type === "expense" ? "bg-[#D32F2F]/10 text-[#D32F2F]" :
-                            event.type === "bill" && (event as any).isOverdue ? "bg-[#D32F2F]/10 text-[#D32F2F]" :
+                            event.type === "bill" && billEvent.isOverdue ? "bg-[#D32F2F]/10 text-[#D32F2F]" :
                             event.type === "bill" && event.priority >= 2 ? "bg-[#ED6C02]/10 text-[#ED6C02]" :
-                            event.type === "bill" && (event as any).status === "partial" ? "bg-[#D4A854]/10 text-[#D4A854]" :
+                            event.type === "bill" && billEvent.status === "partial" ? "bg-[#D4A854]/10 text-[#D4A854]" :
                             event.type === "bill" ? "bg-[#8D8A87]/10 text-[#8D8A87]" :
                             "bg-[#D4A854]/10 text-[#D4A854]"
                           }`}>{event.type}</span>
                           <span className="text-xs text-[#8D8A87]">{formatDate(event.date)}</span>
-                          {(event as any).isOverdue && <span className="text-xs font-bold text-[#D32F2F]">OVERDUE</span>}
-                          {event.priority === 2 && !(event as any).isOverdue && <span className="text-xs font-bold text-[#ED6C02]">DUE SOON</span>}
-                          {(event as any).status === "partial" && !(event as any).isOverdue && event.priority !== 2 && <span className="text-xs font-bold text-[#D4A854]">PARTIAL</span>}
+                          {billEvent.isOverdue && <span className="text-xs font-bold text-[#D32F2F]">OVERDUE</span>}
+                          {event.priority === 2 && !billEvent.isOverdue && <span className="text-xs font-bold text-[#ED6C02]">DUE SOON</span>}
+                          {billEvent.status === "partial" && !billEvent.isOverdue && event.priority !== 2 && <span className="text-xs font-bold text-[#D4A854]">PARTIAL</span>}
                         </div>
                         <p className="mt-1 truncate text-sm font-medium text-[#2D2A26]">{event.title}</p>
                       </div>
@@ -233,7 +235,8 @@ export function Calendar() {
                       )}
                     </CardContent>
                   </Card>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );})}

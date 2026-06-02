@@ -33,7 +33,6 @@ import {
   purchaseOrders,
   purchaseOrderItems,
   recurringBillTemplates,
-  dailyMpesaLedger,
 } from "@db/schema";
 import {
   resetBusinessTransactions,
@@ -44,7 +43,7 @@ import {
 // ─── Test Utilities ──────────────────────────────────────────────────────────
 
 // Helper to handle the union return type of drizzle .returning()
-async function firstRow<T>(promise: Promise<any>): Promise<T> {
+async function firstRow<T>(promise: Promise<unknown>): Promise<T> {
   const result = await promise;
   const rows = Array.isArray(result) ? result : [];
   return rows[0] as T;
@@ -79,7 +78,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     slug: `reset-${seed.toLowerCase()}`,
     plan: "pro",
     isActive: true,
-  } as any).returning());
+  } satisfies typeof businesses.$inferInsert).returning());
 
   const owner = await firstRow<typeof users.$inferSelect>(db.insert(users).values({
     username: `owner-${seed.toLowerCase()}`,
@@ -87,14 +86,14 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     isActive: true,
     currentBusinessId: business.id,
     accountId,
-  } as any).returning());
+  } satisfies typeof users.$inferInsert).returning());
 
   await db.insert(userBusinesses).values({
     userId: owner.id,
     businessId: business.id,
     role: "owner",
     isActive: true,
-  } as any);
+  } satisfies typeof userBusinesses.$inferInsert);
 
   const location = await firstRow<typeof locations.$inferSelect>(db.insert(locations).values({
     businessId: business.id,
@@ -103,7 +102,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     isActive: true,
     nextBillNumber: 19,
     nextExpenseNumber: 27,
-  } as any).returning());
+  } satisfies typeof locations.$inferInsert).returning());
 
   // Create operational (user) account
   const opAccount = await firstRow<typeof accounts.$inferSelect>(db.insert(accounts).values({
@@ -114,7 +113,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     currentBalance: "450.00",
     openingBalance: "100.00",
     isActive: true,
-  } as any).returning());
+  } satisfies typeof accounts.$inferInsert).returning());
 
   // Create system account
   const sysAccount = await firstRow<typeof accounts.$inferSelect>(db.insert(accounts).values({
@@ -129,7 +128,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     systemKey: "expense:operating_expense",
     isSystemGenerated: true,
     isActive: true,
-  } as any).returning());
+  } satisfies typeof accounts.$inferInsert).returning());
 
   // Create expense category (accounts must exist first due to FK constraint)
   const category = await firstRow<typeof expenseCategories.$inferSelect>(db.insert(expenseCategories).values({
@@ -139,7 +138,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     color: "#C73E1D",
     defaultAccountId: sysAccount.id,
     isActive: true,
-  } as any).returning());
+  } satisfies typeof expenseCategories.$inferInsert).returning());
 
   // Create supplier
   const supplier = await firstRow<typeof suppliers.$inferSelect>(db.insert(suppliers).values({
@@ -148,7 +147,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     currentBalance: "5000.00",
     totalBilled: "10000.00",
     totalPaid: "5000.00",
-  } as any).returning());
+  } satisfies typeof suppliers.$inferInsert).returning());
 
   // Create employee
   const employee = await firstRow<typeof employees.$inferSelect>(db.insert(employees).values({
@@ -159,7 +158,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     basicSalary: "50000.00",
     employmentDate: "2026-01-01",
     isActive: true,
-  } as any).returning());
+  } satisfies typeof employees.$inferInsert).returning());
 
   // Create journal entry
   const entry = await firstRow<typeof journalEntries.$inferSelect>(db.insert(journalEntries).values({
@@ -169,7 +168,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     description: "Reset me",
     isPosted: true,
     createdBy: owner.id,
-  } as any).returning());
+  } satisfies typeof journalEntries.$inferInsert).returning());
 
   await db.insert(journalLines).values({
     journalEntryId: entry.id,
@@ -177,7 +176,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     debit: "900.00",
     credit: "0.00",
     lineNumber: 1,
-  } as any);
+  } satisfies typeof journalLines.$inferInsert);
 
   await db.insert(ledgerEntries).values({
     accountId: sysAccount.id,
@@ -188,7 +187,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     balanceAfter: "900.00",
     entryDate: "2026-05-16",
     createdBy: owner.id,
-  } as any);
+  } satisfies typeof ledgerEntries.$inferInsert);
 
   // Create daily sale
   const sale = await firstRow<typeof dailySales.$inferSelect>(db.insert(dailySales).values({
@@ -197,13 +196,13 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     netSales: "1500.00",
     cashTotal: "1500.00",
     enteredBy: owner.id,
-  } as any).returning());
+  } satisfies typeof dailySales.$inferInsert).returning());
 
   await db.insert(dailySalePayments).values({
     dailySaleId: sale.id,
     paymentMethodId: 1,
     amount: "1500.00",
-  } as any);
+  } satisfies typeof dailySalePayments.$inferInsert);
 
   // Create expense
   const expense = await firstRow<typeof expenses.$inferSelect>(db.insert(expenses).values({
@@ -217,7 +216,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     paymentMethod: "cash",
     accountId: opAccount.id,
     enteredBy: owner.id,
-  } as any).returning());
+  } satisfies typeof expenses.$inferInsert).returning());
 
   const expenseItem = await firstRow<typeof expenseItems.$inferSelect>(db.insert(expenseItems).values({
     expenseId: expense.id,
@@ -226,7 +225,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     unitPrice: "250.00",
     totalPrice: "250.00",
     categoryId: category.id,
-  } as any).returning());
+  } satisfies typeof expenseItems.$inferInsert).returning());
 
   // Create bill
   const bill = await firstRow<typeof bills.$inferSelect>(db.insert(bills).values({
@@ -240,7 +239,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     issueDate: "2026-05-16",
     dueDate: "2026-06-15",
     status: "pending",
-  } as any).returning());
+  } satisfies typeof bills.$inferInsert).returning());
 
   await db.insert(billItems).values({
     billId: bill.id,
@@ -248,18 +247,18 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     quantity: "1.000",
     unitPrice: "1000.00",
     totalPrice: "1000.00",
-  } as any);
+  } satisfies typeof billItems.$inferInsert);
 
   // Create M-PESA transaction (txnId limited to varchar(20))
   await db.insert(mpesaTransactions).values({
     locationId: location.id,
-    txnId: `MPESA-${seed}`.slice(0, 20),
+    txnId: `TXN-${seed}`.slice(0, 20),
     txnDate: "2026-05-16",
     txnType: "topup",
     amount: "500.00",
     description: `Test M-PESA ${seed}`,
     importedBy: owner.id,
-  } as any);
+  } satisfies typeof mpesaTransactions.$inferInsert);
 
   // Create payroll period
   const payrollPeriod = await firstRow<typeof payrollPeriods.$inferSelect>(db.insert(payrollPeriods).values({
@@ -269,7 +268,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     endDate: "2026-05-31",
     paymentDate: "2026-05-25",
     status: "open",
-  } as any).returning());
+  } satisfies typeof payrollPeriods.$inferInsert).returning());
 
   await db.insert(payrollEntries).values({
     periodId: payrollPeriod.id,
@@ -277,7 +276,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     basicPay: "50000.00",
     netPay: "45000.00",
     paymentMethod: "wallet",
-  } as any);
+  } satisfies typeof payrollEntries.$inferInsert);
 
   await db.insert(payrollAdvances).values({
     employeeId: employee.id,
@@ -285,7 +284,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     balanceRemaining: "3000.00",
     requestDate: "2026-05-10",
     status: "approved",
-  } as any);
+  } satisfies typeof payrollAdvances.$inferInsert);
 
   await db.insert(budgets).values({
     locationId: location.id,
@@ -293,7 +292,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     month: 5,
     year: 2026,
     amount: "5000.00",
-  } as any);
+  } satisfies typeof budgets.$inferInsert);
 
   const po = await firstRow<typeof purchaseOrders.$inferSelect>(db.insert(purchaseOrders).values({
     locationId: location.id,
@@ -303,7 +302,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     status: "draft",
     total: "2000.00",
     createdBy: owner.id,
-  } as any).returning());
+  } satisfies typeof purchaseOrders.$inferInsert).returning());
 
   await db.insert(purchaseOrderItems).values({
     poId: po.id,
@@ -311,7 +310,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     quantity: "2.000",
     unitPrice: "1000.00",
     totalPrice: "2000.00",
-  } as any);
+  } satisfies typeof purchaseOrderItems.$inferInsert);
 
   // Create recurring bill template
   await db.insert(recurringBillTemplates).values({
@@ -322,7 +321,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     frequency: "monthly",
     nextDueDate: "2026-06-01",
     isActive: true,
-  } as any);
+  } satisfies typeof recurringBillTemplates.$inferInsert);
 
   // Create notification
   await db.insert(notifications).values({
@@ -332,7 +331,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     message: "This is a test notification",
     severity: "info",
     locationId: location.id,
-  } as any);
+  } satisfies typeof notifications.$inferInsert);
 
   return {
     accountId,
@@ -698,7 +697,7 @@ describe("resetBusinessTransactions", () => {
       slug: `multi-${seed.toLowerCase()}`,
       plan: "pro",
       isActive: true,
-    } as any).returning());
+    } satisfies typeof businesses.$inferInsert).returning());
 
     const owner = await firstRow<typeof users.$inferSelect>(db.insert(users).values({
       username: `owner-${seed.toLowerCase()}`,
@@ -706,14 +705,14 @@ describe("resetBusinessTransactions", () => {
       isActive: true,
       currentBusinessId: business.id,
       accountId,
-    } as any).returning());
+    } satisfies typeof users.$inferInsert).returning());
 
     await db.insert(userBusinesses).values({
       userId: owner.id,
       businessId: business.id,
       role: "owner",
       isActive: true,
-    } as any);
+    } satisfies typeof userBusinesses.$inferInsert);
 
     // Create 3 locations
     const locIds: number[] = [];
@@ -725,7 +724,7 @@ describe("resetBusinessTransactions", () => {
         isActive: true,
         nextBillNumber: 10 + i,
         nextExpenseNumber: 20 + i,
-      } as any).returning());
+      } satisfies typeof locations.$inferInsert).returning());
       locIds.push(loc.id);
     }
 
@@ -761,7 +760,7 @@ describe("resetBusinessTransactions", () => {
       slug: `noloc-${seed.toLowerCase()}`,
       plan: "pro",
       isActive: true,
-    } as any).returning());
+    } satisfies typeof businesses.$inferInsert).returning());
 
     seededAccountIds.push(accountId);
 

@@ -3,6 +3,7 @@ import { journalEntries, journalLines, accounts, ledgerEntries } from "@db/schem
 import { eq, and, isNull, sql, desc } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { d } from "./decimal";
+import type { DbClient } from "./account-subscriptions";
 
 export interface JournalLineInput {
   accountId: number;
@@ -56,7 +57,7 @@ export async function createJournalEntry(input: CreateJournalEntryInput) {
         sourceId: input.sourceId,
         createdBy: input.createdBy,
         isPosted: input.postImmediately ?? false,
-      } as any)
+      } satisfies typeof journalEntries.$inferInsert)
       .returning();
 
     for (let i = 0; i < input.lines.length; i++) {
@@ -68,7 +69,7 @@ export async function createJournalEntry(input: CreateJournalEntryInput) {
         credit: line.credit || "0.00",
         description: line.description,
         lineNumber: i + 1,
-      } as any);
+      } satisfies typeof journalLines.$inferInsert);
     }
 
     if (input.postImmediately) {
@@ -82,7 +83,7 @@ export async function createJournalEntry(input: CreateJournalEntryInput) {
 export async function postJournalEntry(
   entryId: number,
   postedBy: number,
-  tx?: any
+  tx?: DbClient
 ) {
   const db = tx || getDb();
 
@@ -139,7 +140,7 @@ export async function postJournalEntry(
 
       await trx.insert(ledgerEntries).values({
         accountId: line.accountId,
-        transactionType: "journal" as any,
+        transactionType: "journal",
         transactionId: entryId,
         entryType: debitAmount.gt(0) ? "debit" : "credit",
         amount: debitAmount.gt(0) ? debitAmount.toFixed(2) : creditAmount.toFixed(2),
@@ -148,7 +149,7 @@ export async function postJournalEntry(
         refNo: entry.entryNumber || undefined,
         entryDate: entry.entryDate,
         createdBy: postedBy,
-      } as any);
+      } satisfies typeof ledgerEntries.$inferInsert);
 
       await trx
         .update(accounts)
@@ -209,7 +210,7 @@ export async function reverseJournalEntry(entryId: number, reversedBy: number) {
         postedAt: now,
         isReversed: false,
         reversalOf: entryId,
-      } as any)
+      } satisfies typeof journalEntries.$inferInsert)
       .returning();
 
     for (let i = 0; i < reversalLines.length; i++) {
@@ -221,7 +222,7 @@ export async function reverseJournalEntry(entryId: number, reversedBy: number) {
         credit: line.credit || "0.00",
         description: line.description,
         lineNumber: i + 1,
-      } as any);
+      } satisfies typeof journalLines.$inferInsert);
     }
 
     await tx
@@ -353,7 +354,10 @@ async function generateEntryNumber(businessId: number): Promise<string> {
   return `${prefix}${String(nextNum).padStart(5, "0")}`;
 }
 
-export async function unpostJournalEntry(entryId: number, userId: number) {
+export async function unpostJournalEntry(
+  entryId: number,
+  _userId: number,
+) {
   const db = getDb();
 
   const entry = await db.query.journalEntries.findFirst({

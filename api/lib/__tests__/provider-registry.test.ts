@@ -3,7 +3,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { WalletProviderRegistry } from "../mobile-wallet/provider-registry";
-import { BaseWalletProvider, ProviderFeatures, WalletTransactionRequest, WalletTransactionResult, WalletStatusResult, WalletWebhookPayload, WalletWebhookResult, WalletBalanceResult, ParsedWalletSms } from "../mobile-wallet/provider-interface";
+import { BaseWalletProvider, ProviderFeatures, WalletTransactionRequest, WalletTransactionResult, WalletStatusResult, WalletWebhookPayload, WalletWebhookResult, WalletBalanceResult } from "../mobile-wallet/provider-interface";
 
 class MockProvider extends BaseWalletProvider {
   readonly code = "mock";

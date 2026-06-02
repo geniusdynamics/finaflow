@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { d, Decimal } from "../decimal";
+import { d } from "../decimal";
 
 describe("Decimal utilities", () => {
   it("should create Decimal from number", () => {

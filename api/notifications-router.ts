@@ -10,6 +10,7 @@ export const notificationsRouter = createRouter({
     .input(z.object({ limit: z.number().default(20), unreadOnly: z.boolean().default(false) }).optional())
     .query(async ({ input, ctx }) => {
       const db = getDb();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userId = (ctx as any).user?.id;
       const cond = [eq(notifications.userId, userId)];
       if (input?.unreadOnly) cond.push(eq(notifications.isRead, false));
@@ -28,6 +29,7 @@ export const notificationsRouter = createRouter({
   markAllRead: authedQuery
     .mutation(async ({ ctx }) => {
       const db = getDb();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userId = (ctx as any).user?.id;
       await db.update(notifications).set({ isRead: true }).where(eq(notifications.userId, userId));
       return { success: true };
@@ -45,6 +47,7 @@ export const notificationsRouter = createRouter({
   // Get unread count
   unreadCount: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const userId = (ctx as any).user?.id;
     const [result] = await db.select({ count: sql<number>`COUNT(*)` }).from(notifications)
       .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)));
@@ -55,6 +58,7 @@ export const notificationsRouter = createRouter({
   generateOverdueNotifications: authedQuery
     .mutation(async ({ ctx }) => {
       const db = getDb();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userId = (ctx as any).user?.id;
       const today = new Date().toISOString().split("T")[0];
 
@@ -80,6 +84,7 @@ export const notificationsRouter = createRouter({
             locationId: bill.locationId,
             entityType: "bill",
             entityId: bill.id,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any).returning();
           created++;
         }

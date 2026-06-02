@@ -10,7 +10,7 @@ describe("resolveFinancialReportBusinessId", () => {
       resolveFinancialReportBusinessId({
         currentBusinessId: 7,
         currentBusiness: { id: 9 },
-      } as any),
+      } as Parameters<typeof resolveFinancialReportBusinessId>[0]),
     ).toBe(9);
   });
 
@@ -19,12 +19,12 @@ describe("resolveFinancialReportBusinessId", () => {
       resolveFinancialReportBusinessId({
         currentBusinessId: 7,
         currentBusiness: null,
-      } as any),
+      } as Parameters<typeof resolveFinancialReportBusinessId>[0]),
     ).toBe(7);
   });
 
   it("returns null instead of silently forcing business 1", () => {
     expect(resolveFinancialReportBusinessId(null)).toBeNull();
-    expect(resolveFinancialReportBusinessId({} as any)).toBeNull();
+    expect(resolveFinancialReportBusinessId({} as Parameters<typeof resolveFinancialReportBusinessId>[0])).toBeNull();
   });
 });

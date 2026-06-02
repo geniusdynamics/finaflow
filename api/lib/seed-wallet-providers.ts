@@ -39,7 +39,7 @@ export async function seedWalletProviders(): Promise<void> {
   for (const provider of DEFAULT_PROVIDERS) {
     await db
       .insert(mobileWalletProviders)
-      .values(provider as any)
+      .values(provider satisfies typeof mobileWalletProviders.$inferInsert)
       .onConflictDoNothing({ target: mobileWalletProviders.code });
   }
   console.log(`[seed] Seeded ${DEFAULT_PROVIDERS.length} wallet providers`);

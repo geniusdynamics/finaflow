@@ -33,6 +33,7 @@ export const feedbackRouter = createRouter({
         questions: JSON.stringify(input.questions),
         isActive: true,
         businessId: input.businessId,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { id: result.id, success: true };
     }),
@@ -54,6 +55,7 @@ export const feedbackRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...raw } = input;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updates: any = { ...raw };
       if (raw.questions) updates.questions = JSON.stringify(raw.questions);
       await db.update(feedbackQuestionnaires).set(updates).where(eq(feedbackQuestionnaires.id, id));
@@ -64,6 +66,7 @@ export const feedbackRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       await db.update(feedbackQuestionnaires).set({ deletedAt: new Date() } as any).where(eq(feedbackQuestionnaires.id, input.id));
       return { success: true };
     }),
@@ -83,6 +86,7 @@ export const feedbackRouter = createRouter({
         respondentName: input.respondentName,
         respondentEmail: input.respondentEmail,
         answers: JSON.stringify(input.answers),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { success: true };
     }),

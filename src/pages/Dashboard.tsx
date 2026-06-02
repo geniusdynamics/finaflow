@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
-import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
+import { formatDate, getLocalDateString, formatKES } from "@/lib/utils";
 import {
   TrendingUp,
   TrendingDown,
@@ -11,21 +11,18 @@ import {
   ChevronRight,
   Receipt,
   CreditCard,
-  Smartphone,
   Users,
   ArrowUpRight,
   ArrowDownRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 
 export function Dashboard() {
-  const [dateRange, setDateRange] = useState({
+  const [dateRange, setDateRange] = useState(() => ({
     from: getLocalDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
     to: getLocalDateString(),
-  });
+  }));
 
-  const utils = trpc.useUtils();
   const { data: summary } = trpc.dashboard.summary.useQuery({
     dateFrom: dateRange.from,
     dateTo: dateRange.to,
@@ -183,7 +180,7 @@ export function Dashboard() {
                 <QuickActionLink to="/daily-sales" icon={<Receipt className="h-4 w-4" />} label="Record Daily Sales" />
                 <QuickActionLink to="/expenses" icon={<TrendingDown className="h-4 w-4" />} label="Log Expense" />
                 <QuickActionLink to="/bills" icon={<AlertTriangle className="h-4 w-4" />} label="Record Bill Payment" />
-                <QuickActionLink to="/mpesa" icon={<Smartphone className="h-4 w-4" />} label="Import M-PESA" />
+                <QuickActionLink to="/wallet" icon={<Wallet className="h-4 w-4" />} label="Import Mobile Wallet" />
                 <QuickActionLink to="/payroll" icon={<Users className="h-4 w-4" />} label="Process Payroll" />
               </div>
             </CardContent>

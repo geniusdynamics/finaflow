@@ -18,7 +18,6 @@ const Suppliers = lazy(() => import("./pages/Suppliers").then(m => ({ default: m
 const Bills = lazy(() => import("./pages/Bills").then(m => ({ default: m.Bills })));
 const Accounts = lazy(() => import("./pages/Accounts").then(m => ({ default: m.Accounts })));
 const Payroll = lazy(() => import("./pages/Payroll").then(m => ({ default: m.Payroll })));
-const Mpesa = lazy(() => import("./pages/Mpesa").then(m => ({ default: m.Mpesa })));
 const Wallet = lazy(() => import("./pages/Wallet").then(m => ({ default: m.Wallet })));
 const WalletAdmin = lazy(() => import("./pages/WalletAdmin").then(m => ({ default: m.WalletAdmin })));
 const Calendar = lazy(() => import("./pages/Calendar").then(m => ({ default: m.Calendar })));
@@ -54,7 +53,6 @@ export default function App() {
         <Route path="/chart-of-accounts" element={<Navigate to="/accounts?section=chart-of-accounts" replace />} />
         <Route path="/locations" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><Locations /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/payroll" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="payroll:view"><Payroll /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/mpesa" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="mpesa:view"><Mpesa /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/wallet" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="wallet:view"><Wallet /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/admin/wallet" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="wallet:admin"><WalletAdmin /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/daily-payments" element={<Navigate to="/calendar?section=payments" replace />} />

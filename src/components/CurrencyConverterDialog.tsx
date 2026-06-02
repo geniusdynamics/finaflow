@@ -1,5 +1,5 @@
 // ABOUTME: Manual currency conversion dialog that shows live rates and converts amounts between currencies.
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { formatCurrency } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ export function CurrencyConverterDialog({
   });
 
   const currentRate = rates?.find(
-    (r: any) => r.fromCurrency === from && r.toCurrency === to
+    (r: { fromCurrency: string; toCurrency: string }) => r.fromCurrency === from && r.toCurrency === to
   );
 
   const rate = currentRate?.rate ?? "0";

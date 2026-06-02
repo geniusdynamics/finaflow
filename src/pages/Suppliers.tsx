@@ -1,24 +1,121 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { skipToken } from "@tanstack/react-query";
 import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Users, Phone, Mail, CreditCard, TrendingDown, AlertTriangle, FileText, TrendingUp, Search, Trash2, Target, Package } from "lucide-react";
+import { Plus, Users, Phone, Mail, CreditCard, TrendingDown, AlertTriangle, FileText, TrendingUp, Search, Trash2, Target, Package, CheckCircle, OctagonX } from "lucide-react";
+import { LocationSelector } from "@/components/LocationSelector";
+import { ExpenseCategorySelector } from "@/components/ExpenseCategorySelector";
 import { toast } from "sonner";
+
+const PAYMENT_METHOD_ACCOUNT_TYPES: Record<string, string[]> = {
+  cash: ["cash"],
+  wallet: ["mpesa", "wallet"],
+  bank_transfer: ["bank_account"],
+  card: ["bank_account"],
+};
+
+{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}function getFundingAccounts(paymentMethod: string, allAccounts: any[], supplierBillLocationId?: number): any[] {
+  const allowedTypes = PAYMENT_METHOD_ACCOUNT_TYPES[paymentMethod] ?? [];
+  return allAccounts.filter(a => allowedTypes.includes(a.type) && !a.deletedAt && (!supplierBillLocationId || a.locationId === supplierBillLocationId));
+}
+
+function PaySupplierDialog({ open, supplier, bills, accounts, payForm, setPayForm, paymentError, isPending, todayDate, onClose, onSubmit }: {
+  open: boolean;
+{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  supplier: any;
+{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  bills: any[];
+{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  accounts: any[];
+  payForm: { paymentMethod: "cash" | "wallet" | "bank_transfer" | "card"; amount: string; paymentDate: string; reference: string; accountId: string };
+  setPayForm: React.Dispatch<React.SetStateAction<{ paymentMethod: "cash" | "wallet" | "bank_transfer" | "card"; amount: string; paymentDate: string; reference: string; accountId: string }>>;
+  paymentError: string | null;
+  isPending: boolean;
+  todayDate: string;
+  onClose: () => void;
+  onSubmit: (billId: number) => void;
+}) {
+  const [selectedPayBillId, setSelectedPayBillId] = useState("");
+  const pendingBills = bills?.filter(b => b.supplierId === supplier?.id && b.status !== "paid") ?? [];
+
+  useEffect(() => { if (!open) setSelectedPayBillId(() => ""); }, [open]);
+
+  return (
+    <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <DialogContent className="bg-white">
+        <DialogHeader><DialogTitle className="font-serif text-xl">Record Payment</DialogTitle></DialogHeader>
+        <form onSubmit={(e) => {
+          e.preventDefault();
+          if (!selectedPayBillId) { toast.error("Please select a bill"); return; }
+          onSubmit(+selectedPayBillId);
+        }} className="space-y-3">
+          <div className="rounded bg-[#F5EDE6] p-3">
+            <p className="text-sm font-medium">{supplier?.name}</p>
+            <p className="text-xs text-[#8D8A87]">Total Balance: {formatKES(supplier?.currentBalance ?? "0")}</p>
+          </div>
+          <div><Label>Bill</Label>
+            <select value={selectedPayBillId} onChange={e => setSelectedPayBillId(e.target.value)} className="w-full rounded border px-3 py-2 text-sm" required>
+              <option value="">Select a bill...</option>
+              {pendingBills.map(b => (
+                <option key={b.id} value={b.id}>{b.billNumber ?? 'BILL-'+String(b.id).padStart(4,'0')} - {formatKES(b.balanceDue)} - {b.description}</option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Amount</Label><Input type="number" step="0.01" value={payForm.amount} onChange={e => setPayForm(p => ({...p, amount: e.target.value}))} required /></div>
+            <div><Label>Method</Label>
+{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}              <select value={payForm.paymentMethod} onChange={e => setPayForm(p => ({...p, paymentMethod: e.target.value as any}))} className="w-full rounded border px-3 py-2 text-sm">
+                <option value="cash">Cash</option><option value="wallet">Wallet</option><option value="bank_transfer">Bank</option><option value="card">Card</option>
+              </select>
+            </div>
+          </div>
+          <div><Label>Payment Date</Label><Input type="date" value={payForm.paymentDate} max={todayDate} onChange={e => setPayForm(p => ({ ...p, paymentDate: e.target.value }))} required /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Funding Source</Label>
+              <select value={payForm.accountId} onChange={e => setPayForm(p => ({...p, accountId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm">
+                <option value="">Auto-detect</option>
+                {getFundingAccounts(payForm.paymentMethod, accounts, pendingBills[0]?.locationId).map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </div>
+            <div><Label>Reference</Label><Input value={payForm.reference} onChange={e => setPayForm(p => ({...p, reference: e.target.value}))} placeholder="Reference code"/></div>
+          </div>
+          {paymentError && (
+            <div role="alert" className="flex items-start gap-2 rounded-md border border-[#D32F2F]/30 bg-[#D32F2F]/5 p-3 text-sm text-[#D32F2F]">
+              <OctagonX className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-medium">Payment failed</p>
+                <p className="mt-0.5 text-xs opacity-80">{paymentError}</p>
+              </div>
+            </div>
+          )}
+          <Button type="submit" className="w-full bg-[#C73E1D]" disabled={isPending}>{isPending ? "Processing..." : "Record Payment"}</Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function Suppliers() {
   const [tab, setTab] = useState<"suppliers" | "prices">("suppliers");
   const [open, setOpen] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState<number | null>(null);
   const [billOpen, setBillOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState<number | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const { user } = useAuth();
   const utils = trpc.useUtils();
   const { data: suppliers, refetch } = trpc.suppliers.list.useQuery();
   const { data: locations } = trpc.locations.list.useQuery();
+  const { data: accounts } = trpc.accounts.list.useQuery();
+  const { data: categories } = trpc.expenses.categories.useQuery();
+  const { data: bills } = trpc.bills.list.useQuery();
+  const { data: settings } = trpc.settings.list.useQuery();
   const { data: supplierStatement } = trpc.suppliers.statement.useQuery(
     { id: selectedSupplier ?? 0 },
     { enabled: selectedSupplier !== null }
@@ -35,9 +132,23 @@ export function Suppliers() {
   const updateBalance = trpc.suppliers.updateBalance.useMutation({
     onSuccess: () => { utils.suppliers.list.invalidate(); if (selectedSupplier) utils.suppliers.statement.invalidate({ id: selectedSupplier }); },
   });
-  const createBill = trpc.suppliers.createBill.useMutation({
-    onSuccess: () => { setBillOpen(false); utils.suppliers.list.invalidate(); if (selectedSupplier) utils.suppliers.statement.invalidate({ id: selectedSupplier }); toast.success("Bill added"); },
+  const createBill = trpc.bills.create.useMutation({
+    onSuccess: () => { setBillOpen(false); utils.bills.list.invalidate(); utils.suppliers.list.invalidate(); if (selectedSupplier) utils.suppliers.statement.invalidate({ id: selectedSupplier }); toast.success("Bill added"); },
     onError: (err) => toast.error(err.message),
+  });
+  const recordPayment = trpc.bills.recordPayment.useMutation({
+    onSuccess: () => {
+      setPayOpen(null);
+      setPaymentError(null);
+      utils.bills.list.invalidate();
+      utils.suppliers.list.invalidate();
+      if (selectedSupplier) utils.suppliers.statement.invalidate({ id: selectedSupplier });
+      toast.success("Payment recorded successfully");
+    },
+    onError: (e) => {
+      setPaymentError(e.message);
+      toast.error(e.message, { duration: 6000 });
+    },
   });
 
   // Price Intelligence state and queries
@@ -67,8 +178,11 @@ export function Suppliers() {
   });
   const [balanceAdj, setBalanceAdj] = useState({ adjustment: "", reason: "" });
   const [billForm, setBillForm] = useState({
-    supplierId: 0, locationId: "", billNumber: "", description: "", amount: "", issueDate: getLocalDateString(), dueDate: "",
+    supplierId: 0, locationId: "", categoryId: "", billNumber: "", description: "", amount: "", issueDate: getLocalDateString(), dueDate: "",
   });
+
+  const [payForm, setPayForm] = useState({ paymentMethod: "wallet" as const, amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" });
+  const todayDate = getLocalDateString();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -155,7 +269,6 @@ export function Suppliers() {
 
         {tab === "suppliers" && (
           <>
-
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Card className="border-[#E8E0D8] bg-white">
             <CardContent className="p-4">
@@ -216,16 +329,26 @@ export function Suppliers() {
                       {supplier.creditLimit && <span className="font-mono text-xs text-[#ED6C02]">Limit: {formatKES(supplier.creditLimit)}</span>}
                     </div>
                   </div>
-                  {/* Add Bill button when selected */}
+                  {/* Add Bill and Pay buttons when selected */}
                   {selectedSupplier === supplier.id && (
                     <div className="mt-3 flex gap-2">
                       <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={(e) => {
                         e.stopPropagation();
-                        setBillForm({ supplierId: supplier.id, locationId: "", billNumber: "", description: "", amount: "", issueDate: getLocalDateString(), dueDate: "" });
+                        setBillForm({ supplierId: supplier.id, locationId: "", categoryId: "", billNumber: "", description: "", amount: "", issueDate: getLocalDateString(), dueDate: "" });
                         setBillOpen(true);
                       }}>
                         <FileText className="mr-1 h-3 w-3" /> Add Bill
                       </Button>
+                      {balance > 0 && (
+                        <Button size="sm" variant="outline" className="flex-1 border-[#C73E1D] text-[#C73E1D] text-xs" onClick={(e) => {
+                          e.stopPropagation();
+                          setPayOpen(supplier.id);
+                          setPayForm({ paymentMethod: "wallet" as const, amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" });
+                          setPaymentError(null);
+                        }}>
+                          <CheckCircle className="mr-1 h-3 w-3" /> Pay
+                        </Button>
+                      )}
                     </div>
                   )}
                 </CardContent>
@@ -239,15 +362,16 @@ export function Suppliers() {
           )}
         </div>
 
-        {/* Add Bill Dialog */}
+        {/* Add Bill Dialog - unified with main bills page */}
         <Dialog open={billOpen} onOpenChange={setBillOpen}>
-          <DialogContent className="bg-white">
+          <DialogContent className="bg-white max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle className="font-serif text-xl">Add Bill for {suppliers?.find(s => s.id === billForm.supplierId)?.name}</DialogTitle></DialogHeader>
             <form onSubmit={(e) => {
               e.preventDefault();
               createBill.mutate({
                 supplierId: billForm.supplierId,
                 locationId: +billForm.locationId,
+                categoryId: billForm.categoryId ? +billForm.categoryId : undefined,
                 billNumber: billForm.billNumber || undefined,
                 description: billForm.description,
                 amount: billForm.amount,
@@ -255,25 +379,52 @@ export function Suppliers() {
                 dueDate: billForm.dueDate,
               });
             }} className="space-y-3">
-              <div><Label>Location</Label>
-                <select value={billForm.locationId} onChange={e => setBillForm(p => ({ ...p, locationId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required>
-                  <option value="">Select</option>
-                  {locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              <div className="grid grid-cols-2 gap-3"><div>
+                <LocationSelector
+                  locations={locations}
+                  userLocationId={user?.locationId}
+                  value={billForm.locationId}
+                  onChange={v => setBillForm(p => ({...p, locationId: v}))}
+                  enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
+                  required
+                />
+              </div><div><Label>Supplier</Label>
+                <select value={billForm.supplierId} className="w-full rounded border bg-gray-100 px-3 py-2 text-sm" disabled>
+                  <option value={billForm.supplierId}>{suppliers?.find(s => s.id === billForm.supplierId)?.name}</option>
                 </select>
-              </div>
+              </div></div>
+              <div><ExpenseCategorySelector categories={categories} value={billForm.categoryId} onChange={v => setBillForm(p => ({...p, categoryId: v}))} label="Category" placeholder="Use supplier/default logic" /></div>
+              <div><Label>Description</Label><Input value={billForm.description} onChange={e => setBillForm(p => ({ ...p, description: e.target.value }))} required /></div>
               <div className="grid grid-cols-2 gap-3">
                 <div><Label>Bill Number <span className="text-[#8D8A87] font-normal">(optional)</span></Label><Input value={billForm.billNumber} onChange={e => setBillForm(p => ({ ...p, billNumber: e.target.value }))} placeholder="Auto: BILL-0001" /></div>
                 <div><Label>Amount</Label><Input type="number" step="0.01" value={billForm.amount} onChange={e => setBillForm(p => ({ ...p, amount: e.target.value }))} required /></div>
               </div>
-              <div><Label>Description</Label><Input value={billForm.description} onChange={e => setBillForm(p => ({ ...p, description: e.target.value }))} required /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Issue Date</Label><Input type="date" value={billForm.issueDate} onChange={e => setBillForm(p => ({ ...p, issueDate: e.target.value }))} required /></div>
-                <div><Label>Due Date</Label><Input type="date" value={billForm.dueDate} onChange={e => setBillForm(p => ({ ...p, dueDate: e.target.value }))} required /></div>
-              </div>
+              <div className="grid grid-cols-2 gap-3"><div><Label>Issue Date</Label><Input type="date" value={billForm.issueDate} onChange={e => setBillForm(p => ({ ...p, issueDate: e.target.value }))} required /></div><div><Label>Due Date</Label><Input type="date" value={billForm.dueDate} onChange={e => setBillForm(p => ({ ...p, dueDate: e.target.value }))} required /></div></div>
               <Button type="submit" className="w-full bg-[#C73E1D]" disabled={createBill.isPending}>{createBill.isPending ? "Saving..." : "Add Bill"}</Button>
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Pay Supplier Dialog */}
+        <PaySupplierDialog
+          open={payOpen !== null}
+          supplier={payOpen ? suppliers?.find(s => s.id === payOpen) ?? null : null}
+          bills={bills ?? []}
+          accounts={accounts ?? []}
+          payForm={payForm}
+          setPayForm={setPayForm}
+          paymentError={paymentError}
+          isPending={recordPayment.isPending}
+          todayDate={todayDate}
+          onClose={() => { setPayOpen(null); setPaymentError(null); }}
+          onSubmit={(billId) => {
+            if (payForm.paymentDate > todayDate) {
+              toast.error("Payment date cannot be in the future");
+              return;
+            }
+            recordPayment.mutate({ billId, paymentMethod: payForm.paymentMethod, amount: payForm.amount, paymentDate: payForm.paymentDate, reference: payForm.reference, accountId: payForm.accountId ? +payForm.accountId : undefined });
+          }}
+        />
 
         {selectedSupplier && supplierStatement && (
           <Card className="border-[#E8E0D8] bg-white">
@@ -315,7 +466,7 @@ export function Suppliers() {
                         <td className="py-2 text-right font-mono text-sm text-[#D32F2F]">{formatKES(bill.balanceDue)}</td>
                       </tr>
                     ))}
-                    {supplierStatement.payments?.map((pay: any) => (
+{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                    {supplierStatement.payments?.map((pay: any) => (
                       <tr key={`pay-${pay.id}`} className="hover:bg-[#F5EDE6]/50">
                         <td className="py-2 text-xs"><span className="rounded-full bg-[#2E7D32]/10 px-2 py-0.5 text-[#2E7D32]">Payment</span></td>
                         <td className="py-2 text-xs font-mono text-[#8D8A87]">{pay.billNumber ?? "-"}</td>
@@ -339,7 +490,6 @@ export function Suppliers() {
 
         {tab === "prices" && (
           <>
-            {/* Price Alerts */}
             {alerts && alerts.length > 0 && (
               <div className="space-y-2">
                 <h2 className="text-sm font-medium text-[#D32F2F] flex items-center gap-2"><AlertTriangle className="h-4 w-4"/> Price Alerts ({alerts.length})</h2>
@@ -354,7 +504,6 @@ export function Suppliers() {
               </div>
             )}
 
-            {/* Filters */}
             <Card className="border-[#E8E0D8]"><CardContent className="p-4">
               <div className="flex flex-wrap items-end gap-3">
                 <div className="flex-1 min-w-60"><Label className="text-xs text-[#8D8A87]">Search Item</Label>
@@ -368,7 +517,6 @@ export function Suppliers() {
               </div>
             </CardContent></Card>
 
-            {/* Price Items Grid */}
             <Card className="border-[#E8E0D8]"><CardHeader className="pb-3"><CardTitle className="font-serif text-lg flex items-center gap-2"><Package className="h-5 w-5 text-[#C73E1D]"/>Tracked Items</CardTitle></CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">
@@ -406,7 +554,6 @@ export function Suppliers() {
               </CardContent>
             </Card>
 
-            {/* Alert Rules */}
             {rules && rules.length > 0 && (
               <Card className="border-[#E8E0D8]"><CardHeader className="pb-3"><CardTitle className="font-serif text-lg flex items-center gap-2"><Target className="h-5 w-5 text-[#ED6C02]"/>Alert Rules</CardTitle></CardHeader>
                 <CardContent>
@@ -425,7 +572,6 @@ export function Suppliers() {
               </Card>
             )}
 
-            {/* Price History Detail */}
             {searchItem && history && history.length > 0 && (
               <Card className="border-[#E8E0D8]"><CardHeader className="pb-3"><CardTitle className="font-serif text-lg">Price History for "{searchItem}"</CardTitle></CardHeader>
                 <CardContent>
