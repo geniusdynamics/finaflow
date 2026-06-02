@@ -1,676 +1,783 @@
-# FinaBill Platform Specification
+# FinaFlow Billing Module Specification
 
-> **Project Location**: `d:\DevCenter\abuilds\fina\finabill\` — sibling directory to FinaFlow (`d:\DevCenter\abuilds\fina\finaflow\`)
-> **Spec documents**: Initially created at `finaflow/.trae/specs/finabill-platform/`. Once the monorepo foundation is built, these spec documents SHALL be copied to `finabill/.trae/specs/` for implementation tracking within the FinaBill project.
+> **Implementation Location**: Inside `d:\DevCenter\abuilds\fina\finaflow\` — NOT a separate application
+> **Architecture**: Context-switching single app where the sidebar completely changes between "Expenses" and "Billing" modes
+> **Shared Foundation**: One Chart of Accounts, one RBAC system, one business/settings engine, one multi-currency wallet system
+
+---
 
 ## Why
 
-FinaFlow provides powerful cashflow tracking, expense management, and accounting capabilities for small businesses, but lacks a dedicated invoicing and billing platform. Businesses need to send professional invoices, manage customer accounts, set up recurring billing, track payments received, and integrate collections data back into their financial reporting. FinaBill fills this gap as a standalone billing platform that seamlessly integrates with FinaFlow's accounting engine, creating a complete financial operations suite.
+FinaFlow already provides powerful cashflow tracking, expense management, multi-currency accounting, and financial reporting. What's missing is the **receivables side** — the ability to send professional invoices, manage customer accounts, set up recurring billing, track payments received, and surface income-focused reports.
+
+Rather than building a separate application (which would duplicate the entire Chart of Accounts, user system, settings, wallet system, and business context), this module extends FinaFlow with a **full context-switching experience**:
+
+- One app, one login, one database
+- Sidebar toggles between **Expenses** mode and **Billing** mode
+- All shared infrastructure (COA, auth, settings, currencies, locations) lives once
+- Revenue data flows naturally into the existing financial reports (P&L, Balance Sheet)
 
 ---
 
 ## What Changes
 
-### Platform Architecture
-- **Create standalone FinaBill application** in a new repository at `/finabill/` sibling to `/finaflow/`
-- **Shared libraries package** `@finabill/shared` for types, utilities, and validation schemas consumed by both FinaBill and FinaFlow
-- **API integration layer** between FinaBill and FinaFlow for bi-directional data sync (payments, invoices, customers)
-- **Unified database** strategy using shared PostgreSQL with separate schema (`finabill.*`) or same-schema with `businessId` scoping
-- **Authentication re-use** via shared JWT + session model so users log in once across both platforms
-- **Monorepo structure** with `packages/` directory holding shared code
-
-### Database Schema (NEW — FinaBill-specific tables)
-- `customers` — Customer profiles with contact info, billing addresses, payment terms, credit limits
-- `invoices` — Invoice header with line items, totals, status, due dates
-- `invoice_items` — Individual line items on invoices (description, quantity, unit price, tax, total)
-- `invoice_payments` — Payment records applied to invoices (partial/full)
-- `recurring_invoice_templates` — Recurring invoice schedules (frequency, next date, active status)
-- `recurring_invoice_generations` — History of auto-generated invoices from recurring templates
-- `payment_reminders` — Reminder schedules and delivery logs
-- `invoice_email_logs` — Email delivery tracking (sent, opened, bounced)
-- `revenue_categories` — **(already exists in FinaFlow schema)** Revenue classification for invoice line items
-- `business_profiles` — Business branding settings (logo, payment terms, footer text) for invoice customization
-
-### Shared Library (`@finabill/shared`)
-- **Shared TypeScript types**: Customer, Invoice, InvoiceItem, Payment, RecurringTemplate, RevenueCategory
-- **Validation schemas** via Zod: createCustomerSchema, createInvoiceSchema, recordPaymentSchema, etc.
-- **Financial utilities**: currency formatting, tax calculation, invoice totals, due date computation
-- **Date utilities**: next invoice date calculation, overdue detection, period filtering
-- **tRPC procedure helpers**: shared middleware patterns, pagination schemas, date-range filters
-- **Decimal.js wrapper**: consistent financial math across both platforms
-- **Permission types**: shared RBAC definitions for billing operations
-
-### API Endpoints (NEW — FinaBill routers)
-- `customers.router.ts` — CRUD + search + statement generation
-- `invoices.router.ts` — CRUD + send + void + download PDF
-- `invoice-items.router.ts` — Line item management within invoices
-- `payments.router.ts` — Payment recording + reconciliation
-- `recurring.router.ts` — Recurring template CRUD + manual trigger + schedule management
-- `reports.router.ts` — Revenue reports, aging reports, customer statements
-- `email.router.ts` — Send invoices, payment reminders
-- `business-profile.router.ts` — Business branding configuration
-- `integration.router.ts` — FinaFlow sync endpoints (push payments, pull accounts)
-
-### API Integration Layer (FinaFlow ↔ FinaBill)
-- **FinaFlow sync router** (`finabill-integration.ts`): Exposes endpoints for FinaBill to push/pull data
-- **Payment sync**: When FinaBill records a payment, it creates a corresponding journal entry in FinaFlow via integration API
-- **Customer sync**: Customers created in FinaBill are visible as entities in FinaFlow
-- **Revenue mapping**: Invoice line items map to revenue categories → Chart of Accounts revenue accounts
-- **Shared business context**: Both platforms use the same `businessId` and location model
-- **Webhook system**: FinaBill can notify FinaFlow of invoice events (paid, overdue, created)
-- **Batch sync**: Scheduled reconciliation between invoice payment totals and FinaFlow bank transaction totals
-
-### UI Features (FinaBill standalone app)
-- **Dashboard** — Revenue overview, outstanding invoices, upcoming recurring, aging summary
-- **Customers page** — List + search + detail view with invoice history and statement
-- **Invoices page** — List with status filters (draft, sent, paid, overdue, void) + create/send
-- **Invoice Builder** — Professional invoice form with line items, tax, discounts, notes, terms
-- **Recurring Invoices page** — Template list, schedule management, generation log
-- **Payments page** — Payment records, reconciliation with bank deposits
-- **Reports section** — Revenue by period, customer aging, invoice status distribution
-- **Settings** — Business profile (logo, branding), payment terms, invoice numbering, email templates
-- **Mobile-friendly** — Responsive design matching FinaFlow's Tailwind/shadcn/ui patterns
-
-### UI Personas
-- **Admin/Owner** — Full access to all billing features, settings, reports
-- **Accountant** — Can view invoices, record payments, run reports — cannot create/edit customers
-- **Operator** — Can create invoices, send invoices, manage customers — cannot modify settings or void invoices
-
----
-
-## Impact
-
-- **Affected FinaFlow specs**: This extends the existing accounting enhancements spec with a complete billing platform
-- **New repository**: `/finabill/` standalone application
-- **Shared package**: `@finabill/shared` NPM package
-- **FinaFlow modifications**: New integration router, shared package consumption, optional API endpoints
-- **Database**: New tables (customers, invoices, invoice_items, payments, recurring, reminders, business_profiles, email_logs)
-- **Migration**: Existing FinaFlow bills/payables remain separate from FinaBill invoices/receivables
-
----
-
-## ADDED Requirements
-
-### Requirement: Shared Library Package
-
-The system SHALL provide a shared NPM package `@finabill/shared` with common types, validation schemas, and utilities consumed by both FinaBill and FinaFlow.
-
-#### Scenario: Consuming shared types
-- **GIVEN** both FinaBill and FinaFlow import from `@finabill/shared`
-- **WHEN** either application uses a type (e.g., `Invoice`, `Customer`)
-- **THEN** the type definition is identical in both applications
-
-#### Scenario: Validation re-use
-- **GIVEN** an API endpoint that accepts invoice creation input
-- **WHEN** validation runs
-- **THEN** it uses Zod schemas from `@finabill/shared/createInvoiceSchema`
-
-### Requirement: Customer Management
-
-FinaBill SHALL provide full customer lifecycle management.
-
-#### Scenario: Create customer
-- **GIVEN** an authorized user with billing:create permission
-- **WHEN** they fill the customer form with name, email, phone, billing address, payment terms
-- **THEN** the customer is saved and visible in the customer list
-- **AND** a customer number is auto-generated (CUST-0001 format)
-
-#### Scenario: View customer detail
-- **GIVEN** a customer exists with invoices and payments
-- **WHEN** user clicks on the customer
-- **THEN** a detail page shows customer info, statement (invoice list with balances), payment history
-
-#### Scenario: Search customers
-- **GIVEN** many customers exist
-- **WHEN** user types in the search field
-- **THEN** results filter by name, email, phone, or customer number in real-time
-
-### Requirement: Invoice Management
-
-FinaBill SHALL support professional invoice creation, sending, and lifecycle management.
-
-#### Scenario: Create invoice
-- **GIVEN** a customer exists
-- **WHEN** user creates a new invoice with customer, line items (description, qty, unit price, tax rate), discount, notes
-- **THEN** the invoice is saved as "draft" with auto-calculated subtotal, tax total, discount total, grand total
-- **AND** an invoice number is auto-generated (INV-0001 format)
-
-#### Scenario: Invoice line items
-- **GIVEN** an invoice is being created or edited
-- **WHEN** user adds/removes line items
-- **THEN** totals are recalculated in real-time
-- **AND** each line item has: description, quantity, unit_price, tax_rate, tax_amount, line_total
-
-#### Scenario: Send invoice
-- **GIVEN** an invoice in "draft" status
-- **WHEN** user clicks "Send"
-- **THEN** status changes to "sent"
-- **AND** an email is dispatched to the customer with the invoice PDF attached
-- **AND** an email delivery log is created
-
-#### Scenario: Record partial payment
-- **GIVEN** an invoice in "sent" or "overdue" status with balance > 0
-- **WHEN** user records a payment for an amount less than the balance
-- **THEN** status changes to "partial"
-- **AND** the paid amount and balance are updated
-
-#### Scenario: Record full payment
-- **GIVEN** an invoice in "sent" or "overdue" status with balance > 0
-- **WHEN** user records a payment for the full balance amount
-- **THEN** status changes to "paid"
-- **AND** a payment record is created
-
-#### Scenario: Void invoice
-- **GIVEN** an invoice that has not been fully paid
-- **WHEN** user voids the invoice with a reason
-- **THEN** status changes to "void"
-- **AND** any payments made are reversed as credit notes
-
-### Requirement: Recurring Invoices
-
-FinaBill SHALL support recurring invoice templates with automatic generation on schedule.
-
-#### Scenario: Create recurring template
-- **GIVEN** a customer exists
-- **WHEN** user creates a recurring invoice template with customer, line items, frequency (weekly/monthly/quarterly/annually), next_due_date, end_date
-- **THEN** the template is saved and scheduled for auto-generation
-
-#### Scenario: Auto-generate recurring invoice
-- **GIVEN** an active recurring template with next_due_date <= today
-- **WHEN** scheduled task runs (daily cron)
-- **THEN** a new invoice is created from the template
-- **AND** next_due_date is advanced by the frequency period
-- **AND** a generation log entry is created
-
-#### Scenario: Skip recurring generation
-- **GIVEN** a recurring template with next_due_date today
-- **WHEN** user manually skips this occurrence
-- **THEN** next_due_date is advanced without generating an invoice
-- **AND** a skip log entry is created
-
-### Requirement: Payment Collection
-
-FinaBill SHALL track payments with support for partial payments, multiple payment methods, and reconciliation.
-
-#### Scenario: Record payment
-- **GIVEN** an invoice with outstanding balance
-- **WHEN** user records a payment with amount, payment_method (cash/mpesa/bank/card), reference, payment_date
-- **THEN** the payment is applied to the invoice
-- **AND** invoice balance and status are updated
-
-#### Scenario: Payment reconciliation
-- **GIVEN** payments recorded against invoices
-- **WHEN** user views the payments page
-- **THEN** they can filter by date, payment method, status
-- **AND** see totals by payment method for reconciliation with bank/M-PESA statements
-
-### Requirement: Revenue Reporting
-
-FinaBill SHALL provide revenue and aging reports for business insights.
-
-#### Scenario: Revenue by period
-- **GIVEN** invoices with payments exist
-- **WHEN** user selects a date range and grouping (monthly/quarterly/yearly)
-- **THEN** a revenue report shows: invoiced amount, collected amount, outstanding balance by period
-
-#### Scenario: Customer aging
-- **GIVEN** invoices with different due dates
-- **WHEN** user views the aging report
-- **THEN** outstanding balances are grouped into buckets: 0-30 days, 31-60 days, 61-90 days, 90+ days
-
-### Requirement: FinaFlow Integration
-
-FinaBill SHALL integrate with FinaFlow for unified accounting and cashflow tracking.
-
-#### Scenario: Sync payment to FinaFlow journal
-- **GIVEN** a payment is recorded in FinaBill
-- **WHEN** the payment is saved
-- **THEN** a background sync creates a journal entry in FinaFlow:
-  - Debit: Cash/Bank account (by payment method)
-  - Credit: Revenue account (by invoice revenue category)
-
-#### Scenario: Sync customer list
-- **GIVEN** customers exist in FinaBill
-- **WHEN** FinaFlow requests customer data
-- **THEN** customers are available for selection in FinaFlow's account/entity picker
-
-#### Scenario: Batch reconciliation
-- **GIVEN** FinaBill has recorded payments
-- **WHEN** daily batch sync runs
-- **THEN** FinaBill payment totals are reconciled against FinaFlow bank transaction totals
-
-### Requirement: PDF Invoice Generation
-
-FinaBill SHALL generate professional PDF invoices with business branding.
-
-#### Scenario: Generate invoice PDF
-- **GIVEN** an invoice exists with customer info and line items
-- **WHEN** user clicks "Download PDF" or sends invoice via email
-- **THEN** a PDF is generated with: business logo, business info, customer info, invoice number, invoice date, due date, line items table, subtotal, tax, discounts, grand total, payment terms, notes
-- **AND** the PDF is styled professionally with the business branding colors
-
-### Requirement: Email Delivery
-
-FinaBill SHALL send invoices and payment reminders via email.
-
-#### Scenario: Send invoice email
-- **GIVEN** an invoice in "draft" status
-- **WHEN** user clicks "Send"
-- **THEN** an email is sent to the customer's email address
-- **AND** the PDF invoice is attached
-- **AND** a delivery log is created with status (sent/failed/bounced)
-
-#### Scenario: Payment reminder
-- **GIVEN** an invoice is overdue (past due date with balance > 0)
-- **WHEN** automated reminder schedule triggers
-- **THEN** a reminder email is sent to the customer
-- **AND** a reminder log is created
-
-### Requirement: Business Branding
-
-FinaBill SHALL support per-business branding configuration for invoices.
-
-#### Scenario: Configure business profile
-- **GIVEN** a business exists
-- **WHEN** user configures the business profile in settings
-- **THEN** they can set: business logo (upload), business name, address, phone, email, payment terms text, invoice footer text, default tax rate, invoice numbering prefix
-- **AND** all generated invoices use this branding
-
-### Requirement: Mobile-Friendly UI
-
-FinaBill SHALL provide a mobile-responsive interface matching FinaFlow's design patterns.
-
-#### Scenario: Mobile invoice list
-- **GIVEN** a user on a mobile device
-- **WHEN** they view the invoices list
-- **THEN** the table adapts to card-based layout for small screens
-- **AND** actions (view, send, download) are accessible via touch-friendly buttons
-
-#### Scenario: Mobile invoice creation
-- **GIVEN** a user on a mobile device
-- **WHEN** they create an invoice
-- **THEN** the form is scrollable with stacked layout
-- **AND** line items can be added/removed with touch-friendly controls
-
----
-
-## ADDED Infrastructure Requirements
-
-### Requirement: Monorepo Structure
-
-The system SHALL be organized as a monorepo with shared packages.
+### Architecture
 
 ```
-/finabill/
-  ├── apps/
-  │   └── web/          # FinaBill React frontend (Vite)
-  ├── packages/
-  │   └── shared/       # @finabill/shared types, schemas, utilities
-  ├── api/              # Hono.js + tRPC backend
-  ├── db/               # Drizzle schema + migrations for FinaBill tables
-  ├── package.json
-  └── tsconfig.json
+finaflow/
+├── api/
+│   ├── customers-router.ts         ← NEW
+│   ├── invoices-router.ts          ← NEW
+│   ├── invoice-payments-router.ts  ← NEW
+│   ├── recurring-invoices-router.ts ← NEW
+│   ├── billing-reports-router.ts   ← NEW
+│   └── ...existing routers...
+├── src/
+│   ├── pages/
+│   │   ├── billing/                ← NEW — all billing pages
+│   │   │   ├── Invoices.tsx
+│   │   │   ├── InvoiceDetail.tsx
+│   │   │   ├── InvoiceBuilder.tsx
+│   │   │   ├── Customers.tsx
+│   │   │   ├── CustomerDetail.tsx
+│   │   │   ├── RecurringInvoices.tsx
+│   │   │   ├── BillingReports.tsx
+│   │   │   └── BillingDashboard.tsx
+│   │   ├── ...existing pages...
+│   ├── components/
+│   │   ├── Layout.tsx              ← MODIFIED — context switcher in sidebar
+│   │   └── ...existing...
+│   ├── features/
+│   │   └── billing/                ← NEW — billing components
+│   │       ├── InvoiceForm.tsx
+│   │       ├── InvoiceList.tsx
+│   │       ├── CustomerSelect.tsx
+│   │       ├── InvoicePDF.tsx
+│   │       └── PaymentForm.tsx
+│   └── hooks/
+│       ├── useBillingContext.ts    ← NEW — context switching hook
+│       └── ...existing...
+├── db/
+│   ├── schema.ts                   ← MODIFIED — new tables added
+│   └── ...existing...
+└── packages/
+    └── shared/                     ← NEW (optional, if needed for shared utilities)
 ```
 
-### Requirement: Database Schema
+### Context Switching: How It Works
 
-#### Table: `customers`
+The sidebar gains a **mode toggle** at the top. When the user switches modes, the entire navigation changes:
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | serial PK | |
-| businessId | int FK → businesses.id | |
-| customerNumber | varchar(20) UNIQUE | Auto-generated CUST-XXXX |
-| name | varchar(200) NOT NULL | |
-| email | varchar(255) | |
-| phone | varchar(50) | |
-| billingAddress | text | Street, city, postal code, country |
-| paymentTerms | varchar(50) | net15, net30, net60, due_on_receipt |
-| creditLimit | decimal(12,2) DEFAULT 0 | |
-| notes | text | |
-| isActive | boolean DEFAULT true | |
-| externalId | varchar(255) | For FinaFlow integration mapping |
-| externalSystem | varchar(50) | |
-| createdAt | timestamptz | |
-| updatedAt | timestamptz | |
-| deletedAt | timestamptz | Soft delete |
+```
+┌─────────────────────┐
+│ [  Expenses ✓  ]   │  ← Mode toggle dropdown
+│ [  Billing     ]   │
+├─────────────────────┤
+│ (mode-specific nav) │
+│                     │
+│ ...                 │
+└─────────────────────┘
+```
 
-#### Table: `invoices`
+#### Expenses Mode Sidebar
+```
+Dashboard
+Daily Sales
+Expenses
+Suppliers
+Bills
+  └─ All Bills
+  └─ Recurring Bills
+Accounts
+Payroll
+Wallet
+Calendar
+Reports
+Settings
+```
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | serial PK | |
-| businessId | int FK → businesses.id | |
-| customerId | int FK → customers.id | |
-| invoiceNumber | varchar(20) UNIQUE | Auto-generated INV-XXXX |
-| status | enum | draft, sent, partial, paid, overdue, void, credit_note |
-| issueDate | date NOT NULL | |
-| dueDate | date NOT NULL | Computed from payment_terms |
-| subtotal | decimal(12,2) | Sum of line item totals before tax/discount |
-| discountType | enum | percentage, fixed |
-| discountValue | decimal(12,2) | |
-| discountAmount | decimal(12,2) | Computed |
-| taxTotal | decimal(12,2) | Sum of line item taxes |
-| grandTotal | decimal(12,2) | subtotal - discount + tax |
-| amountPaid | decimal(12,2) DEFAULT 0 | |
-| balanceDue | decimal(12,2) | grand_total - amount_paid |
-| notes | text | |
-| terms | text | Payment terms text |
-| isRecurring | boolean DEFAULT false | |
-| recurringTemplateId | int FK → recurring_invoice_templates | |
-| sourceType | varchar(50) | manual, recurring, credit_note |
-| sourceId | int | ID of source (recurring gen log, etc.) |
-| voidReason | text | |
-| voidedAt | timestamptz | |
-| createdAt | timestamptz | |
-| updatedAt | timestamptz | |
-| deletedAt | timestamptz | |
+#### Billing Mode Sidebar
+```
+Billing Dashboard      ← Income-focused KPIs
+Invoices
+  └─ All Invoices
+  └─ Create Invoice
+  └─ Recurring Invoices
+Customers
+  └─ All Customers
+  └─ Add Customer
+Payments Received
+Reports
+  └─ Revenue by Period
+  └─ Customer Aging
+  └─ Invoice Status
+  └─ Customer Statements
+Settings               ← Same settings, billing-focused sections
+```
 
-#### Table: `invoice_items`
+**Shared items** (accessible from both modes):
+- Settings (business profile, users, currencies — same pages)
+- Accounts/COA (same Chart of Accounts — filtered by context)
+- Calendar (same calendar — shows invoice due dates in billing mode)
+- User profile/logout
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | serial PK | |
-| invoiceId | int FK → invoices.id | |
-| lineNumber | int | Order within invoice |
-| description | text NOT NULL | |
-| quantity | decimal(12,2) DEFAULT 1 | |
-| unitPrice | decimal(12,2) NOT NULL | |
-| taxRate | decimal(5,2) DEFAULT 0 | Percentage (e.g., 16.00 for VAT) |
-| taxAmount | decimal(12,2) | Computed: quantity × unit_price × tax_rate / 100 |
-| discountRate | decimal(5,2) DEFAULT 0 | Percentage |
-| discountAmount | decimal(12,2) | Computed |
-| lineTotal | decimal(12,2) | Computed: (qty × unit_price) - discount + tax |
-| revenueCategoryId | int FK → revenue_categories | For accounting mapping |
-| createdAt | timestamptz | |
+### Business Onboarding: Primary Mode Selection
 
-#### Table: `invoice_payments`
+When a **new business is created**, the user selects their primary focus:
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | serial PK | |
-| businessId | int FK → businesses.id | |
-| invoiceId | int FK → invoices.id | |
-| paymentMethod | enum | cash, mpesa, bank_transfer, card, other |
-| amount | decimal(12,2) NOT NULL | |
-| reference | varchar(255) | Transaction reference (M-PESA code, cheque no.) |
-| paymentDate | date NOT NULL | |
-| notes | text | |
-| isReconciled | boolean DEFAULT false | Synced to FinaFlow |
-| reconciledAt | timestamptz | |
-| createdBy | int FK → users.id | |
-| createdAt | timestamptz | |
+```
+┌─────────────────────────────────────┐
+│  What do you want to do first?      │
+│                                     │
+│  [📊 Track Expenses & Cashflow]     │
+│     Manage bills, expenses, payroll │
+│                                     │
+│  [📋 Send Invoices & Get Paid]     │
+│     Create invoices, manage clients │
+│                                     │
+│  [🔄 I'll do both]                  │
+│     Full access to everything       │
+└─────────────────────────────────────┘
+```
 
-#### Table: `recurring_invoice_templates`
+This selection stores a `primaryMode` field on the `businesses` table:
+- `"expense"` — Default to Expenses mode on login
+- `"billing"` — Default to Billing mode on login
+- `"both"` — Default to Expenses mode (but both are equally accessible)
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | serial PK | |
-| businessId | int FK → businesses.id | |
-| customerId | int FK → customers.id | |
-| name | varchar(200) | Template name for display |
-| description | text | |
-| frequency | enum | weekly, monthly, quarterly, annually |
-| interval | int DEFAULT 1 | Every N periods |
-| nextDueDate | date NOT NULL | Next invoice generation date |
-| endDate | date | Optional end date |
-| isActive | boolean DEFAULT true | |
-| notes | text | Default invoice notes |
-| terms | text | Default invoice terms |
-| lastGeneratedDate | date | |
-| totalGenerated | int DEFAULT 0 | |
-| createdAt | timestamptz | |
-| updatedAt | timestamptz | |
-| deletedAt | timestamptz | |
+The user can always switch modes freely. The primary mode just determines the default landing view.
 
-#### Table: `recurring_template_items`
+### New Database Tables
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | serial PK | |
-| templateId | int FK → recurring_invoice_templates.id | |
-| description | text NOT NULL | |
-| quantity | decimal(12,2) DEFAULT 1 | |
-| unitPrice | decimal(12,2) NOT NULL | |
-| taxRate | decimal(5,2) DEFAULT 0 | |
-| revenueCategoryId | int FK → revenue_categories | |
-| createdAt | timestamptz | |
+All new tables follow existing FinaFlow conventions (same `businessId` scoping, same timestamp patterns, same soft-delete via `deletedAt`).
 
-#### Table: `recurring_invoice_generations`
+#### `customers`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | serial PK | |
-| templateId | int FK → recurring_invoice_templates.id | |
-| invoiceId | int FK → invoices.id | The generated invoice |
-| generatedDate | date NOT NULL | |
-| status | enum | success, skipped, failed |
-| skipReason | text | |
-| createdAt | timestamptz | |
+```sql
+CREATE TABLE customers (
+  id              SERIAL PRIMARY KEY,
+  businessId      INT NOT NULL REFERENCES businesses(id),
+  customerNumber  VARCHAR(20) UNIQUE,        -- Auto-generated CUST-XXXX
+  name            VARCHAR(200) NOT NULL,
+  email           VARCHAR(255),
+  phone           VARCHAR(50),
+  billingAddress  TEXT,
+  paymentTerms    VARCHAR(50),                -- net15, net30, net60, due_on_receipt
+  creditLimit     DECIMAL(15,2) DEFAULT 0,
+  currency        VARCHAR(3) DEFAULT 'KES',   -- Customer's preferred currency
+  notes           TEXT,
+  isActive        BOOLEAN DEFAULT true,
+  createdAt       TIMESTAMPTZ DEFAULT NOW(),
+  updatedAt       TIMESTAMPTZ DEFAULT NOW(),
+  deletedAt       TIMESTAMPTZ
+);
+CREATE INDEX idx_customers_business ON customers(businessId);
+CREATE INDEX idx_customers_email ON customers(email);
+```
 
-#### Table: `payment_reminders`
+#### `invoices`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | serial PK | |
-| businessId | int FK → businesses.id | |
-| invoiceId | int FK → invoices.id | |
-| reminderType | enum | first_reminder, second_reminder, final_reminder |
-| scheduledDate | date | |
-| sentDate | date | |
-| status | enum | pending, sent, failed |
-| deliveryLog | jsonb | |
-| createdAt | timestamptz | |
+```sql
+CREATE TABLE invoices (
+  id                  SERIAL PRIMARY KEY,
+  businessId          INT NOT NULL REFERENCES businesses(id),
+  locationId          INT REFERENCES locations(id),
+  customerId          INT NOT NULL REFERENCES customers(id),
+  invoiceNumber       VARCHAR(20) UNIQUE,       -- INV-XXXX per business
+  status              VARCHAR(20) NOT NULL DEFAULT 'draft',
+                      -- draft, sent, partial, paid, overdue, void, credit_note
+  issueDate           DATE NOT NULL,
+  dueDate             DATE NOT NULL,
+  currency            VARCHAR(3) DEFAULT 'KES',
+  subtotal            DECIMAL(15,2) NOT NULL,
+  discountType        VARCHAR(10),               -- percentage, fixed
+  discountValue       DECIMAL(15,2) DEFAULT 0,
+  discountAmount      DECIMAL(15,2) DEFAULT 0,
+  taxTotal            DECIMAL(15,2) DEFAULT 0,
+  grandTotal          DECIMAL(15,2) NOT NULL,
+  amountPaid          DECIMAL(15,2) DEFAULT 0,
+  balanceDue          DECIMAL(15,2) GENERATED ALWAYS AS (grandTotal - amountPaid) STORED,
+  notes               TEXT,
+  terms               TEXT,
+  isRecurring         BOOLEAN DEFAULT false,
+  recurringTemplateId INT REFERENCES recurring_invoice_templates(id),
+  sourceType          VARCHAR(50),               -- manual, recurring, credit_note
+  sourceId            INT,
+  voidReason          TEXT,
+  voidedAt            TIMESTAMPTZ,
+  createdBy           INT REFERENCES users(id),
+  createdAt           TIMESTAMPTZ DEFAULT NOW(),
+  updatedAt           TIMESTAMPTZ DEFAULT NOW(),
+  deletedAt           TIMESTAMPTZ
+);
+CREATE INDEX idx_invoices_business ON invoices(businessId);
+CREATE INDEX idx_invoices_customer ON invoices(customerId);
+CREATE INDEX idx_invoices_status ON invoices(status);
+CREATE INDEX idx_invoices_issue_date ON invoices(issueDate);
+CREATE INDEX idx_invoices_due_date ON invoices(dueDate);
+```
 
-#### Table: `invoice_email_logs`
+#### `invoice_items`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | serial PK | |
-| invoiceId | int FK → invoices.id | |
-| recipient | varchar(255) | Email address |
-| emailType | enum | invoice_sent, payment_reminder, payment_receipt |
-| status | enum | sent, delivered, opened, bounced, failed |
-| sentAt | timestamptz | |
-| deliveredAt | timestamptz | |
-| openedAt | timestamptz | |
-| errorMessage | text | |
-| createdAt | timestamptz | |
+```sql
+CREATE TABLE invoice_items (
+  id                  SERIAL PRIMARY KEY,
+  invoiceId           INT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+  lineNumber          INT NOT NULL,
+  description         TEXT NOT NULL,
+  quantity            DECIMAL(15,2) DEFAULT 1,
+  unitPrice           DECIMAL(15,2) NOT NULL,
+  taxRate             DECIMAL(5,2) DEFAULT 0,
+  taxAmount           DECIMAL(15,2) GENERATED ALWAYS AS (quantity * unitPrice * taxRate / 100) STORED,
+  discountRate        DECIMAL(5,2) DEFAULT 0,
+  discountAmount      DECIMAL(15,2) DEFAULT 0,
+  lineTotal           DECIMAL(15,2) NOT NULL,
+  revenueCategoryId   INT REFERENCES revenue_categories(id),
+  createdAt           TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_invoice_items_invoice ON invoice_items(invoiceId);
+```
 
-#### Table: `business_profiles`
+#### `invoice_payments`
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | serial PK | |
-| businessId | int FK → businesses.id UNIQUE | |
-| logoUrl | text | Uploaded logo path |
-| businessName | varchar(200) | Display name on invoices |
-| address | text | |
-| phone | varchar(50) | |
-| email | varchar(255) | |
-| website | varchar(255) | |
-| taxRegistrationNo | varchar(100) | KRA PIN, VAT no., etc. |
-| defaultTaxRate | decimal(5,2) DEFAULT 0 | |
-| invoicePrefix | varchar(10) DEFAULT "INV" | |
-| invoiceNumberStart | int DEFAULT 1 | |
-| paymentTerms | text | Default terms text |
-| footerText | text | Invoice footer |
-| accentColor | varchar(7) | Hex color for invoice branding |
-| createdAt | timestamptz | |
-| updatedAt | timestamptz | |
+```sql
+CREATE TABLE invoice_payments (
+  id              SERIAL PRIMARY KEY,
+  businessId      INT NOT NULL REFERENCES businesses(id),
+  invoiceId       INT NOT NULL REFERENCES invoices(id),
+  paymentMethod   VARCHAR(20) NOT NULL,        -- cash, mpesa, bank_transfer, card, other
+  amount          DECIMAL(15,2) NOT NULL,
+  reference       VARCHAR(255),
+  paymentDate     DATE NOT NULL,
+  currency        VARCHAR(3) DEFAULT 'KES',
+  exchangeRate    DECIMAL(10,4) DEFAULT 1,     -- For multi-currency payments
+  notes           TEXT,
+  accountId       INT REFERENCES accounts(id), -- The cash/bank/wallet account deposited to
+  isReconciled    BOOLEAN DEFAULT false,
+  reconciledAt    TIMESTAMPTZ,
+  createdBy       INT REFERENCES users(id),
+  createdAt       TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_invpayments_invoice ON invoice_payments(invoiceId);
+CREATE INDEX idx_invpayments_date ON invoice_payments(paymentDate);
+CREATE INDEX idx_invpayments_method ON invoice_payments(paymentMethod);
+```
 
-### Requirement: FinaFlow Integration API
+#### `recurring_invoice_templates`
 
-#### Integration Endpoints (in FinaFlow's `api/integration`)
+```sql
+CREATE TABLE recurring_invoice_templates (
+  id                SERIAL PRIMARY KEY,
+  businessId        INT NOT NULL REFERENCES businesses(id),
+  customerId        INT NOT NULL REFERENCES customers(id),
+  name              VARCHAR(200),
+  description       TEXT,
+  frequency         VARCHAR(20) NOT NULL,       -- weekly, monthly, quarterly, annually
+  interval          INT DEFAULT 1,              -- Every N periods
+  nextDueDate       DATE NOT NULL,
+  endDate           DATE,
+  isActive          BOOLEAN DEFAULT true,
+  notes             TEXT,
+  terms             TEXT,
+  lastGeneratedDate DATE,
+  totalGenerated    INT DEFAULT 0,
+  createdAt         TIMESTAMPTZ DEFAULT NOW(),
+  updatedAt         TIMESTAMPTZ DEFAULT NOW(),
+  deletedAt         TIMESTAMPTZ
+);
+CREATE INDEX idx_recurring_templates_active ON recurring_invoice_templates(businessId, isActive);
+CREATE INDEX idx_recurring_templates_due ON recurring_invoice_templates(nextDueDate);
+```
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `POST /api/integration/finabill/sync-payment` | Mutation | Receive a payment from FinaBill, create journal entry |
-| `POST /api/integration/finabill/sync-invoice` | Mutation | Create/update invoice as receivable in FinaFlow |
-| `GET /api/integration/finabill/accounts` | Query | Get Chart of Accounts for revenue category mapping |
-| `GET /api/integration/finabill/verify-business` | Query | Verify API key and return business context |
-| `POST /api/integration/finabill/reconcile` | Mutation | Trigger batch reconciliation |
+#### `recurring_template_items`
 
-#### Authentication between platforms
-- FinaBill uses an API key (generated per business in FinaFlow settings)
-- API key is passed in `X-FinaBill-Api-Key` header
-- FinaFlow validates the key and scopes all operations to the matching business
+```sql
+CREATE TABLE recurring_template_items (
+  id                SERIAL PRIMARY KEY,
+  templateId        INT NOT NULL REFERENCES recurring_invoice_templates(id) ON DELETE CASCADE,
+  description       TEXT NOT NULL,
+  quantity          DECIMAL(15,2) DEFAULT 1,
+  unitPrice         DECIMAL(15,2) NOT NULL,
+  taxRate           DECIMAL(5,2) DEFAULT 0,
+  revenueCategoryId INT REFERENCES revenue_categories(id),
+  createdAt         TIMESTAMPTZ DEFAULT NOW()
+);
+```
 
-### Requirement: Chron Job for Recurring Invoices
+#### `recurring_invoice_generations`
 
-- Daily cron job runs at 00:00
-- Finds all active recurring templates where nextDueDate <= today
-- For each, creates a new invoice from template items
-- Updates nextDueDate (add frequency interval)
-- Logs generation in `recurring_invoice_generations`
-- Sends generated invoices automatically (configurable)
+```sql
+CREATE TABLE recurring_invoice_generations (
+  id              SERIAL PRIMARY KEY,
+  templateId      INT NOT NULL REFERENCES recurring_invoice_templates(id),
+  invoiceId       INT REFERENCES invoices(id),
+  generatedDate   DATE NOT NULL,
+  status          VARCHAR(20) NOT NULL,         -- success, skipped, failed
+  skipReason      TEXT,
+  errorMessage    TEXT,
+  createdAt       TIMESTAMPTZ DEFAULT NOW()
+);
+```
 
-### Requirement: Invoice Status Lifecycle
+#### `payment_reminders`
+
+```sql
+CREATE TABLE payment_reminders (
+  id              SERIAL PRIMARY KEY,
+  businessId      INT NOT NULL REFERENCES businesses(id),
+  invoiceId       INT NOT NULL REFERENCES invoices(id),
+  reminderType    VARCHAR(20) NOT NULL,         -- first_reminder, second_reminder, final_reminder
+  scheduledDate   DATE,
+  sentDate        DATE,
+  status          VARCHAR(20) DEFAULT 'pending', -- pending, sent, failed
+  deliveryLog     JSONB,
+  createdAt       TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+#### `invoice_email_logs`
+
+```sql
+CREATE TABLE invoice_email_logs (
+  id              SERIAL PRIMARY KEY,
+  invoiceId       INT NOT NULL REFERENCES invoices(id),
+  recipient       VARCHAR(255) NOT NULL,
+  emailType       VARCHAR(30) NOT NULL,         -- invoice_sent, payment_reminder, payment_receipt
+  status          VARCHAR(20) NOT NULL,         -- sent, delivered, opened, bounced, failed
+  sentAt          TIMESTAMPTZ,
+  deliveredAt     TIMESTAMPTZ,
+  openedAt        TIMESTAMPTZ,
+  errorMessage    TEXT,
+  createdAt       TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+#### `business_profiles` (invoice branding)
+
+```sql
+CREATE TABLE business_profiles (
+  id                  SERIAL PRIMARY KEY,
+  businessId          INT NOT NULL UNIQUE REFERENCES businesses(id),
+  logoUrl             TEXT,                    -- Uploaded logo
+  businessName        VARCHAR(200),
+  address             TEXT,
+  phone               VARCHAR(50),
+  email               VARCHAR(255),
+  website             VARCHAR(255),
+  taxRegistrationNo   VARCHAR(100),            -- KRA PIN, VAT no.
+  defaultTaxRate      DECIMAL(5,2) DEFAULT 0,
+  invoicePrefix       VARCHAR(10) DEFAULT 'INV',
+  invoiceNumberStart  INT DEFAULT 1,
+  paymentTerms        TEXT,                    -- Default terms text
+  footerText          TEXT,
+  accentColor         VARCHAR(7) DEFAULT '#C73E1D',
+  createdAt           TIMESTAMPTZ DEFAULT NOW(),
+  updatedAt           TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### Modified Existing Tables
+
+#### `businesses` — Add `primaryMode` column
+
+| Column | Type | Default | Notes |
+|--------|------|---------|-------|
+| primaryMode | VARCHAR(20) | 'both' | 'expense', 'billing', or 'both' |
+
+---
+
+## API Endpoints (NEW)
+
+### `customers-router.ts` (`/api/customers`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `customers.list` | Query | Paginated list with search (name, email, phone, customerNumber) |
+| `customers.getById` | Query | Single customer with stats (total invoiced, total paid, balance) |
+| `customers.create` | Mutation | Create customer with auto-generated customerNumber |
+| `customers.update` | Mutation | Update customer details |
+| `customers.delete` | Mutation | Soft delete (check no outstanding invoices) |
+| `customers.getStatement` | Query | Customer statement with invoice list and balances |
+
+### `invoices-router.ts` (`/api/invoices`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `invoices.list` | Query | Paginated list with status/date/customer/currency filters |
+| `invoices.getById` | Query | Full invoice with line items and payments |
+| `invoices.create` | Mutation | Create invoice with line items (auto-calculate totals) |
+| `invoices.update` | Mutation | Update draft invoice only |
+| `invoices.send` | Mutation | Change status to 'sent', trigger email dispatch |
+| `invoices.void` | Mutation | Void invoice with reason, reverse payments if any |
+| `invoices.downloadPdf` | Query | Generate and return PDF |
+| `invoices.getNextNumber` | Query | Return next available invoice number for preview |
+
+### `invoice-payments-router.ts` (`/api/invoice-payments`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `invoicePayments.list` | Query | Payments list with date/payment method/invoice filters |
+| `invoicePayments.record` | Mutation | Record payment, update invoice balance/status |
+| `invoicePayments.getByInvoice` | Query | All payments for a specific invoice |
+| `invoicePayments.delete` | Mutation | Reverse a payment (within cancelation period) |
+
+### `recurring-invoices-router.ts` (`/api/recurring-invoices`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `recurringInvoices.list` | Query | List recurring templates |
+| `recurringInvoices.create` | Mutation | Create template with items |
+| `recurringInvoices.update` | Mutation | Update template |
+| `recurringInvoices.delete` | Mutation | Deactivate template |
+| `recurringInvoices.triggerNow` | Mutation | Manually trigger generation |
+| `recurringInvoices.skipNext` | Mutation | Skip next occurrence |
+| `recurringInvoices.getGenerationLog` | Query | History of auto-generations |
+
+### `billing-reports-router.ts` (`/api/billing-reports`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `billingReports.revenueByPeriod` | Query | Grouped revenue by month/quarter/year |
+| `billingReports.customerAging` | Query | Outstanding balances by aging bucket |
+| `billingReports.invoiceStatusDistribution` | Query | Count/amount by status |
+| `billingReports.revenueByCategory` | Query | Revenue breakdown by revenue category |
+
+### `billing-business-profile-router.ts` (`/api/billing/business-profile`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `billingProfile.get` | Query | Get business branding profile |
+| `billingProfile.update` | Mutation | Update branding (logo, prefix, terms, colors) |
+
+### `billing-dashboard-router.ts` (`/api/billing/dashboard`)
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `billingDashboard.summary` | Query | Revenue KPIs (invoiced, collected, outstanding) |
+| `billingDashboard.recentInvoices` | Query | Last N invoices |
+| `billingDashboard.upcomingRecurring` | Query | Next N recurring invoices |
+
+---
+
+## UI Pages (NEW — `src/pages/billing/`)
+
+### Billing Dashboard (`/billing`)
+- Revenue summary cards: Invoiced This Month, Collected This Month, Outstanding
+- Recent invoices list (last 10)
+- Upcoming recurring invoices (next 5)
+- Aging summary (buckets with amounts)
+- Monthly revenue trend chart (recharts)
+
+### Customers (`/billing/customers`)
+- List page with search (name, email, phone, customerNumber)
+- Status indicator (active/inactive)
+- Quick actions: Create Invoice, View Statement
+- Customer detail page with:
+  - Info cards (contact, payment terms, credit limit)
+  - Invoice history table with status badges
+  - Statement summary (balance, aging)
+  - Quick action buttons
+
+### Invoices (`/billing/invoices`)
+- List with status tabs: All, Draft, Sent, Paid, Overdue, Void
+- FinaFlow-style button tabs (border-b-2 active indicator)
+- Status badges with color coding (same pattern as bills)
+- Quick actions: View, Send, Download PDF, Record Payment, Void
+
+### Invoice Builder (`/billing/invoices/create`, `/billing/invoices/:id/edit`)
+- Customer selector (searchable dropdown with contact info)
+- Invoice date, due date (auto-computed from payment terms)
+- Line items table (add/remove rows, inline edit qty/price/tax)
+- Revenue category selector per line item (from revenue_categories table)
+- Currency selector (defaults to customer's preferred currency)
+- Real-time totals (subtotal, discount, tax, grand total)
+- Notes and payment terms text areas
+- Save as Draft / Save and Send buttons
+
+### Invoice Detail (`/billing/invoices/:id`)
+- Professional invoice display (print-friendly)
+- Status badge with color coding
+- Payment history table
+- Email log entries
+- Actions: Send, Download PDF, Record Payment, Void
+
+### Recurring Invoices (`/billing/recurring`)
+- Template list with status indicator (active/inactive)
+- Create/edit template form (customer, name, frequency, items, next date)
+- Template detail with generation history log
+- Manual trigger / Skip next action buttons
+
+### Payments Received (`/billing/payments`)
+- Payments list with date range, payment method filters
+- Payment method breakdown summary card
+- Each payment shows linked invoice and customer
+
+### Billing Reports (`/billing/reports`)
+- Revenue by period chart and table (recharts bar chart)
+- Customer aging summary card with bucket breakdown
+- Invoice status distribution (pie chart)
+- Date range picker
+- CSV export
+
+---
+
+## Invoice Status Lifecycle
 
 ```
 [Draft] ──→ [Sent] ──→ [Partial] ──→ [Paid]
    │            │           │
-   ├──→ [Void]  └──→ [Overdue]     └──→ [Credit Note]
-                    (past due date + balance > 0)
+   ├──→ [Void]  └──→ [Overdue]    └──→ [Credit Note]
+                  (past due + balance > 0)
 ```
 
-### Requirement: Invoice Numbering
-
-- Format: `{prefix}-{number}` where prefix defaults to "INV" and number auto-increments
-- Prefix configurable in business profile settings
-- Numbering is per-business (not global)
-- Format: `INV-0001`, `INV-0002`, etc.
-
-### Requirement: Shared NPM Package Structure
-
-```typescript
-// @finabill/shared package
-@finabill/shared/
-  ├── src/
-  │   ├── index.ts
-  │   ├── types/
-  │   │   ├── customer.ts       // Customer, CreateCustomerInput, UpdateCustomerInput
-  │   │   ├── invoice.ts        // Invoice, InvoiceItem, InvoiceStatus, CreateInvoiceInput
-  │   │   ├── payment.ts        // Payment, RecordPaymentInput, PaymentMethod
-  │   │   ├── recurring.ts      // RecurringTemplate, RecurringTemplateItem
-  │   │   ├── revenue.ts        // RevenueCategory, RevenueReport
-  │   │   ├── business.ts       // BusinessProfile, BusinessProfileUpdate
-  │   │   ├── common.ts         // Pagination, DateRange, ApiResponse, BusinessContext
-  │   │   └── integration.ts    // SyncPayload, SyncResult
-  │   ├── schemas/
-  │   │   ├── customer.ts       // Zod schemas
-  │   │   ├── invoice.ts
-  │   │   ├── payment.ts
-  │   │   └── recurring.ts
-  │   ├── utils/
-  │   │   ├── currency.ts       // formatCurrency, parseCurrency
-  │   │   ├── invoice.ts        // calculateTotals, computeDueDate, generateInvoiceNumber
-  │   │   ├── date.ts           // nextDateByFrequency, isOverdue, formatDate
-  │   │   ├── validation.ts     // shared validation helpers
-  │   │   └── pagination.ts     // paginate, buildPaginationMeta
-  │   └── constants.ts          // InvoiceStatus, PaymentMethod enums, defaultTaxRates
-  ├── package.json
-  ├── tsconfig.json
-  └── README.md
-```
+- **Draft**: Editable, not yet sent to customer
+- **Sent**: Dispatched to customer via email, no longer editable
+- **Partial**: Some payments received, balance still due
+- **Paid**: Fully paid
+- **Overdue**: Past due date with balance > 0
+- **Void**: Cancelled with reason (only if not fully paid)
+- **Credit Note**: Full reversal (applies when voiding a paid invoice)
 
 ---
 
-## MODIFIED FinaFlow Requirements
+## Integration with Chart of Accounts
 
-### FinaFlow: Integration Router (NEW)
+The existing **Chart of Accounts** already has:
+- `accountType = "revenue"` — Income statement revenue accounts
+- `revenue_categories` table — Categorizes revenue (product_sales, service_revenue, subscription, etc.)
+- Each `revenueCategory` links to a `incomeAccountId` (a `revenue` type account in the COA)
+- Multi-currency support on the `accounts` table
 
-FinaFlow SHALL expose integration endpoints for FinaBill to sync billing data into the accounting system.
+### How Invoices Feed Into Financial Reports
 
-#### Scenario: Receive payment sync
-- **GIVEN** FinaBill records a payment
-- **WHEN** FinaBill calls the sync endpoint
-- **THEN** FinaFlow creates a journal entry:
-  - Debit: Cash/Bank account (determined by payment method)
-  - Credit: Revenue account (determined by invoice revenue category)
-- **AND** returns success with the journal entry ID
+When an invoice is **sent** (status changes from draft → sent):
+- No journal entry yet — revenue is not recognized until payment
 
-#### Scenario: API key verification
-- **GIVEN** a request with X-FinaBill-Api-Key header
-- **WHEN** FinaFlow receives the request
-- **THEN** it validates the key against the `finabill_api_keys` table
-- **AND** returns the associated business context
+When an **invoice payment is recorded**:
+- Creates a journal entry automatically:
+  - **Debit**: Cash/Bank/Wallet account (determined by payment method)
+  - **Credit**: Revenue account (from the line item's revenueCategory → incomeAccountId)
+- This feeds directly into:
+  - **Profit & Loss** — Revenue is recognized
+  - **Balance Sheet** — Cash/Bank balance increases
+  - **Cash Flow** — Operating cash inflow recorded
 
-### FinaFlow: New `finabill_api_keys` Table
+When an invoice is **voided** with payments made:
+- Creates a reversing journal entry
+- Or creates a credit note entry
 
-| Column | Type | Notes |
-|--------|------|-------|
-| id | serial PK | |
-| businessId | int FK → businesses.id | |
-| apiKey | varchar(64) UNIQUE | Generated key |
-| isActive | boolean DEFAULT true | |
-| createdAt | timestamptz | |
-| expiresAt | timestamptz | |
+### Shared Account System
+
+The `accounts` table (`cash`, `mpesa`, `bank_account` types) is used by **both**:
+- **Expenses side**: Bills payments draw from these accounts
+- **Billing side**: Invoice payments deposit into these accounts
+- The `accountId` field on `invoice_payments` links directly to `accounts.id`
+
+This means every payment, whether outgoing (bill) or incoming (invoice), connects to the same wallet/account tracking. The existing ledger and financial reports automatically reflect both sides.
+
+---
+
+## Payment to Account Mapping
+
+| Payment Method | Account Type | COA Sub-Type |
+|---------------|--------------|--------------|
+| cash | cash | asset:cash |
+| mpesa | mpesa | asset:cash |
+| bank_transfer | bank_account | asset:bank |
+| card | bank_account | asset:bank |
+
+This mirrors the existing [accounting-maps.ts](file:///d:/DevCenter/abuilds/fina/finaflow/api/lib/accounting-maps.ts) pattern used for bill payments, ensuring consistency.
+
+---
+
+## Recurring Invoice Engine (Cron Job)
+
+A scheduled task runs daily:
+1. Queries all active `recurring_invoice_templates` where `nextDueDate <= today`
+2. For each template, creates a new invoice from template items
+3. Updates `nextDueDate` by the frequency interval
+4. Creates a `recurring_invoice_generations` log entry
+5. Optionally sends the generated invoice via email (configurable)
+
+Frequency computation:
+- **Weekly**: `nextDueDate + 7 days`
+- **Monthly**: `nextDueDate + 1 month` (using date-fns or similar)
+- **Quarterly**: `nextDueDate + 3 months`
+- **Annually**: `nextDueDate + 1 year`
+
+---
+
+## Payment Reminders (Cron Job)
+
+A scheduled task runs daily:
+1. Finds all invoices where `status = 'sent' OR status = 'partial'` AND `dueDate < today` AND `balanceDue > 0`
+2. Groups by days overdue:
+   - 7 days overdue → First reminder
+   - 14 days overdue → Second reminder
+   - 30+ days overdue → Final reminder
+3. Creates `payment_reminders` entries with `status = 'pending'`
+4. Email subsystem sends reminders and updates status
+
+---
+
+## PDF Invoice Generation
+
+Using a lightweight PDF library (pdfkit or similar):
+- Business logo (from `business_profiles.logoUrl`)
+- Business info (name, address, phone, email, tax reg no)
+- Customer info block
+- Invoice header (number, date, due date, status)
+- Line items table (description, qty, unit price, tax, total)
+- Totals section (subtotal, discount, tax, grand total)
+- Amount in words (for Kenyan businesses)
+- Payment terms and notes
+- Business accent color (from `business_profiles.accentColor`)
 
 ---
 
 ## UI Design Patterns
 
-- **Color scheme**: Follow FinaFlow's warm neutral palette (#2D2A26 text, #E8E0D8 borders, #C73E1D accent, #F5EDE6 backgrounds)
-- **Sidebar navigation**: Same `Layout` component pattern with collapsible sidebar, icon + label links
-- **Tabs style**: Underline-tab pattern (border-b-2 on active, same as FinaFlow's Accounts/Suppliers pages)
-- **Cards**: Rounded-2xl, border [#E8E0D8], white background, shadow-sm
-- **Fonts**: Serif for page titles (font-serif), monospace for currency amounts (font-mono)
-- **Mobile**: Same responsive patterns (grid → stacked at sm, tables → card lists)
-- **Tables**: Same styled table pattern (border-b divides, hover:bg[#F5EDE6]/50 rows)
-- **Forms**: Same input styling (rounded border px-3 py-2 text-sm)
-- **Buttons**: Same variant classes (bg-[#C73E1D] primary, bg-[#2E7D32] success actions)
-- **Date pickers**: Native `<input type="date">` with max/min constraints
+All billing pages follow existing FinaFlow conventions exactly:
+
+| Pattern | Existing Reference | How Billing Follows |
+|---------|-------------------|-------------------|
+| **Sidebar** | Layout.tsx — collapsible, icon+label | Same component, context-switched nav items |
+| **Mobile nav** | MobileBottomNavigation — bottom tab bar | Context-switched bottom items |
+| **Page tabs** | Reports.tsx — button-style `border-b-2` | Same pattern for invoice status tabs |
+| **Cards** | All pages — `rounded-2xl border border-[#E8E0D8] bg-white shadow-sm` | Same |
+| **Tables** | Bills.tsx — `border-b` divides, hover rows | Same |
+| **Buttons** | Primary `bg-[#C73E1D]`, success `bg-[#2E7D32]` | Same |
+| **Inputs** | `rounded-lg border px-3 py-2 text-sm` | Same |
+| **Dialogs** | shadcn `<Dialog>` | Same |
+| **Color palette** | `#2D2A26` text, `#E8E0D8` borders, `#C73E1D` accent, `#F5EDE6` bg, `#8D8A87` muted | Same |
+| **Fonts** | Serif titles, monospace currency amounts | Same |
+| **Status badges** | Bills.tsx — colored inline badges | Same pattern, different status values |
+| **Date pickers** | Native `<input type="date">` | Same |
+
+---
+
+## Mobile Experience
+
+- **Bottom navigation** context-switches just like the sidebar:
+  - Expenses mode: Dashboard, Sales, Expenses, Bills, Reports
+  - Billing mode: Dashboard, Invoices, Customers, Payments, Reports
+- **Invoice list** adapts to card-based layout on small screens
+- **Invoice builder** is scrollable with touch-friendly line item controls
+- **Dialogs** are full-screen on mobile
+- **Touch targets** at least 44px
 
 ---
 
 ## Indexes for Performance
 
-- `idx_customers_business_id` on `customers(businessId)`
-- `idx_customers_email` on `customers(email)`
-- `idx_invoices_business_id` on `invoices(businessId)`
-- `idx_invoices_customer_id` on `invoices(customerId)`
-- `idx_invoices_status` on `invoices(status)`
-- `idx_invoices_issue_date` on `invoices(issueDate)`
-- `idx_invoice_items_invoice_id` on `invoice_items(invoiceId)`
-- `idx_invoice_payments_invoice_id` on `invoice_payments(invoiceId)`
-- `idx_invoice_payments_payment_date` on `invoice_payments(paymentDate)`
-- `idx_recurring_templates_active` on `recurring_invoice_templates(businessId, isActive)`
-- `idx_recurring_templates_next_due` on `recurring_invoice_templates(nextDueDate)`
-- `idx_email_logs_invoice_id` on `invoice_email_logs(invoiceId)`
-- Unique indexes on `invoiceNumber`, `customerNumber`
+```
+idx_customers_business       ON customers(businessId)
+idx_customers_email          ON customers(email)
+idx_invoices_business        ON invoices(businessId)
+idx_invoices_customer        ON invoices(customerId)
+idx_invoices_status          ON invoices(status)
+idx_invoices_issue_date      ON invoices(issueDate)
+idx_invoices_due_date        ON invoices(dueDate)
+idx_invoice_items_invoice    ON invoice_items(invoiceId)
+idx_invpayments_invoice      ON invoice_payments(invoiceId)
+idx_invpayments_date         ON invoice_payments(paymentDate)
+idx_invpayments_method       ON invoice_payments(paymentMethod)
+idx_recurring_templates_active ON recurring_invoice_templates(businessId, isActive)
+idx_recurring_templates_due  ON recurring_invoice_templates(nextDueDate)
+uq_invoice_number            ON invoices(invoiceNumber) — unique per business
+uq_customer_number           ON customers(customerNumber) — unique per business
+```
 
 ---
 
-## Migration Strategy
+## Permission Model
 
-### Phase 1: Foundation (Week 1-2)
-- Set up monorepo structure
-- Create `@finabill/shared` package with types and schemas
-- Create database schema + Drizzle migration scripts
-- Set up FinaBill API scaffold (Hono + tRPC)
+Leveraging the existing RBAC system, new permissions are added:
 
-### Phase 2: Core Features (Week 3-4)
-- Customer CRUD API + UI
-- Invoice CRUD API + UI with line items
-- Invoice status lifecycle management
-- PDF generation
+| Permission Constant | What It Controls |
+|--------------------|-----------------|
+| `INVOICES_VIEW` | View invoice list and details |
+| `INVOICES_CREATE` | Create and edit invoices |
+| `INVOICES_SEND` | Send invoices to customers |
+| `INVOICES_VOID` | Void invoices |
+| `INVOICES_PAY` | Record payments against invoices |
+| `CUSTOMERS_VIEW` | View customer list and details |
+| `CUSTOMERS_MANAGE` | Create, edit, delete customers |
+| `RECURRING_MANAGE` | Create, edit, manage recurring templates |
+| `BILLING_REPORTS_VIEW` | View billing reports |
+| `BILLING_SETTINGS_MANAGE` | Manage billing settings and branding |
 
-### Phase 3: Billing Operations (Week 5-6)
-- Payment recording
-- Recurring invoice engine + cron job
-- Email delivery (invoices + reminders)
-- Revenue reporting
+These follow the same pattern as existing permissions (`BILLS_VIEW`, `EXPENSES_VIEW`, etc.) and are checked via `hasAnyPermission()`.
 
-### Phase 4: Integration (Week 7-8)
-- FinaFlow integration router
-- Payment sync (FinaBill → FinaFlow journal entries)
-- Shared library consumption in FinaFlow
-- Batch reconciliation
+---
 
-### Phase 5: Polish (Week 9-10)
-- Business branding on invoices
-- Mobile optimization
-- Permission system
-- Testing (unit + integration)
-- Documentation
+## Invoice Numbering
+
+- Format: `{prefix}-{number}` where prefix defaults to `"INV"`
+- Prefix configurable in business profile settings
+- Numbering is per-business (not global)
+- First invoice: `INV-0001`, second: `INV-0002`, etc.
+- Uses a counter stored in `business_profiles.invoiceNumberStart`
+- Atomic increment to prevent duplicates
+
+---
+
+## Data Migration
+
+### Existing Data
+- **No data migration needed** — this is a new module. No existing tables are renamed or restructured.
+- The `businesses` table gets a `primaryMode` column with default `'both'` for existing businesses.
+
+### Seed Data
+- No seed data needed for billing-specific tables.
+- Existing `revenue_categories` seed data already exists in `db/seed.ts`.
+
+---
+
+## Phase Plan
+
+### Phase 1: Foundation
+1. Add `primaryMode` column to `businesses` table
+2. Create all new database tables (Drizzle schema + migration)
+3. Add context-switching infrastructure (Layout.tsx changes, useBillingContext hook)
+4. Add new permissions to the RBAC system
+5. Add new permission seed data
+
+### Phase 2: Core Features
+1. Customers CRUD (API + UI)
+2. Invoices CRUD (API + UI + line items)
+3. Invoice Builder UI
+4. Invoice status lifecycle management
+5. Invoice PDF generation
+
+### Phase 3: Billing Operations
+1. Payment recording (API + UI)
+2. Recurring invoice engine + cron job
+3. Email delivery (SendGrid or SMTP integration)
+4. Payment reminders (cron job)
+5. Business branding/profile settings
+
+### Phase 4: Reports & Dashboard
+1. Billing dashboard with revenue KPIs
+2. Revenue by period report
+3. Customer aging report
+4. Invoice status distribution
+5. Billing reports integrated into main Reports page
+
+### Phase 5: Polish
+1. Mobile optimization for all billing pages
+2. Permission enforcement in UI
+3. Business onboarding flow
+4. Integration with existing financial reports (P&L, Balance Sheet)
+5. Testing
+
+---
+
+## Key Design Decisions
+
+1. **No separate app** — Everything lives inside `finaflow/`. Avoids duplication of COA, auth, settings, wallets.
+
+2. **Full context switching** — The sidebar completely changes between modes. This keeps each mode lean and mobile-friendly.
+
+3. **Business onboarding** — `primaryMode` on the businesses table determines the default landing view. Users can always switch freely.
+
+4. **Revenue flows through existing COA** — Invoice payments create journal entries to revenue accounts. This means existing P&L and Balance Sheet reports automatically reflect billing data.
+
+5. **Shared payment accounts** — `invoice_payments.accountId` links to the same `accounts` table as bill payments. One unified view of all cash/bank/wallet balances.
+
+6. **Permissions reuse** — Follows the same `PERMISSIONS` constant pattern as the rest of the app. No new auth system needed.
+
+7. **Revenue categories already exist** — The `revenue_categories` table is already in the schema with `incomeAccountId` linking to the COA. No new table needed for this.

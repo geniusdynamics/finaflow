@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { createRouter, walletQuery, walletImport, walletAdmin, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { mobileWalletTransactions, mobileWalletProviders, mobileWalletDailyLedger, mobileWalletReconciliation, providerConfigs, expenses, suppliers, accounts, ledgerEntries } from "@db/schema";
+import { mobileWalletTransactions, mobileWalletProviders, mobileWalletDailyLedger, mobileWalletReconciliation, providerConfigs, expenses, suppliers, accounts, ledgerEntries, locations } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { walletRegistry } from "./lib/mobile-wallet/provider-registry";
 

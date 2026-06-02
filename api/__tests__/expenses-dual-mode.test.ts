@@ -685,8 +685,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
       isPaymentMethod: true,
     });
 
-    const supplier = await caller.businesses.addSupplier({
-      businessId: ctx.business.id,
+    const supplier = await caller.suppliers.create({
       locationId: ctx.location.id,
       name: `Path B Supplier ${seed}`,
     });
@@ -705,7 +704,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
   }
 
   it("creates a billPayments record when paying via expense with billId", async () => {
-    const { caller, paymentAccount, createdBill } = await seedPathBTest(`BP${Date.now()}`);
+    const { ctx, caller, paymentAccount, createdBill } = await seedPathBTest(`BP${Date.now()}`);
     const db = getTestDb();
 
     const category = await caller.expenses.createCategory({
@@ -714,7 +713,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
     });
 
     await caller.expenses.create({
-      locationId: paymentAccount.locationId,
+      locationId: ctx.location.id,
       categoryId: category.id,
       amount: "200.00",
       description: "Paying bill via expense",
@@ -736,7 +735,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
   });
 
   it("marks the bill as paid when full amount is paid via expense", async () => {
-    const { caller, paymentAccount, createdBill } = await seedPathBTest(`FULL${Date.now()}`);
+    const { ctx, caller, paymentAccount, createdBill } = await seedPathBTest(`FULL${Date.now()}`);
     const db = getTestDb();
 
     const category = await caller.expenses.createCategory({
@@ -745,7 +744,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
     });
 
     await caller.expenses.create({
-      locationId: paymentAccount.locationId,
+      locationId: ctx.location.id,
       categoryId: category.id,
       amount: "200.00",
       description: "Full payment",
@@ -768,7 +767,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
   });
 
   it("marks the bill as partial when partial amount is paid via expense", async () => {
-    const { caller, paymentAccount, createdBill } = await seedPathBTest(`PART${Date.now()}`);
+    const { ctx, caller, paymentAccount, createdBill } = await seedPathBTest(`PART${Date.now()}`);
     const db = getTestDb();
 
     const category = await caller.expenses.createCategory({
@@ -777,7 +776,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
     });
 
     await caller.expenses.create({
-      locationId: paymentAccount.locationId,
+      locationId: ctx.location.id,
       categoryId: category.id,
       amount: "50.00",
       description: "Partial payment",
@@ -800,7 +799,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
   });
 
   it("updates supplier totalPaid and currentBalance when paying via expense", async () => {
-    const { caller, paymentAccount, createdBill, supplier } = await seedPathBTest(`SUPP${Date.now()}`);
+    const { ctx, caller, paymentAccount, createdBill, supplier } = await seedPathBTest(`SUPP${Date.now()}`);
     const db = getTestDb();
 
     const [prePay] = await db.select().from(suppliers).where(eq(suppliers.id, supplier.id)).limit(1);
@@ -811,7 +810,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
     });
 
     await caller.expenses.create({
-      locationId: paymentAccount.locationId,
+      locationId: ctx.location.id,
       categoryId: category.id,
       amount: "200.00",
       description: "Supplier update via expense",
@@ -845,7 +844,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
     });
 
     await caller.expenses.create({
-      locationId: paymentAccount.locationId,
+      locationId: ctx.location.id,
       categoryId: category.id,
       amount: "200.00",
       description: "AP debit via expense",
@@ -872,7 +871,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
   });
 
   it("blocks standalone expense when supplier has outstanding bills (no billId)", async () => {
-    const { caller, paymentAccount, supplier } = await seedPathBTest(`BLK${Date.now()}`);
+    const { ctx, caller, paymentAccount, supplier } = await seedPathBTest(`BLK${Date.now()}`);
 
     const category = await caller.expenses.createCategory({
       name: `Block Cat ${Date.now()}`,
@@ -881,7 +880,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
 
     await expect(
       caller.expenses.create({
-        locationId: paymentAccount.locationId,
+        locationId: ctx.location.id,
         categoryId: category.id,
         amount: "10.00",
         description: "Should be blocked",
@@ -894,7 +893,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
   });
 
   it("does NOT block expense when billId is provided even if supplier has outstanding bills", async () => {
-    const { caller, paymentAccount, createdBill, supplier } = await seedPathBTest(`NBLK${Date.now()}`);
+    const { ctx, caller, paymentAccount, createdBill, supplier } = await seedPathBTest(`NBLK${Date.now()}`);
 
     const category = await caller.expenses.createCategory({
       name: `No Block Cat ${Date.now()}`,
@@ -902,7 +901,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
     });
 
     const result = await caller.expenses.create({
-      locationId: paymentAccount.locationId,
+      locationId: ctx.location.id,
       categoryId: category.id,
       amount: "200.00",
       description: "Paying with billId",
@@ -930,7 +929,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
     const catA = await callerA.expenses.createCategory({ name: `Cross A ${Date.now()}`, accountingClass: "operating_expense" });
     await ensureSystemAccount({ businessId: ctxA.business.id, accountType: "liability", accountSubType: "accounts_payable", name: "AP" });
     const acctA = await callerA.accounts.create({ locationId: ctxA.location.id, name: `Cross Cash A`, type: "cash", openingBalance: "1000.00", isPaymentMethod: true });
-    const supA = await callerA.businesses.addSupplier({ businessId: ctxA.business.id, locationId: ctxA.location.id, name: `Cross Sup A` });
+    const supA = await callerA.suppliers.create({ locationId: ctxA.location.id, name: `Cross Sup A` });
     const billA = await callerA.bills.create({ locationId: ctxA.location.id, supplierId: supA.id, categoryId: catA.id, description: "Cross A", amount: "100.00", issueDate: "2026-05-10", dueDate: "2026-06-10" });
 
     await callerA.bills.recordPayment({ billId: billA.id, paymentMethod: "cash", amount: "100.00", paymentDate: "2026-05-12", accountId: acctA.id });
@@ -948,11 +947,11 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
     const catB = await callerB.expenses.createCategory({ name: `Cross B ${Date.now()}`, accountingClass: "operating_expense" });
     await ensureSystemAccount({ businessId: ctxB.business.id, accountType: "liability", accountSubType: "accounts_payable", name: "AP" });
     const acctB = await callerB.accounts.create({ locationId: ctxB.location.id, name: `Cross Cash B`, type: "cash", openingBalance: "1000.00", isPaymentMethod: true });
-    const supB = await callerB.businesses.addSupplier({ businessId: ctxB.business.id, locationId: ctxB.location.id, name: `Cross Sup B` });
+    const supB = await callerB.suppliers.create({ locationId: ctxB.location.id, name: `Cross Sup B` });
     const billB = await callerB.bills.create({ locationId: ctxB.location.id, supplierId: supB.id, categoryId: catB.id, description: "Cross B", amount: "100.00", issueDate: "2026-05-10", dueDate: "2026-06-10" });
 
     await callerB.expenses.create({
-      locationId: acctB.locationId, categoryId: catB.id, amount: "100.00",
+      locationId: ctxB.location.id, categoryId: catB.id, amount: "100.00",
       description: "Cross B payment", expenseDate: "2026-05-12", paymentMethod: "cash",
       accountId: acctB.id, billId: billB.id, supplierId: supB.id,
     });

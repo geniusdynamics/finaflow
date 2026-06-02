@@ -1,5 +1,24 @@
 # Changelog
 
+## [Unreleased] — Typecheck & Test Fixes
+
+### Added
+- Missing `sql` import in `api/suppliers-router.ts` (needed for `LOWER()` and `IN()` queries)
+- Missing `locations` import in `api/wallet-router.ts`
+
+### Fixed
+- **JSX comments inside JS expression contexts** — Three files used `{/* eslint-disable */}` (JSX comment syntax) inside TypeScript expression contexts (object literals, top-level function declarations) which broke esbuild/TypeScript compilation. Changed to `//` single-line JS comments:
+  - `src/pages/Expenses.tsx` — Two top-level `{/* */}` comments before function declarations
+  - `src/pages/Suppliers.tsx` — One top-level `{/* */}` comment before function declaration
+- **Runtime SlotClone error** — `React.Children.only expected to receive a single React element child` on Users page. Root cause: `{/* eslint-disable-next-line */}` JSX comment inside `<DialogTrigger asChild>` created an extra undefined child entry, causing Radix UI's `SlotClone` to see multiple children. Removed the comment and the `as any` cast.
+- **expenses-dual-mode.test.ts** (7 failing tests) — `accounts.create()` only returns `{ id, success }`, not `locationId`. Fixed by:
+  - Replacing `paymentAccount.locationId` → `ctx.location.id` across 7 test cases
+  - Keeping `paymentAccount` in destructuring (needed for `paymentAccount.id`)
+  - Fixed `acctB.locationId` → `ctxB.location.id` in the cross-path test
+- **recurring-bills-isolation.test.ts** — `ReferenceError: catA is not defined`. Variable declared as `_catA` but used as `catA`. Fixed destructuring.
+- **`Type 'unknown' not assignable to ReactNode`** — `{(b as { allocationSource?: unknown }).allocationSource && <span>}` in Layout.tsx and MobileNavigation.tsx. Changed `&&` to ternary with explicit `null` fallback.
+- **migrate-existing-data.ts** (3 errors) — Raw `db.execute()` rows have `unknown` type. Added `as Record<string, unknown>` casts for property access.
+
 ## [Unreleased] — Duplicate Accounts Payable Fix & Chart of Accounts systemKey Backfill
 
 ### Fixed

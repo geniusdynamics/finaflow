@@ -21,16 +21,20 @@ const PAYMENT_METHOD_ACCOUNT_TYPES: Record<string, string[]> = {
   card: ["bank_account"],
 };
 
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}function getFundingAccounts(paymentMethod: string, allAccounts: any[], supplierBillLocationId?: number): any[] {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getFundingAccounts(paymentMethod: string, allAccounts: any[], supplierBillLocationId?: number): any[] {
   const allowedTypes = PAYMENT_METHOD_ACCOUNT_TYPES[paymentMethod] ?? [];
   return allAccounts.filter(a => allowedTypes.includes(a.type) && !a.deletedAt && (!supplierBillLocationId || a.locationId === supplierBillLocationId));
 }
 
 function PaySupplierDialog({ open, supplier, bills, accounts, payForm, setPayForm, paymentError, isPending, todayDate, onClose, onSubmit }: {
   open: boolean;
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  supplier: any;
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  bills: any[];
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  accounts: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supplier: any;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  bills: any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  accounts: any[];
   payForm: { paymentMethod: "cash" | "wallet" | "bank_transfer" | "card"; amount: string; paymentDate: string; reference: string; accountId: string };
   setPayForm: React.Dispatch<React.SetStateAction<{ paymentMethod: "cash" | "wallet" | "bank_transfer" | "card"; amount: string; paymentDate: string; reference: string; accountId: string }>>;
   paymentError: string | null;

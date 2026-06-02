@@ -150,9 +150,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <Building className="h-4 w-4" />
                   <span className="flex-1">{b.name}</span>
                   {b.isDemo && <span className="rounded bg-[#8D8A87]/10 px-1.5 py-0 text-[10px] text-[#8D8A87]">DEMO</span>}
-                  {(b as { allocationSource?: unknown }).allocationSource && (
+                  {(b as { allocationSource?: unknown }).allocationSource ? (
                     <span className="rounded bg-[#0288D1]/10 px-1.5 py-0.5 text-[10px] text-[#0288D1]">Allocated</span>
-                  )}
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -334,9 +334,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                         {b.isDemo && (
                           <span className="rounded bg-[#8D8A87]/10 px-1 py-0 text-[10px] text-[#8D8A87]">DEMO</span>
                         )}
-                        {(b as { allocationSource?: unknown }).allocationSource && (
+                        {(b as { allocationSource?: unknown }).allocationSource ? (
                           <span className="rounded bg-[#0288D1]/10 px-1 py-0.5 text-[10px] text-[#0288D1]">Allocated</span>
-                        )}
+                        ) : null}
                       </button>
                     ))}
                   </div>

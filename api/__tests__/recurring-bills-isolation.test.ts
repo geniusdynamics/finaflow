@@ -167,7 +167,7 @@ describe("Recurring Bills Data Isolation", () => {
     } as any).returning();
 
     // Create expense categories for A
-    [catA] = await db.insert(expenseCategories).values({
+    [_catA] = await db.insert(expenseCategories).values({
       businessId: bizA.id,
       locationId: locA.id,
       name: "Rent A",

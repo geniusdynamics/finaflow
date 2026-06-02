@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, supplierQuery, supplierManage, requireAuthorizedLocation, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
 import { suppliers, bills, billPayments, locations } from "@db/schema";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, isNull, desc, sql } from "drizzle-orm";
 
 export const suppliersRouter = createRouter({
   list: supplierQuery.query(async ({ ctx }) => {
