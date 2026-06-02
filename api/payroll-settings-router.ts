@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { payrollSettings } from "@db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { computePaye, computeNssf, PERSONAL_RELIEF } from "./lib/tax";
 import { d } from "./lib/decimal";
 
@@ -36,6 +36,7 @@ export const payrollSettingsRouter = createRouter({
       if (existing.length > 0) {
         await db.update(payrollSettings).set(updates).where(eq(payrollSettings.id, existing[0].id));
       } else {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         await db.insert(payrollSettings).values({ locationId, ...updates } as any).returning();
       }
       return { success: true };

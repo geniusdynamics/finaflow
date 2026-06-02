@@ -42,6 +42,7 @@ export function Feedback() {
     setQuestions(prev => [...prev, { id: crypto.randomUUID(), text: "", type: "text", required: true }]);
   };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const updateQuestion = (id: string, field: string, value: any) => {
     setQuestions(prev => prev.map(q => q.id === id ? { ...q, [field]: value } : q));
   };

@@ -1,7 +1,7 @@
 // ABOUTME: Unit tests for the unified webhook handler — provider routing, signature validation, error handling.
 // ABOUTME: Validates webhook delegation to correct provider and proper error responses.
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { handleWalletWebhook } from "../mobile-wallet/webhook-handler";
 import { walletRegistry } from "../mobile-wallet/provider-registry";
 import { BaseWalletProvider, ProviderFeatures, WalletWebhookPayload, WalletWebhookResult } from "../mobile-wallet/provider-interface";
@@ -40,7 +40,7 @@ describe("handleWalletWebhook", () => {
   beforeEach(() => {
     // Clear registry and register mock
     const providers = walletRegistry.getAll();
-    for (const p of providers) {
+    for (const _p of providers) {
       // Can't unregister, so just add our mock
     }
     walletRegistry.register(new WebhookMockProvider());

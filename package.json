@@ -19,6 +19,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:run": "tsx scripts/run-migrations.ts",
+    "db:fix:ap": "tsx scripts/fix-duplicate-ap-accounts.ts",
     "db:push": "drizzle-kit push"
   },
   "portless": {

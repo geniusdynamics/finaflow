@@ -1,5 +1,5 @@
 import { getDb } from "../queries/connection";
-import { accounts, expenseCategories, items, ledgerEntries } from "@db/schema";
+import { accounts, expenseCategories, items, ledgerEntries, type AccountSubType } from "@db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { d } from "./decimal";
@@ -38,7 +38,7 @@ export async function createExpenseJournalEntry(input: ExpenseJournalInput) {
     const account = await db.query.accounts.findFirst({
       where: and(
         eq(accounts.businessId, input.businessId),
-        eq(accounts.accountSubType, mapCategoryToSubType(expenseCategory?.accountingClass) as any),
+        eq(accounts.accountSubType, mapCategoryToSubType(expenseCategory?.accountingClass)),
         isNull(accounts.deletedAt)
       ),
     });
@@ -81,8 +81,8 @@ async function createFixedAssetEntry(
     throw new Error("Asset account not found");
   }
 
-  const dateStr = input.entryDate instanceof Date 
-    ? input.entryDate.toISOString().split("T")[0] 
+  const dateStr = input.entryDate instanceof Date
+    ? input.entryDate.toISOString().split("T")[0]
     : input.entryDate;
 
   const [item] = await db.insert(items).values({
@@ -99,7 +99,7 @@ async function createFixedAssetEntry(
     accumulatedDepreciation: "0.00",
     currentBookValue: amount.toFixed(2),
     assetAccountId: input.assetAccountId,
-  } as any).returning();
+  } satisfies typeof items.$inferInsert).returning();
 
   const cashAccount = await db.query.accounts.findFirst({
     where: and(
@@ -116,7 +116,7 @@ async function createFixedAssetEntry(
   await db.transaction(async (tx) => {
     await tx.insert(ledgerEntries).values({
       accountId: input.assetAccountId!,
-      transactionType: "expense" as any,
+      transactionType: "expense",
       transactionId: input.expenseId,
       entryType: "debit",
       amount: amount.toFixed(2),
@@ -124,7 +124,7 @@ async function createFixedAssetEntry(
       entryDate: dateStr,
       createdBy: input.userId,
       description: `Fixed Asset: ${input.description}`,
-    } as any);
+    } satisfies typeof ledgerEntries.$inferInsert);
 
     await tx.update(accounts).set({
       currentBalance: assetNewBalance.toFixed(2),
@@ -133,7 +133,7 @@ async function createFixedAssetEntry(
     if (cashAccount) {
       await tx.insert(ledgerEntries).values({
         accountId: input.accountId,
-        transactionType: "expense" as any,
+        transactionType: "expense",
         transactionId: input.expenseId,
         entryType: "credit",
         amount: amount.toFixed(2),
@@ -141,7 +141,7 @@ async function createFixedAssetEntry(
         entryDate: dateStr,
         createdBy: input.userId,
         description: `Fixed Asset: ${input.description}`,
-      } as any);
+      } satisfies typeof ledgerEntries.$inferInsert);
 
       await tx.update(accounts).set({
         currentBalance: cashNewBalance.toFixed(2),
@@ -163,8 +163,8 @@ async function createExpenseJournalEntryInternal(
   userId: number
 ) {
   const db = getDb();
-  const dateStr = entryDate instanceof Date 
-    ? entryDate.toISOString().split("T")[0] 
+  const dateStr = entryDate instanceof Date
+    ? entryDate.toISOString().split("T")[0]
     : entryDate;
 
   const expenseAccount = await db.query.accounts.findFirst({
@@ -185,7 +185,7 @@ async function createExpenseJournalEntryInternal(
   await db.transaction(async (tx) => {
     await tx.insert(ledgerEntries).values({
       accountId: expenseAccountId,
-      transactionType: "expense" as any,
+      transactionType: "expense",
       transactionId: expenseId,
       entryType: "debit",
       amount: amount.toFixed(2),
@@ -193,7 +193,7 @@ async function createExpenseJournalEntryInternal(
       entryDate: dateStr,
       createdBy: userId,
       description: description,
-    } as any);
+    } satisfies typeof ledgerEntries.$inferInsert);
 
     await tx.update(accounts).set({
       currentBalance: expenseNewBalance.toFixed(2),
@@ -201,7 +201,7 @@ async function createExpenseJournalEntryInternal(
 
     await tx.insert(ledgerEntries).values({
       accountId: cashAccountId,
-      transactionType: "expense" as any,
+      transactionType: "expense",
       transactionId: expenseId,
       entryType: "credit",
       amount: amount.toFixed(2),
@@ -209,7 +209,7 @@ async function createExpenseJournalEntryInternal(
       entryDate: dateStr,
       createdBy: userId,
       description: description,
-    } as any);
+    } satisfies typeof ledgerEntries.$inferInsert);
 
     await tx.update(accounts).set({
       currentBalance: cashNewBalance.toFixed(2),
@@ -217,7 +217,7 @@ async function createExpenseJournalEntryInternal(
   });
 }
 
-function mapCategoryToSubType(accountingClass?: string | null): string {
+function mapCategoryToSubType(accountingClass?: string | null): AccountSubType {
   switch (accountingClass) {
     case "cogs":
       return "cogs";
@@ -260,7 +260,7 @@ export async function createBillJournalEntry(
     const account = await db.query.accounts.findFirst({
       where: and(
         eq(accounts.businessId, businessId),
-        eq(accounts.accountSubType, mapCategoryToSubType(expenseCategory?.accountingClass) as any),
+        eq(accounts.accountSubType, mapCategoryToSubType(expenseCategory?.accountingClass)),
         isNull(accounts.deletedAt)
       ),
     });
@@ -272,7 +272,7 @@ export async function createBillJournalEntry(
   const apAccount = await db.query.accounts.findFirst({
     where: and(
       eq(accounts.businessId, businessId),
-      eq(accounts.accountSubType, "accounts_payable" as any),
+      eq(accounts.accountSubType, "accounts_payable"),
       isNull(accounts.deletedAt)
     ),
   });
@@ -285,8 +285,8 @@ export async function createBillJournalEntry(
     return;
   }
 
-  const dateStr = entryDate instanceof Date 
-    ? entryDate.toISOString().split("T")[0] 
+  const dateStr = entryDate instanceof Date
+    ? entryDate.toISOString().split("T")[0]
     : entryDate;
 
   const expenseAccount = await db.query.accounts.findFirst({
@@ -301,7 +301,7 @@ export async function createBillJournalEntry(
   await db.transaction(async (tx) => {
     await tx.insert(ledgerEntries).values({
       accountId: expenseAccountId,
-      transactionType: "expense" as any,
+      transactionType: "expense",
       transactionId: billId,
       entryType: "debit",
       amount: amountDec.toFixed(2),
@@ -309,7 +309,7 @@ export async function createBillJournalEntry(
       entryDate: dateStr,
       createdBy: userId,
       description: `Bill: ${description}`,
-    } as any);
+    } satisfies typeof ledgerEntries.$inferInsert);
 
     await tx.update(accounts).set({
       currentBalance: expenseNewBalance.toFixed(2),
@@ -317,7 +317,7 @@ export async function createBillJournalEntry(
 
     await tx.insert(ledgerEntries).values({
       accountId: apAccount.id,
-      transactionType: "bill_payment" as any,
+      transactionType: "bill_payment",
       transactionId: billId,
       entryType: "credit",
       amount: amountDec.toFixed(2),
@@ -325,7 +325,7 @@ export async function createBillJournalEntry(
       entryDate: dateStr,
       createdBy: userId,
       description: `Bill: ${description}`,
-    } as any);
+    } satisfies typeof ledgerEntries.$inferInsert);
 
     await tx.update(accounts).set({
       currentBalance: apNewBalance.toFixed(2),
@@ -349,7 +349,7 @@ export async function createBillPaymentJournalEntry(
   const apAccount = await db.query.accounts.findFirst({
     where: and(
       eq(accounts.businessId, businessId),
-      eq(accounts.accountSubType, "accounts_payable" as any),
+      eq(accounts.accountSubType, "accounts_payable"),
       isNull(accounts.deletedAt)
     ),
   });
@@ -362,8 +362,8 @@ export async function createBillPaymentJournalEntry(
     return;
   }
 
-  const dateStr = entryDate instanceof Date 
-    ? entryDate.toISOString().split("T")[0] 
+  const dateStr = entryDate instanceof Date
+    ? entryDate.toISOString().split("T")[0]
     : entryDate;
 
   const apNewBalance = d(apAccount.currentBalance || "0").minus(amountDec);
@@ -372,7 +372,7 @@ export async function createBillPaymentJournalEntry(
   await db.transaction(async (tx) => {
     await tx.insert(ledgerEntries).values({
       accountId: apAccount.id,
-      transactionType: "bill_payment" as any,
+      transactionType: "bill_payment",
       transactionId: billPaymentId,
       entryType: "debit",
       amount: amountDec.toFixed(2),
@@ -380,7 +380,7 @@ export async function createBillPaymentJournalEntry(
       entryDate: dateStr,
       createdBy: userId,
       description: `Bill Payment: ${description}`,
-    } as any);
+    } satisfies typeof ledgerEntries.$inferInsert);
 
     await tx.update(accounts).set({
       currentBalance: apNewBalance.toFixed(2),
@@ -388,7 +388,7 @@ export async function createBillPaymentJournalEntry(
 
     await tx.insert(ledgerEntries).values({
       accountId: accountId,
-      transactionType: "bill_payment" as any,
+      transactionType: "bill_payment",
       transactionId: billPaymentId,
       entryType: "credit",
       amount: amountDec.toFixed(2),
@@ -396,7 +396,7 @@ export async function createBillPaymentJournalEntry(
       entryDate: dateStr,
       createdBy: userId,
       description: `Bill Payment: ${description}`,
-    } as any);
+    } satisfies typeof ledgerEntries.$inferInsert);
 
     await tx.update(accounts).set({
       currentBalance: cashNewBalance.toFixed(2),

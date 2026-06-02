@@ -4,7 +4,6 @@ import {
   accounts,
   expenseCategories,
   suppliers,
-  users,
 } from "./schema";
 
 async function seed() {

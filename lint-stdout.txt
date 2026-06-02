@@ -1,0 +1,831 @@
+
+> my-app@0.0.0 lint
+> eslint .
+
+
+D:\DevCenter\abuilds\fina\finaflow\api\__tests__\recurring-bills-isolation.test.ts
+   25:63  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+   27:40  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+   43:7   error  'catA' is assigned a value but never used  @typescript-eslint/no-unused-vars
+   76:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+   84:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+   94:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  103:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  111:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  118:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  126:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  133:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  144:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  144:30  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  155:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  165:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  177:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  186:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  194:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  322:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  348:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+  353:10  error  Unexpected any. Specify a different type   @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\__tests__\wallet-router.test.ts
+   31:8    error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   36:8    error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   38:121  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   43:8    error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   46:38   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   65:54   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   77:8    error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   85:8    error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  106:38   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\accounts-router.ts
+  210:48  error  '_accountSubType' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  210:75  error  '_isContra' is assigned a value but never used        @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\bills-router.ts
+   12:15  error  'AccountType' is defined but never used          @typescript-eslint/no-unused-vars
+   12:28  error  'AccountSubType' is defined but never used       @typescript-eslint/no-unused-vars
+   17:6   error  'BillItemInsert' is defined but never used       @typescript-eslint/no-unused-vars
+   20:6   error  'RecurringBillInsert' is defined but never used  @typescript-eslint/no-unused-vars
+   21:6   error  'MasterItemInsert' is defined but never used     @typescript-eslint/no-unused-vars
+  301:33  error  Unexpected any. Specify a different type         @typescript-eslint/no-explicit-any
+  384:27  error  Unexpected any. Specify a different type         @typescript-eslint/no-explicit-any
+  392:33  error  Unexpected any. Specify a different type         @typescript-eslint/no-explicit-any
+  419:12  error  Unexpected any. Specify a different type         @typescript-eslint/no-explicit-any
+  431:14  error  Unexpected any. Specify a different type         @typescript-eslint/no-explicit-any
+  512:12  error  Unexpected any. Specify a different type         @typescript-eslint/no-explicit-any
+  532:23  error  Unexpected any. Specify a different type         @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\boot.ts
+  63:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  63:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  72:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\chart-of-accounts-router.ts
+    5:27  error  'sql' is defined but never used           @typescript-eslint/no-unused-vars
+   88:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   95:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   97:32  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  125:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  173:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\daily-ledger-router.ts
+    9:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   63:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  118:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\daily-sales-router.ts
+    4:60  error  'paymentMethods' is defined but never used  @typescript-eslint/no-unused-vars
+   93:33  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  126:14  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  141:61  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  154:18  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  173:22  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  186:42  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  194:18  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  211:42  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  219:18  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  232:18  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  255:50  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+  286:12  error  Unexpected any. Specify a different type    @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\dashboard-router.ts
+  4:39   error  'billItems' is defined but never used         @typescript-eslint/no-unused-vars
+  4:50   error  'billPayments' is defined but never used      @typescript-eslint/no-unused-vars
+  4:159  error  'payrollEntries' is defined but never used    @typescript-eslint/no-unused-vars
+  4:175  error  'payrollAdvances' is defined but never used   @typescript-eslint/no-unused-vars
+  4:192  error  'ledgerEntries' is defined but never used     @typescript-eslint/no-unused-vars
+  4:207  error  'dailyMpesaLedger' is defined but never used  @typescript-eslint/no-unused-vars
+  4:225  error  'suppliers' is defined but never used         @typescript-eslint/no-unused-vars
+  4:236  error  'attachments' is defined but never used       @typescript-eslint/no-unused-vars
+  4:249  error  'locations' is defined but never used         @typescript-eslint/no-unused-vars
+  7:81   error  'ResetResult' is defined but never used       @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\depreciation-router.ts
+   56:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  178:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  206:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  214:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  239:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  264:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  319:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\employees-payroll-router.ts
+   49:12   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   67:22   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  133:12   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  186:16   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  208:16   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  228:16   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  245:30   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  286:41   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  294:14   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  309:45   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  317:18   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  323:17   error  'payeAcct' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  324:103  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  337:45   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  345:18   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  351:17   error  'nssfAcct' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  352:103  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  365:45   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  373:18   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  379:17   error  'nhifAcct' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  380:103  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  393:45   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  401:18   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  407:17   error  'hlAcct' is assigned a value but never used    @typescript-eslint/no-unused-vars
+  408:103  error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  421:45   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  429:18   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  446:16   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  490:16   error  'result' is assigned a value but never used    @typescript-eslint/no-unused-vars
+  497:14   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  512:22   error  'entry' is assigned a value but never used     @typescript-eslint/no-unused-vars
+  520:18   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  547:12   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\expenses-router.ts
+   70:32   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   70:74   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   90:30   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   91:34   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   91:76   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  107:51   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  129:76   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  160:30   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  161:34   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  161:76   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  170:117  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  182:51   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  191:42   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  205:67   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  260:30   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  283:11   error  'fixedAssetItemId' is defined but never used  @typescript-eslint/no-unused-vars
+  307:110  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  333:14   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  341:18   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  355:18   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  367:18   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  378:22   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  419:24   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  447:22   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  486:27   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  492:62   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  517:12   error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  523:31   error  'ctx' is defined but never used               @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\feedback-router.ts
+  36:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  57:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  67:80  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  86:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\inquiry-router.ts
+   5:14  error  'and' is defined but never used           @typescript-eslint/no-unused-vars
+   5:25  error  'sql' is defined but never used           @typescript-eslint/no-unused-vars
+  24:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\integrations-router.ts
+   5:25  error  'sql' is defined but never used           @typescript-eslint/no-unused-vars
+  39:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  84:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  99:48  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\items-router.ts
+   24:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   26:62  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  136:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  177:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\journal-router.ts
+    2:39  error  'publicQuery' is defined but never used   @typescript-eslint/no-unused-vars
+    5:14  error  'and' is defined but never used           @typescript-eslint/no-unused-vars
+    5:19  error  'isNull' is defined but never used        @typescript-eslint/no-unused-vars
+   30:28  error  'ctx' is defined but never used           @typescript-eslint/no-unused-vars
+   54:28  error  'ctx' is defined but never used           @typescript-eslint/no-unused-vars
+  127:31  error  'ctx' is defined but never used           @typescript-eslint/no-unused-vars
+  139:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  163:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  217:28  error  'ctx' is defined but never used           @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\lib\__tests__\accounting-system-accounts.test.ts
+  43:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\lib\__tests__\currency-converter.test.ts
+  4:44  error  'vi' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\lib\__tests__\currency-lock.test.ts
+  6:10  error  'd' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\lib\__tests__\decimal.test.ts
+  2:13  error  'Decimal' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\lib\__tests__\provider-registry.test.ts
+   6:183  error  'ParsedWalletSms' is defined but never used  @typescript-eslint/no-unused-vars
+  21:25   error  '_request' is defined but never used         @typescript-eslint/no-unused-vars
+  24:21   error  '_providerTxnId' is defined but never used   @typescript-eslint/no-unused-vars
+  27:24   error  '_payload' is defined but never used         @typescript-eslint/no-unused-vars
+  30:23   error  '_providerTxnId' is defined but never used   @typescript-eslint/no-unused-vars
+  30:47   error  '_amount' is defined but never used          @typescript-eslint/no-unused-vars
+  33:24   error  '_accountId' is defined but never used       @typescript-eslint/no-unused-vars
+  36:12   error  '_context' is defined but never used         @typescript-eslint/no-unused-vars
+  36:30   error  '_error' is defined but never used           @typescript-eslint/no-unused-vars
+  36:47   error  '_metadata' is defined but never used        @typescript-eslint/no-unused-vars
+  57:12   error  '_context' is defined but never used         @typescript-eslint/no-unused-vars
+  57:30   error  '_error' is defined but never used           @typescript-eslint/no-unused-vars
+  57:47   error  '_metadata' is defined but never used        @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\lib\__tests__\sasapay-provider.test.ts
+  17:10  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\lib\__tests__\tax.test.ts
+  2:69  error  'PAYE_BANDS' is defined but never used       @typescript-eslint/no-unused-vars
+  2:81  error  'PERSONAL_RELIEF' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\lib\__tests__\transaction-logger.test.ts
+  5:10  error  'getWalletStats' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\lib\__tests__\webhook-handler.test.ts
+   4:44  error  'vi' is defined but never used          @typescript-eslint/no-unused-vars
+  23:24  error  '_payload' is defined but never used    @typescript-eslint/no-unused-vars
+  36:12  error  '_context' is defined but never used    @typescript-eslint/no-unused-vars
+  36:30  error  '_error' is defined but never used      @typescript-eslint/no-unused-vars
+  36:47  error  '_metadata' is defined but never used   @typescript-eslint/no-unused-vars
+  43:16  error  'p' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\lib\business-provisioning.ts
+  32:10  error  'generateReferralCode' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\lib\mobile-wallet\providers\airtel-money-provider.ts
+  228:45  error  Unnecessary escape character: \-  no-useless-escape
+  228:57  error  Unnecessary escape character: \-  no-useless-escape
+  230:43  error  Unnecessary escape character: \-  no-useless-escape
+
+D:\DevCenter\abuilds\fina\finaflow\api\lib\mobile-wallet\providers\mpesa-provider.ts
+  149:44  error  'originalText' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\lib\reports.ts
+  103:3  error  'startDate' is defined but never used    @typescript-eslint/no-unused-vars
+  104:3  error  'endDate' is defined but never used      @typescript-eslint/no-unused-vars
+  106:9  error  'db' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  207:3  error  'asOfDate' is defined but never used     @typescript-eslint/no-unused-vars
+  364:3  error  'asOfDate' is defined but never used     @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\local-auth-router.ts
+  486:7  error  'maxBranches' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\locations-router.ts
+   4:53  error  'getCurrentBusinessLocationIds' is defined but never used  @typescript-eslint/no-unused-vars
+   7:27  error  'sql' is defined but never used                            @typescript-eslint/no-unused-vars
+   7:32  error  'desc' is defined but never used                           @typescript-eslint/no-unused-vars
+  53:12  error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\middleware.ts
+  167:10  error  'hasPermissionWithCache' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\api\mpesa-router.ts
+   10:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   39:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  132:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  133:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  133:76  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  175:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  204:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  231:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  259:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  284:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  297:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  317:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\notifications-router.ts
+  13:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  31:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  48:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  58:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  83:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\partner-router.ts
+  336:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\payment-methods-router.ts
+   51:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   67:54  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  126:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  150:24  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  161:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  185:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  222:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\payroll-settings-router.ts
+   5:14  error  'and' is defined but never used           @typescript-eslint/no-unused-vars
+  39:79  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\permissions-router.ts
+  175:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  183:43  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  199:77  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\po-router.ts
+   12:46  error  'bills' is defined but never used         @typescript-eslint/no-unused-vars
+   30:78  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   71:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   76:15  error  'sup' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  101:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  112:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\reports-router.ts
+    4:58  error  'accounts' is defined but never used          @typescript-eslint/no-unused-vars
+    4:68  error  'financialReports' is defined but never used  @typescript-eslint/no-unused-vars
+    8:43  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   29:24  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   38:26  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   82:26  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+   91:28  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  126:26  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  130:28  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  158:26  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  206:24  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  216:23  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  245:24  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+  263:25  error  Unexpected any. Specify a different type      @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\settings-router.ts
+   5:24  error  'isNull' is defined but never used        @typescript-eslint/no-unused-vars
+   8:42  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  51:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  61:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\supplier-prices-router.ts
+    4:49  error  'bills' is defined but never used         @typescript-eslint/no-unused-vars
+    4:56  error  'billItems' is defined but never used     @typescript-eslint/no-unused-vars
+    5:30  error  'isNull' is defined but never used        @typescript-eslint/no-unused-vars
+   17:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   68:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  119:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  172:73  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  181:52  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\suppliers-router.ts
+    2:55  error  'getCurrentBusinessLocationIds' is defined but never used  @typescript-eslint/no-unused-vars
+   10:32  error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+   10:74  error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+   22:34  error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+   22:76  error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+   40:34  error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+   40:76  error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+   56:12  error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+  158:14  error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\test\setup.ts
+  54:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\users-router.ts
+  85:71  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  92:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\wallet-management-router.ts
+    4:50   error  'getCurrentBusinessLocationIds' is defined but never used  @typescript-eslint/no-unused-vars
+    6:112  error  'locations' is defined but never used                      @typescript-eslint/no-unused-vars
+   17:35   error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+   65:92   error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+   74:70   error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+   76:69   error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+   95:23   error  'input' is defined but never used                          @typescript-eslint/no-unused-vars
+   95:30   error  'ctx' is defined but never used                            @typescript-eslint/no-unused-vars
+   98:112  error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+   98:136  error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+   98:162  error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+  101:24   error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+  109:19   error  Empty block statement                                      no-empty
+  143:23   error  'input' is defined but never used                          @typescript-eslint/no-unused-vars
+  209:84   error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+  231:14   error  Unexpected any. Specify a different type                   @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\api\wallet-router.ts
+    7:186  error  'mpesaTransactions' is defined but never used  @typescript-eslint/no-unused-vars
+   16:38   error  'ctx' is defined but never used                @typescript-eslint/no-unused-vars
+   19:35   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   44:22   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+   45:24   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  195:36   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  196:36   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  196:78   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  254:33   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  286:35   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  313:16   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  341:32   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  356:16   error  'ledger1' is assigned a value but never used   @typescript-eslint/no-unused-vars
+  366:14   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  379:16   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  399:18   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+  523:27   error  Unexpected any. Specify a different type       @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\db\relations.ts
+  31:3  error  'mobileWalletProviders' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\db\seed-accounting.ts
+  111:45  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  112:51  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  119:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  145:79  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  147:12  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  167:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\db\seed.ts
+  7:3  error  'users' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\scripts\comprehensive-financial-audit.ts
+   61:43  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   83:38  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   99:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  115:56  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  116:37  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  155:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  178:17  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  236:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  348:23  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  348:59  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\scripts\create-demo-user.ts
+   5:10  error  'hashPassword' is defined but never used  @typescript-eslint/no-unused-vars
+  21:25  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  38:15  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\scripts\create-expense-accounts-and-fix.ts
+  267:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\scripts\fix-mpesa-orphans.ts
+  10:15  error  'isNull' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\scripts\run-migrations.ts
+  29:54  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  55:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\src\components\AuthLayout.tsx
+  122:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\DevCenter\abuilds\fina\finaflow\src\components\AuthLayout.tsx:122:7
+  120 |   useEffect(() => {
+  121 |     if (isCollapsed) {
+> 122 |       setIsResizing(false);
+      |       ^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  123 |     }
+  124 |   }, [isCollapsed]);
+  125 |  react-hooks/set-state-in-effect
+
+D:\DevCenter\abuilds\fina\finaflow\src\components\ErrorBoundary.tsx
+  13:10  error  Fast refresh only works when a file only exports components. Move your component(s) to a separate file  react-refresh/only-export-components
+
+D:\DevCenter\abuilds\fina\finaflow\src\components\MobileNavigation.tsx
+  24:14  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  33:14  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+D:\DevCenter\abuilds\fina\finaflow\src\components\ui\badge.tsx
+  46:17  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+D:\DevCenter\abuilds\fina\finaflow\src\components\ui\button-group.tsx
+  82:3  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+D:\DevCenter\abuilds\fina\finaflow\src\components\ui\button.tsx
+  62:18  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+D:\DevCenter\abuilds\fina\finaflow\src\components\ui\form.tsx
+  159:3  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+D:\DevCenter\abuilds\fina\finaflow\src\components\ui\navigation-menu.tsx
+  167:3  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+D:\DevCenter\abuilds\fina\finaflow\src\components\ui\sidebar.tsx
+  611:26  error  Error: Cannot call impure function during render
+
+`Math.random` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+D:\DevCenter\abuilds\fina\finaflow\src\components\ui\sidebar.tsx:611:26
+  609 |   // Random width between 50 to 90%.
+  610 |   const width = React.useMemo(() => {
+> 611 |     return `${Math.floor(Math.random() * 40) + 50}%`
+      |                          ^^^^^^^^^^^^^ Cannot call impure function
+  612 |   }, [])
+  613 |
+  614 |   return (  react-hooks/purity
+  725:3   error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            react-refresh/only-export-components
+
+D:\DevCenter\abuilds\fina\finaflow\src\components\ui\toggle.tsx
+  45:18  error  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+D:\DevCenter\abuilds\fina\finaflow\src\features\reports\OperationsReportsPanel.tsx
+  106:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\DevCenter\abuilds\fina\finaflow\src\features\reports\OperationsReportsPanel.tsx:106:7
+  104 |   useEffect(() => {
+  105 |     if (cogsTarget) {
+> 106 |       setCogsForm({ target: cogsTarget.targetFoodCostPercent, alert: cogsTarget.alertThresholdPercent });
+      |       ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  107 |     }
+  108 |   }, [cogsTarget]);
+  109 |  react-hooks/set-state-in-effect
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Accounts.tsx
+  43:7  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Accounts.tsx:43:7
+  41 |     const sp = searchParams.get("section");
+  42 |     if (sp === "chart-of-accounts" || sp === "journal-entries") {
+> 43 |       setSection(sp);
+     |       ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  44 |     }
+  45 |     const tp = searchParams.get("tab");
+  46 |     if (tp === "payment-methods") {  react-hooks/set-state-in-effect
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Bills.tsx
+  131:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Bills.tsx:131:7
+  129 |     const matches = getFundingAccounts(payForm.paymentMethod, accounts, bill.locationId);
+  130 |     if (matches.length === 1) {
+> 131 |       setPayForm(p => ({ ...p, accountId: String(matches[0].id) }));
+      |       ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  132 |     } else if (payForm.accountId) {
+  133 |       const stillValid = matches.some(a => String(a.id) === payForm.accountId);
+  134 |       if (!stillValid) {  react-hooks/set-state-in-effect
+  138:6  warning  React Hook useEffect has a missing dependency: 'payForm.accountId'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     react-hooks/exhaustive-deps
+  177:7  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Bills.tsx:177:7
+  175 |   useEffect(() => {
+  176 |     if (matchedMasterItem && itemForm.unitPrice === "") {
+> 177 |       setItemForm(p => ({
+      |       ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  178 |         ...p,
+  179 |         unitPrice: matchedMasterItem.lastUnitPrice ?? "",
+  180 |         categoryId: matchedMasterItem.lastCategoryId?.toString() ?? "",                                                                                     react-hooks/set-state-in-effect
+  183:6  warning  React Hook useEffect has a missing dependency: 'itemForm.unitPrice'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    react-hooks/exhaustive-deps
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\BusinessOverview.tsx
+   83:9  error  'downloadDocumentMutation' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  198:9  error  'triggerBase64Download' is assigned a value but never used     @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Businesses.tsx
+  312:53  error  '_key' is defined but never used  @typescript-eslint/no-unused-vars
+  320:98  error  '_key' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Calendar.tsx
+  32:50  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Calendar.tsx:32:50
+  30 |
+  31 |   const today = getLocalDateString();
+> 32 |   const futureDate = getLocalDateString(new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000));
+     |                                                  ^^^^^^^^^^ Cannot call impure function
+  33 |
+  34 |   const { data: sales } = trpc.dailySales.list.useQuery({});
+  35 |   const { data: expenses } = trpc.expenses.list.useQuery({});  react-hooks/purity
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\ChartOfAccounts.tsx
+  170:52  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-explicit-any
+  236:47  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-explicit-any
+  242:7   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\ChartOfAccounts.tsx:242:7
+  240 |   useEffect(() => {
+  241 |     if (nextCodeQuery.data?.nextCode && !accountCode) {
+> 242 |       setAccountCode(nextCodeQuery.data.nextCode);
+      |       ^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  243 |     }
+  244 |   }, [nextCodeQuery.data?.nextCode, accountCode]);
+  245 |  react-hooks/set-state-in-effect
+  257:35  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\DailySales.tsx
+  441:46  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Dashboard.tsx
+  19:10  error  'Button' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             @typescript-eslint/no-unused-vars
+  23:39  error  Error: Cannot call impure function during render
+
+`Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component happens to re-render. (https://react.dev/reference/rules/components-and-hooks-must-be-pure#components-and-hooks-must-be-idempotent).
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Dashboard.tsx:23:39
+  21 | export function Dashboard() {
+  22 |   const [dateRange, setDateRange] = useState({
+> 23 |     from: getLocalDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
+     |                                       ^^^^^^^^^^ Cannot call impure function
+  24 |     to: getLocalDateString(),
+  25 |   });
+  26 |  react-hooks/purity
+  27:9   error  'utils' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Expenses.tsx
+   29:17   error    Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              react-refresh/only-export-components
+   63:65   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-explicit-any
+   63:85   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-explicit-any
+  101:14   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-explicit-any
+  193:5    error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Expenses.tsx:193:5
+  191 |     }
+  192 |
+> 193 |     setForm(p => ({
+      |     ^^^^^^^ Avoid calling setState() directly within an effect
+  194 |       ...p,
+  195 |       supplierId: selectedBill.supplierId ? String(selectedBill.supplierId) : p.supplierId,
+  196 |       categoryIds: categoryIds.length > 0 ? categoryIds : p.categoryIds,                                                                                                        react-hooks/set-state-in-effect
+  198:6    warning  React Hook useEffect has a missing dependency: 'getCategoriesFromBillItems'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               react-hooks/exhaustive-deps
+  202:7    error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Expenses.tsx:202:7
+  200 |   useEffect(() => {
+  201 |     if (!form.billId && form.categoryIds.length === 0 && selectedSupplier?.autoCategoryId) {
+> 202 |       setForm((previous) => ({
+      |       ^^^^^^^ Avoid calling setState() directly within an effect
+  203 |         ...previous,
+  204 |         categoryIds: [selectedSupplier.autoCategoryId].filter((id): id is number => id !== null),
+  205 |       }));                               react-hooks/set-state-in-effect
+  213:7    error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Expenses.tsx:213:7
+  211 |     const matches = getFundingAccounts(form.paymentMethod, accounts);
+  212 |     if (matches.length === 1) {
+> 213 |       setForm(p => ({ ...p, accountId: String(matches[0].id) }));
+      |       ^^^^^^^ Avoid calling setState() directly within an effect
+  214 |     } else if (form.accountId) {
+  215 |       const stillValid = matches.some(a => String(a.id) === form.accountId);
+  216 |       if (!stillValid) {  react-hooks/set-state-in-effect
+  220:6    warning  React Hook useEffect has a missing dependency: 'form.accountId'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           react-hooks/exhaustive-deps
+  337:51   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-explicit-any
+  477:126  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-explicit-any
+  699:157  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Feedback.tsx
+  45:61  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\JournalEntries.tsx
+  140:35  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  275:67  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  337:22  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  413:40  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Locations.tsx
+  10:51  error  'Smartphone' is defined but never used  @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Login.tsx
+   1:20  error  'useEffect' is defined but never used                   @typescript-eslint/no-unused-vars
+  12:10  error  'detectAccountFromSubdomain' is defined but never used  @typescript-eslint/no-unused-vars
+  76:42  error  '_' is defined but never used                           @typescript-eslint/no-unused-vars
+  76:45  error  '__' is defined but never used                          @typescript-eslint/no-unused-vars
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\PartnerDashboard.tsx
+  207:63  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Payroll.tsx
+  155:197  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Settings.tsx
+   13:276  error  'TrendingUp' is defined but never used    @typescript-eslint/no-unused-vars
+   94:61   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  512:36   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  549:43   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  586:48   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  592:48   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  616:39   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  651:44   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  737:149  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Suppliers.tsx
+   24:65   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+   24:106  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+   31:13   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+   32:10   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+   33:13   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+   45:32   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Suppliers.tsx:45:32
+  43 |   const pendingBills = bills?.filter(b => b.supplierId === supplier?.id && b.status !== "paid") ?? [];
+  44 |
+> 45 |   useEffect(() => { if (!open) setSelectedPayBillId(""); }, [open]);
+     |                                ^^^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  46 |
+  47 |   return (
+  48 |     <Dialog open={open} onOpenChange={v => { if (!v) onClose(); }}>  react-hooks/set-state-in-effect
+   71:125  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+  469:60   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Users.tsx
+  221:110  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  300:203  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  312:140  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Wallet.tsx
+   29:54   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+   90:21   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\Wallet.tsx:90:21
+  88 |   }, [tagTxnId, refetchCategories]);
+  89 |
+> 90 |   useEffect(() => { setParsedPreview([]); }, [smsText, smsProvider, selectedLocation]);
+     |                     ^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  91 |
+  92 |   const handlePreviewSms = async () => {
+  93 |     if (!selectedLocation || !smsText.trim()) return;  react-hooks/set-state-in-effect
+  131:64   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  136:46   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  136:102  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  137:47   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  137:103  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  138:59   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  170:34   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  170:73   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  209:49   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  336:74   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  347:79   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  361:39   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  396:46   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  585:50   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  585:89   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+  659:41   error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               @typescript-eslint/no-explicit-any
+
+D:\DevCenter\abuilds\fina\finaflow\src\pages\WalletAdmin.tsx
+    5:10  error  'formatKES' is defined but never used                   @typescript-eslint/no-unused-vars
+    6:10  error  'formatCurrency' is defined but never used              @typescript-eslint/no-unused-vars
+   13:31  error  'Settings' is defined but never used                    @typescript-eslint/no-unused-vars
+   13:41  error  'TrendingUp' is defined but never used                  @typescript-eslint/no-unused-vars
+   13:73  error  'DollarSign' is defined but never used                  @typescript-eslint/no-unused-vars
+   37:9   error  'createCurrency' is assigned a value but never used     @typescript-eslint/no-unused-vars
+   61:9   error  'configureProvider' is assigned a value but never used  @typescript-eslint/no-unused-vars
+  100:32  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  137:39  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  177:50  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  183:50  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  218:37  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+  251:40  error  Unexpected any. Specify a different type                @typescript-eslint/no-explicit-any
+
+✖ 452 problems (448 errors, 4 warnings)
+

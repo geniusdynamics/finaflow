@@ -6,10 +6,12 @@ import { createRouter, publicQuery, authedQuery, businessManage } from "./middle
 import { getDb } from "./queries/connection";
 import { businesses, userBusinesses, users, locations, dailySales, expenses, bills, accounts, businessDocuments, businessLogos, customerAccounts, type InsertCustomerAccount } from "@db/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
-import { logAudit } from "./lib/audit";
+import { logAudit, logCrossAccountAccess } from "./lib/audit";
 import { base64SizeBytes, resolveMimeType, sanitizeDownloadFileName } from "./lib/business-documents";
 import { assertAllowedLogoMimeType, assertLogoMaxSize } from "./lib/logo-validation";
 import { assertCanCreateBusiness } from "./lib/subscription-enforcement";
+import { provisionBusiness, seedBusinessAccounting } from "./lib/business-provisioning";
+import { checkUserLimitForAccount } from "./lib/account-subscriptions";
 import {
   countBusinessesForAccount,
   extendBusinessTrial,
@@ -113,9 +115,11 @@ export const businessesRouter = createRouter({
 
   get: authedQuery
     .input(z.object({ id: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
-      const row = await db.select().from(businesses).where(and(eq(businesses.id, input.id), isNull(businesses.deletedAt))).limit(1);
+      const accountId = ctx.user?.accountId;
+      if (!accountId) return null;
+      const row = await db.select().from(businesses).where(and(eq(businesses.id, input.id), eq(businesses.accountId, accountId), isNull(businesses.deletedAt))).limit(1);
       return row[0] ?? null;
     }),
 
@@ -284,7 +288,6 @@ export const businessesRouter = createRouter({
       natureOfBusiness: z.string().max(255).optional(),
       kraPin: z.string().max(20).optional(),
       email: z.string().optional(),
-      plan: z.string().default("free"),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
@@ -296,44 +299,23 @@ export const businessesRouter = createRouter({
 
       await assertCanCreateBusiness(db, accountId, accountRefId);
 
-      const planConfig = getPlanConfig(input.plan);
       let businessId = 0;
       await db.transaction(async (tx) => {
-        const [result] = await tx.insert(businesses).values({
-          ...input,
+        const result = await provisionBusiness({
+          db: tx,
           accountId,
           accountRefId,
+          name: input.name,
+          slug: input.slug,
+          userId: ctx.user!.id,
           referralCode: generateReferralCode(),
-          maxBranches: planConfig.maxBranches,
-          maxUsers: planConfig.maxUsers,
-        } as any).returning();
-        businessId = result.id;
-        
-        await tx.insert(userBusinesses).values({ userId: ctx.user!.id, businessId, role: "owner", isActive: true } as any);
-        await tx.update(users).set({ currentBusinessId: businessId }).where(eq(users.id, ctx.user!.id));
-
-        // Create default location with a more unique slug to avoid global unique constraint conflicts
-        const locationSlug = `main-${businessId}`;
-        const [locResult] = await tx.insert(locations).values({
-          businessId,
-          name: "Main Branch",
-          slug: locationSlug,
-          isActive: true,
-        } as any).returning();
-        const locId = locResult.id;
-
-        // Create default accounts for this location
-        await tx.insert(accounts).values([
-          { name: "Cash Drawer", type: "cash", locationId: locId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
-          { name: "Wallet", type: "wallet", locationId: locId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
-          { name: "Bank Account", type: "bank_account", locationId: locId, openingBalance: "0.00", currentBalance: "0.00", isActive: true } as any,
-        ]);
+        });
+        businessId = result.businessId;
       });
 
       if (businessId) {
         const locs = await db.select({ id: locations.id }).from(locations).where(eq(locations.businessId, businessId)).limit(1);
-        const { seedAccountingData } = await import("../db/seed-accounting");
-        await seedAccountingData(businessId, locs[0]?.id).catch((err) =>
+        await seedBusinessAccounting(businessId, locs[0]?.id).catch((err) =>
           console.error("[businesses.create] seedAccountingData failed", err)
         );
       }
@@ -365,47 +347,26 @@ export const businessesRouter = createRouter({
       const [accountRow] = await db.insert(customerAccounts)
         .values(accountValues)
         .returning({ id: customerAccounts.id });
-      
+
       let businessId = 0;
       await db.transaction(async (tx) => {
-        const [result] = await tx.insert(businesses).values({
+        const result = await provisionBusiness({
+          db: tx,
           accountId,
           accountRefId: accountRow.id,
           name: "Demo Business",
           slug: `demo-${ctx.user!.id}-${Date.now()}`,
-          plan: "pro",
-          maxBranches: 99,
-          maxUsers: 99,
+          userId: ctx.user!.id,
           isDemo: true,
-          isActive: true,
           referralCode: generateReferralCode(),
-        } as any).returning();
-        businessId = result.id;
-        
-        await tx.insert(userBusinesses).values({ userId: ctx.user!.id, businessId, role: "owner", isActive: true } as any);
-        await tx.update(users).set({ currentBusinessId: businessId }).where(eq(users.id, ctx.user!.id));
-
-        // Create default location
-        const [locResult] = await tx.insert(locations).values({
-          businessId,
-          name: "Main Branch",
-          slug: `demo-main-${businessId}`,
-          isActive: true,
-        } as any).returning();
-        const locId = locResult.id;
-
-        // Create default accounts
-        await tx.insert(accounts).values([
-          { name: "Cash Drawer", type: "cash", locationId: locId, openingBalance: "50000.00", currentBalance: "50000.00", isActive: true } as any,
-          { name: "Wallet", type: "wallet", locationId: locId, openingBalance: "75000.00", currentBalance: "75000.00", isActive: true } as any,
-          { name: "Bank Account", type: "bank_account", locationId: locId, openingBalance: "200000.00", currentBalance: "200000.00", isActive: true } as any,
-        ]);
+          defaultAccountOpeningBalance: "50000.00",
+        });
+        businessId = result.businessId;
       });
 
       if (businessId) {
         const locs = await db.select({ id: locations.id }).from(locations).where(eq(locations.businessId, businessId)).limit(1);
-        const { seedAccountingData } = await import("../db/seed-accounting");
-        await seedAccountingData(businessId, locs[0]?.id).catch((err) =>
+        await seedBusinessAccounting(businessId, locs[0]?.id).catch((err) =>
           console.error("[businesses.createDemo] seedAccountingData failed", err)
         );
       }
@@ -516,14 +477,29 @@ export const businessesRouter = createRouter({
 
   addMember: businessManage
     .input(z.object({ businessId: z.number(), userId: z.number(), role: z.string().default("admin") }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const [biz] = await db.select().from(businesses).where(eq(businesses.id, input.businessId)).limit(1);
-      const maxUsers = biz?.maxUsers ?? 1;
-      const currentUsers = await db.select({ count: sql<number>`COUNT(*)` }).from(userBusinesses)
-        .where(and(eq(userBusinesses.businessId, input.businessId), eq(userBusinesses.isActive, true)));
-      if ((currentUsers[0]?.count ?? 0) >= maxUsers) {
-        throw new Error(`User limit reached (${maxUsers}). Upgrade plan to add more users.`);
+      const accountId = ctx.user?.accountId;
+      if (!accountId) throw new Error("Account context required");
+      const [biz] = await db.select().from(businesses).where(and(eq(businesses.id, input.businessId), eq(businesses.accountId, accountId))).limit(1);
+      if (!biz) throw new Error("Business not found in this account");
+      const [targetUser] = await db.select({ id: users.id, accountId: users.accountId })
+        .from(users).where(and(eq(users.id, input.userId), isNull(users.deletedAt))).limit(1);
+      if (!targetUser || targetUser.accountId !== accountId) {
+        await logCrossAccountAccess({
+          userId: ctx.user!.id,
+          userAccountId: accountId,
+          targetResourceType: "users",
+          targetId: input.userId,
+          targetAccountId: targetUser?.accountId ?? undefined,
+          action: "addMember",
+          reason: "Cross-account user added to business attempt blocked",
+        });
+        throw new Error("User not found in this account");
+      }
+      const limitCheck = await checkUserLimitForAccount(db, accountId, input.businessId, biz.accountRefId);
+      if (!limitCheck.allowed) {
+        throw new Error(`User limit reached (${limitCheck.maxUsers}) for this account. Upgrade plan to add more users.`);
       }
       const existingMember = await db.select({ id: userBusinesses.id }).from(userBusinesses)
         .where(and(eq(userBusinesses.userId, input.userId), eq(userBusinesses.businessId, input.businessId)))
@@ -545,16 +521,26 @@ export const businessesRouter = createRouter({
 
   removeMember: businessManage
     .input(z.object({ businessId: z.number(), userId: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const accountId = ctx.user?.accountId;
+      if (!accountId) throw new Error("Account context required");
+      const [biz] = await db.select({ id: businesses.id }).from(businesses)
+        .where(and(eq(businesses.id, input.businessId), eq(businesses.accountId, accountId))).limit(1);
+      if (!biz) throw new Error("Business not found in this account");
       await db.update(userBusinesses).set({ isActive: false }).where(and(eq(userBusinesses.userId, input.userId), eq(userBusinesses.businessId, input.businessId)));
       return { success: true };
     }),
 
   members: businessManage
     .input(z.object({ businessId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
+      const accountId = ctx.user?.accountId;
+      if (!accountId) return [];
+      const [biz] = await db.select({ id: businesses.id }).from(businesses)
+        .where(and(eq(businesses.id, input.businessId), eq(businesses.accountId, accountId))).limit(1);
+      if (!biz) throw new Error("Business not found in this account");
       const junctions = await db.select().from(userBusinesses).where(and(eq(userBusinesses.businessId, input.businessId), eq(userBusinesses.isActive, true)));
       if (junctions.length === 0) return [];
       const userIds = junctions.map(j => j.userId);

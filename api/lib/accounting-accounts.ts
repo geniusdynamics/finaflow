@@ -52,6 +52,30 @@ export async function ensureSystemAccount(input: EnsureSystemAccountInput): Prom
     return existing[0].id;
   }
 
+  // Fallback: look for an existing account with matching accountSubType but no systemKey.
+  // This handles seeded accounts created before systemKey was introduced.
+  const fallback = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.businessId, input.businessId),
+        eq(accounts.accountType, input.accountType),
+        eq(accounts.accountSubType, input.accountSubType),
+        isNull(accounts.systemKey),
+        isNull(accounts.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  if (fallback[0]) {
+    await db
+      .update(accounts)
+      .set({ systemKey })
+      .where(eq(accounts.id, fallback[0].id));
+    return fallback[0].id;
+  }
+
   const [created] = await db
     .insert(accounts)
     .values({
@@ -70,7 +94,7 @@ export async function ensureSystemAccount(input: EnsureSystemAccountInput): Prom
       isSystemGenerated: true,
       isContra: false,
       isActive: true,
-    } as any)
+    } satisfies typeof accounts.$inferInsert)
     .returning({ id: accounts.id });
 
   return created.id;
