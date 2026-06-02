@@ -2,8 +2,8 @@
 // ABOUTME: Provides consistent transaction recording, cross-provider aggregation, and stats computation.
 
 import { getDb } from "../../queries/connection";
-import { mobileWalletTransactions, mobileWalletDailyLedger, accounts } from "@db/schema";
-import { eq, and, gte, lte, isNull, sql, desc, inArray } from "drizzle-orm";
+import { mobileWalletTransactions } from "@db/schema";
+import { eq, and, gte, lte, isNull, desc } from "drizzle-orm";
 import { WalletTxnStatus, WalletTxnType, WalletDirection } from "./provider-interface";
 
 export interface LogTransactionParams {

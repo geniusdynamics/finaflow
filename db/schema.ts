@@ -34,7 +34,7 @@ export const salaryTypeEnum = pgEnum("salaryType", ["monthly", "weekly", "daily"
 export const txnTypeEnum = pgEnum("txnType", ["topup", "expense", "transfer", "bank_transfer", "airtime", "utility", "withdrawal"]);
 export const actionEnum = pgEnum("action", ["CREATE", "UPDATE", "DELETE", "RESTORE", "LOGIN", "LOGOUT"]);
 export const severityEnum = pgEnum("severity", ["info", "warning", "critical"]);
-export const paymentMethod2Enum = pgEnum("paymentMethod2", ["cash", "mpesa", "bank_transfer", "card"]);
+export const paymentMethod2Enum = pgEnum("paymentMethod2", ["cash", "mpesa", "bank_transfer", "card", "wallet"]);
 export const billStatusEnum = pgEnum("billStatus", ["pending", "partial", "paid", "overdue", "cancelled"]);
 export const payrollStatusEnum = pgEnum("payrollStatus", ["open", "processing", "paid", "cancelled"]);
 export const advanceStatusEnum = pgEnum("advanceStatus", ["pending", "approved", "partially_repaid", "repaid", "cancelled"]);
@@ -453,10 +453,10 @@ export type BillPayment = typeof billPayments.$inferSelect;
 // Recurring bill templates
 export const recurringBillTemplates = pgTable("recurring_bill_templates", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number" }).notNull(),
-  businessId: bigint("businessId", { mode: "number" }),
-  supplierId: bigint("supplierId", { mode: "number" }),
-  categoryId: bigint("categoryId", { mode: "number" }),
+  locationId: bigint("locationId", { mode: "number" }).notNull().references(() => locations.id, { onDelete: "cascade" }),
+  businessId: bigint("businessId", { mode: "number" }).references(() => businesses.id, { onDelete: "cascade" }),
+  supplierId: bigint("supplierId", { mode: "number" }).references(() => suppliers.id, { onDelete: "set null" }),
+  categoryId: bigint("categoryId", { mode: "number" }).references(() => expenseCategories.id, { onDelete: "set null" }),
   liabilityAccountId: bigint("liabilityAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   description: text("description").notNull(),
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),

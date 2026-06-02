@@ -10,12 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Users, DollarSign, CreditCard, CheckCircle, Clock, Eye, Play, Banknote, Pencil, UserCircle, UserPlus, UserMinus, Calculator, Landmark, Shield } from "lucide-react";
+import { LocationSelector } from "@/components/LocationSelector";
 import { toast } from "sonner";
 
 export function Payroll() {
   const { user } = useAuth();
   const role = user?.role ?? "viewer";
   const canProcess = hasPermission(role, PERMISSIONS.PAYROLL_PROCESS);
+  const { data: settings } = trpc.settings.list.useQuery();
 
   const [periodOpen, setPeriodOpen] = useState(false);
   const [empOpen, setEmpOpen] = useState(false);
@@ -137,11 +139,20 @@ export function Payroll() {
                 <DialogTrigger asChild><Button variant="outline" className="border-[#D4A854] text-[#D4A854]"><Users className="mr-2 h-4 w-4" /> Add Staff</Button></DialogTrigger>
                 <DialogContent className="bg-white max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle className="font-serif text-xl">Add Employee</DialogTitle></DialogHeader>
                   <form onSubmit={handleEmp} className="space-y-3">
-                    <div><Label>Location</Label><select value={empForm.locationId} onChange={e => setEmpForm(p => ({ ...p, locationId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required><option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
+                    <div>
+                      <LocationSelector
+                      locations={locations}
+                      userLocationId={user?.locationId}
+                      value={empForm.locationId}
+                      onChange={v => setEmpForm(p => ({ ...p, locationId: v }))}
+                      enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
+                        required
+                       />
+                    </div>
                     <div className="grid grid-cols-2 gap-3"><div><Label>Full Name</Label><Input value={empForm.fullName} onChange={e => setEmpForm(p => ({ ...p, fullName: e.target.value }))} required /></div><div><Label>Phone</Label><Input value={empForm.phone} onChange={e => setEmpForm(p => ({ ...p, phone: e.target.value }))} required /></div></div>
                     <div className="grid grid-cols-2 gap-3"><div><Label>ID Number</Label><Input value={empForm.idNumber} onChange={e => setEmpForm(p => ({ ...p, idNumber: e.target.value }))} /></div><div><Label>KRA PIN</Label><Input value={empForm.kraPin} onChange={e => setEmpForm(p => ({ ...p, kraPin: e.target.value }))} /></div></div>
                     <div className="grid grid-cols-2 gap-3"><div><Label>NSSF</Label><Input value={empForm.nssfNumber} onChange={e => setEmpForm(p => ({ ...p, nssfNumber: e.target.value }))} /></div><div><Label>NHIF</Label><Input value={empForm.nhifNumber} onChange={e => setEmpForm(p => ({ ...p, nhifNumber: e.target.value }))} /></div></div>
-                    <div className="grid grid-cols-2 gap-3"><div><Label>Salary Type</Label><select value={empForm.salaryType} onChange={e => setEmpForm(p => ({ ...p, salaryType: e.target.value as any }))} className="w-full rounded border px-3 py-2 text-sm"><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="daily">Daily</option><option value="hourly">Hourly</option></select></div><div><Label>Basic Salary</Label><Input type="number" step="0.01" value={empForm.basicSalary} onChange={e => setEmpForm(p => ({ ...p, basicSalary: e.target.value }))} required /></div></div>
+{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                    <div className="grid grid-cols-2 gap-3"><div><Label>Salary Type</Label><select value={empForm.salaryType} onChange={e => setEmpForm(p => ({ ...p, salaryType: e.target.value as any }))} className="w-full rounded border px-3 py-2 text-sm"><option value="monthly">Monthly</option><option value="weekly">Weekly</option><option value="daily">Daily</option><option value="hourly">Hourly</option></select></div><div><Label>Basic Salary</Label><Input type="number" step="0.01" value={empForm.basicSalary} onChange={e => setEmpForm(p => ({ ...p, basicSalary: e.target.value }))} required /></div></div>
                     <div className="grid grid-cols-3 gap-3"><div><Label>Bank</Label><Input value={empForm.bankName} onChange={e => setEmpForm(p => ({ ...p, bankName: e.target.value }))} /></div><div><Label>Account</Label><Input value={empForm.bankAccount} onChange={e => setEmpForm(p => ({ ...p, bankAccount: e.target.value }))} /></div><div><Label>Code</Label><Input value={empForm.bankCode} onChange={e => setEmpForm(p => ({ ...p, bankCode: e.target.value }))} /></div></div>
                     <div><Label>Employment Date</Label><Input type="date" value={empForm.employmentDate} onChange={e => setEmpForm(p => ({ ...p, employmentDate: e.target.value }))} required /></div>
                     <Button type="submit" className="w-full bg-[#C73E1D]" disabled={createEmployee.isPending}>{createEmployee.isPending ? "Saving..." : "Add Employee"}</Button>
@@ -152,7 +163,16 @@ export function Payroll() {
                 <DialogTrigger asChild><Button className="bg-[#C73E1D]"><Plus className="mr-2 h-4 w-4" /> Add Period</Button></DialogTrigger>
                 <DialogContent className="bg-white"><DialogHeader><DialogTitle className="font-serif text-xl">Add Pay Period</DialogTitle></DialogHeader>
                   <form onSubmit={handlePeriod} className="space-y-3">
-                    <div><Label>Location</Label><select value={periodForm.locationId} onChange={e => setPeriodForm(p => ({ ...p, locationId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required><option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
+                    <div>
+                      <LocationSelector
+                      locations={locations}
+                      userLocationId={user?.locationId}
+                      value={periodForm.locationId}
+                      onChange={v => setPeriodForm(p => ({ ...p, locationId: v }))}
+                      enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
+                        required
+                       />
+                    </div>
                     <div><Label>Period Name</Label><Input value={periodForm.periodName} onChange={e => setPeriodForm(p => ({ ...p, periodName: e.target.value }))} placeholder="e.g. May 2026" required /></div>
                     <div className="grid grid-cols-3 gap-3"><div><Label>Start</Label><Input type="date" value={periodForm.startDate} onChange={e => setPeriodForm(p => ({ ...p, startDate: e.target.value }))} required /></div><div><Label>End</Label><Input type="date" value={periodForm.endDate} onChange={e => setPeriodForm(p => ({ ...p, endDate: e.target.value }))} required /></div><div><Label>Pay Date</Label><Input type="date" value={periodForm.paymentDate} onChange={e => setPeriodForm(p => ({ ...p, paymentDate: e.target.value }))} required /></div></div>
                     <Button type="submit" className="w-full bg-[#C73E1D]" disabled={createPeriod.isPending}>{createPeriod.isPending ? "Saving..." : "Add Period"}</Button>

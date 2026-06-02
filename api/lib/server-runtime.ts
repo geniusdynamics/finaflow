@@ -5,5 +5,5 @@ export type RuntimeImportMetaEnv = {
 } | undefined;
 
 export function shouldStartStandaloneServer(importMetaEnv?: RuntimeImportMetaEnv): boolean {
-  return !Boolean(importMetaEnv?.DEV);
+  return !importMetaEnv?.DEV;
 }

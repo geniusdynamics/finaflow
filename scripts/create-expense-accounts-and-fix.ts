@@ -264,6 +264,7 @@ async function createExpenseAccountsAndFixRecords() {
   }
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getNextJeNumber(client: any) {
   const result = await client.query(`SELECT MAX(CAST(SUBSTRING("entryNumber" FROM 4) AS INTEGER)) as max_num FROM journal_entries`);
   return (result.rows[0]?.max_num || 0) + 1;

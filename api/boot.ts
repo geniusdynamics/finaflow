@@ -59,7 +59,7 @@ app.get("/health", async (c) => {
     return c.json({ status: "unhealthy", error: String(e) }, 503);
   }
 });
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function trpcRateLimiter(c: any, next: any) {
   if (c.req.method === "POST" && c.req.path.startsWith("/api/trpc")) {
     try {
@@ -69,6 +69,7 @@ async function trpcRateLimiter(c: any, next: any) {
         .catch(() => null);
       if (body && typeof body === "object") {
         const paths = new Set<string>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
         const walk = (obj: any) => {
           if (!obj || typeof obj !== "object") return;
           if (obj.path && typeof obj.path === "string") paths.add(obj.path);

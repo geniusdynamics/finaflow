@@ -35,7 +35,7 @@
 //   - supplierPriceHistory, financialReports
 // ──────────────────────────────────────────────────────────────────────────────
 
-import { and, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql, type SQL, type PgTable } from "drizzle-orm";
 
 import {
   accounts,
@@ -74,6 +74,7 @@ import {
   suppliers,
   webhookDeliveries,
 } from "@db/schema";
+import type { DbClient } from "./account-subscriptions";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -102,7 +103,7 @@ export type PreResetValidation = {
 };
 
 export async function validatePreReset(input: {
-  db: any;
+  db: DbClient;
   businessId: number;
 }): Promise<PreResetValidation> {
   const warnings: string[] = [];
@@ -142,7 +143,7 @@ export type ResetSnapshot = {
 };
 
 export async function createResetSnapshot(input: {
-  db: any;
+  db: DbClient;
   businessId: number;
 }): Promise<ResetSnapshot> {
   const locationRows = await input.db
@@ -162,7 +163,7 @@ export async function createResetSnapshot(input: {
   if (locationIds.length > 0) {
     const locIdSql = sql.join(locationIds.map((id: number) => sql`${id}`), sql`, `);
 
-    const countTable = async (table: any, idField: any, extraCondition?: SQL) => {
+    const countTable = async (table: PgTable, idField: Parameters<typeof sql>[0], extraCondition?: SQL) => {
       const conditions = [sql`${idField} IN (${locIdSql})`];
       if (extraCondition) conditions.push(extraCondition);
       const [row] = await input.db
@@ -211,11 +212,11 @@ export async function createResetSnapshot(input: {
 // ─── Main Reset Function ─────────────────────────────────────────────────────
 
 export async function resetBusinessTransactions(input: {
-  db: any;
+  db: DbClient;
   businessId: number;
   userId?: number;
 }): Promise<ResetResult> {
-  return input.db.transaction(async (tx: any) => {
+  return input.db.transaction(async (tx: DbClient) => {
     const results: Record<string, { count: number }> = {};
     const now = new Date();
 
@@ -276,7 +277,7 @@ export async function resetBusinessTransactions(input: {
 
     const softDeleteLocationScoped = async (
       key: string,
-      table: any,
+      table: PgTable,
       extraSet: Record<string, unknown> = {},
     ) => {
       const updated = await tx
@@ -287,7 +288,7 @@ export async function resetBusinessTransactions(input: {
       results[key] = { count: updated.length };
     };
 
-    const deleteLocationScoped = async (key: string, table: any) => {
+    const deleteLocationScoped = async (key: string, table: PgTable) => {
       const deleted = await tx
         .delete(table)
         .where(sql`${table.locationId} IN (${locIdSql})`)
@@ -532,7 +533,7 @@ export async function resetBusinessTransactions(input: {
     // 7f. provider_configs (location-scoped, clear on reset)
     const configDeleted = await tx
       .update(providerConfigs)
-      .set({ deletedAt: now, isActive: false } as any)
+      .set({ deletedAt: now, isActive: false })
       .where(sql`1=1`)
       .returning({ id: providerConfigs.id });
     results.provider_configs = { count: configDeleted.length };

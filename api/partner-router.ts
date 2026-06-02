@@ -333,6 +333,7 @@ export const partnerRouter = createRouter({
             subscriptionAmount: subAmount.toFixed(2),
             commissionPercent: revShare.toFixed(2),
             commissionAmount: commission.toFixed(2),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any).returning();
           created++;
         }

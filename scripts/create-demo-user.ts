@@ -2,7 +2,7 @@
 import "./patch-db";
 import { getDb } from "../api/queries/connection";
 import { localAuthRouter } from "../api/local-auth-router";
-import { hashPassword } from "../api/lib/password";
+
 
 const DEMO_INPUT = {
   name: "GENIUS Owner",
@@ -18,6 +18,7 @@ const DEMO_INPUT = {
 
 async function main() {
   const db = getDb();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ctx = { db } as any;
 
   const caller = localAuthRouter.createCaller(ctx);
@@ -35,6 +36,7 @@ async function main() {
     }, null, 2));
     console.log("\nToken (first 50 chars):", result.token.substring(0, 50) + "...");
     console.log("CSRF Token:", result.csrfToken?.substring(0, 20) + "...");
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } catch (e: any) {
     if (e.code === "CONFLICT" || e.message?.includes("already taken")) {
       console.log("Note: User may already exist. Error:", e.message);

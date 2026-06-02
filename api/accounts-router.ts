@@ -9,10 +9,15 @@ import { notFutureDateString } from "./lib/future-date";
 import { toLocalDateKey } from "./lib/date-key";
 import { ensureSystemAccount } from "./lib/accounting-accounts";
 import { validateOperationalAccountClassification } from "./lib/accounting-validation";
+import type { AccountType } from "@db/schema";
+
+type Db = ReturnType<typeof getDb>;
+type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+type LedgerEntryInsert = typeof ledgerEntries.$inferInsert;
 
 async function syncOperationalToCoaBalance(
-  db: any,
-  tx: any,
+  db: Db,
+  tx: Tx,
   accountId: number
 ): Promise<void> {
   const [account] = await tx.select().from(accounts).where(eq(accounts.id, accountId)).limit(1);
@@ -114,7 +119,7 @@ export const accountsRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const userId = (ctx as any).user?.id ?? 1;
+      const userId = ctx.user?.id ?? 1;
       await requireAuthorizedLocation(ctx, input.locationId);
       const ob = input.openingBalance ?? "0.00";
       const [location] = await db
@@ -136,7 +141,7 @@ export const accountsRouter = createRouter({
 
       const classification = validateOperationalAccountClassification(
         input.type,
-        input.accountType as any,
+        input.accountType as AccountType | null,
         input.accountSubType,
       );
 
@@ -164,7 +169,7 @@ export const accountsRouter = createRouter({
         isPaymentMethod: input.isPaymentMethod ?? false,
         isContra: false,
       }).returning();
-      const result = (rows as any[])[0];
+      const result = rows[0];
 
       if (input.accountType && parseFloat(ob) !== 0) {
         await db.update(accounts).set({ currentBalance: ob }).where(eq(accounts.id, systemAccountId));
@@ -200,9 +205,9 @@ export const accountsRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const userId = (ctx as any).user?.id ?? 1;
+      const userId = ctx.user?.id ?? 1;
       const existing = await requireAuthorizedEntity(ctx, accounts, input.id);
-      const { id, accountType, accountSubType, isContra, ...rest } = input;
+      const { id, accountType, ...rest } = input;
 
       const updates: Record<string, unknown> = { ...rest };
 
@@ -230,7 +235,7 @@ export const accountsRouter = createRouter({
     .input(z.object({ id: z.number(), newBalance: z.string(), reason: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const userId = (ctx as any).user?.id ?? 1;
+      const userId = ctx.user?.id ?? 1;
       const acct = await requireAuthorizedEntity(ctx, accounts, input.id);
       const oldBal = d(acct.currentBalance);
       const newBal = d(input.newBalance);
@@ -238,7 +243,7 @@ export const accountsRouter = createRouter({
 
       await db.transaction(async (tx) => {
         const entryType = diff.gte(0) ? "credit" : "debit";
-        const [ledgerResult] = await tx.insert(ledgerEntries).values({
+        await tx.insert(ledgerEntries).values({
           accountId: input.id,
           transactionType: "deposit",
           transactionId: input.id,
@@ -248,7 +253,7 @@ export const accountsRouter = createRouter({
           description: input.reason || `Balance adjustment from ${oldBal.toFixed(2)} to ${newBal.toFixed(2)}`,
           entryDate: new Date(),
           createdBy: userId,
-        } as any).returning();
+        } as LedgerEntryInsert).returning();
         await tx.update(accounts).set({ currentBalance: input.newBalance }).where(eq(accounts.id, input.id));
         await syncOperationalToCoaBalance(db, tx, input.id);
       });
@@ -268,14 +273,14 @@ export const accountsRouter = createRouter({
     .input(drawingInputSchema)
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const userId = (ctx as any).user?.id ?? 1;
+      const userId = ctx.user?.id ?? 1;
       const acct = await requireAuthorizedEntity(ctx, accounts, input.accountId);
       const oldBal = d(acct.currentBalance);
       const amount = d(input.amount);
       const newBal = oldBal.minus(amount);
 
       await db.transaction(async (tx) => {
-        const [result] = await tx.insert(ledgerEntries).values({
+        await tx.insert(ledgerEntries).values({
           accountId: input.accountId,
           transactionType: "drawing",
           transactionId: input.accountId,
@@ -285,7 +290,7 @@ export const accountsRouter = createRouter({
           description: input.description || "Owner drawing",
           entryDate: new Date(input.date),
           createdBy: userId,
-        } as any).returning();
+        } as LedgerEntryInsert).returning();
         await tx.update(accounts).set({ currentBalance: newBal.toFixed(2) }).where(eq(accounts.id, input.accountId));
         await syncOperationalToCoaBalance(db, tx, input.accountId);
       });
@@ -305,14 +310,14 @@ export const accountsRouter = createRouter({
     .input(depositInputSchema)
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const userId = (ctx as any).user?.id ?? 1;
+      const userId = ctx.user?.id ?? 1;
       const acct = await requireAuthorizedEntity(ctx, accounts, input.accountId);
       const oldBal = d(acct.currentBalance);
       const amount = d(input.amount);
       const newBal = oldBal.plus(amount);
 
       await db.transaction(async (tx) => {
-        const [result] = await tx.insert(ledgerEntries).values({
+        await tx.insert(ledgerEntries).values({
           accountId: input.accountId,
           transactionType: "deposit",
           transactionId: input.accountId,
@@ -322,7 +327,7 @@ export const accountsRouter = createRouter({
           description: input.description || "Deposit",
           entryDate: new Date(input.date),
           createdBy: userId,
-        } as any).returning();
+        } as LedgerEntryInsert).returning();
         await tx.update(accounts).set({ currentBalance: newBal.toFixed(2) }).where(eq(accounts.id, input.accountId));
         await syncOperationalToCoaBalance(db, tx, input.accountId);
       });
@@ -333,7 +338,7 @@ export const accountsRouter = createRouter({
     .input(transferInputSchema)
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const userId = (ctx as any).user?.id ?? 1;
+      const userId = ctx.user?.id ?? 1;
 
       const fromAcct = await requireAuthorizedEntity(ctx, accounts, input.fromAccountId);
 
@@ -361,7 +366,7 @@ export const accountsRouter = createRouter({
           description: `${input.description} (to ${input.toAccounts.length} account${input.toAccounts.length > 1 ? 's' : ''})`,
           entryDate: new Date(input.date),
           createdBy: userId,
-        } as any).returning();
+        } as LedgerEntryInsert).returning();
         await tx.update(accounts).set({ currentBalance: fromNewBal.toFixed(2) }).where(eq(accounts.id, input.fromAccountId));
         await syncOperationalToCoaBalance(db, tx, input.fromAccountId);
 
@@ -370,7 +375,7 @@ export const accountsRouter = createRouter({
           const toOldBal = d(toAcct.currentBalance);
           const toNewBal = toOldBal.plus(d(to.amount));
 
-          const [creditEntry] = await tx.insert(ledgerEntries).values({
+          await tx.insert(ledgerEntries).values({
             accountId: to.accountId,
             transactionType: "transfer",
             transactionId: debitEntry.id,
@@ -380,7 +385,7 @@ export const accountsRouter = createRouter({
             description: to.description || `${input.description} (from ${fromAcct.name})`,
             entryDate: new Date(input.date),
             createdBy: userId,
-          } as any).returning();
+          } as LedgerEntryInsert).returning();
           await tx.update(accounts).set({ currentBalance: toNewBal.toFixed(2) }).where(eq(accounts.id, to.accountId));
           await syncOperationalToCoaBalance(db, tx, to.accountId);
           results.push({ accountId: to.accountId, amount: to.amount, newBalance: toNewBal.toFixed(2) });

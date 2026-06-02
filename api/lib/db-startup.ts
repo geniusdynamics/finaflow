@@ -132,12 +132,13 @@ async function runPendingMigrations(pool: pg.Pool) {
         if (stmt.trim()) {
           try {
             await pool.query(stmt);
-          } catch (stmtError: any) {
+          } catch (stmtError) {
+            const code = (stmtError as { code?: string } | null | undefined)?.code;
             if (
-              stmtError?.code === "42710" ||
-              stmtError?.code === "23505" ||
-              stmtError?.code === "42P07" ||
-              stmtError?.code === "42701"
+              code === "42710" ||
+              code === "23505" ||
+              code === "42P07" ||
+              code === "42701"
             ) {
               continue;
             }
@@ -147,8 +148,9 @@ async function runPendingMigrations(pool: pg.Pool) {
       }
       await pool.query("INSERT INTO drizzle_schema (name) VALUES ($1)", [file]);
       console.log(`[db] applied migration ${file}`);
-    } catch (error: any) {
-      if (error?.code === "42710" || error?.code === "23505" || error?.code === "42P07" || error?.code === "42701") {
+    } catch (error) {
+      const code = (error as { code?: string } | null | undefined)?.code;
+      if (code === "42710" || code === "23505" || code === "42P07" || code === "42701") {
         console.log(`[db] migration ${file} already exists; marking as applied`);
         await pool.query("INSERT INTO drizzle_schema (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [file]);
       } else {
