@@ -20,10 +20,9 @@ export const itemsRouter = createRouter({
       if (!business || business.id !== input.businessId) {
         throw new Error("Unauthorized access to this business");
       }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const conditions: any[] = [eq(items.businessId, input.businessId)];
       if (input.itemType) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         conditions.push(eq(items.itemType, input.itemType as any));
       }
       conditions.push(isNull(items.deletedAt));
@@ -134,7 +133,6 @@ export const itemsRouter = createRouter({
           reorderLevel: input.reorderLevel,
           taxRate: input.taxRate,
           notes: input.notes,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any)
         .returning();
 
@@ -175,7 +173,7 @@ export const itemsRouter = createRouter({
       });
 
       if (!item) throw new Error("Item not found");
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const updates: any = {};
       if (input.name !== undefined) updates.name = input.name;
       if (input.description !== undefined) updates.description = input.description;

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, authedQuery, apiKeysManage, webhooksManage } from "./middleware";
 import { getDb } from "./queries/connection";
 import { apiKeys, webhooks, webhookDeliveries } from "@db/schema";
-import { eq, and, desc, isNull } from "drizzle-orm";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 
 function generateApiKey(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -36,7 +36,6 @@ export const integrationsRouter = createRouter({
         keyHash,
         keyPrefix: prefix,
         scopes: input.scopes ?? ["read"],
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { id: result.id, key: rawKey, prefix };
     }),
@@ -82,7 +81,6 @@ export const integrationsRouter = createRouter({
         url: input.url,
         events: input.events,
         secret: input.secret,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { id: result.id };
     }),
@@ -98,7 +96,6 @@ export const integrationsRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...updates } = input;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       await db.update(webhooks).set(updates as any).where(eq(webhooks.id, id));
       return { success: true };
     }),

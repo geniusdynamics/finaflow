@@ -2,7 +2,7 @@
 // Run this once after schema migration: npx tsx db/migrate-existing-data.ts
 
 import { getDb } from "../api/queries/connection";
-import { accounts, expenseCategories, journalEntries, journalLines, type AccountSubType, type AccountType, type AccountingClass } from "./schema";
+import { accounts, expenses, expenseCategories, bills, journalEntries, journalLines } from "./schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { d } from "../api/lib/decimal";
 
@@ -24,7 +24,7 @@ async function migrateExistingData(businessId: number, locationIds: number[]) {
     ));
 
   for (const acc of existingAccounts) {
-    const typeMap: Record<string, { type: AccountType; subType: AccountSubType; code: string }> = {
+    const typeMap: Record<string, { type: string; subType: string; code: string }> = {
       cash: { type: "asset", subType: "cash", code: "1000" },
       mpesa: { type: "asset", subType: "cash", code: "1200" },
       wallet: { type: "asset", subType: "cash", code: "1200" },
@@ -32,12 +32,12 @@ async function migrateExistingData(businessId: number, locationIds: number[]) {
     };
 
     const config = typeMap[acc.type] || { type: "asset", subType: "other_asset", code: "1900" };
-
+    
     await db.update(accounts).set({
       businessId: businessId,
       accountCode: acc.accountCode || config.code,
-      accountType: config.type,
-      accountSubType: config.subType,
+      accountType: config.type as any,
+      accountSubType: config.subType as any,
       isActive: true,
     }).where(eq(accounts.id, acc.id));
     
@@ -54,7 +54,7 @@ async function migrateExistingData(businessId: number, locationIds: number[]) {
 
   for (const cat of cats) {
     const nameLower = cat.name.toLowerCase();
-    let accountingClass: AccountingClass = "operating_expense";
+    let accountingClass: string = "operating_expense";
     if (["food supplies", "beverages", "food cost", "beverage cost"].some(s => nameLower.includes(s))) {
       accountingClass = "cogs";
     } else if (["rent"].some(s => nameLower.includes(s))) {
@@ -68,7 +68,7 @@ async function migrateExistingData(businessId: number, locationIds: number[]) {
     await db.update(expenseCategories).set({
       businessId: businessId,
       locationId: locationId,
-      accountingClass: accountingClass,
+      accountingClass: accountingClass as any,
     }).where(eq(expenseCategories.id, cat.id));
     
     console.log(`  Mapped category: ${cat.name} -> ${accountingClass}`);
@@ -132,7 +132,7 @@ async function migrateExistingData(businessId: number, locationIds: number[]) {
         credit: isDebitNormal ? "0.00" : balance.toFixed(2),
         description: `Opening balance: ${acc.name}`,
         lineNumber: lineNum++,
-      });
+      } as any);
 
       console.log(`  Created opening line: ${acc.name} = ${balance.toFixed(2)}`);
     }
@@ -147,8 +147,7 @@ async function migrateExistingData(businessId: number, locationIds: number[]) {
     sql`SELECT * FROM "ledger_entries" WHERE "journalEntryId" IS NULL`
   );
 
-  type LedgerRow = (typeof existingLedgerEntries.rows)[number];
-  const ledgerGrouped: Record<string, LedgerRow[]> = {};
+  const ledgerGrouped: Record<string, any[]> = {};
   for (const le of existingLedgerEntries.rows) {
     const key = `${le.transactionType}-${le.transactionId}-${le.entryDate}`;
     if (!ledgerGrouped[key]) ledgerGrouped[key] = [];
@@ -156,7 +155,7 @@ async function migrateExistingData(businessId: number, locationIds: number[]) {
   }
 
   let convertedCount = 0;
-  for (const ledgers of Object.values(ledgerGrouped)) {
+  for (const [key, ledgers] of Object.entries(ledgerGrouped)) {
     if (ledgers.length < 2) continue;
 
     const first = ledgers[0];
@@ -185,7 +184,7 @@ async function migrateExistingData(businessId: number, locationIds: number[]) {
         credit: le.entryType === "credit" ? le.amount : "0.00",
         description: le.description || "",
         lineNumber: i + 1,
-      });
+      } as any);
     }
 
     convertedCount++;

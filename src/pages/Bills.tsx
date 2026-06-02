@@ -10,8 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, CreditCard, AlertTriangle, CheckCircle, Clock, Trash2, Package, Search, Camera, Calendar, Repeat, FileText, RotateCcw, OctagonX } from "lucide-react";
-import { LocationSelector } from "@/components/LocationSelector";
-import { ExpenseCategorySelector } from "@/components/ExpenseCategorySelector";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -31,15 +29,7 @@ const PAYMENT_METHOD_ACCOUNT_TYPES: Record<string, string[]> = {
   card: ["bank_account"],
 };
 
-interface FundingAccount {
-  id: number;
-  type: string;
-  deletedAt?: string | null;
-  locationId?: number | null;
-  name?: string;
-}
-
-function getFundingAccounts(paymentMethod: string, allAccounts: FundingAccount[] | undefined, locationId?: number): FundingAccount[] {
+function getFundingAccounts(paymentMethod: string, allAccounts: any[] | undefined, locationId?: number): any[] {
   const allowedTypes = PAYMENT_METHOD_ACCOUNT_TYPES[paymentMethod] ?? [];
   return (allAccounts ?? []).filter(a => allowedTypes.includes(a.type) && !a.deletedAt && (!locationId || a.locationId === locationId));
 }
@@ -253,19 +243,10 @@ export function Bills() {
                 <DialogTrigger asChild><Button variant="outline" className="border-[#D4A854] text-[#D4A854]"><Plus className="mr-2 h-4 w-4" /> Recurring</Button></DialogTrigger>
                 <DialogContent className="bg-white max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle className="font-serif text-xl">Add Recurring Bill</DialogTitle></DialogHeader>
                   <form onSubmit={handleRecurring} className="space-y-3">
-                    <div>
-                      <LocationSelector
-                         locations={locations}
-                         userLocationId={user?.locationId}
-                         value={recForm.locationId}
-                         onChange={v => setRecForm(p => ({...p, locationId: v}))}
-                         enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
-                         required
-                       />
-                    </div>
+                    <div><Label>Location</Label><select value={recForm.locationId} onChange={e => setRecForm(p => ({...p, locationId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm" required><option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div>
                     <div><Label>Description</Label><Input value={recForm.description} onChange={e => setRecForm(p => ({...p, description: e.target.value}))} placeholder="e.g. Rent, License" required /></div>
-                    <div><ExpenseCategorySelector categories={categories} value={recForm.categoryId} onChange={v => setRecForm(p => ({...p, categoryId: v}))} label="Default Category" placeholder="Optional" /></div>
-                    <div className="grid grid-cols-2 gap-3"><div><Label>Amount</Label><Input type="number" step="0.01" value={recForm.amount} onChange={e => setRecForm(p => ({...p, amount: e.target.value}))} required /></div><div><Label>Frequency</Label><select value={recForm.frequency} onChange={e => setRecForm(p => ({...p, frequency: e.target.value as "daily" | "weekly" | "monthly" | "quarterly" | "annually"}))} className="w-full rounded border px-3 py-2 text-sm"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div></div>
+                    <div><Label>Default Category</Label><select value={recForm.categoryId} onChange={e => setRecForm(p => ({...p, categoryId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Optional</option>{categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+                    <div className="grid grid-cols-2 gap-3"><div><Label>Amount</Label><Input type="number" step="0.01" value={recForm.amount} onChange={e => setRecForm(p => ({...p, amount: e.target.value}))} required /></div><div><Label>Frequency</Label><select value={recForm.frequency} onChange={e => setRecForm(p => ({...p, frequency: e.target.value as any}))} className="w-full rounded border px-3 py-2 text-sm"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div></div>
                     <div><Label>Next Due</Label><Input type="date" value={recForm.nextDueDate} onChange={e => setRecForm(p => ({...p, nextDueDate: e.target.value}))} required /></div>
                     <Button type="submit" className="w-full bg-[#C73E1D]" disabled={createRecurring.isPending}>{createRecurring.isPending ? "Saving..." : "Add Recurring"}</Button>
                   </form>
@@ -275,17 +256,8 @@ export function Bills() {
                 <DialogTrigger asChild><Button className="bg-[#C73E1D]"><Plus className="mr-2 h-4 w-4" /> Add Bill</Button></DialogTrigger>
                 <DialogContent className="bg-white max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle className="font-serif text-xl">Add Bill</DialogTitle></DialogHeader>
                   <form onSubmit={handleSubmit} className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3"><div>
-                      <LocationSelector
-                        locations={locations}
-                        userLocationId={user?.locationId}
-                        value={form.locationId}
-                        onChange={v => setForm(p => ({...p, locationId: v}))}
-                        enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
-                        required
-                      />
-                    </div><div><Label>Supplier</Label><select value={form.supplierId} onChange={e => setForm(p => ({...p, supplierId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Optional</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div></div>
-                    <div><ExpenseCategorySelector categories={categories} value={form.categoryId} onChange={v => setForm(p => ({...p, categoryId: v}))} label="Category" placeholder="Use supplier/default logic" /></div>
+                    <div className="grid grid-cols-2 gap-3"><div><Label>Location</Label><select value={form.locationId} onChange={e => setForm(p => ({...p, locationId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm" required><option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</select></div><div><Label>Supplier</Label><select value={form.supplierId} onChange={e => setForm(p => ({...p, supplierId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Optional</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div></div>
+                    <div><Label>Category</Label><select value={form.categoryId} onChange={e => setForm(p => ({...p, categoryId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Use supplier/default logic</option>{categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                     <div><Label>Description</Label><Input value={form.description} onChange={e => setForm(p => ({...p, description: e.target.value}))} required /></div>
                     <div className="grid grid-cols-2 gap-3">
                       <div><Label>Bill Number <span className="text-[#8D8A87] font-normal">(optional)</span></Label><Input value={form.billNumber} onChange={e => setForm(p => ({...p, billNumber: e.target.value}))} placeholder="Auto: BILL-0001" /></div>
@@ -383,7 +355,7 @@ export function Bills() {
                         <DialogContent className="bg-white"><DialogHeader><DialogTitle className="font-serif text-xl">Record Payment</DialogTitle></DialogHeader>
                           <form onSubmit={handlePayment(bill.id)} className="space-y-3">
                             <div className="rounded bg-[#F5EDE6] p-3"><p className="text-sm font-medium">{bill.description}</p><p className="text-xs text-[#8D8A87]">Supplier: {suppliers?.find(s => s.id === bill.supplierId)?.name ?? "-"} · Balance: {formatKES(bill.balanceDue)}</p></div>
-                            <div className="grid grid-cols-2 gap-3"><div><Label>Amount</Label><Input type="number" step="0.01" max={parseFloat(bill.balanceDue)} value={payForm.amount} onChange={e => setPayForm(p => ({...p, amount: e.target.value}))} required /></div><div><Label>Method</Label><select value={payForm.paymentMethod} onChange={e => setPayForm(p => ({...p, paymentMethod: e.target.value as "cash" | "wallet" | "bank_transfer" | "card"}))} className="w-full rounded border px-3 py-2 text-sm"><option value="cash">Cash</option><option value="wallet">Wallet</option><option value="bank_transfer">Bank</option><option value="card">Card</option></select></div></div>
+                            <div className="grid grid-cols-2 gap-3"><div><Label>Amount</Label><Input type="number" step="0.01" max={parseFloat(bill.balanceDue)} value={payForm.amount} onChange={e => setPayForm(p => ({...p, amount: e.target.value}))} required /></div><div><Label>Method</Label><select value={payForm.paymentMethod} onChange={e => setPayForm(p => ({...p, paymentMethod: e.target.value as any}))} className="w-full rounded border px-3 py-2 text-sm"><option value="cash">Cash</option><option value="wallet">Wallet</option><option value="bank_transfer">Bank</option><option value="card">Card</option></select></div></div>
                             <div><Label>Payment Date</Label><Input type="date" value={payForm.paymentDate} max={todayDate} onChange={e => setPayForm(p => ({ ...p, paymentDate: e.target.value }))} required /></div>
                             <div className="grid grid-cols-2 gap-3"><div><Label>Funding Source</Label><select value={payForm.accountId} onChange={e => setPayForm(p => ({...p, accountId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Auto-detect</option>{getFundingAccounts(payForm.paymentMethod, accounts, bill.locationId)?.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name}{loc ? ` (${loc})` : ""}</option>; })}</select></div><div><Label>Reference</Label><Input value={payForm.reference} onChange={e => setPayForm(p => ({...p, reference: e.target.value}))} placeholder="Reference code"/></div></div>
                             {paymentError && (
@@ -462,7 +434,7 @@ export function Bills() {
                   <div className="grid grid-cols-4 gap-2 items-end">
                     <div><Label className="text-xs">Qty</Label><Input type="number" step="0.001" value={itemForm.quantity} onChange={e => setItemForm(p => ({...p, quantity: e.target.value}))} required /></div>
                     <div><Label className="text-xs">Unit Price</Label><Input type="number" step="0.01" value={itemForm.unitPrice} onChange={e => setItemForm(p => ({...p, unitPrice: e.target.value}))} required /></div>
-                    <div><ExpenseCategorySelector categories={categories} value={itemForm.categoryId} onChange={v => setItemForm(p => ({...p, categoryId: v}))} label={<span className="text-xs">Category</span>} placeholder="Select" /></div>
+                    <div><Label className="text-xs">Category</Label><select value={itemForm.categoryId} onChange={e => setItemForm(p => ({...p, categoryId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Select</option>{categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
                     <Button type="submit" className="bg-[#C73E1D]" disabled={addItem.isPending}><Plus className="h-4 w-4"/></Button>
                   </div>
                   {matchedMasterItem && (

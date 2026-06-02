@@ -1,13 +1,12 @@
 import { z } from "zod";
-import { createRouter, supplierQuery, supplierManage, requireAuthorizedLocation, requireAuthorizedBusinessEntity } from "./middleware";
+import { createRouter, supplierQuery, supplierManage, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
 import { suppliers, bills, billPayments, locations } from "@db/schema";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, isNull, desc, sql } from "drizzle-orm";
 
 export const suppliersRouter = createRouter({
   list: supplierQuery.query(async ({ ctx }) => {
     const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
     if (!businessId) return [];
     
@@ -20,7 +19,6 @@ export const suppliersRouter = createRouter({
     .input(z.object({ query: z.string() }))
     .query(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
       if (!businessId) return [];
 
@@ -39,11 +37,10 @@ export const suppliersRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
       if (!businessId) throw new Error("No active business available.");
       
-      const targetLocationId = input.locationId;
+      let targetLocationId = input.locationId;
       if (targetLocationId) {
         await requireAuthorizedLocation(ctx, targetLocationId);
       }
@@ -56,7 +53,6 @@ export const suppliersRouter = createRouter({
         contactPerson: input.contactPerson, kraPin: input.kraPin,
         paymentTermsDays: input.paymentTermsDays, creditLimit: input.creditLimit ?? null,
         currentBalance: cb, totalBilled: cb, notes: input.notes,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { id: result.id, success: true };
     }),
@@ -159,7 +155,6 @@ export const suppliersRouter = createRouter({
           balanceDue: input.amount,
           issueDate: new Date(input.issueDate),
           dueDate: new Date(input.dueDate),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
         billId = result.id;
 

@@ -1,4 +1,3 @@
-// eslint-disable react-refresh/only-export-components
 import { useState, useRef, useMemo, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
@@ -11,8 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Trash2, Receipt, Tag, Pencil, X, AlertCircle, Camera, FileText, Download, Printer, Wallet, TrendingUp, Filter, BookOpen, RotateCcw } from "lucide-react";
-import { LocationSelector } from "@/components/LocationSelector";
-import { ExpenseCategorySelector } from "@/components/ExpenseCategorySelector";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -61,7 +58,7 @@ const PAYMENT_METHOD_ACCOUNT_TYPES: Record<string, string[]> = {
   card: ["bank_account"],
 };
 
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}function getFundingAccounts(paymentMethod: string, allAccounts: any[] | undefined): any[] {
+function getFundingAccounts(paymentMethod: string, allAccounts: any[] | undefined): any[] {
   const allowedTypes = PAYMENT_METHOD_ACCOUNT_TYPES[paymentMethod] ?? [];
   return (allAccounts ?? []).filter(a => allowedTypes.includes(a.type) && !a.deletedAt);
 }
@@ -99,7 +96,7 @@ export function Expenses() {
   // Build query filters
   const dateRange = useMemo(() => getPeriodDates(periodFilter, customFrom, customTo), [periodFilter, customFrom, customTo]);
   const expenseFilters = useMemo(() => {
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}    const f: any = {};
+    const f: any = {};
     if (branchFilter) f.locationId = +branchFilter;
     if (periodFilter !== "overall" && dateRange.dateFrom) {
       f.dateFrom = dateRange.dateFrom;
@@ -162,16 +159,15 @@ export function Expenses() {
   const itemCategories = billItems ? getCategoriesFromBillItems(billItems) : [];
   const hasMultiCategoryItems = !!form.billId && !!billItems && billItems.length > 0 && itemCategories.length > 1;
 
-  const groupBillItemsByCategory = (items: NonNullable<typeof billItems>): Map<number | null | undefined, NonNullable<typeof billItems>> => {
-    const grouped = new Map<number | null | undefined, NonNullable<typeof billItems>>();
+  const groupBillItemsByCategory = (items: typeof billItems): Map<number | undefined, typeof billItems> => {
+    const grouped = new Map<number | undefined, typeof billItems>();
     if (!items) return grouped;
     for (const item of items) {
       const catId = item.categoryId;
       if (!grouped.has(catId)) {
         grouped.set(catId, []);
       }
-      const existing = grouped.get(catId);
-      if (existing) existing.push(item);
+      grouped.get(catId)!.push(item);
     }
     return grouped;
   };
@@ -197,11 +193,12 @@ export function Expenses() {
       categoryIds: categoryIds.length > 0 ? categoryIds : p.categoryIds,
     }));
   }, [form.billId, selectedBill, billItems, selectedSupplier?.autoCategoryId]);
+
   useEffect(() => {
     if (!form.billId && form.categoryIds.length === 0 && selectedSupplier?.autoCategoryId) {
       setForm((previous) => ({
         ...previous,
-        categoryIds: [selectedSupplier.autoCategoryId].filter((id): id is number => id !== null),
+        categoryIds: [selectedSupplier.autoCategoryId],
       }));
     }
   }, [form.billId, form.categoryIds, selectedSupplier?.autoCategoryId]);
@@ -334,7 +331,7 @@ export function Expenses() {
     if (catForm.mode === "link" && !catForm.defaultAccountId) { toast.error("Please select a default expense account"); return; }
     createCat.mutate({
       name: catForm.name, description: catForm.description, color: catForm.color,
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}      accountingClass: catForm.accountingClass as any,
+      accountingClass: catForm.accountingClass as any,
       defaultAccountId: catForm.mode === "link" && catForm.defaultAccountId ? +catForm.defaultAccountId : undefined,
     });
   };
@@ -402,25 +399,24 @@ export function Expenses() {
               <DialogHeader><DialogTitle className="font-serif text-xl text-[#2D2A26]">Add Expense</DialogTitle></DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <LocationSelector
-                      locations={locations}
-                      userLocationId={user?.locationId}
-                      value={form.locationId}
-                      onChange={v => setForm(p => ({ ...p, locationId: v }))}
-                      enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
-                      required
-                    />
+                  <div><Label>Location</Label>
+                    <select value={form.locationId} onChange={e => setForm(p => ({ ...p, locationId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required>
+                      <option value="">Select</option>{locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    </select>
                   </div>
                   {!hasMultiCategoryItems && (
                     <div>
-                      <ExpenseCategorySelector
-                        categories={categories}
-                        value={form.categoryIds[0]?.toString() ?? ""}
-                        onChange={v => setForm(p => ({ ...p, categoryIds: v ? [parseInt(v)] : [] }))}
-                        label={<>Category {form.billId && selectedBill?.categoryId && <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span>}</>}
-                        hint={form.billId ? (selectedBill?.categoryId ? "Category from linked bill." : (selectedSupplier?.autoCategoryId ? "Using supplier default." : undefined)) : undefined}
-                      />
+                      <Label>Category {form.billId && selectedBill?.categoryId && <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span>}</Label>
+                      <select
+                        value={form.categoryIds[0] ?? ""}
+                        onChange={e => setForm(p => ({ ...p, categoryIds: e.target.value ? [parseInt(e.target.value)] : [] }))}
+                        className="w-full rounded border px-3 py-2 text-sm"
+                      >
+                        <option value="">{catsLoading ? "Loading..." : categories?.length ? "Select a category" : "No categories"}</option>
+                        {categories?.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      {form.billId && selectedBill?.categoryId && <p className="mt-1 text-xs text-[#2E7D32]">Category from linked bill.</p>}
+                      {form.billId && !selectedBill?.categoryId && selectedSupplier?.autoCategoryId && <p className="mt-1 text-xs text-[#2E7D32]">Using supplier default.</p>}
                     </div>
                   )}
                 </div>
@@ -474,7 +470,6 @@ export function Expenses() {
                     </div>
                   </div>
                   <div><Label>Payment Method</Label>
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     <select value={form.paymentMethod} onChange={e => setForm(p => ({ ...p, paymentMethod: e.target.value as any }))} className="w-full rounded border px-3 py-2 text-sm">
                       <option value="cash">Cash</option><option value="wallet">Wallet</option><option value="bank_transfer">Bank Transfer</option><option value="card">Card</option>
                     </select>
@@ -697,7 +692,6 @@ export function Expenses() {
                 <span>{c.name}</span>
                 {editCat === c.id ? (
                   <>
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                     <select value={c.accountingClass ?? "operating_expense"} onChange={e => updateCat.mutate({ id: c.id, accountingClass: e.target.value as any })} className="w-28 rounded border px-1 py-0.5 text-[10px]">
                       <option value="operating_expense">Operating</option>
                       <option value="admin_expense">Admin</option>

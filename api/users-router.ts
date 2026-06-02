@@ -4,7 +4,6 @@ import { getDb } from "./queries/connection";
 import { users, userBusinesses } from "@db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { hashPassword } from "./lib/password";
-import { logCrossAccountAccess } from "./lib/audit";
 
 type CreateUserInput = {
   username: string;
@@ -35,27 +34,21 @@ export function buildCreateUserValues(
 }
 
 export const usersRouter = createRouter({
-  list: authedQuery.query(async ({ ctx }) => {
+  list: authedQuery.query(async () => {
     const db = getDb();
-    const accountId = ctx.user?.accountId;
-    if (!accountId) return [];
     return db.select({
       id: users.id, name: users.name, email: users.email, username: users.username,
       role: users.role, phone: users.phone, locationId: users.locationId,
       currentBusinessId: users.currentBusinessId, isActive: users.isActive,
       createdAt: users.createdAt, lastSignInAt: users.lastSignInAt,
-    }).from(users).where(and(isNull(users.deletedAt), eq(users.accountId, accountId))).orderBy(users.name);
+    }).from(users).where(isNull(users.deletedAt)).orderBy(users.name);
   }),
 
   get: authedQuery
     .input(z.object({ id: z.number() }))
-    .query(async ({ input, ctx }) => {
+    .query(async ({ input }) => {
       const db = getDb();
-      const accountId = ctx.user?.accountId;
-      if (!accountId) return null;
-      const rows = await db.select().from(users)
-        .where(and(eq(users.id, input.id), eq(users.accountId, accountId)))
-        .limit(1);
+      const rows = await db.select().from(users).where(eq(users.id, input.id)).limit(1);
       return rows[0] ?? null;
     }),
 
@@ -82,7 +75,6 @@ export const usersRouter = createRouter({
       const passwordHash = await hashPassword(input.password);
       const values = buildCreateUserValues(input, accountId, currentBusinessId, passwordHash);
       const [result] = await db.transaction(async (tx) => {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         const [createdUser] = await tx.insert(users).values(values as any).returning();
         if (currentBusinessId) {
           await tx.insert(userBusinesses).values({
@@ -90,7 +82,6 @@ export const usersRouter = createRouter({
             businessId: currentBusinessId,
             role: input.role,
             isActive: true,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any);
         }
         return [createdUser];
@@ -109,49 +100,17 @@ export const usersRouter = createRouter({
       locationId: z.number().optional(),
       isActive: z.boolean().optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const db = getDb();
-      const accountId = ctx.user?.accountId;
-      if (!accountId) throw new Error("Account context required");
       const { id, ...updates } = input;
-      const targetUser = await db.select({ id: users.id, accountId: users.accountId })
-        .from(users).where(and(eq(users.id, id), isNull(users.deletedAt))).limit(1);
-      if (!targetUser[0] || targetUser[0].accountId !== accountId) {
-        await logCrossAccountAccess({
-          userId: ctx.user!.id,
-          userAccountId: accountId,
-          targetResourceType: "users",
-          targetId: id,
-          targetAccountId: targetUser[0]?.accountId ?? undefined,
-          action: "update",
-          reason: "Cross-account user update attempt blocked",
-        });
-        throw new Error("User not found in this account");
-      }
       await db.update(users).set(updates).where(eq(users.id, id));
       return { success: true };
     }),
 
   delete: userManage
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const db = getDb();
-      const accountId = ctx.user?.accountId;
-      if (!accountId) throw new Error("Account context required");
-      const targetUser = await db.select({ id: users.id, accountId: users.accountId })
-        .from(users).where(and(eq(users.id, input.id), isNull(users.deletedAt))).limit(1);
-      if (!targetUser[0] || targetUser[0].accountId !== accountId) {
-        await logCrossAccountAccess({
-          userId: ctx.user!.id,
-          userAccountId: accountId,
-          targetResourceType: "users",
-          targetId: input.id,
-          targetAccountId: targetUser[0]?.accountId ?? undefined,
-          action: "delete",
-          reason: "Cross-account user delete attempt blocked",
-        });
-        throw new Error("User not found in this account");
-      }
       await db.update(users).set({ deletedAt: new Date(), isActive: false }).where(eq(users.id, input.id));
       return { success: true };
     }),
@@ -161,24 +120,8 @@ export const usersRouter = createRouter({
       userId: z.number(),
       newPassword: z.string().min(4).max(100),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const db = getDb();
-      const accountId = ctx.user?.accountId;
-      if (!accountId) throw new Error("Account context required");
-      const targetUser = await db.select({ id: users.id, accountId: users.accountId })
-        .from(users).where(and(eq(users.id, input.userId), isNull(users.deletedAt))).limit(1);
-      if (!targetUser[0] || targetUser[0].accountId !== accountId) {
-        await logCrossAccountAccess({
-          userId: ctx.user!.id,
-          userAccountId: accountId,
-          targetResourceType: "users",
-          targetId: input.userId,
-          targetAccountId: targetUser[0]?.accountId ?? undefined,
-          action: "changePassword",
-          reason: "Cross-account password change attempt blocked",
-        });
-        throw new Error("User not found in this account");
-      }
       const newHash = await hashPassword(input.newPassword);
       await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, input.userId));
       return { success: true };

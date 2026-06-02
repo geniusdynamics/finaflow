@@ -137,7 +137,6 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
                 </CardContent>
               </Card>
             ) : (
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               entries.map((entry: any) => (
                 <Card key={entry.id} className="border-[#E8E0D8] hover:border-[#C73E1D]/30 transition-colors">
                   <CardContent className="p-4">
@@ -273,7 +272,7 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
                       </tr>
                     </thead>
                     <tbody>
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                      {selectedEntryQuery.data?.lines?.map((line: any, idx: number) => (
+                      {selectedEntryQuery.data?.lines?.map((line: any, idx: number) => (
                         <tr key={idx} className="border-b">
                           <td className="py-2">
                             <div className="font-medium">{line.accountName || `Account #${line.accountId}`}</div>
@@ -335,7 +334,7 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
 
   const updateLine = (idx: number, field: string, value: string) => {
     const updated = [...lines];
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}    (updated[idx] as any)[field] = value;
+    (updated[idx] as any)[field] = value;
     setLines(updated);
   };
 
@@ -411,7 +410,7 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
                   required
                 >
                   <option value="">Select Account</option>
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                  {accounts?.map((acc: any) => (
+                  {accounts?.map((acc: any) => (
                     <option key={acc.id} value={acc.id}>
                       {acc.name} ({acc.accountCode || acc.type})
                     </option>

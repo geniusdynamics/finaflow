@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +8,21 @@ import { toast } from "sonner";
 import { Link, useSearchParams, useNavigate } from "react-router";
 import { Landmark, LogIn, Store, Eye, EyeOff, Briefcase, CheckCircle, Gift, Building, Globe, Loader2, Check, X, ArrowRight, ArrowLeft, ChevronLeft, UserPlus, Handshake } from "lucide-react";
 import { setCsrfFromResponse } from "@/hooks/useAuth";
+
+function detectAccountFromSubdomain(): string | null {
+  try {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") return null;
+    const parts = host.split(".");
+    if (parts.length >= 3) {
+      const sub = parts[0].toUpperCase();
+      if (sub.length >= 2 && sub.length <= 100) return sub;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
 
 function goToSignup(
   setMode: (m: "accountLookup" | "credentials" | "signup") => void,
@@ -32,7 +47,7 @@ export default function Login() {
   );
   const [showPassword, setShowPassword] = useState(false);
 
-  const [accountId, setAccountId] = useState("");
+  const [accountId, setAccountId] = useState(() => detectAccountFromSubdomain() || "");
   const [foundBusiness, setFoundBusiness] = useState<Record<string, unknown> | null>(null);
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [signupForm, setSignupForm] = useState({

@@ -17,9 +17,10 @@ import { isAllowedLogoType, optimizeLogoFile, validateLogoFileSizeBytes } from "
 import { toast } from "sonner";
 import {
   Building2, Store, Globe, Shield, FileText, MapPin, Pencil, Trash2, Plus,
-  X, Loader2, Upload, Building, ChevronLeft,
-  Landmark, Wallet, Save,
+  CheckCircle, X, Loader2, Upload, Building, ChevronLeft,
+  Landmark, Wallet, Smartphone, Save,
 } from "lucide-react";
+
 const DOCUMENT_TYPES = [
   "Business Registration Certificate",
   "KRA PIN Certificate",
@@ -79,7 +80,7 @@ export function BusinessOverview() {
   );
   const { data: accounts } = trpc.accounts.list.useQuery();
 
-  const _downloadDocumentMutation = trpc.businesses.downloadDocument.useMutation();
+  const downloadDocumentMutation = trpc.businesses.downloadDocument.useMutation();
   const uploadDocMutation = trpc.businesses.uploadDocument.useMutation();
   const deleteDocMutation = trpc.businesses.deleteDocument.useMutation();
   const uploadLogoMutation = trpc.businesses.uploadLogo.useMutation();
@@ -143,17 +144,7 @@ export function BusinessOverview() {
     });
   };
 
-  const startEditLocation = (loc: {
-    id: number;
-    name?: string;
-    slug?: string;
-    address?: string;
-    phone?: string;
-    email?: string;
-    isActive: boolean;
-    defaultMpesaAccountId?: number | null;
-    defaultCashAccountId?: number | null;
-  }) => {
+  const startEditLocation = (loc: any) => {
     setEditLocId(loc.id);
     setEditLocForm({
       name: loc.name || "",
@@ -194,7 +185,7 @@ export function BusinessOverview() {
     }
   };
 
-  const _triggerBase64Download = (fileName: string, mimeType: string, fileData: string) => {
+  const triggerBase64Download = (fileName: string, mimeType: string, fileData: string) => {
     const byteChars = atob(fileData);
     const bytes = new Uint8Array(byteChars.length);
     for (let i = 0; i < byteChars.length; i++) {
@@ -209,6 +200,16 @@ export function BusinessOverview() {
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadDocument = async (documentId: number) => {
+    try {
+      const payload = await downloadDocumentMutation.mutateAsync({ documentId });
+      triggerBase64Download(payload.fileName, payload.mimeType, payload.fileData);
+      toast.success("Document download started");
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, "Failed to download document"));
+    }
   };
 
   const handleLogoUpload = async (file: File) => {

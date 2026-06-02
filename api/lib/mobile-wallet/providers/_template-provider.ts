@@ -10,6 +10,7 @@ import {
   WalletWebhookPayload,
   WalletWebhookResult,
   WalletBalanceResult,
+  ParsedWalletSms,
 } from "../provider-interface";
 
 export class NewWalletProvider extends BaseWalletProvider {
@@ -62,9 +63,7 @@ export class NewWalletProvider extends BaseWalletProvider {
     }
   }
 
-  async processWebhook(
-    _payload: WalletWebhookPayload,
-  ): Promise<WalletWebhookResult> {
+  async processWebhook(payload: WalletWebhookPayload): Promise<WalletWebhookResult> {
     try {
       // 1. Verify HMAC signature using this.apiSecret
       // 2. Parse JSON payload

@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { supplierPriceHistory, priceAlertRules, suppliers } from "@db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { supplierPriceHistory, priceAlertRules, bills, billItems, suppliers } from "@db/schema";
+import { eq, and, desc, sql, isNull } from "drizzle-orm";
 
 export const supplierPricesRouter = createRouter({
   // Get price history for an item
@@ -14,7 +14,6 @@ export const supplierPricesRouter = createRouter({
     }))
     .query(async ({ input }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const cond: any[] = [];
       if (input.itemName) cond.push(sql`LOWER(${supplierPriceHistory.itemName}) LIKE LOWER(${"%" + input.itemName + "%"})`);
       if (input.supplierId) cond.push(eq(supplierPriceHistory.supplierId, input.supplierId));
@@ -65,7 +64,7 @@ export const supplierPricesRouter = createRouter({
         itemName: supplierPriceHistory.itemName,
         supplierId: supplierPriceHistory.supplierId,
       }).from(supplierPriceHistory).where(cond.length > 0 ? and(...cond) : undefined).limit(200);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const results: any[] = [];
       for (const item of items) {
         const history = await db.select().from(supplierPriceHistory).where(
@@ -117,7 +116,6 @@ export const supplierPricesRouter = createRouter({
         billId: input.billId,
         locationId: input.locationId,
         priceDate: new Date(input.priceDate),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { id: result.id };
     }),
@@ -171,7 +169,6 @@ export const supplierPricesRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const [result] = await db.insert(priceAlertRules).values(input as any).returning();
       return { id: result.id };
     }),
@@ -181,7 +178,6 @@ export const supplierPricesRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...data } = input;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       await db.update(priceAlertRules).set(data as any).where(eq(priceAlertRules.id, id));
       return { success: true };
     }),

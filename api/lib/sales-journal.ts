@@ -1,6 +1,7 @@
 import { getDb } from "../queries/connection";
-import { accounts, ledgerEntries, revenueCategories, type AccountSubType } from "@db/schema";
+import { accounts, ledgerEntries, revenueCategories } from "@db/schema";
 import { eq, and, isNull } from "drizzle-orm";
+import Decimal from "decimal.js";
 import { d } from "./decimal";
 
 interface DailySalesJournalInput {
@@ -26,7 +27,7 @@ export async function createDailySalesJournalEntry(input: DailySalesJournalInput
   const salesRevenueAccount = await db.query.accounts.findFirst({
     where: and(
       eq(accounts.businessId, input.businessId),
-      eq(accounts.accountSubType, "sales_revenue"),
+      eq(accounts.accountSubType, "sales_revenue" as any),
       isNull(accounts.deletedAt)
     ),
   });
@@ -46,7 +47,7 @@ export async function createDailySalesJournalEntry(input: DailySalesJournalInput
   if (revenueCategory?.incomeAccountId) {
     revenueAccountId = revenueCategory.incomeAccountId;
   } else if (input.salesType) {
-    const typeAccountMap: Record<string, AccountSubType> = {
+    const typeAccountMap: Record<string, string> = {
       food: "sales_revenue",
       beverage: "sales_revenue",
       delivery: "service_revenue",
@@ -55,7 +56,7 @@ export async function createDailySalesJournalEntry(input: DailySalesJournalInput
     const account = await db.query.accounts.findFirst({
       where: and(
         eq(accounts.businessId, input.businessId),
-        eq(accounts.accountSubType, typeAccountMap[input.salesType]),
+        eq(accounts.accountSubType, typeAccountMap[input.salesType] as any),
         isNull(accounts.deletedAt)
       ),
     });
@@ -64,7 +65,7 @@ export async function createDailySalesJournalEntry(input: DailySalesJournalInput
     }
   }
 
-  const typeToSubtype: Record<string, AccountSubType> = {
+  const typeToSubtype: Record<string, string> = {
     cash: "cash",
     mpesa: "cash",
     bankTransfer: "bank",
@@ -80,7 +81,7 @@ export async function createDailySalesJournalEntry(input: DailySalesJournalInput
       const cashAccount = await tx.query.accounts.findFirst({
         where: and(
           eq(accounts.businessId, input.businessId),
-          eq(accounts.accountSubType, typeToSubtype[paymentType]),
+          eq(accounts.accountSubType, typeToSubtype[paymentType] as any),
           isNull(accounts.deletedAt)
         ),
       });
@@ -91,7 +92,7 @@ export async function createDailySalesJournalEntry(input: DailySalesJournalInput
 
       await tx.insert(ledgerEntries).values({
         accountId: cashAccount.id,
-        transactionType: "sale",
+        transactionType: "sale" as any,
         transactionId: input.dailySalesId,
         entryType: "debit",
         amount: amountDec.toFixed(2),
@@ -99,14 +100,14 @@ export async function createDailySalesJournalEntry(input: DailySalesJournalInput
         entryDate: dateStr,
         createdBy: input.userId,
         description: `Daily Sales - ${paymentType}`,
-      } satisfies typeof ledgerEntries.$inferInsert);
+      } as any);
 
       await tx.update(accounts).set({
         currentBalance: cashNewBalance.toFixed(2),
       }).where(eq(accounts.id, cashAccount.id));
 
-      const revenueNewBalance = d(revenueAccountId === cashAccount.id
-        ? cashAccount.currentBalance
+      const revenueNewBalance = d(revenueAccountId === cashAccount.id 
+        ? cashAccount.currentBalance 
         : (await tx.query.accounts.findFirst({
           where: eq(accounts.id, revenueAccountId)
         }))?.currentBalance || "0"
@@ -114,7 +115,7 @@ export async function createDailySalesJournalEntry(input: DailySalesJournalInput
 
       await tx.insert(ledgerEntries).values({
         accountId: revenueAccountId,
-        transactionType: "sale",
+        transactionType: "sale" as any,
         transactionId: input.dailySalesId,
         entryType: "credit",
         amount: amountDec.toFixed(2),
@@ -122,7 +123,7 @@ export async function createDailySalesJournalEntry(input: DailySalesJournalInput
         entryDate: dateStr,
         createdBy: input.userId,
         description: `Daily Sales - ${paymentType}`,
-      } satisfies typeof ledgerEntries.$inferInsert);
+      } as any);
 
       if (revenueAccountId !== cashAccount.id) {
         await tx.update(accounts).set({

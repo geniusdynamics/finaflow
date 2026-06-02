@@ -1,6 +1,5 @@
 import { z } from "zod";
-import { sql, type PgSelect, type PgTable } from "drizzle-orm";
-import type { DbClient } from "./account-subscriptions";
+import { sql } from "drizzle-orm";
 
 export const paginationInput = z.object({
   offset: z.number().int().min(0).default(0),
@@ -17,10 +16,10 @@ export interface PaginatedResult<T> {
 }
 
 export async function paginatedQuery<T>(
-  db: DbClient,
-  query: PgSelect,
+  db: any,
+  query: any,
   input: PaginationInput,
-  from: PgTable,
+  from: any,
 ): Promise<PaginatedResult<T>> {
   const [data, countResult] = await Promise.all([
     query.limit(input.limit).offset(input.offset),

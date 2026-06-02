@@ -1,9 +1,8 @@
 import { z } from "zod";
 import { createRouter, authedQuery, userManage, PERMISSIONS, loadRolePermissionsFromDb, invalidateRolePermissionCache, type Permission } from "./middleware";
 import { getDb } from "./queries/connection";
-import { users, rolePermissions, userBusinesses, businesses } from "@db/schema";
-import { eq, and, isNull, sql } from "drizzle-orm";
-import { logCrossAccountAccess } from "./lib/audit";
+import { users, rolePermissions, userBusinesses } from "@db/schema";
+import { eq, isNull } from "drizzle-orm";
 
 const HARD_DEFAULTS: Record<string, string[]> = {
   owner: Object.values(PERMISSIONS),
@@ -64,36 +63,17 @@ const HARD_DEFAULTS: Record<string, string[]> = {
 
 export const permissionsRouter = createRouter({
   // List all users
-  listUsers: authedQuery.query(async ({ ctx }) => {
+  listUsers: authedQuery.query(async () => {
     const db = getDb();
-    const accountId = ctx.user?.accountId;
-    if (!accountId) return [];
-
     const userRows = await db.select({
       id: users.id, name: users.name, email: users.email, username: users.username,
       role: users.role, phone: users.phone, locationId: users.locationId,
       isActive: users.isActive, createdAt: users.createdAt,
       lastSignInAt: users.lastSignInAt,
-    }).from(users).where(and(isNull(users.deletedAt), eq(users.accountId, accountId))).orderBy(users.name);
+    }).from(users).where(isNull(users.deletedAt)).orderBy(users.name);
 
-    if (userRows.length === 0) return [];
-    const userIds = userRows.map(u => u.id);
-
-    // Fetch business assignments scoped to this account's businesses
-    const accountBizIds = (await db.select({ id: businesses.id }).from(businesses)
-      .where(and(eq(businesses.accountId, accountId), isNull(businesses.deletedAt)))).map(b => b.id);
-
-    let allJunctions: Array<{ userId: number; businessId: number }> = [];
-    if (accountBizIds.length > 0) {
-      allJunctions = await db.select({ userId: userBusinesses.userId, businessId: userBusinesses.businessId })
-        .from(userBusinesses)
-        .where(and(
-          eq(userBusinesses.isActive, true),
-          sql`${userBusinesses.userId} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`,
-          sql`${userBusinesses.businessId} IN (${sql.join(accountBizIds.map(id => sql`${id}`), sql`, `)})`,
-        ));
-    }
-
+    // Fetch business assignments for all users
+    const allJunctions = await db.select().from(userBusinesses).where(eq(userBusinesses.isActive, true));
     const userBizMap: Record<number, number[]> = {};
     for (const j of allJunctions) {
       if (!userBizMap[j.userId]) userBizMap[j.userId] = [];
@@ -110,25 +90,9 @@ export const permissionsRouter = createRouter({
       locationId: z.number().optional(),
       isActive: z.boolean().optional(),
     }))
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const db = getDb();
-      const accountId = ctx.user?.accountId;
-      if (!accountId) throw new Error("Account context required");
       const { userId, ...updates } = input;
-      const targetUser = await db.select({ id: users.id, accountId: users.accountId })
-        .from(users).where(and(eq(users.id, userId), isNull(users.deletedAt))).limit(1);
-      if (!targetUser[0] || targetUser[0].accountId !== accountId) {
-        await logCrossAccountAccess({
-          userId: ctx.user!.id,
-          userAccountId: accountId,
-          targetResourceType: "users",
-          targetId: userId,
-          targetAccountId: targetUser[0]?.accountId ?? undefined,
-          action: "updateUserRole",
-          reason: "Cross-account user role update attempt blocked",
-        });
-        throw new Error("User not found in this account");
-      }
       await db.update(users).set(updates).where(eq(users.id, userId));
       return { success: true };
     }),
@@ -172,7 +136,6 @@ export const permissionsRouter = createRouter({
       const existing = await db.select().from(rolePermissions).where(eq(rolePermissions.roleKey, input.roleKey)).limit(1);
       if (existing.length > 0) {
         await db.update(rolePermissions).set({
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           permissions: input.permissions as any,
           isActive: true,
         }).where(eq(rolePermissions.id, existing[0].id));
@@ -181,7 +144,6 @@ export const permissionsRouter = createRouter({
       }
       const [result] = await db.insert(rolePermissions).values({
         roleKey: input.roleKey, roleLabel: input.roleLabel,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         permissions: input.permissions as any,
       }).returning();
       invalidateRolePermissionCache();
@@ -198,7 +160,6 @@ export const permissionsRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...updates } = input;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (updates.permissions) updates.permissions = updates.permissions as any;
       await db.update(rolePermissions).set(updates).where(eq(rolePermissions.id, id));
       invalidateRolePermissionCache();

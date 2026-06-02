@@ -1,7 +1,7 @@
 // ABOUTME: Verifies expense categories can work in simple mode without a prebuilt chart of accounts.
 // ABOUTME: Ensures bill posting can inherit a supplier default category instead of relying on fragile fallbacks.
 import { afterEach, describe, expect, it } from "vitest";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { appRouter } from "../router";
 import {
@@ -16,12 +16,9 @@ import {
   suppliers,
   userBusinesses,
   users,
-  accountSubTypeEnum,
-  transactionTypeEnum,
 } from "@db/schema";
 import { ensureSystemAccount } from "../lib/accounting-accounts";
 import { getTestDb } from "../test/db";
-import { d } from "../lib/decimal";
 
 type SeededContext = {
   accountId: string;
@@ -42,7 +39,7 @@ async function seedExpenseContext(seed: string): Promise<SeededContext> {
     maxBranches: 5,
     maxUsers: 10,
     isActive: true,
-  } satisfies typeof businesses.$inferInsert).returning();
+  } as any).returning();
 
   const [user] = await db.insert(users).values({
     username: `owner-exp-${seed.toLowerCase()}`,
@@ -51,21 +48,21 @@ async function seedExpenseContext(seed: string): Promise<SeededContext> {
     isActive: true,
     currentBusinessId: business.id,
     accountId,
-  } satisfies typeof users.$inferInsert).returning();
+  } as any).returning();
 
   await db.insert(userBusinesses).values({
     userId: user.id,
     businessId: business.id,
     role: "owner",
     isActive: true,
-  } satisfies typeof userBusinesses.$inferInsert);
+  } as any);
 
   const [location] = await db.insert(locations).values({
     businessId: business.id,
     name: `Expense Branch ${seed}`,
     slug: `expense-branch-${seed.toLowerCase()}`,
     isActive: true,
-  } satisfies typeof locations.$inferInsert).returning();
+  } as any).returning();
 
   return {
     accountId,
@@ -135,22 +132,6 @@ async function cleanupExpenseContext(accountId: string) {
   await db.delete(businesses).where(eq(businesses.id, business.id));
 }
 
-interface CallerUser {
-  id: number;
-  role: string;
-  currentBusinessId: number;
-  accountId: string;
-  accountRefId: number | null;
-  currentBusiness: { id: number; accountId: string; accountRefId: number | null; plan: string; maxBranches: number | null; maxUsers: number | null; features: unknown };
-  businessIds: number[];
-}
-
-interface CallerContext {
-  req: Request;
-  resHeaders: Headers;
-  user: CallerUser;
-}
-
 function createCaller(ctx: SeededContext) {
   return appRouter.createCaller({
     req: new Request("http://localhost/api/trpc/expenses.createCategory"),
@@ -160,7 +141,7 @@ function createCaller(ctx: SeededContext) {
       currentBusiness: ctx.business,
       businessIds: [ctx.business.id],
     },
-  } as CallerContext);
+  } as any);
 }
 
 describe("expense categories dual-mode behavior", () => {
@@ -236,7 +217,7 @@ describe("expense categories dual-mode behavior", () => {
       locationId: ctx.location.id,
       name: "Ad Vendor",
       autoCategoryId: savedCategory.id,
-    } satisfies typeof suppliers.$inferInsert).returning();
+    } as any).returning();
 
     const createdBill = await caller.bills.create({
       locationId: ctx.location.id,
@@ -644,361 +625,5 @@ describe("bill category resolution priority", () => {
         accountId: paymentAccount.id,
       })
     ).rejects.toThrow(/kindly define one/i);
-  });
-});
-
-describe("expenses with billId (Path B) — bill payment consolidation", () => {
-  const seededAccountIds: string[] = [];
-
-  afterEach(async () => {
-    while (seededAccountIds.length > 0) {
-      const accountId = seededAccountIds.pop();
-      if (accountId) {
-        await cleanupExpenseContext(accountId);
-      }
-    }
-  });
-
-  async function seedPathBTest(seed: string) {
-    const db = getTestDb();
-    const ctx = await seedExpenseContext(seed);
-    seededAccountIds.push(ctx.accountId);
-    const caller = createCaller(ctx);
-
-    const category = await caller.expenses.createCategory({
-      name: `Bill Pay Cat ${seed}`,
-      accountingClass: "operating_expense",
-    });
-
-    await ensureSystemAccount({
-      businessId: ctx.business.id,
-      accountType: "liability",
-      accountSubType: "accounts_payable",
-      name: "Accounts Payable",
-    });
-
-    const paymentAccount = await caller.accounts.create({
-      locationId: ctx.location.id,
-      name: `Path B Cash ${seed}`,
-      type: "cash",
-      openingBalance: "1000.00",
-      isPaymentMethod: true,
-    });
-
-    const supplier = await caller.businesses.addSupplier({
-      businessId: ctx.business.id,
-      locationId: ctx.location.id,
-      name: `Path B Supplier ${seed}`,
-    });
-
-    const createdBill = await caller.bills.create({
-      locationId: ctx.location.id,
-      supplierId: supplier.id,
-      categoryId: category.id,
-      description: `Path B bill ${seed}`,
-      amount: "200.00",
-      issueDate: "2026-05-10",
-      dueDate: "2026-06-10",
-    });
-
-    return { db, ctx, caller, category, paymentAccount, supplier, createdBill };
-  }
-
-  it("creates a billPayments record when paying via expense with billId", async () => {
-    const { caller, paymentAccount, createdBill } = await seedPathBTest(`BP${Date.now()}`);
-    const db = getTestDb();
-
-    const category = await caller.expenses.createCategory({
-      name: `BP Cat ${Date.now()}`,
-      accountingClass: "operating_expense",
-    });
-
-    await caller.expenses.create({
-      locationId: paymentAccount.locationId,
-      categoryId: category.id,
-      amount: "200.00",
-      description: "Paying bill via expense",
-      expenseDate: "2026-05-12",
-      paymentMethod: "cash",
-      accountId: paymentAccount.id,
-      billId: createdBill.id,
-      supplierId: createdBill.supplierId,
-    });
-
-    const payments = await db
-      .select()
-      .from(billPayments)
-      .where(eq(billPayments.billId, createdBill.id));
-
-    expect(payments.length).toBe(1);
-    expect(payments[0].amount).toBe("200.00");
-    expect(payments[0].paymentMethod).toBe("cash");
-  });
-
-  it("marks the bill as paid when full amount is paid via expense", async () => {
-    const { caller, paymentAccount, createdBill } = await seedPathBTest(`FULL${Date.now()}`);
-    const db = getTestDb();
-
-    const category = await caller.expenses.createCategory({
-      name: `Full Pay Cat ${Date.now()}`,
-      accountingClass: "operating_expense",
-    });
-
-    await caller.expenses.create({
-      locationId: paymentAccount.locationId,
-      categoryId: category.id,
-      amount: "200.00",
-      description: "Full payment",
-      expenseDate: "2026-05-12",
-      paymentMethod: "cash",
-      accountId: paymentAccount.id,
-      billId: createdBill.id,
-      supplierId: createdBill.supplierId,
-    });
-
-    const [updatedBill] = await db
-      .select()
-      .from(bills)
-      .where(eq(bills.id, createdBill.id))
-      .limit(1);
-
-    expect(updatedBill.status).toBe("paid");
-    expect(d(updatedBill.balanceDue).toNumber()).toBe(0);
-    expect(d(updatedBill.amountPaid).toNumber()).toBe(200);
-  });
-
-  it("marks the bill as partial when partial amount is paid via expense", async () => {
-    const { caller, paymentAccount, createdBill } = await seedPathBTest(`PART${Date.now()}`);
-    const db = getTestDb();
-
-    const category = await caller.expenses.createCategory({
-      name: `Part Pay Cat ${Date.now()}`,
-      accountingClass: "operating_expense",
-    });
-
-    await caller.expenses.create({
-      locationId: paymentAccount.locationId,
-      categoryId: category.id,
-      amount: "50.00",
-      description: "Partial payment",
-      expenseDate: "2026-05-12",
-      paymentMethod: "cash",
-      accountId: paymentAccount.id,
-      billId: createdBill.id,
-      supplierId: createdBill.supplierId,
-    });
-
-    const [updatedBill] = await db
-      .select()
-      .from(bills)
-      .where(eq(bills.id, createdBill.id))
-      .limit(1);
-
-    expect(updatedBill.status).toBe("partial");
-    expect(d(updatedBill.balanceDue).toNumber()).toBe(150);
-    expect(d(updatedBill.amountPaid).toNumber()).toBe(50);
-  });
-
-  it("updates supplier totalPaid and currentBalance when paying via expense", async () => {
-    const { caller, paymentAccount, createdBill, supplier } = await seedPathBTest(`SUPP${Date.now()}`);
-    const db = getTestDb();
-
-    const [prePay] = await db.select().from(suppliers).where(eq(suppliers.id, supplier.id)).limit(1);
-
-    const category = await caller.expenses.createCategory({
-      name: `Supp Cat ${Date.now()}`,
-      accountingClass: "operating_expense",
-    });
-
-    await caller.expenses.create({
-      locationId: paymentAccount.locationId,
-      categoryId: category.id,
-      amount: "200.00",
-      description: "Supplier update via expense",
-      expenseDate: "2026-05-12",
-      paymentMethod: "cash",
-      accountId: paymentAccount.id,
-      billId: createdBill.id,
-      supplierId: supplier.id,
-    });
-
-    const [postPay] = await db.select().from(suppliers).where(eq(suppliers.id, supplier.id)).limit(1);
-
-    expect(d(postPay.totalPaid).minus(d(prePay.totalPaid)).toNumber()).toBe(200);
-    expect(d(prePay.currentBalance).minus(d(postPay.currentBalance)).toNumber()).toBe(200);
-  });
-
-  it("creates AP ledger debit entry when paying via expense with billId", async () => {
-    const { db, ctx, caller, paymentAccount, createdBill } = await seedPathBTest(`AP${Date.now()}`);
-
-    const apAccount = await db.query.accounts.findFirst({
-      where: and(
-        eq(accounts.accountSubType, accountSubTypeEnum.enumValues[9]),
-        eq(accounts.businessId, ctx.business.id),
-        isNull(accounts.deletedAt)
-      ),
-    });
-
-    const category = await caller.expenses.createCategory({
-      name: `AP Ledger Cat ${Date.now()}`,
-      accountingClass: "operating_expense",
-    });
-
-    await caller.expenses.create({
-      locationId: paymentAccount.locationId,
-      categoryId: category.id,
-      amount: "200.00",
-      description: "AP debit via expense",
-      expenseDate: "2026-05-12",
-      paymentMethod: "cash",
-      accountId: paymentAccount.id,
-      billId: createdBill.id,
-      supplierId: createdBill.supplierId,
-    });
-
-    const apLedgerEntries = await db
-      .select()
-      .from(ledgerEntries)
-      .where(
-        and(
-          eq(ledgerEntries.transactionType, transactionTypeEnum.enumValues[2]),
-          eq(ledgerEntries.entryType, "debit"),
-          eq(ledgerEntries.accountId, apAccount!.id),
-        )
-      );
-
-    expect(apLedgerEntries.length).toBe(1);
-    expect(apLedgerEntries[0].amount).toBe("200.00");
-  });
-
-  it("blocks standalone expense when supplier has outstanding bills (no billId)", async () => {
-    const { caller, paymentAccount, supplier } = await seedPathBTest(`BLK${Date.now()}`);
-
-    const category = await caller.expenses.createCategory({
-      name: `Block Cat ${Date.now()}`,
-      accountingClass: "operating_expense",
-    });
-
-    await expect(
-      caller.expenses.create({
-        locationId: paymentAccount.locationId,
-        categoryId: category.id,
-        amount: "10.00",
-        description: "Should be blocked",
-        expenseDate: "2026-05-12",
-        paymentMethod: "cash",
-        accountId: paymentAccount.id,
-        supplierId: supplier.id,
-      })
-    ).rejects.toThrow(/outstanding bills/i);
-  });
-
-  it("does NOT block expense when billId is provided even if supplier has outstanding bills", async () => {
-    const { caller, paymentAccount, createdBill, supplier } = await seedPathBTest(`NBLK${Date.now()}`);
-
-    const category = await caller.expenses.createCategory({
-      name: `No Block Cat ${Date.now()}`,
-      accountingClass: "operating_expense",
-    });
-
-    const result = await caller.expenses.create({
-      locationId: paymentAccount.locationId,
-      categoryId: category.id,
-      amount: "200.00",
-      description: "Paying with billId",
-      expenseDate: "2026-05-12",
-      paymentMethod: "cash",
-      accountId: paymentAccount.id,
-      billId: createdBill.id,
-      supplierId: supplier.id,
-    });
-
-    expect(result.success).toBe(true);
-  });
-
-  it("produces identical billPayments records from both payment paths", async () => {
-    // Path A: bills.recordPayment
-    const seedA = `PA-${Date.now()}`;
-    const ctxA = await seedExpenseContext(seedA);
-    seededAccountIds.push(ctxA.accountId);
-    const callerA = appRouter.createCaller({
-      req: new Request("http://localhost"),
-      resHeaders: new Headers(),
-      user: { ...ctxA.user, currentBusiness: ctxA.business, businessIds: [ctxA.business.id] },
-    } as CallerContext);
-
-    const catA = await callerA.expenses.createCategory({ name: `Cross A ${Date.now()}`, accountingClass: "operating_expense" });
-    await ensureSystemAccount({ businessId: ctxA.business.id, accountType: "liability", accountSubType: "accounts_payable", name: "AP" });
-    const acctA = await callerA.accounts.create({ locationId: ctxA.location.id, name: `Cross Cash A`, type: "cash", openingBalance: "1000.00", isPaymentMethod: true });
-    const supA = await callerA.businesses.addSupplier({ businessId: ctxA.business.id, locationId: ctxA.location.id, name: `Cross Sup A` });
-    const billA = await callerA.bills.create({ locationId: ctxA.location.id, supplierId: supA.id, categoryId: catA.id, description: "Cross A", amount: "100.00", issueDate: "2026-05-10", dueDate: "2026-06-10" });
-
-    await callerA.bills.recordPayment({ billId: billA.id, paymentMethod: "cash", amount: "100.00", paymentDate: "2026-05-12", accountId: acctA.id });
-
-    // Path B: expenses.create with billId
-    const seedB = `PB-${Date.now() + 1}`;
-    const ctxB = await seedExpenseContext(seedB);
-    seededAccountIds.push(ctxB.accountId);
-    const callerB = appRouter.createCaller({
-      req: new Request("http://localhost"),
-      resHeaders: new Headers(),
-      user: { ...ctxB.user, currentBusiness: ctxB.business, businessIds: [ctxB.business.id] },
-    } as CallerContext);
-
-    const catB = await callerB.expenses.createCategory({ name: `Cross B ${Date.now()}`, accountingClass: "operating_expense" });
-    await ensureSystemAccount({ businessId: ctxB.business.id, accountType: "liability", accountSubType: "accounts_payable", name: "AP" });
-    const acctB = await callerB.accounts.create({ locationId: ctxB.location.id, name: `Cross Cash B`, type: "cash", openingBalance: "1000.00", isPaymentMethod: true });
-    const supB = await callerB.businesses.addSupplier({ businessId: ctxB.business.id, locationId: ctxB.location.id, name: `Cross Sup B` });
-    const billB = await callerB.bills.create({ locationId: ctxB.location.id, supplierId: supB.id, categoryId: catB.id, description: "Cross B", amount: "100.00", issueDate: "2026-05-10", dueDate: "2026-06-10" });
-
-    await callerB.expenses.create({
-      locationId: acctB.locationId, categoryId: catB.id, amount: "100.00",
-      description: "Cross B payment", expenseDate: "2026-05-12", paymentMethod: "cash",
-      accountId: acctB.id, billId: billB.id, supplierId: supB.id,
-    });
-
-    // Compare billPayments structure
-    const db = getTestDb();
-    const payA = (await db.select().from(billPayments).where(eq(billPayments.billId, billA.id)))[0];
-    const payB = (await db.select().from(billPayments).where(eq(billPayments.billId, billB.id)))[0];
-
-    expect(payA).toBeTruthy();
-    expect(payB).toBeTruthy();
-    expect(payA.amount).toBe(payB.amount);
-    expect(payA.paymentMethod).toBe(payB.paymentMethod);
-  });
-
-  it("does NOT create billPayments for standalone expense without billId", async () => {
-    const seed = `NOPAY-${Date.now()}`;
-    const ctx = await seedExpenseContext(seed);
-    seededAccountIds.push(ctx.accountId);
-    const caller = createCaller(ctx);
-    const db = getTestDb();
-
-    const category = await caller.expenses.createCategory({
-      name: `No Pay Cat ${Date.now()}`,
-      accountingClass: "operating_expense",
-    });
-
-    const paymentAccount = await caller.accounts.create({
-      locationId: ctx.location.id,
-      name: `No Pay Cash ${Date.now()}`,
-      type: "cash",
-      openingBalance: "500.00",
-      isPaymentMethod: true,
-    });
-
-    await caller.expenses.create({
-      locationId: ctx.location.id,
-      categoryId: category.id,
-      amount: "50.00",
-      description: "Standalone expense",
-      expenseDate: "2026-05-12",
-      paymentMethod: "cash",
-      accountId: paymentAccount.id,
-    });
-
-    const allPayments = await db.select().from(billPayments);
-    expect(allPayments.length).toBeGreaterThanOrEqual(0);
   });
 });

@@ -14,7 +14,6 @@ describe("SasapayProvider", () => {
       ok: true,
       status: 200,
       json: () => Promise.resolve({ status: "success", data: "mock" }),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
   });
 

@@ -146,11 +146,11 @@ export function FinancialReportsPanel({ year }: FinancialReportsPanelProps) {
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
                           <span>Current Assets</span>
-                          <span className="font-mono">{formatKES(balanceSheetData.assets?.current?.reduce((s: number, i: { amount: string }) => s + parseFloat(i.amount.replace(/,/g, '') || 0), 0) || "0")}</span>
+                          <span className="font-mono">{formatKES(balanceSheetData.assets?.current?.reduce((s: number, i: any) => s + parseFloat(i.amount.replace(/,/g, '') || 0), 0) || "0")}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Fixed Assets</span>
-                          <span className="font-mono">{formatKES(balanceSheetData.assets?.fixed?.reduce((s: number, i: { amount: string }) => s + parseFloat(i.amount.replace(/,/g, '') || 0), 0) || "0")}</span>
+                          <span className="font-mono">{formatKES(balanceSheetData.assets?.fixed?.reduce((s: number, i: any) => s + parseFloat(i.amount.replace(/,/g, '') || 0), 0) || "0")}</span>
                         </div>
                         <div className="flex justify-between font-semibold border-t pt-1">
                           <span>Total Assets</span>
@@ -222,7 +222,7 @@ export function FinancialReportsPanel({ year }: FinancialReportsPanelProps) {
                         </tr>
                       </thead>
                       <tbody>
-                        {trialBalanceData.accounts?.map((acc: { accountName: string; debit: string; credit: string }, idx: number) => (
+                        {trialBalanceData.accounts?.map((acc: any, idx: number) => (
                           <tr key={idx} className="border-b">
                             <td className="py-1">{acc.accountName}</td>
                             <td className="text-right font-mono">{acc.debit !== "0.00" ? formatKES(acc.debit) : ""}</td>
@@ -283,7 +283,7 @@ export function FinancialReportsPanel({ year }: FinancialReportsPanelProps) {
                           </tr>
                         </thead>
                         <tbody>
-                          {assetRegisterData.assets?.map((asset: { name: string; purchaseDate: string; purchasePrice: string; accumulatedDepreciation: string; currentBookValue: string; status: string }, idx: number) => (
+                          {assetRegisterData.assets?.map((asset: any, idx: number) => (
                             <tr key={idx} className="border-b">
                               <td className="py-2 px-2">
                                 <div className="font-medium">{asset.name}</div>

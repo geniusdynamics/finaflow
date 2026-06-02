@@ -110,9 +110,8 @@ export function useFinancialStatements() {
         setIncomeStatementData(result);
         queryClient.invalidateQueries({ queryKey: ["reports.incomeStatement"] });
         toast.success("Income Statement generated successfully");
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "Unknown error";
-        toast.error(`Failed to generate Income Statement: ${message}`);
+      } catch (e: any) {
+        toast.error(`Failed to generate Income Statement: ${e?.message || "Unknown error"}`);
       }
     },
     [incomeStatementMutation, queryClient]
@@ -136,9 +135,8 @@ export function useFinancialStatements() {
         setBalanceSheetData(result);
         queryClient.invalidateQueries({ queryKey: ["reports.balanceSheet"] });
         toast.success("Balance Sheet generated successfully");
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "Unknown error";
-        toast.error(`Failed to generate Balance Sheet: ${message}`);
+      } catch (e: any) {
+        toast.error(`Failed to generate Balance Sheet: ${e?.message || "Unknown error"}`);
       }
     },
     [balanceSheetMutation, queryClient]
@@ -162,9 +160,8 @@ export function useFinancialStatements() {
         setTrialBalanceData(result);
         queryClient.invalidateQueries({ queryKey: ["reports.trialBalance"] });
         toast.success("Trial Balance generated successfully");
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "Unknown error";
-        toast.error(`Failed to generate Trial Balance: ${message}`);
+      } catch (e: any) {
+        toast.error(`Failed to generate Trial Balance: ${e?.message || "Unknown error"}`);
       }
     },
     [trialBalanceMutation, queryClient]
@@ -183,9 +180,8 @@ export function useFinancialStatements() {
         setAssetRegisterData(result);
         queryClient.invalidateQueries({ queryKey: ["reports.assetRegister"] });
         toast.success("Asset Register generated successfully");
-      } catch (e) {
-        const message = e instanceof Error ? e.message : "Unknown error";
-        toast.error(`Failed to generate Asset Register: ${message}`);
+      } catch (e: any) {
+        toast.error(`Failed to generate Asset Register: ${e?.message || "Unknown error"}`);
       }
     },
     [assetRegisterMutation, queryClient]

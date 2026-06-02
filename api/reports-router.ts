@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { createRouter, reportQuery, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
-import { dailySales, expenses, bills, expenseCategories } from "@db/schema";
+import { dailySales, expenses, bills, expenseCategories, accounts, financialReports } from "@db/schema";
 import { eq, and, isNull, sql, inArray } from "drizzle-orm";
 import { d } from "./lib/decimal";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 async function resolveLocationFilter(ctx: any, inputLocationId?: number): Promise<number[]> {
   const locIds = await getCurrentBusinessLocationIds(ctx);
   if (inputLocationId !== undefined) {
@@ -25,7 +25,7 @@ export const reportsRouter = createRouter({
       const endDate = new Date(input.year, input.month, 0).toISOString().split("T")[0];
       const locFilter = await resolveLocationFilter(ctx, input.locationId);
       const locIdSql = sql.join(locFilter.map(id => sql`${id}`), sql`, `);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const salesCond: any[] = [
         sql`${dailySales.saleDate} >= ${startDate}`,
         sql`${dailySales.saleDate} <= ${endDate}`,
@@ -34,7 +34,7 @@ export const reportsRouter = createRouter({
       ];
       const salesData = await db.select().from(dailySales).where(and(...salesCond));
       const revenue = salesData.reduce((sum, s) => sum.plus(d(s.netSales || "0")), d(0));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const expenseCond: any[] = [
         sql`${expenses.expenseDate} >= ${startDate}`,
         sql`${expenses.expenseDate} <= ${endDate}`,
@@ -78,7 +78,7 @@ export const reportsRouter = createRouter({
       for (let m = 1; m <= 12; m++) {
         const monthStart = `${input.year}-${String(m).padStart(2, "0")}-01`;
         const monthEnd = new Date(input.year, m, 0).toISOString().split("T")[0];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         const salesCond: any[] = [
           sql`${dailySales.saleDate} >= ${monthStart}`,
           sql`${dailySales.saleDate} <= ${monthEnd}`,
@@ -87,7 +87,7 @@ export const reportsRouter = createRouter({
         ];
         const salesData = await db.select().from(dailySales).where(and(...salesCond));
         const revenue = salesData.reduce((sum, s) => sum.plus(d(s.netSales || "0")), d(0));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         const expenseCond: any[] = [
           sql`${expenses.expenseDate} >= ${monthStart}`,
           sql`${expenses.expenseDate} <= ${monthEnd}`,
@@ -123,11 +123,10 @@ export const reportsRouter = createRouter({
       const getTotals = async (year: number) => {
         const start = `${year}-01-01`;
         const end = `${year}-12-31`;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         const salesCond: any[] = [sql`${dailySales.saleDate} >= ${start}`, sql`${dailySales.saleDate} <= ${end}`, isNull(dailySales.deletedAt), sql`${dailySales.locationId} IN (${locIdSql})`];
         const salesData = await db.select().from(dailySales).where(and(...salesCond));
         const revenue = salesData.reduce((sum, s) => sum.plus(d(s.netSales || "0")), d(0));
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
         const expenseCond: any[] = [sql`${expenses.expenseDate} >= ${start}`, sql`${expenses.expenseDate} <= ${end}`, isNull(expenses.deletedAt), sql`${expenses.locationId} IN (${locIdSql})`];
         const expenseResult = await db.select({ total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)` }).from(expenses).where(and(...expenseCond));
         const expensesTotal = d(expenseResult[0]?.total || "0");
@@ -155,7 +154,7 @@ export const reportsRouter = createRouter({
       const locIdSql = sql.join(locFilter.map(id => sql`${id}`), sql`, `);
       const startDate = `${input.year}-01-01`;
       const endDate = input.month ? new Date(input.year, input.month, 0).toISOString().split("T")[0] : `${input.year}-12-31`;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const expenseCond: any[] = [
         sql`${expenses.expenseDate} >= ${startDate}`,
         sql`${expenses.expenseDate} <= ${endDate}`,
@@ -203,7 +202,7 @@ export const reportsRouter = createRouter({
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
       const today = new Date().toISOString().split("T")[0];
       const next30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const salesCond: any[] = [
         sql`${dailySales.saleDate} >= ${thirtyDaysAgo}`,
         sql`${dailySales.saleDate} <= ${today}`,
@@ -213,7 +212,7 @@ export const reportsRouter = createRouter({
       const salesData = await db.select().from(dailySales).where(and(...salesCond));
       const totalSales = salesData.reduce((sum, s) => sum.plus(d(s.netSales || "0")), d(0));
       const avgDaily = totalSales.gt(0) ? totalSales.dividedBy(30) : d(0);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const billCond: any[] = [
         sql`${bills.dueDate} >= ${today}`,
         sql`${bills.dueDate} <= ${next30}`,
@@ -242,7 +241,7 @@ export const reportsRouter = createRouter({
       const locIdSql = sql.join(locFilter.map(id => sql`${id}`), sql`, `);
       const startDate = input.month ? `${input.year}-${String(input.month).padStart(2, "0")}-01` : `${input.year}-01-01`;
       const endDate = input.month ? new Date(input.year, input.month, 0).toISOString().split("T")[0] : `${input.year}-12-31`;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const salesCond: any[] = [
         sql`${dailySales.saleDate} >= ${startDate}`,
         sql`${dailySales.saleDate} <= ${endDate}`,
@@ -261,7 +260,6 @@ export const reportsRouter = createRouter({
 
       let totalCogs = d("0");
       if (cogsCatIds.length > 0) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         const cogsCond: any[] = [
           sql`${expenses.expenseDate} >= ${startDate}`,
           sql`${expenses.expenseDate} <= ${endDate}`,

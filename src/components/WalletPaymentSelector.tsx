@@ -1,9 +1,10 @@
 // ABOUTME: Multi-provider wallet payment selector component for choosing between configured wallet providers.
 // ABOUTME: Shows all active providers with brand colors, disables unsupported currencies, indicates defaults.
+import { useState } from "react";
 import { trpc } from "@/providers/trpc";
-import { skipToken } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { Smartphone, Wallet, AlertCircle, CheckCircle2, XCircle } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 export interface WalletProviderCard {
@@ -121,14 +122,14 @@ export function WalletPaymentSelector({
 }: WalletPaymentSelectorProps) {
   const { data: providers } = trpc.wallet.providers.list.useQuery();
   const { data: locationProviders } = trpc.wallet.providers.listForLocation.useQuery(
-    locationId ? { locationId } : skipToken,
+    locationId ? { locationId } : undefined,
     { enabled: !!locationId }
   );
 
   const available = locationProviders ?? providers ?? [];
-  const activeProviders = available.filter((p: { isActive?: boolean }) => p.isActive !== false);
+  const activeProviders = available.filter((p: any) => p.isActive !== false);
   const hasMultiple = activeProviders.length > 1;
-  const unsupportedCount = activeProviders.filter((p: { supportedCurrencies?: string }) => {
+  const unsupportedCount = activeProviders.filter((p: any) => {
     const supported = p.supportedCurrencies ?? "KES";
     return currency && !supported.includes(currency);
   }).length;
@@ -154,7 +155,7 @@ export function WalletPaymentSelector({
         </Alert>
       )}
       <div className={cn("grid gap-2", hasMultiple ? "grid-cols-2 md:grid-cols-3" : "grid-cols-1")}>
-        {activeProviders.map((provider: WalletProviderCard) => {
+        {activeProviders.map((provider: any) => {
           const supported = provider.supportedCurrencies ?? "KES";
           const supportsCurrency = !currency || supported.includes(currency);
           const isDisabled = disabled || !supportsCurrency;

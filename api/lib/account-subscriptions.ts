@@ -1,9 +1,8 @@
 // ABOUTME: Resolves canonical account-level subscription data with fallback to legacy business rows during migration.
 // ABOUTME: Centralizes account-scoped usage counting so auth, settings, and enforcement stay consistent.
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import { businesses, customerAccounts, users, userBusinesses } from "@db/schema";
+import { businesses, customerAccounts, users } from "@db/schema";
 import type { getDb } from "../queries/connection";
-import { getPlanConfig } from "./subscriptions";
 
 export type DbClient = ReturnType<typeof getDb>;
 
@@ -75,35 +74,4 @@ export async function getAccountUsage(db: DbClient, accountId: string) {
     businessCount: Number(businessCount?.count ?? 0),
     userCount: Number(userCount?.count ?? 0),
   };
-}
-
-export async function checkUserLimitForAccount(
-  db: DbClient,
-  accountId: string,
-  businessId: number,
-  accountRefId?: number | null,
-  requestedCount: number = 1,
-): Promise<{ allowed: boolean; maxUsers: number; currentUsers: number }> {
-  const resolved = await getAccountSubscription(db, {
-    accountId,
-    accountRefId: accountRefId ?? null,
-    fallbackBusinessId: businessId,
-  });
-  const maxUsers = resolved.source === "account"
-    ? resolved.account.maxUsers
-    : getPlanConfig(resolved.business.plan).maxUsers;
-
-  const result = await db.select({ count: sql<number>`COUNT(DISTINCT ${userBusinesses.userId})` }).from(userBusinesses)
-    .innerJoin(users, eq(users.id, userBusinesses.userId))
-    .where(
-      and(
-        eq(users.accountId, accountId),
-        eq(userBusinesses.isActive, true),
-        eq(users.isActive, true),
-        isNull(users.deletedAt),
-      )
-    );
-
-  const currentUsers = Number(result[0]?.count ?? 0);
-  return { allowed: currentUsers + requestedCount <= maxUsers, maxUsers, currentUsers };
 }

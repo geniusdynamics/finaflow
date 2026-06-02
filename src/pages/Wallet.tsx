@@ -3,20 +3,15 @@
 import { useState, useEffect } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
-import { useAuth } from "@/hooks/useAuth";
 import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Smartphone, Upload, ArrowUpRight, ArrowDownRight, Tag, Receipt, Wallet as WalletIcon, Landmark, Plus, Link2, BookOpen, LayoutDashboard } from "lucide-react";
-import { LocationSelector } from "@/components/LocationSelector";
-import { ExpenseCategorySelector } from "@/components/ExpenseCategorySelector";
+import { Smartphone, Upload, ArrowUpRight, ArrowDownRight, Tag, Receipt, Wallet as WalletIcon, Landmark, Plus, Link2, BookOpen } from "lucide-react";
 
 export function Wallet() {
-  const { user } = useAuth();
-  const { data: settings } = trpc.settings.list.useQuery();
   const [tab, setTab] = useState<"overview" | "transactions" | "ledger" | "import">("overview");
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [dateFrom, setDateFrom] = useState(() => {
@@ -26,7 +21,7 @@ export function Wallet() {
   const [smsText, setSmsText] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
   const [smsProvider, setSmsProvider] = useState("mpesa");
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  const [parsedPreview, setParsedPreview] = useState<any[]>([]);
+  const [parsedPreview, setParsedPreview] = useState<any[]>([]);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [tagTxnId, setTagTxnId] = useState<number | null>(null);
   const [linkTxnId, setLinkTxnId] = useState<number | null>(null);
@@ -87,7 +82,7 @@ export function Wallet() {
     }
   }, [tagTxnId, refetchCategories]);
 
-  useEffect(() => { setParsedPreview(() => []); }, [smsText, smsProvider, selectedLocation]);
+  useEffect(() => { setParsedPreview([]); }, [smsText, smsProvider, selectedLocation]);
 
   const handlePreviewSms = async () => {
     if (!selectedLocation || !smsText.trim()) return;
@@ -128,14 +123,14 @@ export function Wallet() {
   const bankAccounts = accounts?.filter(a => a.type === "bank_account" && !a.deletedAt) ?? [];
 
   // Ledger calculations (mirror Mpesa page pattern)
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  const ledgerTxns = selectedWallet ? transactions?.filter((t: any) => {
+  const ledgerTxns = selectedWallet ? transactions?.filter((t: any) => {
     const wallet = walletAccounts.find(a => a.id.toString() === selectedWallet);
     return wallet && t.locationId === wallet.locationId;
   }) : transactions;
   const rangeTxns = ledgerTxns ?? [];
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  const ledgerTotalIn = rangeTxns.filter((t: any) => parseFloat(t.amount) > 0).reduce((s: number, t: any) => s + parseFloat(t.amount), 0);
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  const ledgerTotalOut = rangeTxns.filter((t: any) => parseFloat(t.amount) < 0).reduce((s: number, t: any) => s + Math.abs(parseFloat(t.amount)), 0);
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  const ledgerTotalFees = rangeTxns.reduce((s: number, t: any) => s + parseFloat(t.txnFee || "0"), 0);
+  const ledgerTotalIn = rangeTxns.filter((t: any) => parseFloat(t.amount) > 0).reduce((s: number, t: any) => s + parseFloat(t.amount), 0);
+  const ledgerTotalOut = rangeTxns.filter((t: any) => parseFloat(t.amount) < 0).reduce((s: number, t: any) => s + Math.abs(parseFloat(t.amount)), 0);
+  const ledgerTotalFees = rangeTxns.reduce((s: number, t: any) => s + parseFloat(t.txnFee || "0"), 0);
 
   const handleLedgerSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -152,13 +147,11 @@ export function Wallet() {
   const smsImportSection = (fullPage?: boolean) => (
     <div className={fullPage ? "space-y-6" : "space-y-4"}>
       <div className="space-y-2">
-        <LocationSelector
-        locations={locations}
-        userLocationId={user?.locationId}
-        value={selectedLocation}
-        onChange={(e) => setSelectedLocation(e)}
-          enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
-         />
+        <Label>Location</Label>
+        <select value={selectedLocation} onChange={(e) => setSelectedLocation(e.target.value)} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
+          <option value="">Select location</option>
+          {locations?.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+        </select>
         {locations && locations.length === 0 && (
           <p className="text-xs text-[#D32F2F]">No locations found for your current business. Please create a location first in Settings.</p>
         )}
@@ -167,7 +160,7 @@ export function Wallet() {
       <div className="space-y-2">
         <Label>Provider</Label>
         <select value={smsProvider} onChange={(e) => setSmsProvider(e.target.value)} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}          {providers?.filter((p: any) => p.features?.smsImport).map((p: any) => (
+          {providers?.filter((p: any) => p.features?.smsImport).map((p: any) => (
             <option key={p.code} value={p.code}>{p.displayName || p.name}</option>
           ))}
         </select>
@@ -206,7 +199,7 @@ export function Wallet() {
         <div className="rounded-lg bg-[#F5EDE6] p-3">
           <p className="text-sm font-medium text-[#2D2A26]">Preview: {parsedPreview.length} transactions</p>
           <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}            {parsedPreview.slice(0, 10).map((p: any, i: number) => (
+            {parsedPreview.slice(0, 10).map((p: any, i: number) => (
               <div key={i} className="flex items-center justify-between text-xs">
                 <span className="text-[#2D2A26]">{p.txnId} · {p.partyName || "-"}</span>
                 <span className={p.direction === "in" ? "text-[#2E7D32]" : "text-[#D32F2F]"}>{p.currency || "KES"} {p.amount} · {p.txnType}</span>
@@ -240,19 +233,12 @@ export function Wallet() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 border-b border-[#E8E0D8]">
-          <button onClick={() => setTab("overview")} className={`px-4 py-2 text-sm font-medium ${tab === "overview" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
-            <LayoutDashboard className="mr-1 inline h-4 w-4"/>Overview
-          </button>
-          <button onClick={() => setTab("transactions")} className={`px-4 py-2 text-sm font-medium ${tab === "transactions" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
-            <ArrowUpRight className="mr-1 inline h-4 w-4"/>Transactions
-          </button>
-          <button onClick={() => setTab("ledger")} className={`px-4 py-2 text-sm font-medium ${tab === "ledger" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
-            <BookOpen className="mr-1 inline h-4 w-4"/>Daily Ledger
-          </button>
-          <button onClick={() => setTab("import")} className={`px-4 py-2 text-sm font-medium ${tab === "import" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
-            <Upload className="mr-1 inline h-4 w-4"/>Import
-          </button>
+        <div className="mb-4 flex flex-wrap gap-2">
+          {["overview", "transactions", "ledger", "import"].map((t) => (
+            <button key={t} onClick={() => setTab(t as any)} className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${tab === t ? "bg-[#C73E1D] text-white" : "bg-[#F5EDE6] text-[#2D2A26] hover:bg-[#E8E0D8]"}`}>
+              {t === "overview" ? "Overview" : t === "transactions" ? "Transactions" : t === "ledger" ? "Daily Ledger" : "Import"}
+            </button>
+          ))}
         </div>
 
         <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -333,7 +319,7 @@ export function Wallet() {
               <Card className="border-[#E8E0D8] bg-white">
                 <CardHeader><CardTitle className="text-sm text-[#2D2A26]">Fees by Type</CardTitle></CardHeader>
                 <CardContent>
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                  {stats?.feesByType?.length ? stats.feesByType.map((ft: any) => (
+                  {stats?.feesByType?.length ? stats.feesByType.map((ft: any) => (
                     <div key={ft.txnType} className="flex items-center justify-between rounded-lg border border-[#E8E0D8] p-3">
                       <span className="text-sm text-[#2D2A26]">{ft.txnType.replace(/_/g, " ")}</span>
                       <span className="font-mono text-sm text-[#D4A854]">{formatKES(ft.totalFees)} ({ft.count} txns)</span>
@@ -344,7 +330,7 @@ export function Wallet() {
               <Card className="border-[#E8E0D8] bg-white">
                 <CardHeader><CardTitle className="text-sm text-[#2D2A26]">Top Recipients</CardTitle></CardHeader>
                 <CardContent>
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                  {stats?.topRecipients?.length ? stats.topRecipients.map((r: any) => (
+                  {stats?.topRecipients?.length ? stats.topRecipients.map((r: any) => (
                     <div key={r.partyName ?? "unknown"} className="flex items-center justify-between rounded-lg bg-[#F5EDE6] px-3 py-2">
                       <span className="text-sm text-[#2D2A26]">{r.partyName}</span>
                       <span className="font-mono text-sm text-[#2D2A26]">{formatKES(r.totalAmount)} ({r.count})</span>
@@ -358,7 +344,7 @@ export function Wallet() {
               <CardHeader><CardTitle className="text-sm text-[#2D2A26]">Available Providers</CardTitle></CardHeader>
               <CardContent>
                 <div className="grid gap-3 md:grid-cols-3">
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                  {providers?.map((p: any) => (
+                  {providers?.map((p: any) => (
                     <div key={p.code} className="rounded-lg border border-[#E8E0D8] p-4">
                       <div className={`mb-2 inline-block rounded px-2 py-0.5 text-xs font-medium text-white ${providerColors[p.code] || "bg-gray-600"}`}>
                         {providerIcons[p.code] || p.displayName || p.name}
@@ -393,7 +379,7 @@ export function Wallet() {
                     </tr>
                   </thead>
                   <tbody>
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                    {transactions?.map((txn: any) => {
+                    {transactions?.map((txn: any) => {
                       const amt = Math.abs(parseFloat(txn.amount));
                       const isOut = txn.direction === "out" || parseFloat(txn.amount) < 0;
                       return (
@@ -475,14 +461,14 @@ export function Wallet() {
                                         <p className="text-xs text-[#8D8A87]">{txn.partyName} · {formatKES(amt.toFixed(2))}</p>
                                       </div>
                                       <div className="space-y-2">
-                                      <ExpenseCategorySelector
-                                          categories={categories}
-                                          value={expenseForm.categoryId}
-                                          onChange={(v) => setExpenseForm((p) => ({ ...p, categoryId: v }))}
-                                          label="Expense Category *"
-                                          required
-                                          hint={categories && categories.length === 0 ? "No categories found. Please create categories in the Expenses page first." : undefined}
-                                        />
+                                        <Label>Expense Category *</Label>
+                                        <select value={expenseForm.categoryId} onChange={(e) => setExpenseForm((p) => ({ ...p, categoryId: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" required>
+                                          <option value="">{categories && categories.length > 0 ? "Select category" : "Loading categories..."}</option>
+                                          {categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                        </select>
+                                        {categories && categories.length === 0 && (
+                                          <p className="text-xs text-[#D32F2F]">No categories found. Please create categories in the Expenses page first.</p>
+                                        )}
                                       </div>
                                       <div className="space-y-2">
                                         <Label>Description</Label>
@@ -496,14 +482,11 @@ export function Wallet() {
                                         </select>
                                       </div>
                                       <div className="space-y-2">
-                                        <LocationSelector
-                                        locations={locations}
-                                        userLocationId={user?.locationId}
-                                        value={expenseForm.locationId}
-                                        onChange={v => setExpenseForm(p => ({ ...p, locationId: v }))}
-                                        enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
-                                          required
-                                         />
+                                        <Label>Location *</Label>
+                                        <select value={expenseForm.locationId} onChange={(e) => setExpenseForm((p) => ({ ...p, locationId: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" required>
+                                          <option value="">Select</option>
+                                          {locations?.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                        </select>
                                       </div>
                                       <Button onClick={() => createExpenseFromTxn.mutate({
                                         walletTxnId: txn.id,
@@ -570,19 +553,16 @@ export function Wallet() {
                   <form onSubmit={handleLedgerSubmit} className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-2">
-                        <LocationSelector
-                        locations={locations}
-                        userLocationId={user?.locationId}
-                        value={ledgerForm.locationId}
-                        onChange={v => setLedgerForm(p => ({ ...p, locationId: v }))}
-                        enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
-                          required
-                         />
+                        <Label>Location</Label>
+                        <select value={ledgerForm.locationId} onChange={e => setLedgerForm(p => ({ ...p, locationId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required>
+                          <option value="">Select</option>
+                          {locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                        </select>
                       </div>
                       <div className="space-y-2">
                         <Label>Provider</Label>
                         <select value={ledgerForm.provider} onChange={e => setLedgerForm(p => ({ ...p, provider: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                          {providers?.filter((p: any) => p.features?.smsImport).map((p: any) => (
+                          {providers?.filter((p: any) => p.features?.smsImport).map((p: any) => (
                             <option key={p.code} value={p.code}>{p.displayName || p.name}</option>
                           ))}
                         </select>
@@ -656,7 +636,7 @@ export function Wallet() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E8E0D8]">
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                      {ledgers?.map((l: any) => (
+                      {ledgers?.map((l: any) => (
                         <tr key={l.id} className="hover:bg-[#F5EDE6]/50">
                           <td className="px-4 py-3 text-sm text-[#2D2A26]">{formatDate(l.ledgerDate)}</td>
                           <td className="px-4 py-3">

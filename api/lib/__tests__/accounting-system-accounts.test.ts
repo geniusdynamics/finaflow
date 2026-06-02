@@ -40,7 +40,6 @@ describe("ensureSystemAccount", () => {
       name: "System Account Test Business",
       slug,
       isActive: true,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
     const firstId = await ensureSystemAccount({

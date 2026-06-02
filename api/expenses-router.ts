@@ -8,7 +8,6 @@ import { notFutureDateString, optionalNotFutureDateString } from "./lib/future-d
 import { logAudit } from "./lib/audit";
 import { ensureSystemAccount } from "./lib/accounting-accounts";
 import { getExpenseAccountSubType } from "./lib/accounting-maps";
-import { payBill } from "./lib/bill-payment";
 import { reverseLedgerEntriesForTransaction } from "./lib/accounting-reversal";
 
 export const expenseItemInputSchema = z.object({
@@ -67,7 +66,6 @@ export const updateExpenseInputSchema = z.object({
 export const expensesRouter = createRouter({
   categories: expenseQuery.query(async ({ ctx }) => {
     const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
     if (!businessId) return [];
     return db.select().from(expenseCategories)
@@ -88,9 +86,7 @@ export const expensesRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userId = (ctx as any).user?.id ?? 1;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
 
       if (!businessId) {
@@ -107,7 +103,6 @@ export const expensesRouter = createRouter({
           where: and(
             eq(accounts.id, defaultAccountId),
             eq(accounts.businessId, businessId),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
             eq(accounts.accountType, "expense" as any),
             isNull(accounts.deletedAt)
           ),
@@ -130,7 +125,6 @@ export const expensesRouter = createRouter({
         name: input.name, 
         description: input.description, 
         color: input.color ?? "#C73E1D",
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         accountingClass: (input.accountingClass || "operating_expense") as any,
         defaultAccountId,
       }).returning();
@@ -162,9 +156,7 @@ export const expensesRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userId = (ctx as any).user?.id ?? 1;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
       const { id, ...updates } = input;
       
@@ -174,7 +166,6 @@ export const expensesRouter = createRouter({
 
       const normalizedUpdates: Record<string, unknown> = { ...updates };
       if (businessId && updates.defaultAccountId === undefined) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         const accountingClass = (updates.accountingClass ?? existing[0]?.accountingClass ?? "operating_expense") as any;
         normalizedUpdates.defaultAccountId = await ensureSystemAccount({
           businessId,
@@ -187,7 +178,6 @@ export const expensesRouter = createRouter({
           where: and(
             eq(accounts.id, updates.defaultAccountId),
             eq(accounts.businessId, businessId),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
             eq(accounts.accountType, "expense" as any),
             isNull(accounts.deletedAt)
           ),
@@ -196,7 +186,7 @@ export const expensesRouter = createRouter({
           throw new Error("Default account must be a valid chart of accounts expense entry for this business");
         }
       }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+      
       const auditDetails: Record<string, any> = {};
       if (updates.accountingClass && updates.accountingClass !== existing[0]?.accountingClass) {
         auditDetails.accountingClassChange = {
@@ -210,7 +200,7 @@ export const expensesRouter = createRouter({
           to: updates.defaultAccountId,
         };
       }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+      
       await db.update(expenseCategories).set(normalizedUpdates as any).where(eq(expenseCategories.id, id));
       
       if (Object.keys(auditDetails).length > 0) {
@@ -266,7 +256,6 @@ export const expensesRouter = createRouter({
     .input(createExpenseInputSchema)
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userId = (ctx as any).user?.id ?? 1;
 
       await requireAuthorizedLocation(ctx, input.locationId);
@@ -290,12 +279,12 @@ export const expensesRouter = createRouter({
 
       let expenseId = 0;
       let accountId = input.accountId;
-      let _fixedAssetItemId: number | undefined;
+      let fixedAssetItemId: number | undefined;
 
       await db.transaction(async (tx) => {
         await tx.update(locations).set({ nextExpenseNumber: nextNum + 1 }).where(eq(locations.id, input.locationId));
 
-        if (!input.billId && input.supplierId) {
+        if (input.supplierId) {
           const sup = await tx.select().from(suppliers).where(eq(suppliers.id, input.supplierId)).limit(1);
           if (sup[0]) {
             const supplierBills = await tx.select().from(bills).where(
@@ -314,7 +303,6 @@ export const expensesRouter = createRouter({
         if (!accountId) {
           const typeMap: Record<string, string> = { cash: "cash", wallet: "cash", bank_transfer: "bank", card: "bank" };
           const accts = await tx.select().from(accounts).where(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
             and(eq(accounts.locationId, input.locationId), eq(accounts.type, typeMap[input.paymentMethod] as any), isNull(accounts.deletedAt))
           ).limit(1);
           if (accts[0]) accountId = accts[0].id;
@@ -341,7 +329,6 @@ export const expensesRouter = createRouter({
           usefulLifeMonths: input.usefulLifeMonths,
           depreciationMethod: input.depreciationMethod,
           salvageValue: input.salvageValue,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
         expenseId = result.id;
 
@@ -350,7 +337,6 @@ export const expensesRouter = createRouter({
             await tx.insert(attachments).values({
               recordType: "expense", recordId: expenseId,
               imageData: att.imageData, mimeType: att.mimeType, caption: att.caption,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any).returning();
           }
         }
@@ -365,7 +351,6 @@ export const expensesRouter = createRouter({
               totalPrice: item.totalPrice,
               categoryId: item.categoryId,
               notes: item.notes,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any).returning();
           }
         }
@@ -378,7 +363,6 @@ export const expensesRouter = createRouter({
               accountId, transactionType: "expense", transactionId: expenseId,
               entryType: "credit", amount: input.amount, balanceAfter: cashNewBal.toFixed(2),
               entryDate: new Date(input.expenseDate), createdBy: userId, refNo: expenseNumber,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any).returning();
             await tx.update(accounts).set({ currentBalance: cashNewBal.toFixed(2) }).where(eq(accounts.id, accountId));
 
@@ -390,26 +374,49 @@ export const expensesRouter = createRouter({
                   accountId: input.assetAccountId, transactionType: "expense", transactionId: expenseId,
                   entryType: "debit", amount: input.amount, balanceAfter: assetNewBal.toFixed(2),
                   entryDate: new Date(input.expenseDate), createdBy: userId, refNo: expenseNumber,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
                 } as any).returning();
                 await tx.update(accounts).set({ currentBalance: assetNewBal.toFixed(2) }).where(eq(accounts.id, input.assetAccountId));
               }
             } else if (input.billId) {
-              await payBill({
-                db: tx,
-                billId: input.billId,
-                paymentMethod: input.paymentMethod,
-                amount: input.amount,
-                paymentDate: input.expenseDate,
-                reference: input.description,
-                accountId: accountId!,
-                categoryId: input.categoryId,
-                enteredBy: userId,
-                businessId,
-                locationId: input.locationId,
-                supplierId: input.supplierId,
-                skipExpenseCreation: true,
+              const apAccount = await tx.query.accounts.findFirst({
+                where: and(
+                  eq(accounts.accountSubType, "accounts_payable" as any),
+                  eq(accounts.businessId, businessId),
+                  isNull(accounts.deletedAt)
+                ),
               });
+              const billRecord = await tx.select().from(bills).where(eq(bills.id, input.billId)).limit(1);
+              const billBalanceDue = d(billRecord[0]?.balanceDue || "0");
+              const paymentAmount = d(input.amount);
+              const apDebitAmount = paymentAmount.lte(billBalanceDue) ? paymentAmount : billBalanceDue;
+              const prepaymentAmount = d(input.amount).gt(billBalanceDue) ? d(input.amount).minus(billBalanceDue) : d(0);
+              if (apAccount && apAccount.id !== accountId && apDebitAmount.gt(0)) {
+                const apNewBal = d(apAccount.currentBalance || "0").minus(apDebitAmount);
+                await tx.insert(ledgerEntries).values({
+                  accountId: apAccount.id, transactionType: "bill_payment" as any, transactionId: expenseId,
+                  entryType: "debit", amount: apDebitAmount.toFixed(2), balanceAfter: apNewBal.toFixed(2),
+                  entryDate: new Date(input.expenseDate), createdBy: userId, refNo: expenseNumber,
+                } as any).returning();
+                await tx.update(accounts).set({ currentBalance: apNewBal.toFixed(2) }).where(eq(accounts.id, apAccount.id));
+              }
+              if (prepaymentAmount.gt(0)) {
+                const prepayAcct = await tx.query.accounts.findFirst({
+                  where: and(
+                    eq(accounts.accountCode, "1550"),
+                    eq(accounts.businessId, businessId),
+                    isNull(accounts.deletedAt)
+                  ),
+                });
+                if (prepayAcct) {
+                  const prepayNewBal = d(prepayAcct.currentBalance || "0").plus(prepaymentAmount);
+                  await tx.insert(ledgerEntries).values({
+                    accountId: prepayAcct.id, transactionType: "bill_payment" as any, transactionId: expenseId,
+                    entryType: "debit", amount: prepaymentAmount.toFixed(2), balanceAfter: prepayNewBal.toFixed(2),
+                    entryDate: new Date(input.expenseDate), createdBy: userId, refNo: expenseNumber,
+                  } as any).returning();
+                  await tx.update(accounts).set({ currentBalance: prepayNewBal.toFixed(2) }).where(eq(accounts.id, prepayAcct.id));
+                }
+              }
             } else {
               const category = await tx.select().from(expenseCategories).where(
                 and(eq(expenseCategories.id, input.categoryId), isNull(expenseCategories.deletedAt))
@@ -432,7 +439,6 @@ export const expensesRouter = createRouter({
                     accountId: expenseAccountId, transactionType: "expense", transactionId: expenseId,
                     entryType: "debit", amount: input.amount, balanceAfter: expenseNewBal.toFixed(2),
                     entryDate: new Date(input.expenseDate), createdBy: userId, refNo: expenseNumber,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
                   } as any).returning();
                   await tx.update(accounts).set({ currentBalance: expenseNewBal.toFixed(2) }).where(eq(accounts.id, expenseAccountId));
                 }
@@ -441,7 +447,7 @@ export const expensesRouter = createRouter({
           }
         }
 
-        if (!input.billId && input.supplierId) {
+        if (input.supplierId) {
           const sup = await tx.select().from(suppliers).where(eq(suppliers.id, input.supplierId)).limit(1);
           if (sup[0]) {
             const newPaid = d(sup[0].totalPaid).plus(d(input.amount));
@@ -450,6 +456,18 @@ export const expensesRouter = createRouter({
           }
         }
 
+        if (input.billId) {
+          const bill = await tx.select().from(bills).where(eq(bills.id, input.billId)).limit(1);
+          if (bill[0]) {
+            const currentPaid = d(bill[0].amountPaid);
+            const paymentAmount = d(input.amount);
+            const totalAmount = d(bill[0].amount);
+            const newPaid = currentPaid.plus(paymentAmount);
+            const newBalance = d(Math.max(0, totalAmount.minus(currentPaid).minus(paymentAmount).toNumber()));
+            const newStatus = newBalance.lte(0) ? "paid" : (newPaid.gt(0) ? "partial" : "pending");
+            await tx.update(bills).set({ amountPaid: newPaid.toFixed(2), balanceDue: newBalance.toFixed(2), status: newStatus }).where(eq(bills.id, input.billId));
+          }
+        }
       });
 
       return { id: expenseId, expenseNumber, success: true };
@@ -461,7 +479,6 @@ export const expensesRouter = createRouter({
       const db = getDb();
       await requireAuthorizedEntity(ctx, expenses, input.id);
       const { id, ...rawUpdates } = input;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updates: any = { ...rawUpdates };
       if (rawUpdates.expenseDate) updates.expenseDate = new Date(rawUpdates.expenseDate);
       await db.update(expenses).set(updates).where(eq(expenses.id, id));
@@ -501,14 +518,12 @@ export const expensesRouter = createRouter({
         await reverseLedgerEntriesForTransaction({
           db: tx,
           transactionId: input.id,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           userId: (ctx as any).user?.id ?? 1,
           reason: input.reason,
         });
 
         await tx
           .update(expenses)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           .set({ reversedAt: new Date(), reversedBy: (ctx as any).user?.id ?? 1 })
           .where(eq(expenses.id, input.id));
       });
@@ -534,14 +549,13 @@ export const expensesRouter = createRouter({
       const [result] = await db.insert(attachments).values({
         recordType: "expense", recordId: input.recordId,
         imageData: input.imageData, mimeType: input.mimeType, caption: input.caption,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { id: result.id, success: true };
     }),
 
   deleteAttachment: expenseManage
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
       await db.delete(attachments).where(eq(attachments.id, input.id));
       return { success: true };

@@ -16,34 +16,23 @@ export class MpesaProvider extends BaseWalletProvider {
     smsImport: true,
   };
 
-  async initiatePayment(
-    _request: WalletTransactionRequest,
-  ): Promise<WalletTransactionResult> {
+  async initiatePayment(_request: WalletTransactionRequest): Promise<WalletTransactionResult> {
     throw new Error(`${this.displayName} does not support API-initiated payments in SMS mode`);
   }
 
-  async queryStatus(
-    _providerTxnId: string,
-  ): Promise<WalletStatusResult> {
+  async queryStatus(_providerTxnId: string): Promise<WalletStatusResult> {
     throw new Error(`${this.displayName} does not support status queries in SMS mode`);
   }
 
-  async processWebhook(
-    _payload: WalletWebhookPayload,
-  ): Promise<WalletWebhookResult> {
+  async processWebhook(_payload: WalletWebhookPayload): Promise<WalletWebhookResult> {
     throw new Error(`${this.displayName} does not support webhooks in SMS mode`);
   }
 
-  async processRefund(
-    _providerTxnId: string,
-    _amount?: string,
-  ): Promise<WalletTransactionResult> {
+  async processRefund(_providerTxnId: string, _amount?: string): Promise<WalletTransactionResult> {
     throw new Error(`${this.displayName} does not support API-initiated refunds in SMS mode`);
   }
 
-  async balanceInquiry(
-    _accountId: number,
-  ): Promise<WalletBalanceResult> {
+  async balanceInquiry(_accountId: number): Promise<WalletBalanceResult> {
     throw new Error(`${this.displayName} does not support balance inquiries in SMS mode`);
   }
 
@@ -80,7 +69,7 @@ export class MpesaProvider extends BaseWalletProvider {
     const timeStr = text.match(/\d{1,2}:\d{2}\s*(?:AM|PM)/i)?.[0] ?? "";
     const balanceStr = this.extractKshValue(text, /balance\s*:?\s*(?:ksh\s*)?([\d,]+(?:\.\d{1,2})?)/i);
 
-    const rawTxnType = this.detectTxnType(lowerText);
+    const rawTxnType = this.detectTxnType(lowerText, text);
     const direction = this.detectDirection(rawTxnType, lowerText);
     const partyName = this.extractPartyName(lowerText, rawTxnType, text);
     const txnFee = this.extractKshValue(text, /(?:transaction\s+(?:fee|cost)|charge)\s*,?\s*:?\s*(?:ksh\s*)?([\d,]+(?:\.\d{1,2})?)/i) ?? "0.00";
@@ -112,7 +101,7 @@ export class MpesaProvider extends BaseWalletProvider {
   }
 
   private splitIntoSmsChunks(text: string): string[] {
-    const parts = text.split(/(?=\b[A-Z0-9]{6,20}\s+[Cc]onfirmed\.)/);
+    const parts = text.split(/(?=[A-Z0-9]{6,20}\s+Confirmed\.)/);
     return parts.filter((p) => p.trim().length > 0);
   }
 
@@ -140,7 +129,7 @@ export class MpesaProvider extends BaseWalletProvider {
     return null;
   }
 
-  private detectTxnType(lowerText: string): ParsedWalletSms["txnType"] {
+  private detectTxnType(lowerText: string, originalText: string): ParsedWalletSms["txnType"] {
     if (lowerText.includes("you have received") || lowerText.includes("received from")) {
       if (lowerText.includes("kcb") || lowerText.includes("co-op") || lowerText.includes("equity") || lowerText.includes("bank")) {
         return "topup";
@@ -183,10 +172,7 @@ export class MpesaProvider extends BaseWalletProvider {
     return null;
   }
 
-  private extractPartyIdentifier(
-    text: string,
-    _lowerText: string,
-  ): string | null {
+  private extractPartyIdentifier(text: string, lowerText: string): string | null {
     const phoneMatch = text.match(/0\d{9}/);
     if (phoneMatch) return phoneMatch[0];
     const tillMatch = text.match(/till\s*(?:no\.?)?\s*:?\s*(\d{5,10})/i);

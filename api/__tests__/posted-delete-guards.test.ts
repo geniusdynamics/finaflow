@@ -24,24 +24,6 @@ type SeededContext = {
   location: { id: number };
 };
 
-type Row = { id: number };
-
-interface CallerUser {
-  id: number;
-  role: string;
-  currentBusinessId: number;
-  accountId: string;
-  accountRefId: number | null;
-  currentBusiness: { id: number; accountId: string; accountRefId: number | null; plan: string; maxBranches: number | null; maxUsers: number | null; features: unknown };
-  businessIds: number[];
-}
-
-interface CallerContext {
-  req: Request;
-  resHeaders: Headers;
-  user: CallerUser;
-}
-
 async function seedDeleteContext(seed: string): Promise<SeededContext> {
   const db = getTestDb();
   const accountId = `DEL-${seed}`;
@@ -54,7 +36,7 @@ async function seedDeleteContext(seed: string): Promise<SeededContext> {
     maxBranches: 5,
     maxUsers: 10,
     isActive: true,
-  } satisfies typeof businesses.$inferInsert).returning();
+  } as any).returning();
 
   const [user] = await db.insert(users).values({
     username: `owner-del-${seed.toLowerCase()}`,
@@ -63,21 +45,21 @@ async function seedDeleteContext(seed: string): Promise<SeededContext> {
     isActive: true,
     currentBusinessId: business.id,
     accountId,
-  } satisfies typeof users.$inferInsert).returning();
+  } as any).returning();
 
   await db.insert(userBusinesses).values({
     userId: user.id,
     businessId: business.id,
     role: "owner",
     isActive: true,
-  } satisfies typeof userBusinesses.$inferInsert);
+  } as any);
 
   const [location] = await db.insert(locations).values({
     businessId: business.id,
     name: `Delete Branch ${seed}`,
     slug: `delete-branch-${seed.toLowerCase()}`,
     isActive: true,
-  } satisfies typeof locations.$inferInsert).returning();
+  } as any).returning();
 
   return {
     accountId,
@@ -145,7 +127,7 @@ function createCaller(ctx: SeededContext) {
       currentBusiness: ctx.business,
       businessIds: [ctx.business.id],
     },
-  } as CallerContext);
+  } as any);
 }
 
 describe("posted record delete guards", () => {
@@ -176,15 +158,15 @@ describe("posted record delete guards", () => {
       accountSubType: "cash",
       currentBalance: "1000.00",
       openingBalance: "1000.00",
-    } satisfies typeof accounts.$inferInsert).returning();
-    const [account] = acctRows as Row[];
+    } as any).returning();
+    const [account] = acctRows as any[];
 
     const [category] = await db.insert(expenseCategories).values({
       businessId: ctx.business.id,
       name: "Ops",
       accountingClass: "operating_expense",
       defaultAccountId: account.id,
-    } satisfies typeof expenseCategories.$inferInsert).returning();
+    } as any).returning();
 
     const [expense] = await db.insert(expenses).values({
       locationId: ctx.location.id,
@@ -195,7 +177,7 @@ describe("posted record delete guards", () => {
       expenseDate: "2026-05-10",
       paymentMethod: "cash",
       enteredBy: ctx.user.id,
-    } satisfies typeof expenses.$inferInsert).returning();
+    } as any).returning();
 
     await db.insert(ledgerEntries).values({
       accountId: account.id,
@@ -206,7 +188,7 @@ describe("posted record delete guards", () => {
       balanceAfter: "800.00",
       entryDate: "2026-05-10",
       createdBy: ctx.user.id,
-    } satisfies typeof ledgerEntries.$inferInsert);
+    } as any);
 
     await expect(caller.expenses.delete({ id: expense.id })).rejects.toThrow(/reverse|posted/i);
   });
@@ -227,8 +209,8 @@ describe("posted record delete guards", () => {
       accountSubType: "cash",
       currentBalance: "800.00",
       openingBalance: "1000.00",
-    } satisfies typeof accounts.$inferInsert).returning();
-    const [cashAccount] = cashRows as Row[];
+    } as any).returning();
+    const [cashAccount] = cashRows as any[];
 
     const expenseRows = await db.insert(accounts).values({
       businessId: ctx.business.id,
@@ -239,15 +221,15 @@ describe("posted record delete guards", () => {
       accountSubType: "operating_expense",
       currentBalance: "200.00",
       openingBalance: "0.00",
-    } satisfies typeof accounts.$inferInsert).returning();
-    const [expenseAccount] = expenseRows as Row[];
+    } as any).returning();
+    const [expenseAccount] = expenseRows as any[];
 
     const [category] = await db.insert(expenseCategories).values({
       businessId: ctx.business.id,
       name: "Ops",
       accountingClass: "operating_expense",
       defaultAccountId: expenseAccount.id,
-    } satisfies typeof expenseCategories.$inferInsert).returning();
+    } as any).returning();
 
     const [expense] = await db.insert(expenses).values({
       locationId: ctx.location.id,
@@ -259,7 +241,7 @@ describe("posted record delete guards", () => {
       paymentMethod: "cash",
       accountId: cashAccount.id,
       enteredBy: ctx.user.id,
-    } satisfies typeof expenses.$inferInsert).returning();
+    } as any).returning();
 
     await db.insert(ledgerEntries).values([
       {
@@ -282,7 +264,7 @@ describe("posted record delete guards", () => {
         entryDate: "2026-05-10",
         createdBy: ctx.user.id,
       },
-    ] satisfies Array<typeof ledgerEntries.$inferInsert>);
+    ] as any);
 
     await caller.expenses.reverse({ id: expense.id, reason: "Duplicate" });
 
@@ -309,8 +291,8 @@ describe("posted record delete guards", () => {
       accountSubType: "accounts_payable",
       currentBalance: "0.00",
       openingBalance: "0.00",
-    } satisfies typeof accounts.$inferInsert).returning();
-    const [account] = acctRows as Row[];
+    } as any).returning();
+    const [account] = acctRows as any[];
 
     const [bill] = await db.insert(bills).values({
       locationId: ctx.location.id,
@@ -320,7 +302,7 @@ describe("posted record delete guards", () => {
       balanceDue: "300.00",
       issueDate: "2026-05-10",
       dueDate: "2026-06-10",
-    } satisfies typeof bills.$inferInsert).returning();
+    } as any).returning();
 
     await db.insert(ledgerEntries).values({
       accountId: account.id,
@@ -331,7 +313,7 @@ describe("posted record delete guards", () => {
       balanceAfter: "300.00",
       entryDate: "2026-05-10",
       createdBy: ctx.user.id,
-    } satisfies typeof ledgerEntries.$inferInsert);
+    } as any);
 
     await expect(caller.bills.delete({ id: bill.id })).rejects.toThrow(/reverse|posted/i);
   });
@@ -352,8 +334,8 @@ describe("posted record delete guards", () => {
       accountSubType: "accounts_payable",
       currentBalance: "300.00",
       openingBalance: "0.00",
-    } satisfies typeof accounts.$inferInsert).returning();
-    const [apAccount] = apRows as Row[];
+    } as any).returning();
+    const [apAccount] = apRows as any[];
 
     const expAcctRows = await db.insert(accounts).values({
       businessId: ctx.business.id,
@@ -364,15 +346,15 @@ describe("posted record delete guards", () => {
       accountSubType: "operating_expense",
       currentBalance: "300.00",
       openingBalance: "0.00",
-    } satisfies typeof accounts.$inferInsert).returning();
-    const [expenseAccount] = expAcctRows as Row[];
+    } as any).returning();
+    const [expenseAccount] = expAcctRows as any[];
 
     const [category] = await db.insert(expenseCategories).values({
       businessId: ctx.business.id,
       name: "Ops",
       accountingClass: "operating_expense",
       defaultAccountId: expenseAccount.id,
-    } satisfies typeof expenseCategories.$inferInsert).returning();
+    } as any).returning();
 
     const [bill] = await db.insert(bills).values({
       locationId: ctx.location.id,
@@ -383,7 +365,7 @@ describe("posted record delete guards", () => {
       balanceDue: "300.00",
       issueDate: "2026-05-10",
       dueDate: "2026-06-10",
-    } satisfies typeof bills.$inferInsert).returning();
+    } as any).returning();
 
     await db.insert(ledgerEntries).values([
       {
@@ -406,7 +388,7 @@ describe("posted record delete guards", () => {
         entryDate: "2026-05-10",
         createdBy: ctx.user.id,
       },
-    ] satisfies Array<typeof ledgerEntries.$inferInsert>);
+    ] as any);
 
     await caller.bills.reverse({ id: bill.id, reason: "Vendor error" });
 

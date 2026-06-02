@@ -7,12 +7,9 @@ import { createExpenseInputSchema, updateExpenseInputSchema } from "../expenses-
 import { getTodayDateKey, isFutureDateString } from "../lib/future-date";
 
 function tomorrowDateKey(): string {
-  const now = new Date();
-  const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const year = tomorrow.getFullYear();
-  const month = String(tomorrow.getMonth() + 1).padStart(2, "0");
-  const day = String(tomorrow.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return tomorrow.toISOString().slice(0, 10);
 }
 
 describe("future-date guard helper", () => {

@@ -7,7 +7,7 @@
  */
 import { getDb } from "../api/queries/connection";
 import { mpesaTransactions, locations } from "../db/schema";
-import { sql, eq } from "drizzle-orm";
+import { sql, isNull, eq } from "drizzle-orm";
 
 async function fixOrphanedTransactions() {
   const db = getDb();

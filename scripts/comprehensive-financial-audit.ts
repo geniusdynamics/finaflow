@@ -58,7 +58,6 @@ async function comprehensiveFinancialAudit() {
       console.log("  ✅ All account balances match journal entries");
     } else {
       console.log(`  ❌ Found ${calculatedBalances.rows.length} balance mismatches:`);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       calculatedBalances.rows.forEach((r: any) => {
         console.log(`  ${r.name} (${r.accountCode}):`);
         console.log(`    Opening: ${r.opening_balance}, Debits: ${r.total_debit}, Credits: ${r.total_credit}`);
@@ -81,7 +80,6 @@ async function comprehensiveFinancialAudit() {
     
     console.log("\nRevenue Accounts:");
     let totalRevenue = 0;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     revenueAccounts.rows.forEach((r: any) => {
       totalRevenue += r.balance;
       console.log(`  ${r.accountCode}: ${r.name} = ${r.balance.toFixed(2)}`);
@@ -98,7 +96,6 @@ async function comprehensiveFinancialAudit() {
     
     console.log("\nCOGS Accounts:");
     let totalCOGS = 0;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     cogsAccounts.rows.forEach((r: any) => {
       totalCOGS += r.balance;
       console.log(`  ${r.accountCode}: ${r.name} = ${r.balance.toFixed(2)}`);
@@ -115,9 +112,7 @@ async function comprehensiveFinancialAudit() {
       ORDER BY "accountSubType", "accountCode"
     `, [businessId]);
     
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const expenseBySubType: Record<string, { accounts: any[], total: number }> = {};
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     expenseByClass.rows.forEach((r: any) => {
       const subType = r.accountSubType || 'unknown';
       if (!expenseBySubType[subType]) {
@@ -157,7 +152,6 @@ async function comprehensiveFinancialAudit() {
     for (const [subType, accts] of Object.entries(groupBy(assets.rows, 'accountSubType'))) {
       console.log(`  ${subType}:`);
       let subTotal = 0;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       (accts as any[]).forEach((a) => {
         const bal = a.balance;
         subTotal += bal;
@@ -181,7 +175,6 @@ async function comprehensiveFinancialAudit() {
     for (const [subType, accts] of Object.entries(groupBy(liabilities.rows, 'accountSubType'))) {
       console.log(`  ${subType}:`);
       let subTotal = 0;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       (accts as any[]).forEach((a) => {
         const bal = a.balance;
         subTotal += bal;
@@ -240,7 +233,6 @@ async function comprehensiveFinancialAudit() {
       
       if (earnings.rows.length > 0) {
         console.log(`\n  Earnings accounts:`);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         earnings.rows.forEach((e: any) => {
           console.log(`    ${e.accountCode}: ${e.name} = ${e.balance.toFixed(2)}`);
         });
@@ -353,7 +345,6 @@ async function comprehensiveFinancialAudit() {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function groupBy(arr: any[], key: string): Record<string, any[]> {
   return arr.reduce((result, item) => {
     const group = item[key] || 'unknown';

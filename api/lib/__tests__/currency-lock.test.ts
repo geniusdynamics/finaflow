@@ -3,6 +3,7 @@
 
 import { describe, it, expect } from "vitest";
 import { validateProviderCurrency } from "../mobile-wallet/currency-lock";
+import { d } from "../decimal";
 
 describe("validateProviderCurrency", () => {
   const mpesaCurrencies = ["KES"];

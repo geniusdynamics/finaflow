@@ -9,8 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Receipt, Camera, Trash2, ChevronDown, ChevronUp, Filter, X } from "lucide-react";
-import { useAuth } from "@/hooks/useAuth";
-import { LocationSelector } from "@/components/LocationSelector";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -35,7 +33,6 @@ export function DailySales() {
   const [showFilters, setShowFilters] = useState(false);
 
   const utils = trpc.useUtils();
-  const { user } = useAuth();
   const { data: locations } = trpc.locations.list.useQuery();
   
   // Calculate date range based on period filter
@@ -215,16 +212,11 @@ export function DailySales() {
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
-                    <LocationSelector
-                      locations={locations}
-                      userLocationId={user?.locationId}
-                      value={selectedLocation}
-                      onChange={v => { setSelectedLocation(v); setPaymentAmounts({}); }}
-                      enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
-                      label="Branch"
-                      placeholder="Select branch"
-                      required
-                    />
+                    <Label>Branch</Label>
+                    <select value={selectedLocation} onChange={e => { setSelectedLocation(e.target.value); setPaymentAmounts({}); }} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" required>
+                      <option value="">Select branch</option>
+                      {locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                    </select>
                   </div>
                   <div className="space-y-2">
                     <Label>Date</Label>
@@ -438,7 +430,7 @@ export function DailySales() {
                   {/* Payment breakdown from child records */}
                   {sale.payments && sale.payments.length > 0 ? (
                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                      {sale.payments.map((p: any) => {
+                      {sale.payments.map((p: any) => {
                         const pm = allPaymentMethods?.find(m => m.id === p.paymentMethodId);
                         return (
                           <div key={p.id} className="flex justify-between">
