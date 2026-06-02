@@ -159,31 +159,33 @@ async function migrateExistingData(businessId: number, locationIds: number[]) {
   for (const ledgers of Object.values(ledgerGrouped)) {
     if (ledgers.length < 2) continue;
 
-    const first = ledgers[0];
+    const first = ledgers[0] as Record<string, unknown>;
     const entryNumber = `MIG-${String(convertedCount + 1).padStart(4, "0")}`;
-    const dateStr = typeof first.entryDate === 'string' ? first.entryDate : new Date(first.entryDate).toISOString().split("T")[0];
+    const dateStr = typeof first.entryDate === 'string' ? first.entryDate : new Date(first.entryDate as string).toISOString().split("T")[0];
     
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const je = await db.insert(journalEntries).values({
       businessId,
       entryNumber,
       entryDate: dateStr,
-      description: `Migrated: ${first.description || `${first.transactionType} #${first.transactionId}`}`,
-      sourceType: first.transactionType,
-      sourceId: first.transactionId,
+      description: `Migrated: ${(first.description as string) || `${first.transactionType as string} #${first.transactionId as string}`}`,
+      sourceType: first.transactionType as string,
+      sourceId: first.transactionId as number,
       isPosted: true,
-      createdBy: first.createdBy || 1,
-      postedBy: first.createdBy || 1,
+      createdBy: (first.createdBy as number) || 1,
+      postedBy: (first.createdBy as number) || 1,
       postedAt: new Date(),
     }).returning();
 
     for (let i = 0; i < ledgers.length; i++) {
-      const le = ledgers[i];
+      const le = ledgers[i] as Record<string, unknown>;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await db.insert(journalLines).values({
         journalEntryId: je[0].id,
-        accountId: le.accountId,
-        debit: le.entryType === "debit" ? le.amount : "0.00",
-        credit: le.entryType === "credit" ? le.amount : "0.00",
-        description: le.description || "",
+        accountId: le.accountId as number,
+        debit: le.entryType === "debit" ? le.amount as string : "0.00",
+        credit: le.entryType === "credit" ? le.amount as string : "0.00",
+        description: (le.description as string) || "",
         lineNumber: i + 1,
       });
     }

@@ -61,7 +61,8 @@ const PAYMENT_METHOD_ACCOUNT_TYPES: Record<string, string[]> = {
   card: ["bank_account"],
 };
 
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}function getFundingAccounts(paymentMethod: string, allAccounts: any[] | undefined): any[] {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getFundingAccounts(paymentMethod: string, allAccounts: any[] | undefined): any[] {
   const allowedTypes = PAYMENT_METHOD_ACCOUNT_TYPES[paymentMethod] ?? [];
   return (allAccounts ?? []).filter(a => allowedTypes.includes(a.type) && !a.deletedAt);
 }
@@ -99,7 +100,8 @@ export function Expenses() {
   // Build query filters
   const dateRange = useMemo(() => getPeriodDates(periodFilter, customFrom, customTo), [periodFilter, customFrom, customTo]);
   const expenseFilters = useMemo(() => {
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}    const f: any = {};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const f: any = {};
     if (branchFilter) f.locationId = +branchFilter;
     if (periodFilter !== "overall" && dateRange.dateFrom) {
       f.dateFrom = dateRange.dateFrom;
@@ -334,7 +336,8 @@ export function Expenses() {
     if (catForm.mode === "link" && !catForm.defaultAccountId) { toast.error("Please select a default expense account"); return; }
     createCat.mutate({
       name: catForm.name, description: catForm.description, color: catForm.color,
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}      accountingClass: catForm.accountingClass as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      accountingClass: catForm.accountingClass as any,
       defaultAccountId: catForm.mode === "link" && catForm.defaultAccountId ? +catForm.defaultAccountId : undefined,
     });
   };

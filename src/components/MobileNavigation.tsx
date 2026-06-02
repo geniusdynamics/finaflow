@@ -178,9 +178,9 @@ export function MobileHamburgerMenu({
                       {b.isDemo && (
                         <span className="rounded bg-[#8D8A87]/10 px-1 py-0 text-[10px] text-[#8D8A87]">DEMO</span>
                       )}
-                      {(b as { allocationSource?: unknown }).allocationSource && (
+                      {(b as { allocationSource?: unknown }).allocationSource ? (
                         <span className="rounded bg-[#0288D1]/10 px-1 py-0.5 text-[10px] text-[#0288D1]">Allocated</span>
-                      )}
+                      ) : null}
                     </button>
                   ))}
                 </div>

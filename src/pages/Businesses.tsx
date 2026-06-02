@@ -113,7 +113,7 @@ export function Businesses() {
     },
   });
 
-  const startEdit = (b: { id: number; name?: string; address?: string; phone?: string; email?: string }) => {
+  const startEdit = (b: { id: number; name?: string | null; address?: string | null; phone?: string | null; email?: string | null }) => {
     setEditId(b.id);
     setEditForm({
       name: b.name || "", address: b.address || "", phone: b.phone || "", email: b.email || "",

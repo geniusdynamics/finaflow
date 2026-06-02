@@ -297,7 +297,7 @@ export function Users() {
                                   </Dialog>
                                   <Dialog open={editOpen === u.id} onOpenChange={(v) => setEditOpen(v ? u.id : null)}>
                                     <DialogTrigger asChild>
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                                      <Button size="sm" variant="ghost" onClick={() => { setEditOpen(u.id); setEditForm({ name: u.name ?? "", email: u.email ?? "", phone: u.phone ?? "", role: u.role as any, locationId: u.locationId?.toString() ?? "", isActive: u.isActive }); }}><Pencil className="h-4 w-4 text-[#8D8A87]" /></Button>
+                                      <Button size="sm" variant="ghost" onClick={() => { setEditOpen(u.id); setEditForm({ name: u.name ?? "", email: u.email ?? "", phone: u.phone ?? "", role: u.role, locationId: u.locationId?.toString() ?? "", isActive: u.isActive }); }}><Pencil className="h-4 w-4 text-[#8D8A87]" /></Button>
                                     </DialogTrigger>
                                     <DialogContent className="bg-white">
                                       <DialogHeader><DialogTitle className="font-serif text-xl">Edit User</DialogTitle></DialogHeader>
