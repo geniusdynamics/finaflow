@@ -2,7 +2,7 @@
 // ABOUTME: Validates transaction storage, query filtering, and cross-provider aggregation.
 
 import { describe, it, expect } from "vitest";
-import { WalletStats } from "../mobile-wallet/transaction-logger";
+import { getWalletStats, WalletStats } from "../mobile-wallet/transaction-logger";
 
 describe("getWalletStats", () => {
   it("computes empty stats for no data", async () => {

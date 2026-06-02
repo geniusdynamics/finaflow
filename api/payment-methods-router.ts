@@ -48,7 +48,6 @@ export const paymentMethodsRouter = createRouter({
         color: input.color,
         sortOrder: input.sortOrder,
         isActive: true,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { id: result.id, success: true };
     }),
@@ -65,7 +64,6 @@ export const paymentMethodsRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const { id, ...updates } = input;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       await db.update(paymentMethods).set(updates as any).where(eq(paymentMethods.id, id));
       return { success: true };
     }),
@@ -125,7 +123,6 @@ export const paymentMethodsRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userId = (ctx as any).user?.id ?? 1;
       const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? undefined;
       await requireAuthorizedLocation(ctx, input.locationId);
@@ -150,7 +147,6 @@ export const paymentMethodsRouter = createRouter({
 
       if (existing.length > 0) {
         // Update existing — set active and update linked account if provided
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         const updates: any = { isActive: true };
         if (input.linkedAccountId !== undefined) updates.linkedAccountId = input.linkedAccountId;
         await db.update(locationPaymentMethods)
@@ -162,7 +158,6 @@ export const paymentMethodsRouter = createRouter({
           paymentMethodId: input.paymentMethodId,
           linkedAccountId: input.linkedAccountId,
           isActive: true,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
       }
 
@@ -187,7 +182,6 @@ export const paymentMethodsRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userId = (ctx as any).user?.id ?? 1;
       const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? undefined;
       await requireAuthorizedLocation(ctx, input.locationId);
@@ -225,7 +219,6 @@ export const paymentMethodsRouter = createRouter({
     .input(z.object({ locationId: z.number(), paymentMethodId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userId = (ctx as any).user?.id ?? 1;
       const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? undefined;
       await requireAuthorizedLocation(ctx, input.locationId);

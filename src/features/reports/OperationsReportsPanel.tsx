@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { BarChart3, PiggyBank, Receipt, TrendingDown, PieChart, ArrowUpRight, ArrowDownRight, AlertTriangle, Target, Wallet, Download, FileSpreadsheet, Smartphone, Plus } from "lucide-react";
+import { BarChart3, PiggyBank, Receipt, TrendingUp, TrendingDown, PieChart, ArrowUpRight, ArrowDownRight, AlertTriangle, Target, Wallet, Download, FileSpreadsheet, Smartphone, Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 import { MonthlyTrendChart } from "./MonthlyTrendChart";
@@ -28,9 +28,9 @@ import { useReportExports } from "./useReportExports";
 
 export function OperationsReportsPanel() {
   const now = new Date();
-  const [year] = useState(now.getFullYear());
-  const [month] = useState(now.getMonth() + 1);
-  const [branchFilter] = useState<string>("");
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [branchFilter, setBranchFilter] = useState<string>("");
   const [opsTab, setOpsTab] = useState<"overview" | "budgeting">("overview");
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [cogsOpen, setCogsOpen] = useState(false);
@@ -53,7 +53,6 @@ export function OperationsReportsPanel() {
   const cogsQuery = trpc.reports.cogsAnalysis.useQuery({ year, month, locationId: selectedLocationId });
   const cogsTargetQuery = trpc.reports.getCogsTarget.useQuery({ locationId: selectedLocationId });
   const { data: categories } = trpc.expenses.categories.useQuery();
-  const { data: suppliers } = trpc.suppliers.list.useQuery();
 
   const { data: salesData } = trpc.dailySales.list.useQuery({
     dateFrom: `${year}-${String(month).padStart(2, "0")}-01`,
@@ -65,7 +64,7 @@ export function OperationsReportsPanel() {
     dateTo: `${year}-${String(month).padStart(2, "0")}-31`,
     locationId: selectedLocationId,
   });
-  const { data: walletTxns } = trpc.wallet.transactions.list.useQuery({
+  const { data: mpesaData } = trpc.mpesa.list.useQuery({
     dateFrom: `${year}-${String(month).padStart(2, "0")}-01`,
     dateTo: `${year}-${String(month).padStart(2, "0")}-31`,
     locationId: selectedLocationId,
@@ -79,13 +78,12 @@ export function OperationsReportsPanel() {
   const cogs = cogsQuery.data;
   const cogsTarget = cogsTargetQuery.data;
 
-  const { exportSales, exportExpenses, exportWalletTxns, exportConsolidated } = useReportExports({
+  const { exportSales, exportExpenses, exportMpesa, exportConsolidated } = useReportExports({
     salesData: salesData ?? [],
     expenseData: expenseData ?? [],
-    walletTxns: walletTxns ?? [],
+    mpesaData: mpesaData ?? [],
     locations: locations ?? [],
     categories: categories ?? [],
-    suppliers: suppliers ?? [],
     pl,
     year,
     month,
@@ -103,7 +101,7 @@ export function OperationsReportsPanel() {
 
   useEffect(() => {
     if (cogsTarget) {
-      setCogsForm(() => ({ target: cogsTarget.targetFoodCostPercent, alert: cogsTarget.alertThresholdPercent }));
+      setCogsForm({ target: cogsTarget.targetFoodCostPercent, alert: cogsTarget.alertThresholdPercent });
     }
   }, [cogsTarget]);
 
@@ -133,7 +131,7 @@ export function OperationsReportsPanel() {
   );
   const activeSelectedBudgetCategoryId = useMemo(
     () =>
-      budgetActualData.legendItems.some((item: { key: number }) => item.key === selectedBudgetCategoryId)
+      budgetActualData.legendItems.some((item: any) => item.key === selectedBudgetCategoryId)
         ? selectedBudgetCategoryId
         : null,
     [budgetActualData.legendItems, selectedBudgetCategoryId],
@@ -143,6 +141,10 @@ export function OperationsReportsPanel() {
     [activeSelectedBudgetCategoryId, bva],
   );
 
+  const resetChartSelections = () => {
+    setSelectedFlowKey(null);
+    setSelectedBudgetCategoryId(null);
+  };
   const budgetSectionTotals = bva ?? {
     categories: [],
     totalBudgeted: budgetActualData.totalBudgeted,
@@ -321,11 +323,11 @@ export function OperationsReportsPanel() {
                   </div>
                   <Download className="ml-auto h-4 w-4 text-gray-500" />
                 </button>
-                <button onClick={exportWalletTxns} className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-left hover:bg-[#F5EDE6] transition-colors">
+                <button onClick={exportMpesa} className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-left hover:bg-[#F5EDE6] transition-colors">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange-600/10"><Smartphone className="h-5 w-5 text-orange-600" /></div>
                   <div>
-                    <p className="text-sm font-medium text-gray-900">Export wallet txns</p>
-                    <p className="text-xs text-gray-500">{walletTxns?.length ?? 0} records</p>
+                    <p className="text-sm font-medium text-gray-900">Export M-PESA</p>
+                    <p className="text-xs text-gray-500">{mpesaData?.length ?? 0} records</p>
                   </div>
                   <Download className="ml-auto h-4 w-4 text-gray-500" />
                 </button>

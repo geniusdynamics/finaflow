@@ -5,12 +5,14 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
   Line,
   ComposedChart,
+  Cell,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { cn, formatKES } from "@/lib/utils";
 import { TrendingUp } from "lucide-react";
 
@@ -82,6 +84,27 @@ function CustomTooltip({
         </div>
       </div>
     </div>
+  );
+}
+
+function ProfitBar(props: { x?: number; y?: number; width?: number; height?: number; value?: number; fill?: string }) {
+  const { x = 0, y = 0, width = 0, height = 0, fill = "#2E7D32" } = props;
+  const isNegative = height < 0;
+  const barHeight = Math.abs(height);
+  const barY = isNegative ? y : y + height - barHeight;
+
+  return (
+    <g>
+      <rect
+        x={x}
+        y={barY}
+        width={width}
+        height={barHeight}
+        fill={fill}
+        rx={2}
+        ry={2}
+      />
+    </g>
   );
 }
 

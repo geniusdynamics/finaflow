@@ -1,4 +1,0 @@
-﻿
-D:\DevCenter\abuilds\fina\finaflow\api\__tests__\wallet-router.test.ts
-
-

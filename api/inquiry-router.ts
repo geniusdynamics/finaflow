@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, publicQuery, inquiryView } from "./middleware";
 import { getDb } from "./queries/connection";
 import { businessInquiries } from "@db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 
 export const inquiryRouter = createRouter({
   // Public — for landing page registration form
@@ -21,7 +21,6 @@ export const inquiryRouter = createRouter({
       const [result] = await db.insert(businessInquiries).values({
         ...input,
         status: "new",
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { id: result.id, success: true };
     }),

@@ -7,9 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, MapPin, Pencil, Trash2, Building2, Wallet, ChevronLeft, Shield } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
-import { toast } from "sonner";
+import { Plus, MapPin, Pencil, Trash2, Building2, Smartphone, Wallet, ChevronLeft } from "lucide-react";
 
 export function Locations() {
   const [open, setOpen] = useState(false);
@@ -25,13 +23,6 @@ export function Locations() {
   const createLoc = trpc.locations.create.useMutation({ onSuccess: () => { setOpen(false); setForm({ name: "", slug: "", address: "", phone: "", email: "" }); utils.locations.list.invalidate(); } });
   const updateLoc = trpc.locations.update.useMutation({ onSuccess: () => { setEditOpen(null); utils.locations.list.invalidate(); } });
   const deleteLoc = trpc.locations.delete.useMutation({ onSuccess: () => utils.locations.list.invalidate() });
-
-  const { data: settings } = trpc.settings.list.useQuery();
-  const enforceAssigned = settings?.["enforceLocationAssignment"] === "true";
-  const setSetting = trpc.settings.set.useMutation({
-    onSuccess: () => { utils.settings.list.invalidate(); toast.success("Setting updated"); },
-    onError: (err) => toast.error(err.message),
-  });
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,23 +62,6 @@ export function Locations() {
             </DialogContent>
           </Dialog>
         </div>
-
-        <Card className="border-[#E8E0D8] bg-white">
-          <CardContent className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-3">
-              <Shield className="h-5 w-5 text-[#C73E1D]" />
-              <div>
-                <p className="text-sm font-medium text-[#2D2A26]">Enforce Location Assignment</p>
-                <p className="text-xs text-[#8D8A87]">When enabled, users can only record entries for their assigned location</p>
-              </div>
-            </div>
-            <Switch
-              checked={enforceAssigned}
-              onCheckedChange={(checked) => setSetting.mutate({ key: "enforceLocationAssignment", value: checked ? "true" : "false" })}
-              disabled={setSetting.isPending}
-            />
-          </CardContent>
-        </Card>
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {locations?.map(loc => {

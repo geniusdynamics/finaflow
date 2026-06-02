@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { createRouter, authedQuery, ownerQuery, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
-import { dailySales, expenses, bills, accounts, mpesaTransactions, mobileWalletTransactions, recurringBillTemplates, payrollPeriods } from "@db/schema";
+import { dailySales, expenses, bills, billItems, billPayments, accounts, mpesaTransactions, mobileWalletTransactions, recurringBillTemplates, payrollPeriods, payrollEntries, payrollAdvances, ledgerEntries, dailyMpesaLedger, suppliers, attachments, locations } from "@db/schema";
 import { eq, and, isNull, sql, desc } from "drizzle-orm";
 import { d, Decimal } from "./lib/decimal";
-import { resetBusinessTransactions, validatePreReset, createResetSnapshot } from "./lib/business-reset";
+import { resetBusinessTransactions, validatePreReset, createResetSnapshot, type ResetResult } from "./lib/business-reset";
 
 export const dashboardRouter = createRouter({
   summary: authedQuery

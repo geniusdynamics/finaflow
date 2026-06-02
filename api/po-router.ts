@@ -9,7 +9,7 @@ import {
   purchaseOrdersManage,
 } from "./middleware";
 import { getDb } from "./queries/connection";
-import { purchaseOrders, purchaseOrderItems, locations, suppliers } from "@db/schema";
+import { purchaseOrders, purchaseOrderItems, bills, locations, suppliers } from "@db/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 
 export const poRouter = createRouter({
@@ -27,7 +27,6 @@ export const poRouter = createRouter({
       if (locIds.length === 0) return [];
 
       const cond = [isNull(purchaseOrders.deletedAt), inArray(purchaseOrders.locationId, locIds)];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       if (input?.status) cond.push(eq(purchaseOrders.status, input.status as any));
       const pos = await db.select().from(purchaseOrders).where(and(...cond)).orderBy(desc(purchaseOrders.createdAt));
       
@@ -69,13 +68,12 @@ export const poRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const createdBy = (ctx as any).user?.id ?? 1;
 
       await requireAuthorizedLocation(ctx, input.locationId);
 
       if (input.supplierId) {
-        await requireAuthorizedBusinessEntity(ctx, suppliers, input.supplierId);
+        const sup = await requireAuthorizedBusinessEntity(ctx, suppliers, input.supplierId);
       }
 
       // Generate PO number
@@ -100,7 +98,6 @@ export const poRouter = createRouter({
         deliveryNotes: input.deliveryNotes,
         terms: input.terms,
         createdBy,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
 
       const poId = result.id;
@@ -112,7 +109,6 @@ export const poRouter = createRouter({
           unitPrice: item.unitPrice,
           totalPrice: item.totalPrice,
           notes: item.notes,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
       }
 

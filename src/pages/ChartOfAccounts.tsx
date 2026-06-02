@@ -45,7 +45,7 @@ export function ChartOfAccounts({ embedded }: { embedded?: boolean }) {
     expense: { count: 0, total: 0 },
   };
 
-  const accountTypeLabels: Record<string, { label: string; icon: React.ComponentType<{ className?: string }>; color: string }> = {
+  const accountTypeLabels: Record<string, { label: string; icon: any; color: string }> = {
     asset: { label: "1000 - Assets", icon: TrendingUp, color: "text-[#2E7D32]" },
     liability: { label: "2000 - Liabilities", icon: TrendingDown, color: "text-[#D32F2F]" },
     equity: { label: "3000 - Equity", icon: DollarSign, color: "text-[#D4A854]" },
@@ -143,7 +143,7 @@ export function ChartOfAccounts({ embedded }: { embedded?: boolean }) {
                       </CardTitle>
                       <span className="font-mono text-sm text-[#8D8A87]">
                         {formatKES(
-                          accounts.reduce((sum: number, acc: { currentBalance?: string }) => sum + (parseFloat(acc.currentBalance || "0") || 0), 0).toString()
+                          accounts.reduce((sum: number, acc: any) => sum + (parseFloat(acc.currentBalance) || 0), 0).toString()
                         )}
                       </span>
                     </div>
@@ -167,7 +167,6 @@ export function ChartOfAccounts({ embedded }: { embedded?: boolean }) {
                               </td>
                             </tr>
                           ) : (
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
                             accounts.map((account: any) => (
                               <tr key={account.id} className="border-t hover:bg-[#F5EDE6]/50">
                                 <td className="py-2 font-mono text-xs text-[#8D8A87]">
@@ -234,14 +233,13 @@ function AccountForm({ onSuccess, businessId }: { onSuccess: () => void; busines
   });
 
   const nextCodeQuery = trpc.chartOfAccounts.getNextAccountCode.useQuery(
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     { businessId, accountType: accountType as any },
     { enabled: !!businessId }
   );
 
   useEffect(() => {
     if (nextCodeQuery.data?.nextCode && !accountCode) {
-      setAccountCode((prev) => nextCodeQuery.data?.nextCode ?? prev);
+      setAccountCode(nextCodeQuery.data.nextCode);
     }
   }, [nextCodeQuery.data?.nextCode, accountCode]);
 
@@ -256,7 +254,6 @@ function AccountForm({ onSuccess, businessId }: { onSuccess: () => void; busines
       businessId,
       name,
       accountCode,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       accountType: accountType as any,
       accountSubType: accountSubType || undefined,
       openingBalance,

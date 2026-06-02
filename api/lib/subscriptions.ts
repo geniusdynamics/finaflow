@@ -156,7 +156,7 @@ async function syncBusinessesForAccount(
   accountId: string,
   values: Partial<typeof businesses.$inferInsert>,
 ) {
-  await db.update(businesses).set(values)
+  await db.update(businesses).set(values as any)
     .where(and(eq(businesses.accountId, accountId), isNull(businesses.deletedAt)));
 }
 
@@ -239,7 +239,7 @@ async function notifyBusinessUsers(
       severity: "warning",
       entityType: "business",
       entityId: business.id,
-    } satisfies typeof notifications.$inferInsert);
+    } as any);
 
     if (user.email) {
       await sendEmail({

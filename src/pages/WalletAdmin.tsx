@@ -2,13 +2,15 @@
 import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
+import { formatKES } from "@/lib/utils";
+import { formatCurrency } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { RefreshCw, Activity, Smartphone, Wallet, AlertCircle, CheckCircle2 } from "lucide-react";
+import { RefreshCw, Activity, Settings, TrendingUp, Smartphone, Wallet, DollarSign, AlertCircle, CheckCircle2 } from "lucide-react";
 
 const PROVIDER_COLORS: Record<string, string> = {
   mpesa: "bg-[#25B266]",
@@ -32,8 +34,8 @@ export function WalletAdmin() {
   const { data: providers } = trpc.walletManagement.providers.list.useQuery();
   const { data: rates, refetch: refetchRates } = trpc.walletManagement.rates.latest.useQuery({});
   const { data: currencies } = trpc.walletManagement.currencies.list.useQuery();
-  const _createCurrency = trpc.walletManagement.currencies.create.useMutation({ onSuccess: () => utils.walletManagement.currencies.list.invalidate() });
-  const toggleCurrency = trpc.walletManagement.currencies.toggle.useMutation({ onSuccess: () => utils.walletManagement.currencies.list.invalidate() });
+  const createCurrency = trpc.walletManagement.currencies.create.useMutation({ onSuccess: () => currencies.refetch() });
+  const toggleCurrency = trpc.walletManagement.currencies.toggle.useMutation({ onSuccess: () => currencies.refetch() });
 
   const syncRates = trpc.walletManagement.rates.sync.useMutation({
     onSuccess: (res) => {
@@ -56,19 +58,12 @@ export function WalletAdmin() {
     onError: (err) => { toast.error(err.message); },
   });
 
-  const _configureProvider = trpc.walletManagement.providers.configure.useMutation({
+  const configureProvider = trpc.walletManagement.providers.configure.useMutation({
     onSuccess: () => {
       toast.success("Provider configured");
       refetchHealth();
     },
     onError: (err) => { toast.error(err.message); },
-  });
-
-  const testConnection = trpc.walletManagement.providers.testConnection.useMutation({
-    onSuccess: (res) => {
-      if (res.success) { toast.success(`Connection OK`); } else { toast.error(`Connection failed: ${res.error}`); }
-    },
-    onError: (err) => toast.error(err.message),
   });
 
   return (
@@ -95,7 +90,7 @@ export function WalletAdmin() {
         {tab === "providers" && (
           <>
             <div className="mb-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}              {health?.map((h: any) => (
+              {health?.map((h: any) => (
                 <Card key={h.provider} className="border-[#E8E0D8]">
                   <CardContent className="p-4">
                     <div className="mb-3 flex items-center gap-3">
@@ -132,7 +127,7 @@ export function WalletAdmin() {
               <CardHeader><CardTitle className="text-sm">Available Providers</CardTitle></CardHeader>
               <CardContent>
                 <div className="space-y-2">
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                  {providers?.map((p: any) => (
+                  {providers?.map((p: any) => (
                     <div key={p.code} className="flex items-center justify-between rounded-lg border border-[#E8E0D8] p-3">
                       <div>
                         <p className="text-sm font-medium text-[#2D2A26]">{p.displayName || p.name} ({p.code})</p>
@@ -140,7 +135,7 @@ export function WalletAdmin() {
                       </div>
                       <div className="flex gap-2">
                         <Button size="sm" variant="outline" onClick={() => {}} className="text-xs">Configure</Button>
-                        <Button size="sm" variant="outline" onClick={() => testConnection.mutate({ provider: p.code, locationId: 0 })} className="gap-1 text-xs">
+                        <Button size="sm" variant="outline" onClick={() => utils.walletManagement.providers.testConnection.mutate({ provider: p.code }).catch(() => {}) } className="gap-1 text-xs">
                           <CheckCircle2 className="h-3 w-3" /> Test
                         </Button>
                       </div>
@@ -158,7 +153,7 @@ export function WalletAdmin() {
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-[#2D2A26]">Exchange Rates</h2>
               <div className="flex gap-2">
-                <Button size="sm" onClick={() => syncRates.mutate()} disabled={syncRates.isPending} className="gap-1 bg-[#C73E1D]">
+                <Button size="sm" onClick={() => syncRates.mutate()} loading={syncRates.isPending} className="gap-1 bg-[#C73E1D]">
                   <RefreshCw className="h-4 w-4" /> Sync Rates
                 </Button>
                 <Dialog open={rateDialogOpen} onOpenChange={setRateDialogOpen}>
@@ -172,13 +167,13 @@ export function WalletAdmin() {
                         <div className="space-y-1">
                           <Label className="text-xs text-[#8D8A87]">From Currency</Label>
                           <select value={rateForm.fromCurrency} onChange={(e) => setRateForm(f => ({ ...f, fromCurrency: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm">
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                            {currencies?.map((c: any) => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
+                            {currencies?.map((c: any) => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
                           </select>
                         </div>
                         <div className="space-y-1">
                           <Label className="text-xs text-[#8D8A87]">To Currency</Label>
                           <select value={rateForm.toCurrency} onChange={(e) => setRateForm(f => ({ ...f, toCurrency: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm">
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                            {currencies?.map((c: any) => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
+                            {currencies?.map((c: any) => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
                           </select>
                         </div>
                       </div>
@@ -191,7 +186,7 @@ export function WalletAdmin() {
                         fromCurrency: rateForm.fromCurrency,
                         toCurrency: rateForm.toCurrency,
                         rate: rateForm.rate,
-                      })} disabled={!rateForm.rate} className="w-full bg-[#C73E1D]">
+                      })} disabled={!rateForm.rate} className="w-full bg-[#C73E1D]" loading={manualUpdateRate.isPending}>
                         Save Rate
                       </Button>
                     </div>
@@ -213,7 +208,7 @@ export function WalletAdmin() {
                     </tr>
                   </thead>
                   <tbody>
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                    {rates?.map((r: any) => (
+                    {rates?.map((r: any) => (
                       <tr key={`${r.fromCurrency}-${r.toCurrency}`} className="border-b border-[#E8E0D8] hover:bg-[#F5EDE6]/50">
                         <td className="px-4 py-3 text-sm font-medium text-[#2D2A26]">{r.fromCurrency}</td>
                         <td className="px-4 py-3 text-sm text-[#2D2A26]">{r.toCurrency}</td>
@@ -246,7 +241,7 @@ export function WalletAdmin() {
                   </tr>
                 </thead>
                 <tbody>
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                  {currencies?.map((c: any) => (
+                  {currencies?.map((c: any) => (
                     <tr key={c.code} className="border-b border-[#E8E0D8] hover:bg-[#F5EDE6]/50">
                       <td className="px-4 py-3 font-mono text-sm font-medium text-[#2D2A26]">{c.code}</td>
                       <td className="px-4 py-3 text-sm text-[#2D2A26]">{c.name}</td>

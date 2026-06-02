@@ -1,7 +1,7 @@
 // ABOUTME: Unit tests for the CurrencyConverter service — caching, fallback chains, KES passthrough, cross rates.
 // ABOUTME: Tests all core conversion paths with mock DB and external provider.
 
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { CurrencyConverter } from "../currency-converter";
 import { d } from "../decimal";
 

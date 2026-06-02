@@ -46,7 +46,6 @@ export const employeesRouter = createRouter({
       await requireAuthorizedLocation(ctx, input.locationId);
       const [result] = await db.insert(employees).values({
         ...input, employmentDate: new Date(input.employmentDate),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { id: result.id, success: true };
     }),
@@ -65,7 +64,6 @@ export const employeesRouter = createRouter({
       await requireAuthorizedEntity(ctx, employees, input.id);
       
       const { id, ...rawUpdates } = input;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const updates: any = { ...rawUpdates };
       if (rawUpdates.terminationDate) updates.terminationDate = new Date(rawUpdates.terminationDate);
       await db.update(employees).set(updates).where(eq(employees.id, id));
@@ -132,7 +130,6 @@ export const payrollRouter = createRouter({
         ...input, status: "open",
         startDate: new Date(input.startDate), endDate: new Date(input.endDate),
         paymentDate: new Date(input.paymentDate),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { id: result.id, success: true };
     }),
@@ -179,14 +176,13 @@ export const payrollRouter = createRouter({
 
           totalNetPay = totalNetPay.plus(netPay);
 
-          await tx.insert(payrollEntries).values({
+          const [result] = await tx.insert(payrollEntries).values({
             periodId: input.periodId, employeeId: emp.id,
             basicPay: emp.basicSalary, advancesDeducted: advanceDeduction.toFixed(2),
             deductions: grossDeductions.toFixed(2), netPay: netPay.toFixed(2),
             payeDeducted: paye.toFixed(2),
             nhifDeducted: nhif.toFixed(2),
             nssfDeducted: nssf.toFixed(2),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any).returning();
           entries.push({ id: result.id, employeeId: emp.id, netPay: netPay.toFixed(2) });
 
@@ -209,7 +205,6 @@ export const payrollRouter = createRouter({
             balanceDue: totalNetPay.toFixed(2),
             issueDate: new Date(),
             dueDate: period.paymentDate,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any).returning();
           billId = billResult.id;
         } else {
@@ -230,7 +225,6 @@ export const payrollRouter = createRouter({
             unitPrice: entry.netPay,
             totalPrice: entry.netPay,
             notes: `Basic: ${entry.basicPay}, Deductions: ${entry.deductions}, Advances: ${entry.advancesDeducted ?? "0"}, PAYE: ${entry.payeDeducted ?? "0"}`,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any).returning();
         }
 
@@ -248,7 +242,6 @@ export const payrollRouter = createRouter({
     .input(z.object({ periodId: z.number(), accountId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userId = (ctx as any).user?.id ?? 1;
       const period = await requireAuthorizedEntity(ctx, payrollPeriods, input.periodId);
       const acct = await requireAuthorizedEntity(ctx, accounts, input.accountId);
@@ -290,7 +283,6 @@ export const payrollRouter = createRouter({
 
         await tx.insert(ledgerEntries).values({
           accountId: input.accountId,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           transactionType: "payroll" as any,
           transactionId: input.periodId,
           entryType: "credit",
@@ -299,7 +291,6 @@ export const payrollRouter = createRouter({
           entryDate: paymentDateStr,
           createdBy: userId,
           description: `Payroll: ${period.periodName}`,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
         await tx.update(accounts).set({ currentBalance: cashNewBalance.toFixed(2) }).where(eq(accounts.id, input.accountId));
 
@@ -315,7 +306,6 @@ export const payrollRouter = createRouter({
             const expenseNewBal = d(salaryExpenseAcct.currentBalance || "0").plus(totalNetPay);
             await tx.insert(ledgerEntries).values({
               accountId: salaryExpenseAcct.id,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
               transactionType: "payroll" as any,
               transactionId: input.periodId,
               entryType: "debit",
@@ -324,13 +314,15 @@ export const payrollRouter = createRouter({
               entryDate: paymentDateStr,
               createdBy: userId,
               description: `Salaries & Wages: ${period.periodName}`,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any).returning();
             await tx.update(accounts).set({ currentBalance: expenseNewBal.toFixed(2) }).where(eq(accounts.id, salaryExpenseAcct.id));
           }
         }
 
         if (businessId && d(totalPaye || "0").gt(0)) {
+          const payeAcct = await tx.select().from(accounts).where(
+            and(eq(accounts.businessId, businessId), eq(accounts.accountSubType, "accrued_expense" as any), isNull(accounts.deletedAt))
+          ).limit(1);
           const payePayableAcct = await tx.query.accounts.findFirst({
             where: and(
               eq(accounts.accountCode, "2200"),
@@ -342,7 +334,6 @@ export const payrollRouter = createRouter({
             const payeNewBal = d(payePayableAcct.currentBalance || "0").plus(totalPaye);
             await tx.insert(ledgerEntries).values({
               accountId: payePayableAcct.id,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
               transactionType: "payroll" as any,
               transactionId: input.periodId,
               entryType: "credit",
@@ -351,13 +342,15 @@ export const payrollRouter = createRouter({
               entryDate: paymentDateStr,
               createdBy: userId,
               description: `PAYE Payable: ${period.periodName}`,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any).returning();
             await tx.update(accounts).set({ currentBalance: payeNewBal.toFixed(2) }).where(eq(accounts.id, payePayableAcct.id));
           }
         }
 
         if (businessId && d(totalNssf || "0").gt(0)) {
+          const nssfAcct = await tx.select().from(accounts).where(
+            and(eq(accounts.businessId, businessId), eq(accounts.accountSubType, "accrued_expense" as any), isNull(accounts.deletedAt))
+          ).limit(1);
           const nssfPayableAcct = await tx.query.accounts.findFirst({
             where: and(
               eq(accounts.accountCode, "2300"),
@@ -369,7 +362,6 @@ export const payrollRouter = createRouter({
             const nssfNewBal = d(nssfPayableAcct.currentBalance || "0").plus(totalNssf);
             await tx.insert(ledgerEntries).values({
               accountId: nssfPayableAcct.id,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
               transactionType: "payroll" as any,
               transactionId: input.periodId,
               entryType: "credit",
@@ -378,13 +370,15 @@ export const payrollRouter = createRouter({
               entryDate: paymentDateStr,
               createdBy: userId,
               description: `NSSF Payable: ${period.periodName}`,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any).returning();
             await tx.update(accounts).set({ currentBalance: nssfNewBal.toFixed(2) }).where(eq(accounts.id, nssfPayableAcct.id));
           }
         }
 
         if (businessId && d(totalNhif || "0").gt(0)) {
+          const nhifAcct = await tx.select().from(accounts).where(
+            and(eq(accounts.businessId, businessId), eq(accounts.accountSubType, "accrued_expense" as any), isNull(accounts.deletedAt))
+          ).limit(1);
           const nhifPayableAcct = await tx.query.accounts.findFirst({
             where: and(
               eq(accounts.accountCode, "2400"),
@@ -396,7 +390,6 @@ export const payrollRouter = createRouter({
             const nhifNewBal = d(nhifPayableAcct.currentBalance || "0").plus(totalNhif);
             await tx.insert(ledgerEntries).values({
               accountId: nhifPayableAcct.id,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
               transactionType: "payroll" as any,
               transactionId: input.periodId,
               entryType: "credit",
@@ -405,13 +398,15 @@ export const payrollRouter = createRouter({
               entryDate: paymentDateStr,
               createdBy: userId,
               description: `NHIF Payable: ${period.periodName}`,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any).returning();
             await tx.update(accounts).set({ currentBalance: nhifNewBal.toFixed(2) }).where(eq(accounts.id, nhifPayableAcct.id));
           }
         }
 
         if (businessId && d(totalHousingLevy || "0").gt(0)) {
+          const hlAcct = await tx.select().from(accounts).where(
+            and(eq(accounts.businessId, businessId), eq(accounts.accountSubType, "accrued_expense" as any), isNull(accounts.deletedAt))
+          ).limit(1);
           const hlPayableAcct = await tx.query.accounts.findFirst({
             where: and(
               eq(accounts.accountCode, "2600"),
@@ -423,7 +418,6 @@ export const payrollRouter = createRouter({
             const hlNewBal = d(hlPayableAcct.currentBalance || "0").plus(totalHousingLevy);
             await tx.insert(ledgerEntries).values({
               accountId: hlPayableAcct.id,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
               transactionType: "payroll" as any,
               transactionId: input.periodId,
               entryType: "credit",
@@ -432,7 +426,6 @@ export const payrollRouter = createRouter({
               entryDate: paymentDateStr,
               createdBy: userId,
               description: `Housing Levy Payable: ${period.periodName}`,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any).returning();
             await tx.update(accounts).set({ currentBalance: hlNewBal.toFixed(2) }).where(eq(accounts.id, hlPayableAcct.id));
           }
@@ -450,7 +443,6 @@ export const payrollRouter = createRouter({
             accountId: input.accountId,
             reference: `Payroll ${period.periodName}`,
             enteredBy: userId,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any).returning();
         }
 
@@ -495,14 +487,13 @@ export const payrollRouter = createRouter({
         const grossDeductions = advanceDeduction.plus(nssf).plus(nhif).plus(housingLevy).plus(paye);
         const netPay = d(Math.max(0, basicPay.minus(grossDeductions).toNumber()));
 
-        await tx.insert(payrollEntries).values({
+        const [result] = await tx.insert(payrollEntries).values({
           periodId: input.periodId, employeeId: emp.id,
           basicPay: emp.basicSalary, advancesDeducted: advanceDeduction.toFixed(2),
           deductions: grossDeductions.toFixed(2), netPay: netPay.toFixed(2),
           payeDeducted: paye.toFixed(2),
           nhifDeducted: nhif.toFixed(2),
           nssfDeducted: nssf.toFixed(2),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
 
         for (const adv of advances) {
@@ -518,7 +509,7 @@ export const payrollRouter = createRouter({
 
         if (period[0]?.generatedBillId) {
           await tx.update(billItems).set({ deletedAt: new Date() }).where(eq(billItems.billId, period[0].generatedBillId));
-          for (const _entry of allEntries) {
+          for (const entry of allEntries) {
             await tx.insert(billItems).values({
               billId: period[0].generatedBillId,
               itemName: emp.fullName,
@@ -526,7 +517,6 @@ export const payrollRouter = createRouter({
               unitPrice: netPay.toFixed(2),
               totalPrice: netPay.toFixed(2),
               notes: `Basic: ${emp.basicSalary}, Deductions: ${grossDeductions.toFixed(2)}`,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
             } as any).returning();
           }
         }
@@ -554,7 +544,6 @@ export const payrollRouter = createRouter({
         payrollPeriodId: input.payrollPeriodId ?? null,
         notes: input.notes ?? null,
         status: "approved",
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { id: result.id, success: true };
     }),

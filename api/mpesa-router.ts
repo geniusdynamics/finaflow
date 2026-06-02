@@ -6,7 +6,7 @@ import { getDb } from "./queries/connection";
 import { mobileWalletTransactions, expenses, suppliers, accounts, ledgerEntries, locations } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { walletRegistry } from "./lib/mobile-wallet/provider-registry";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function mapToOldFormat(t: any) {
   const amount = parseFloat(t.amount);
   return {
@@ -35,7 +35,7 @@ function mapToOldFormat(t: any) {
     updatedAt: t.updatedAt,
   };
 }
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function mapStatsRow(r: any) {
   return {
     totalIn: r.totalIn ?? "0",
@@ -129,9 +129,7 @@ export const mpesaRouter = createRouter({
     .input(z.object({ locationId: z.number(), smsText: z.string() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const importedBy = (ctx as any).user?.id ?? 1;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
 
       const location = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
@@ -174,7 +172,6 @@ export const mpesaRouter = createRouter({
             importedBy,
             baseCurrency: txn.currency ?? "KES",
             baseAmount: Math.abs(parseFloat(txn.amount)).toFixed(2),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any).returning();
           imported++;
         } catch (e) {
@@ -204,7 +201,6 @@ export const mpesaRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const enteredBy = (ctx as any).user?.id ?? 1;
 
       await requireAuthorizedLocation(ctx, input.locationId);
@@ -232,7 +228,6 @@ export const mpesaRouter = createRouter({
           description: input.description || txn.description || `M-PESA ${txn.txnType}`,
           expenseDate: txn.txnDate, paymentMethod: "mpesa",
           enteredBy,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
 
         expenseId = result.id;
@@ -261,7 +256,6 @@ export const mpesaRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userId = (ctx as any).user?.id ?? 1;
 
       const txn = await db.select().from(mobileWalletTransactions).where(eq(mobileWalletTransactions.id, input.mpesaTxnId)).limit(1);
@@ -287,7 +281,6 @@ export const mpesaRouter = createRouter({
         description: `M-PESA topup to wallet: ${txn[0].providerTxnId}`,
         entryDate: txn[0].txnDate,
         createdBy: userId,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
 
       if (fee > 0) {
@@ -301,7 +294,6 @@ export const mpesaRouter = createRouter({
           description: `M-PESA topup transaction fee: ${txn[0].providerTxnId}`,
           entryDate: txn[0].txnDate,
           createdBy: userId,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
       }
 
@@ -322,7 +314,6 @@ export const mpesaRouter = createRouter({
             description: `Topup received from ${acct[0].name}: ${txn[0].providerTxnId}`,
             entryDate: txn[0].txnDate,
             createdBy: userId,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any).returning();
           await db.update(accounts).set({ currentBalance: destNewBal }).where(eq(accounts.id, input.destinationAccountId));
         }

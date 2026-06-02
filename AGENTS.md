@@ -52,9 +52,3 @@
 - All protected routes use <ProtectedRoute> + <AuthLayout>
 - Lazy loading (React.lazy + Suspense) for all routes
 - Audit logging for sensitive operations
-
-## Changelog Convention
-- **CHANGELOG.md is append-only**: New entries are always added at the top of the file under `[Unreleased]`. Previous entries are never edited, reordered, or removed after they are written.
-- **Chronological ordering**: Newer changes go above older ones. Each section represents a logical batch of work.
-- **Updated after every task**: After completing a task or set of related tasks, a new changelog section is added summarizing what was added, changed, fixed, and tested.
-- **Re-update only on explicit instruction**: If a previous changelog entry was overwritten or needs updating, only do so when the user specifically asks. Do not rewrite history without user direction.

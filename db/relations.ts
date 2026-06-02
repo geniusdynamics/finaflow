@@ -28,6 +28,7 @@ import {
   businessCurrencies,
   mobileWalletTransactions,
   mobileWalletDailyLedger,
+  mobileWalletProviders,
   providerConfigs,
 } from "./schema";
 

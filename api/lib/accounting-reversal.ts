@@ -3,11 +3,10 @@
 import { eq } from "drizzle-orm";
 
 import { accounts, ledgerEntries } from "@db/schema";
-import type { DbClient } from "./account-subscriptions";
 import { d } from "./decimal";
 
 interface ReverseLedgerEntriesInput {
-  db: DbClient;
+  db: any;
   transactionId: number;
   userId: number;
   reason: string;
@@ -53,7 +52,7 @@ export async function reverseLedgerEntriesForTransaction(input: ReverseLedgerEnt
       createdBy: input.userId,
       refNo: entry.refNo,
       description: `Reversal: ${input.reason}`,
-    } satisfies typeof ledgerEntries.$inferInsert);
+    } as any);
 
     await input.db
       .update(accounts)

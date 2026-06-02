@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, accountQuery, accountManage } from "./middleware";
 import { getDb } from "./queries/connection";
 import { accounts } from "@db/schema";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, isNull, sql, desc } from "drizzle-orm";
 
 export const chartOfAccountsRouter = createRouter({
   list: accountQuery
@@ -85,7 +85,6 @@ export const chartOfAccountsRouter = createRouter({
           accountCode: input.accountCode,
           description: input.description,
           accountType: input.accountType,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           accountSubType: input.accountSubType as any,
           isContra: input.isContra,
           parentAccountId: input.parentAccountId,
@@ -93,10 +92,8 @@ export const chartOfAccountsRouter = createRouter({
           currentBalance: input.openingBalance,
           type: input.type || "bank_account",
           isPaymentMethod: input.isPaymentMethod,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any)
         .returning();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const account = (rows as any[])[0];
 
       return account;
@@ -124,7 +121,7 @@ export const chartOfAccountsRouter = createRouter({
       });
 
       if (!account) throw new Error("Account not found");
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
       const updates: any = {};
       if (input.name !== undefined) updates.name = input.name;
       if (input.description !== undefined) updates.description = input.description;
@@ -173,7 +170,6 @@ export const chartOfAccountsRouter = createRouter({
     .input(z.object({ businessId: z.number(), accountCode: z.string(), excludeId: z.number().optional() }))
     .query(async ({ input }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const conditions: any[] = [
         eq(accounts.businessId, input.businessId),
         eq(accounts.accountCode, input.accountCode),

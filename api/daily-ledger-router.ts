@@ -5,7 +5,7 @@ import { createRouter, mpesaQuery, getCurrentBusinessLocationIds } from "./middl
 import { getDb } from "./queries/connection";
 import { mobileWalletDailyLedger, mobileWalletTransactions } from "@db/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 function mapLedgerToOldFormat(l: any) {
   return {
     id: l.id,
@@ -60,7 +60,6 @@ export const dailyLedgerRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const userId = (ctx as any).user?.id ?? 1;
 
       const conditions = [
@@ -116,7 +115,6 @@ export const dailyLedgerRouter = createRouter({
           enteredBy: userId,
           baseCurrency: "KES",
           baseClosingBalance: closingBalance,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
         return { id: result.id, closingBalance, success: true };
       }

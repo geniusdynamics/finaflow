@@ -4,24 +4,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { appRouter } from "../router";
 import { getDb } from "../queries/connection";
 
-type Row = { id: number };
-
-interface CallerUser {
-  id: number;
-  role: string;
-  accountId: string;
-  accountRefId: number;
-  currentBusinessId: number;
-  currentBusiness: { id: number; accountId: string; accountRefId: number };
-  businessIds: number[];
-}
-
-interface CallerContext {
-  req: Request;
-  resHeaders: Headers;
-  user: CallerUser;
-}
-
 async function cleanupAccount(accountId: string) {
   const db = getDb();
   await db.execute(`DELETE FROM user_businesses WHERE "userId" IN (SELECT id FROM users WHERE "accountId" = '${accountId}')`);
@@ -53,28 +35,28 @@ describe("account subscription enforcement", () => {
 
     const owner = await db.execute(`
       INSERT INTO users (username, name, email, role, "accountId", "accountRefId", "currentBusinessId", "isActive")
-      VALUES ('limit-owner', 'Limit Owner', 'limit@example.com', 'owner', 'LIMITCO', ${accountRefId}, ${(existingBusiness.rows[0] as Row).id}, true)
+      VALUES ('limit-owner', 'Limit Owner', 'limit@example.com', 'owner', 'LIMITCO', ${accountRefId}, ${(existingBusiness.rows[0] as any).id}, true)
       RETURNING id
     `);
 
     await db.execute(`
       INSERT INTO user_businesses ("userId", "businessId", role, "isActive")
-      VALUES (${(owner.rows[0] as Row).id}, ${(existingBusiness.rows[0] as Row).id}, 'owner', true)
+      VALUES (${(owner.rows[0] as any).id}, ${(existingBusiness.rows[0] as any).id}, 'owner', true)
     `);
 
     const caller = appRouter.createCaller({
       req: new Request("http://localhost/api/trpc/businesses.create"),
       resHeaders: new Headers(),
       user: {
-        id: (owner.rows[0] as Row).id,
+        id: (owner.rows[0] as any).id,
         role: "owner",
         accountId: "LIMITCO",
         accountRefId,
-        currentBusinessId: (existingBusiness.rows[0] as Row).id,
-        currentBusiness: { id: (existingBusiness.rows[0] as Row).id, accountId: "LIMITCO", accountRefId },
-        businessIds: [(existingBusiness.rows[0] as Row).id],
+        currentBusinessId: (existingBusiness.rows[0] as any).id,
+        currentBusiness: { id: (existingBusiness.rows[0] as any).id, accountId: "LIMITCO", accountRefId },
+        businessIds: [(existingBusiness.rows[0] as any).id],
       },
-    } as CallerContext);
+    } as any);
 
     await expect(caller.businesses.create({
       name: "Limit Two",
@@ -109,33 +91,33 @@ describe("account subscription enforcement", () => {
 
     const owner = await db.execute(`
       INSERT INTO users (username, name, email, role, "accountId", "accountRefId", "currentBusinessId", "isActive")
-      VALUES ('branch-owner', 'Branch Owner', 'branch@example.com', 'owner', 'BRANCHCO', ${accountRefId}, ${(business.rows[0] as Row).id}, true)
+      VALUES ('branch-owner', 'Branch Owner', 'branch@example.com', 'owner', 'BRANCHCO', ${accountRefId}, ${(business.rows[0] as any).id}, true)
       RETURNING id
     `);
 
     await db.execute(`
       INSERT INTO user_businesses ("userId", "businessId", role, "isActive")
-      VALUES (${(owner.rows[0] as Row).id}, ${(business.rows[0] as Row).id}, 'owner', true)
+      VALUES (${(owner.rows[0] as any).id}, ${(business.rows[0] as any).id}, 'owner', true)
     `);
 
     await db.execute(`
       INSERT INTO locations ("businessId", name, slug, "isActive")
-      VALUES (${(business.rows[0] as Row).id}, 'Main Branch', 'branch-main', true)
+      VALUES (${(business.rows[0] as any).id}, 'Main Branch', 'branch-main', true)
     `);
 
     const caller = appRouter.createCaller({
       req: new Request("http://localhost/api/trpc/locations.create"),
       resHeaders: new Headers(),
       user: {
-        id: (owner.rows[0] as Row).id,
+        id: (owner.rows[0] as any).id,
         role: "owner",
         accountId: "BRANCHCO",
         accountRefId,
-        currentBusinessId: (business.rows[0] as Row).id,
-        currentBusiness: { id: (business.rows[0] as Row).id, accountId: "BRANCHCO", accountRefId },
-        businessIds: [(business.rows[0] as Row).id],
+        currentBusinessId: (business.rows[0] as any).id,
+        currentBusiness: { id: (business.rows[0] as any).id, accountId: "BRANCHCO", accountRefId },
+        businessIds: [(business.rows[0] as any).id],
       },
-    } as CallerContext);
+    } as any);
 
     await expect(caller.locations.create({
       name: "Overflow Branch",

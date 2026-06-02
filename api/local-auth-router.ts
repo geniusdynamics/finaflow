@@ -21,7 +21,6 @@ import { logAudit } from "./lib/audit";
 import { serialize } from "cookie";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_TRIAL_DAYS, getPlanConfig } from "./lib/subscriptions";
-import { provisionBusiness, seedBusinessAccounting } from "./lib/business-provisioning";
 
 const JWT_ALG = "HS256";
 const JWT_SECRET = new TextEncoder().encode(env.appSecret);
@@ -453,6 +452,7 @@ export const localAuthRouter = createRouter({
       let businessName = input.businessName;
       const trialExpiry = new Date(Date.now() + DEFAULT_TRIAL_DAYS * 24 * 60 * 60 * 1000);
       let plan = "pro";
+      let maxBranches = getPlanConfig("pro").maxBranches;
       let maxUsers = getPlanConfig("pro").maxUsers;
       let maxTransactionsPerMonth = getPlanConfig("pro").transactionQuota;
       let subscriptionStatus: string = "trial";
@@ -461,6 +461,7 @@ export const localAuthRouter = createRouter({
       if (input.userType === "partner") {
         businessName = businessName || `${input.name}'s Consulting`;
         plan = "partner";
+        maxBranches = getPlanConfig("partner").maxBranches;
         maxUsers = getPlanConfig("partner").maxUsers;
         maxTransactionsPerMonth = getPlanConfig("partner").transactionQuota;
         subscriptionStatus = "active";
@@ -468,6 +469,7 @@ export const localAuthRouter = createRouter({
       } else if (input.createDemo) {
         businessName = businessName || "Demo Business";
         plan = "pro";
+        maxBranches = getPlanConfig("pro").maxBranches;
         maxUsers = getPlanConfig("pro").maxUsers;
         maxTransactionsPerMonth = getPlanConfig("pro").transactionQuota;
         subscriptionStatus = "active";
@@ -480,6 +482,7 @@ export const localAuthRouter = createRouter({
 
       if (firstMonthDiscountApplied) plan = "growth";
       const planConfig = getPlanConfig(plan);
+      maxBranches = planConfig.maxBranches;
       maxUsers = planConfig.maxUsers;
       maxTransactionsPerMonth = planConfig.transactionQuota;
 
@@ -563,27 +566,59 @@ export const localAuthRouter = createRouter({
           };
           const [userRow] = await tx.insert(users).values(userValues).returning({ id: users.id });
 
-          const registration = await provisionBusiness({
-            db: tx,
+          const businessValues: InsertBusiness = {
+            phone: input.phone || null,
             accountId,
             accountRefId: accountRow.id,
             name: businessName,
             slug: `biz-${input.username}-${Date.now()}`,
-            userId: userRow.id,
+            plan,
+            maxBranches,
+            maxUsers,
+            maxTransactionsPerMonth,
+            isActive: true,
             isDemo: input.createDemo || false,
             partnerId: input.userType === "partner" ? userRow.id : undefined,
             revSharePercent: "20.00",
             referralCode,
+            subscriptionStatus,
+            subscriptionExpiry: subscriptionExpiryValue,
             referredByBusinessId,
             referredByUserId,
             firstMonthDiscountApplied,
-            subscriptionStatus,
-            subscriptionExpiry: subscriptionExpiryValue,
-            phone: input.phone || null,
-            testFailPoint: ctx.req.headers.get("x-test-fail-registration-step"),
-          });
+          };
+          const [businessRow] = await tx.insert(businesses).values(businessValues).returning({ id: businesses.id });
 
-          return { userId: userRow.id, businessId: registration.businessId, locationId: registration.locationId, accountRefId: registration.accountRefId };
+          const userBusinessValues: InsertUserBusiness = {
+            userId: userRow.id,
+            businessId: businessRow.id,
+            role: "owner",
+            isActive: true,
+          };
+          await tx.insert(userBusinesses).values(userBusinessValues);
+
+          await tx.update(users).set({ currentBusinessId: businessRow.id }).where(eq(users.id, userRow.id));
+
+          const locationValues: InsertLocation = {
+            businessId: businessRow.id,
+            name: "Main Branch",
+            slug: `main-${businessRow.id}`,
+            isActive: true,
+          };
+          const [locationRow] = await tx.insert(locations).values(locationValues).returning({ id: locations.id });
+
+          if (ctx.req.headers.get("x-test-fail-registration-step") === "before-default-accounts") {
+            throw new Error("Simulated registration failure before default account creation");
+          }
+
+          const defaultAccountValues: InsertAccount[] = [
+            { name: "Cash Drawer", type: "cash", locationId: locationRow.id, openingBalance: "0.00", currentBalance: "0.00", isActive: true },
+            { name: "Wallet", type: "wallet", locationId: locationRow.id, openingBalance: "0.00", currentBalance: "0.00", isActive: true },
+            { name: "Bank Account", type: "bank_account", locationId: locationRow.id, openingBalance: "0.00", currentBalance: "0.00", isActive: true },
+          ];
+          await tx.insert(accounts).values(defaultAccountValues);
+
+          return { userId: userRow.id, businessId: businessRow.id, locationId: locationRow.id, accountRefId: accountRow.id };
         });
 
         userId = registration.userId;
@@ -621,7 +656,8 @@ export const localAuthRouter = createRouter({
       }
 
       if (businessId && locationId) {
-        await seedBusinessAccounting(businessId, locationId).catch((err) =>
+        const { seedAccountingData } = await import("../db/seed-accounting");
+        await seedAccountingData(businessId, locationId).catch((err) =>
           console.error("[register] seedAccountingData failed", err)
         );
       }

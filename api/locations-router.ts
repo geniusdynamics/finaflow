@@ -1,10 +1,10 @@
 // ABOUTME: Exposes branch listing and maintenance mutations within the active business context.
 // ABOUTME: Applies shared subscription enforcement before new locations are added to a business.
 import { z } from "zod";
-import { createRouter, authedQuery, settingsManage } from "./middleware";
+import { createRouter, authedQuery, settingsManage, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
 import { locations } from "@db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, sql, desc } from "drizzle-orm";
 import { assertCanCreateLocation } from "./lib/subscription-enforcement";
 
 export const locationsRouter = createRouter({
@@ -50,7 +50,6 @@ export const locationsRouter = createRouter({
         name: input.name, slug: input.slug, address: input.address,
         phone: input.phone, email: input.email,
         businessId,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
       return { id: result.id, success: true };
     }),

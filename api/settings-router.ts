@@ -2,9 +2,9 @@ import { z } from "zod";
 import { createRouter, authedQuery, settingsManage, getUserBusinessIds } from "./middleware";
 import { getDb } from "./queries/connection";
 import { appSettings } from "@db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 async function verifyBusinessAccess(ctx: any, businessId?: number) {
   if (!businessId) return;
   const userId = ctx.user?.id;
@@ -48,7 +48,6 @@ export const settingsRouter = createRouter({
           key: input.key,
           value: input.value,
           businessId: input.businessId,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
       }
       return { success: true };
@@ -59,7 +58,6 @@ export const settingsRouter = createRouter({
     .query(async ({ input, ctx }) => {
       await verifyBusinessAccess(ctx, input?.businessId);
       const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
       const conditions: any[] = [];
       if (input?.businessId) {
         conditions.push(sql`${appSettings.businessId} = ${input.businessId} OR ${appSettings.businessId} IS NULL`);

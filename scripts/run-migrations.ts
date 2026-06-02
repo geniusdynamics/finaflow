@@ -26,7 +26,6 @@ async function main() {
   const appliedResult = await pool.query(
     "SELECT name FROM drizzle_schema ORDER BY id"
   );
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   const applied = new Set(appliedResult.rows.map((r: any) => r.name));
   console.log("Applied migrations:", applied.size ? [...applied] : "(none)");
 
@@ -53,7 +52,6 @@ async function main() {
       await pool.query("COMMIT");
       console.log(`  [OK] ${file} applied`);
       appliedCount++;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       await pool.query("ROLLBACK");
       if (err.code === "42710" || err.code === "23505" || err.code === "42P07" || err.code === "42701") {

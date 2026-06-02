@@ -21,7 +21,7 @@ function detectCurrency(text: string): string {
 }
 
 function extractCurrencyAmount(text: string): { amount: string; currency: string } | null {
-  for (const [, code] of CURRENCY_PATTERNS) {
+  for (const [pattern, code] of CURRENCY_PATTERNS) {
     const escaped = code.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const re = new RegExp(`${escaped}\\s*([\\d,]+(?:\\.\\d{1,2})?)`, "i");
     const match = text.match(re);
@@ -62,34 +62,23 @@ export class AirtelMoneyProvider extends BaseWalletProvider {
     smsImport: true,
   };
 
-  async initiatePayment(
-    _request: WalletTransactionRequest,
-  ): Promise<WalletTransactionResult> {
+  async initiatePayment(_request: WalletTransactionRequest): Promise<WalletTransactionResult> {
     throw new Error(`${this.displayName} does not support API-initiated payments in SMS mode`);
   }
 
-  async queryStatus(
-    _providerTxnId: string,
-  ): Promise<WalletStatusResult> {
+  async queryStatus(_providerTxnId: string): Promise<WalletStatusResult> {
     throw new Error(`${this.displayName} does not support status queries in SMS mode`);
   }
 
-  async processWebhook(
-    _payload: WalletWebhookPayload,
-  ): Promise<WalletWebhookResult> {
+  async processWebhook(_payload: WalletWebhookPayload): Promise<WalletWebhookResult> {
     throw new Error(`${this.displayName} does not support webhooks in SMS mode`);
   }
 
-  async processRefund(
-    _providerTxnId: string,
-    _amount?: string,
-  ): Promise<WalletTransactionResult> {
+  async processRefund(_providerTxnId: string, _amount?: string): Promise<WalletTransactionResult> {
     throw new Error(`${this.displayName} does not support API-initiated refunds in SMS mode`);
   }
 
-  async balanceInquiry(
-    _accountId: number,
-  ): Promise<WalletBalanceResult> {
+  async balanceInquiry(_accountId: number): Promise<WalletBalanceResult> {
     throw new Error(`${this.displayName} does not support balance inquiries in SMS mode`);
   }
 
@@ -169,10 +158,7 @@ export class AirtelMoneyProvider extends BaseWalletProvider {
     };
   }
 
-  private detectTxnType(
-    lower: string,
-    _original: string,
-  ): ParsedWalletSms["txnType"] {
+  private detectTxnType(lower: string, original: string): ParsedWalletSms["txnType"] {
     if (lower.includes("received") || lower.includes("you have received")) return "payment";
     if (lower.includes("cashpower") || lower.includes("cash power")) return "utility";
     if (lower.includes("withdrawn") || lower.includes("withdraw")) return "withdrawal";
@@ -189,11 +175,7 @@ export class AirtelMoneyProvider extends BaseWalletProvider {
     return "out";
   }
 
-  private extractPartyName(
-    text: string,
-    _lower: string,
-    _txnType: string,
-  ): string | null {
+  private extractPartyName(text: string, lower: string, txnType: string): string | null {
     const receivedMatch = text.match(/(?:from)\s+([A-Za-z0-9\s]{2,30})(?:\s+(?:on|at|Txn|$|,))?/i);
     if (receivedMatch) return receivedMatch[1].trim();
     const sentMatch = text.match(/(?:sent to|paid to)\s+([A-Za-z0-9\s]{2,30})(?:\s+(?:on|at|Txn|$|,))?/i);
@@ -203,10 +185,7 @@ export class AirtelMoneyProvider extends BaseWalletProvider {
     return null;
   }
 
-  private extractFee(
-    text: string,
-    _lower: string,
-  ): string | undefined {
+  private extractFee(text: string, lower: string): string | undefined {
     const feeMatch = text.match(/(?:fee|charge|commission)\s*:?\s*([\d,]+\.?\d*)/i);
     if (feeMatch) return feeMatch[1].replace(/,/g, "");
     const deductedMatch = text.match(/deducted[:\s]+([\d,]+\.?\d*)/i);
@@ -215,9 +194,9 @@ export class AirtelMoneyProvider extends BaseWalletProvider {
   }
 
   private extractDate(text: string): string {
-    const dateMatch = text.match(/(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})/);
+    const dateMatch = text.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/);
     if (dateMatch) {
-      const parts = dateMatch[1].split(/[/-]/);
+      const parts = dateMatch[1].split(/[\/\-]/);
       if (parts.length === 3) {
         const day = parts[0].padStart(2, "0");
         const month = parts[1].padStart(2, "0");
@@ -230,10 +209,7 @@ export class AirtelMoneyProvider extends BaseWalletProvider {
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
   }
 
-  private extractBalance(
-    text: string,
-    _lower: string,
-  ): string | undefined {
+  private extractBalance(text: string, lower: string): string | undefined {
     const balMatch = text.match(/balance[:\s]+([\d,]+\.?\d*)/i);
     if (balMatch) return balMatch[1].replace(/,/g, "");
     return undefined;

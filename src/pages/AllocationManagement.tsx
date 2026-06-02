@@ -26,6 +26,7 @@ export function AllocationManagement() {
   const [generatedCode, setGeneratedCode] = useState<{ code: string; link: string } | null>(null);
   const [revokeAllocationId, setRevokeAllocationId] = useState<number | null>(null);
 
+  const { data: user } = trpc.auth.me.useQuery();
   const { data: businesses } = trpc.businesses.list.useQuery();
   const { data: allocations, isLoading } = trpc.partner.listOwnerAllocations.useQuery();
   const utils = trpc.useUtils();
@@ -113,6 +114,7 @@ export function AllocationManagement() {
     );
   };
 
+  const businessIds = user?.businessIds || [];
   const businessList = businesses || [];
 
   return (
@@ -166,7 +168,7 @@ export function AllocationManagement() {
                 </Label>
                 <Select
                   value={selectedRights}
-                  onValueChange={(value) => setSelectedRights(value as "view_only" | "create_view" | "manage")}
+                  onValueChange={(value: any) => setSelectedRights(value)}
                 >
                   <SelectTrigger id="rights" className="border-[#E8E0D8]">
                     <SelectValue />

@@ -10,6 +10,7 @@ import {
   userBusinesses,
   supportedCurrencies,
   mobileWalletProviders,
+  mobileWalletTransactions,
 } from "@db/schema";
 import { getTestDb } from "../test/db";
 
@@ -28,25 +29,21 @@ async function seedWalletTestCtx(seed: string): Promise<SeededCtx> {
   const [business] = await db.insert(businesses).values({
     accountId, name: `Wallet Test ${seed}`, slug: `wallet-${ts}-${seed.toLowerCase()}`,
     plan: "pro", maxBranches: 5, maxUsers: 10, isActive: true,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any).returning();
 
   const [user] = await db.insert(users).values({
     username: `wallet-owner-${ts}-${seed.toLowerCase()}`, name: `Wallet Owner ${seed}`,
     role: "owner", isActive: true, currentBusinessId: business.id, accountId,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any).returning();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   await db.insert(userBusinesses).values({ userId: user.id, businessId: business.id, role: "owner", isActive: true } as any);
 
   const [location] = await db.insert(locations).values({
     businessId: business.id, name: `Wallet Branch ${seed}`,
     slug: `wallet-branch-${ts}-${seed.toLowerCase()}`, isActive: true,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any).returning();
 
   return {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     accountId, business: business as any, user: {
       id: user.id, role: user.role, currentBusinessId: business.id, accountId, accountRefId: user.accountRefId,
     }, location,
@@ -66,7 +63,6 @@ async function seedSupportedCurrenciesLocal() {
     { code: "USD", name: "US Dollar", symbol: "$", decimalPlaces: 2 },
   ];
   for (const c of currencies) {
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     await db.insert(supportedCurrencies).values(c as any).onConflictDoNothing().returning();
   }
 }
@@ -79,7 +75,6 @@ async function seedMpesaProviderLocal() {
     displayName: "M-PESA",
     supportedCurrencies: "KES",
     isActive: true,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any).onConflictDoNothing().returning();
 }
 
@@ -88,7 +83,6 @@ function createCaller(ctx: SeededCtx) {
     req: new Request("http://localhost/api/trpc/wallet.transactions.list"),
     resHeaders: new Headers(),
     user: { ...ctx.user, currentBusiness: ctx.business, businessIds: [ctx.business.id] },
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any);
 }
 
@@ -110,10 +104,9 @@ describe("Wallet Router - Multi-Provider", () => {
     const caller = createCaller(ctx);
     const providers = await caller.wallet.providers.list();
     expect(Array.isArray(providers)).toBe(true);
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
     const mpesa = providers.find((p: any) => p.code === "mpesa");
     expect(mpesa).toBeDefined();
-    expect(mpesa!.isActive).toBe(true);
+    expect(mpesa.isActive).toBe(true);
   });
 
   it("wallet.transactions.list returns empty array with no transactions", async () => {
