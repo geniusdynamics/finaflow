@@ -185,7 +185,8 @@ describe("notification-lifecycle: applyClear", () => {
 
   it("is idempotent (second call returns identity)", () => {
     const now = new Date("2026-06-03T10:00:00Z");
-    const cleared = applyClear(makeRecord(), "action_completed", now);
+    const record = makeRecord();
+    const cleared = { ...record, ...applyClear(record, "action_completed", now) };
     const twice = applyClear(cleared, "action_completed", new Date("2026-06-04T10:00:00Z"));
     expect(twice.highlightState).toBe("archived");
     expect(twice.clearedAt).toEqual(now);
