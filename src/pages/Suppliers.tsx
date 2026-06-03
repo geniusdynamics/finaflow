@@ -185,7 +185,7 @@ export function Suppliers() {
     supplierId: 0, locationId: "", categoryId: "", billNumber: "", description: "", amount: "", issueDate: getLocalDateString(), dueDate: "",
   });
 
-  const [payForm, setPayForm] = useState({ paymentMethod: "wallet" as const, amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" });
+  const [payForm, setPayForm] = useState<{ paymentMethod: "cash" | "wallet" | "bank_transfer" | "card"; amount: string; paymentDate: string; reference: string; accountId: string }>({ paymentMethod: "wallet", amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" });
   const todayDate = getLocalDateString();
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -347,7 +347,7 @@ export function Suppliers() {
                         <Button size="sm" variant="outline" className="flex-1 border-[#C73E1D] text-[#C73E1D] text-xs" onClick={(e) => {
                           e.stopPropagation();
                           setPayOpen(supplier.id);
-                          setPayForm({ paymentMethod: "wallet" as const, amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" });
+                          setPayForm({ paymentMethod: "wallet", amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" });
                           setPaymentError(null);
                         }}>
                           <CheckCircle className="mr-1 h-3 w-3" /> Pay

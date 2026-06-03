@@ -68,6 +68,10 @@ export const mpesaRouter = createRouter({
 
       if (input?.dateFrom && input?.dateTo) {
         conditions.push(sql`${mobileWalletTransactions.txnDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`);
+      } else if (input?.dateFrom) {
+        conditions.push(sql`${mobileWalletTransactions.txnDate} >= ${input.dateFrom}`);
+      } else if (input?.dateTo) {
+        conditions.push(sql`${mobileWalletTransactions.txnDate} <= ${input.dateTo}`);
       }
 
       if (input?.unlinkedOnly) conditions.push(eq(mobileWalletTransactions.isLinked, false));
@@ -100,6 +104,10 @@ export const mpesaRouter = createRouter({
       }
       if (input?.dateFrom && input?.dateTo) {
         conditions.push(sql`${mobileWalletTransactions.txnDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`);
+      } else if (input?.dateFrom) {
+        conditions.push(sql`${mobileWalletTransactions.txnDate} >= ${input.dateFrom}`);
+      } else if (input?.dateTo) {
+        conditions.push(sql`${mobileWalletTransactions.txnDate} <= ${input.dateTo}`);
       }
 
       const rows = await db.select({
@@ -126,64 +134,136 @@ export const mpesaRouter = createRouter({
     }),
 
   importSms: mpesaImport
-    .input(z.object({ locationId: z.number(), smsText: z.string() }))
-    .mutation(async ({ input, ctx }) => {
-      const db = getDb();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const importedBy = (ctx as any).user?.id ?? 1;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
-
-      const location = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
-      if (location.length === 0) throw new Error("Location not found");
-      if (location[0].businessId !== businessId) throw new Error("Location does not belong to your current business");
-
-      const provider = walletRegistry.get("mpesa");
-      if (!provider.parseSms) throw new Error("M-PESA provider does not support SMS import");
-
-      const parsed = await provider.parseSms(input.smsText);
-
-      let imported = 0, skipped = 0;
-      const errors: string[] = [];
-
-      for (const txn of parsed) {
-        const existing = await db.select().from(mobileWalletTransactions).where(
-          and(eq(mobileWalletTransactions.provider, "mpesa"), eq(mobileWalletTransactions.providerTxnId, txn.providerTxnId))
-        ).limit(1);
-        if (existing.length > 0) { skipped++; continue; }
-
-        try {
-          await db.insert(mobileWalletTransactions).values({
-            locationId: input.locationId,
-            provider: "mpesa",
-            providerTxnId: txn.providerTxnId,
-            txnDate: txn.date,
-            txnTime: txn.time,
-            txnType: txn.txnType,
-            direction: txn.direction,
-            partyName: txn.partyName,
-            partyIdentifier: txn.partyIdentifier,
-            amount: Math.abs(parseFloat(txn.amount)).toFixed(2),
-            currency: txn.currency ?? "KES",
-            txnFee: txn.txnFee ?? "0.00",
-            balance: txn.balance,
-            description: txn.partyIdentifier ? `${txn.partyName} (${txn.partyIdentifier})` : txn.partyName,
-            rawText: txn.rawText,
-            status: "completed",
-            isLinked: false,
-            importedBy,
-            baseCurrency: txn.currency ?? "KES",
-            baseAmount: Math.abs(parseFloat(txn.amount)).toFixed(2),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any).returning();
-          imported++;
-        } catch (e) {
-          errors.push(`${txn.providerTxnId}: ${(e as Error).message}`);
-        }
-      }
-
-      return { imported, skipped, totalParsed: parsed.length, errors, success: true };
-    }),
+       .input(z.object({ locationId: z.number(), smsText: z.string() }))
+       .mutation(async ({ input, ctx }) => {
+         const db = getDb();
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         const importedBy = (ctx as any).user?.id ?? 1;
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
+ 
+         const location = await db.select().from(locations).where(eq(locations.id, input.locationId)).limit(1);
+         if (location.length === 0) throw new Error("Location not found");
+         if (location[0].businessId !== businessId) throw new Error("Location does not belong to your current business");
+ 
+         const provider = walletRegistry.get("mpesa");
+         if (!provider.parseSms) throw new Error("M-PESA provider does not support SMS import");
+ 
+         const parsed = await provider.parseSms(input.smsText);
+ 
+         const preImportCountRow = await db.select({ count: sql<number>`COUNT(*)` })
+           .from(mobileWalletTransactions)
+           .where(and(
+             eq(mobileWalletTransactions.locationId, input.locationId),
+             eq(mobileWalletTransactions.provider, "mpesa"),
+             isNull(mobileWalletTransactions.deletedAt),
+           ));
+         const preImportCount = Number(preImportCountRow[0]?.count ?? 0);
+ 
+         let imported = 0, skipped = 0;
+         const errors: string[] = [];
+ 
+         const parsedAmount = (raw: string): number => {
+           const n = parseFloat(raw);
+           return Number.isFinite(n) ? Math.abs(n) : 0;
+         };
+ 
+         const sanitizeString = (val: unknown, fallback = ""): string => {
+           if (val === null || val === undefined) return fallback;
+           const s = String(val).trim();
+           return s.length > 0 ? s : fallback;
+         };
+ 
+         const buildDescription = (partyName?: string, partyIdentifier?: string): string => {
+           const safeName = sanitizeString(partyName, "Unknown party");
+           const safeId = sanitizeString(partyIdentifier, "");
+           return safeId ? `${safeName} (${safeId})` : safeName;
+         };
+ 
+         const validatedTxns = parsed
+           .map((txn) => {
+             const amt = parsedAmount(txn.amount);
+             if (!txn.providerTxnId || amt <= 0 || !txn.date) {
+               errors.push(`Skipped invalid row: ${txn.providerTxnId || "(no id)"} — amount=${txn.amount}, date=${txn.date}`);
+               return null;
+             }
+             return { ...txn, amount: amt.toFixed(2) };
+           })
+           .filter((t): t is NonNullable<typeof t> => t !== null);
+ 
+         for (const txn of validatedTxns) {
+           const existing = await db.select({ id: mobileWalletTransactions.id }).from(mobileWalletTransactions).where(
+             and(
+               eq(mobileWalletTransactions.provider, "mpesa"),
+               eq(mobileWalletTransactions.providerTxnId, txn.providerTxnId),
+               isNull(mobileWalletTransactions.deletedAt),
+             )
+           ).limit(1);
+           if (existing.length > 0) { skipped++; continue; }
+ 
+           try {
+             await db.insert(mobileWalletTransactions).values({
+               locationId: input.locationId,
+               provider: "mpesa",
+               providerTxnId: txn.providerTxnId,
+               txnDate: txn.date,
+               txnTime: sanitizeString(txn.time, "") || null,
+               txnType: sanitizeString(txn.txnType, "transfer"),
+               direction: txn.direction === "in" ? "in" : "out",
+               partyName: sanitizeString(txn.partyName, "") || null,
+               partyIdentifier: sanitizeString(txn.partyIdentifier, "") || null,
+               amount: txn.amount,
+               currency: sanitizeString(txn.currency, "KES"),
+               txnFee: sanitizeString(txn.txnFee, "0.00"),
+               balance: txn.balance ? sanitizeString(txn.balance, "") || null : null,
+               description: buildDescription(txn.partyName, txn.partyIdentifier),
+               rawText: sanitizeString(txn.rawText, ""),
+               status: "completed",
+               isLinked: false,
+               importedBy,
+               baseCurrency: sanitizeString(txn.currency, "KES"),
+               baseAmount: txn.amount,
+ // eslint-disable-next-line @typescript-eslint/no-explicit-any
+             } as any).returning();
+             imported++;
+           } catch (e) {
+             const msg = (e as Error).message;
+             if (msg.includes("idx_wallet_txn_provider_txn") || msg.includes("duplicate key")) {
+               skipped++;
+             } else {
+               errors.push(`${txn.providerTxnId}: ${msg}`);
+             }
+           }
+         }
+ 
+         const postImportCountRow = await db.select({ count: sql<number>`COUNT(*)` })
+           .from(mobileWalletTransactions)
+           .where(and(
+             eq(mobileWalletTransactions.locationId, input.locationId),
+             eq(mobileWalletTransactions.provider, "mpesa"),
+             isNull(mobileWalletTransactions.deletedAt),
+           ));
+         const postImportCount = Number(postImportCountRow[0]?.count ?? 0);
+ 
+         const dataIntact = postImportCount >= preImportCount;
+         if (!dataIntact) {
+           errors.push(
+             `Critical safeguard triggered: transaction count decreased from ${preImportCount} to ${postImportCount}. ` +
+             `Your existing data has NOT been altered, but please report this incident.`,
+           );
+         }
+ 
+         return {
+           imported,
+           skipped,
+           totalParsed: parsed.length,
+           validParsed: validatedTxns.length,
+           preImportCount,
+           postImportCount,
+           errors,
+           success: dataIntact && (errors.length === 0 || imported > 0),
+         };
+       }),
 
   tagToSupplier: mpesaQuery
     .input(z.object({ mpesaTxnId: z.number(), supplierId: z.number() }))

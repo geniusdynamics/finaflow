@@ -158,7 +158,7 @@ function createCaller(ctx: SeededContext) {
       currentBusiness: ctx.business,
       businessIds: [ctx.business.id],
     },
-  } as CallerContext);
+  } as any);
 }
 
 describe("journal router and daily sales posting", () => {

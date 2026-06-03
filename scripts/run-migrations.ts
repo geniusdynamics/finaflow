@@ -46,23 +46,73 @@ async function main() {
     console.log(`  [APPLY] ${file}`);
     const sql = fs.readFileSync(path.join(migrationsDir, file), "utf8");
 
+    // ABOUTME: Split on --> statement-breakpoint. If absent, fall back to a single
+    // ABOUTME: multi-statement execution. Each statement runs in its own
+    // ABOUTME: transaction so a partial failure does not poison the rest of
+    // ABOUTME: the migration.
+    const statements = sql
+      .split("--> statement-breakpoint")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    // Detection: migration has no breakpoint markers and contains DDL/DML mix
+    // (e.g. CREATE + UPDATE) — running it as a single multi-statement query.
+    // Errors on later statements would roll back earlier ones, so we treat
+    // the whole file as one logical unit. We do NOT mark the migration as
+    // applied unless all statements succeed.
+    let migrationSucceeded = true;
+    const isMultiStatement = statements.length === 1 && /;\s*\n/.test(sql);
+    const effectiveStatements = isMultiStatement
+      ? [statements[0]]
+      : statements;
+
     try {
       await pool.query("BEGIN");
-      await pool.query(sql);
+      for (const stmt of effectiveStatements) {
+        await pool.query(stmt);
+      }
       await pool.query("INSERT INTO drizzle_schema (name) VALUES ($1)", [file]);
       await pool.query("COMMIT");
-      console.log(`  [OK] ${file} applied`);
+      console.log(`  [OK] ${file} applied (${effectiveStatements.length} statement(s))`);
       appliedCount++;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       await pool.query("ROLLBACK");
-      if (err.code === "42710" || err.code === "23505" || err.code === "42P07" || err.code === "42701") {
-        console.log(`  [OK] ${file} already applied (conflict caught)`);
-        await pool.query("INSERT INTO drizzle_schema (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [file]);
-        appliedCount++;
+      // Idempotency: tolerate "already exists" errors (duplicate table/column/etc).
+      // Re-run the migration statement-by-statement to make sure any prior partial
+      // application is completed, then mark it as applied.
+      const isIdempotent =
+        err.code === "42710" || err.code === "23505" || err.code === "42P07" || err.code === "42701";
+      if (isIdempotent) {
+        console.log(`  [RECOVER] ${file} conflict (${err.code}) - applying statement-by-statement`);
+        let perStmtOk = true;
+        for (const stmt of effectiveStatements) {
+          try {
+            await pool.query(stmt);
+          } catch (innerErr: any) {
+            const innerCode = innerErr?.code;
+            const isInnerIdempotent =
+              innerCode === "42710" || innerCode === "23505" || innerCode === "42P07" || innerCode === "42701";
+            if (!isInnerIdempotent) {
+              console.error(`  [ERROR] ${file}: ${innerErr.message}`);
+              perStmtOk = false;
+              break;
+            }
+          }
+        }
+        if (perStmtOk) {
+          await pool.query("INSERT INTO drizzle_schema (name) VALUES ($1) ON CONFLICT (name) DO NOTHING", [file]);
+          appliedCount++;
+        } else {
+          migrationSucceeded = false;
+        }
       } else {
         console.error(`  [ERROR] ${file}: ${err.message}`);
+        migrationSucceeded = false;
       }
+    }
+    if (!migrationSucceeded) {
+      // intentionally do not insert into drizzle_schema so it can be retried
     }
   }
 

@@ -59,6 +59,8 @@ export const PERMISSIONS = {
   LEDGER_VIEW: "ledger:view",
   DASHBOARD_VIEW: "dashboard:view",
   RESET_TRANSACTIONS: "transactions:reset",
+  DEBTS_VIEW: "debts:view",
+  DEBTS_MANAGE: "debts:manage",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -83,6 +85,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.PURCHASE_ORDERS_VIEW, PERMISSIONS.PURCHASE_ORDERS_MANAGE,
     PERMISSIONS.CALENDAR_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.COGS_MANAGE,
     PERMISSIONS.ALERTS_CONFIG, PERMISSIONS.LEDGER_VIEW, PERMISSIONS.DASHBOARD_VIEW,
+    PERMISSIONS.DEBTS_VIEW, PERMISSIONS.DEBTS_MANAGE,
   ],
   manager: [
     PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE,
@@ -98,6 +101,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.PURCHASE_ORDERS_VIEW, PERMISSIONS.PURCHASE_ORDERS_MANAGE,
     PERMISSIONS.CALENDAR_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.COGS_MANAGE,
     PERMISSIONS.ALERTS_CONFIG, PERMISSIONS.LEDGER_VIEW, PERMISSIONS.DASHBOARD_VIEW,
+    PERMISSIONS.DEBTS_VIEW, PERMISSIONS.DEBTS_MANAGE,
   ],
   employee: [
     PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE,
@@ -107,6 +111,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.MPESA_VIEW,
     PERMISSIONS.FEEDBACK_MANAGE,
     PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.CALENDAR_VIEW,
+    PERMISSIONS.DEBTS_VIEW,
   ],
   viewer: [
     PERMISSIONS.SALES_VIEW,
@@ -374,6 +379,8 @@ export const resetTransactions = t.procedure.use(requirePermission(PERMISSIONS.R
 export const apiKeysManage = t.procedure.use(requirePermission(PERMISSIONS.API_KEYS_MANAGE));
 export const webhooksManage = t.procedure.use(requirePermission(PERMISSIONS.WEBHOOKS_MANAGE));
 export const partnerView = t.procedure.use(requirePermission(PERMISSIONS.PARTNER_VIEW));
+export const debtsView = t.procedure.use(requirePermission(PERMISSIONS.DEBTS_VIEW));
+export const debtsManage = t.procedure.use(requirePermission(PERMISSIONS.DEBTS_MANAGE));
 
 // Owner-only middleware
 const requireOwner = t.middleware(async (opts) => {

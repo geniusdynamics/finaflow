@@ -25,14 +25,15 @@ export const transactionTypeEnum = pgEnum("transactionType", [
     "sale", "expense", "bill_payment", "supplier_payment",
     "payroll", "advance", "transfer", "opening_balance", "mpesa_topup",
     "drawing", "deposit", "journal", "depreciation", "asset_disposal",
+    "loan_origination", "loan_disbursement",
   ]);
 export const entryTypeEnum = pgEnum("entryType", ["debit", "credit"]);
-export const paymentMethodEnum = pgEnum("paymentMethod", ["cash", "mpesa", "bank_transfer"]);
+export const paymentMethodEnum = pgEnum("paymentMethod", ["cash", "mpesa", "bank_transfer", "wallet"]);
 export const statusEnum = pgEnum("status", ["open", "resolved", "partial"]);
 export const frequencyEnum = pgEnum("frequency", ["daily", "weekly", "monthly", "quarterly", "annually"]);
 export const salaryTypeEnum = pgEnum("salaryType", ["monthly", "weekly", "daily", "hourly"]);
 export const txnTypeEnum = pgEnum("txnType", ["topup", "expense", "transfer", "bank_transfer", "airtime", "utility", "withdrawal"]);
-export const actionEnum = pgEnum("action", ["CREATE", "UPDATE", "DELETE", "RESTORE", "LOGIN", "LOGOUT"]);
+export const actionEnum = pgEnum("action", ["CREATE", "UPDATE", "DELETE", "RESTORE", "LOGIN", "LOGOUT", "DOWNLOAD"]);
 export const severityEnum = pgEnum("severity", ["info", "warning", "critical"]);
 export const paymentMethod2Enum = pgEnum("paymentMethod2", ["cash", "mpesa", "bank_transfer", "card", "wallet"]);
 export const billStatusEnum = pgEnum("billStatus", ["pending", "partial", "paid", "overdue", "cancelled"]);
@@ -60,7 +61,8 @@ export const accountSubTypeEnum = pgEnum("accountSubType", [
   // Revenue
   "sales_revenue", "service_revenue", "subscription_revenue", "other_income",
   // Expenses
-  "cogs", "operating_expense", "admin_expense", "marketing_expense", "depreciation_expense"
+  "cogs", "operating_expense", "admin_expense", "marketing_expense", "depreciation_expense",
+  "bank_charges"
 ]);
 
 export const itemTypeEnum = pgEnum("itemType", [
@@ -196,6 +198,7 @@ export const accounts = pgTable("accounts", {
   systemKey: varchar("systemKey", { length: 120 }),
   accountType: accountTypeEnum("accountType"),
   accountSubType: accountSubTypeEnum("accountSubType"),
+  coaId: bigint("coaId", { mode: "number" }),
   openingBalance: numeric("openingBalance", { precision: 15, scale: 2 }).default("0.00").notNull(),
   currentBalance: numeric("currentBalance", { precision: 15, scale: 2 }).default("0.00").notNull(),
   currency: varchar("currency", { length: 3 }).default("KES").notNull(),
@@ -214,7 +217,26 @@ export const accounts = pgTable("accounts", {
   accountTypeIdx: index("idx_accounts_type").on(table.accountType),
   businessIdx: index("idx_accounts_business").on(table.businessId),
   systemKeyIdx: uniqueIndex("uq_accounts_business_system_key").on(table.businessId, table.systemKey),
+  coaIdx: index("idx_accounts_coa").on(table.coaId),
 }));
+
+// ABOUTME: Reference table for Chart of Accounts sub-types with wallet support flag.
+export const coaSubtypes = pgTable("coa_subtypes", {
+  id: serial("id").primaryKey(),
+  subtypeKey: varchar("subtypeKey", { length: 50 }).notNull().unique(),
+  displayName: varchar("displayName", { length: 100 }).notNull(),
+  accountType: varchar("accountType", { length: 20 }).notNull(),
+  walletSupport: boolean("walletSupport").default(false).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+}, (table) => ({
+  subtypeKeyIdx: uniqueIndex("idx_coa_subtypes_key").on(table.subtypeKey),
+  accountTypeIdx: index("idx_coa_subtypes_account_type").on(table.accountType),
+}));
+
+export type CoaSubtype = typeof coaSubtypes.$inferSelect;
+export type InsertCoaSubtype = typeof coaSubtypes.$inferInsert;
 
 export type Account = typeof accounts.$inferSelect;
 
@@ -390,6 +412,7 @@ export const bills = pgTable("bills", {
   dueDate: date("dueDate").notNull(),
   status: billStatusEnum("status").default("pending").notNull(),
   journalEntryId: bigint("journalEntryId", { mode: "number" }),
+  debtId: bigint("debtId", { mode: "number" }),
   reversedAt: timestamp("reversedAt"),
   reversedBy: bigint("reversedBy", { mode: "number" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -893,6 +916,36 @@ export const budgets = pgTable("budgets", {
 
 export type Budget = typeof budgets.$inferSelect;
 
+// Debts tracking per location
+export const debts = pgTable("debts", {
+  id: serial("id").primaryKey(),
+  locationId: bigint("locationId", { mode: "number" }),
+  businessId: bigint("businessId", { mode: "number" }),
+  creditorName: varchar("creditorName", { length: 255 }).notNull(),
+  description: text("description"),
+  totalAmount: numeric("totalAmount", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  paidAmount: numeric("paidAmount", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  interestRate: numeric("interestRate", { precision: 5, scale: 2 }).default("0.00"),
+  dueDate: timestamp("dueDate"),
+  loanDate: timestamp("loanDate").defaultNow().notNull(),
+  installmentAmount: numeric("installmentAmount", { precision: 15, scale: 2 }),
+  destinationAccountId: bigint("destinationAccountId", { mode: "number" }),
+  loanAccountId: bigint("loanAccountId", { mode: "number" }),
+  isDisbursed: boolean("isDisbursed").default(false).notNull(),
+  disbursementDate: timestamp("disbursementDate"),
+  disbursementFee: numeric("disbursementFee", { precision: 15, scale: 2 }),
+  recurringBillTemplateId: bigint("recurringBillTemplateId", { mode: "number" }),
+  status: varchar("status", { length: 50 }).notNull().default("active"),
+  paymentSchedule: varchar("paymentSchedule", { length: 50 }).default("monthly"),
+  notes: text("notes"),
+  createdBy: bigint("createdBy", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+});
+
+export type Debt = typeof debts.$inferSelect;
+
 // Payroll settings (statutory deduction rates per location)
 export const payrollSettings = pgTable("payroll_settings", {
   id: serial("id").primaryKey(),
@@ -1009,22 +1062,49 @@ export const mpesaReconciliation = pgTable("mpesa_reconciliation", {
 export type MpesaReconciliation = typeof mpesaReconciliation.$inferSelect;
 
 // Notifications (push + in-app)
-export const notifications = pgTable("notifications", {
-  id: serial("id").primaryKey(),
-  userId: bigint("userId", { mode: "number" }),
-  type: varchar("type", { length: 50 }).notNull(),
-  title: varchar("title", { length: 255 }).notNull(),
-  message: text("message"),
-  severity: severityEnum("severity").default("info").notNull(),
-  locationId: bigint("locationId", { mode: "number" }),
-  entityType: varchar("entityType", { length: 50 }),
-  entityId: bigint("entityId", { mode: "number" }),
-  isRead: boolean("isRead").default(false).notNull(),
-  isPushed: boolean("isPushed").default(false).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+export const notificationHighlightEnum = pgEnum("notification_highlight", ["highlighted", "faded", "archived"]);
+export const notificationClearedReasonEnum = pgEnum("notification_cleared_reason", [
+  "user_dismissed",
+  "bill_paid",
+  "action_completed",
+  "manual_clear_all",
+  "system_resolved",
+]);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: serial("id").primaryKey(),
+    userId: bigint("userId", { mode: "number" }),
+    type: varchar("type", { length: 50 }).notNull(),
+    title: varchar("title", { length: 255 }).notNull(),
+    message: text("message"),
+    severity: severityEnum("severity").default("info").notNull(),
+    locationId: bigint("locationId", { mode: "number" }),
+    entityType: varchar("entityType", { length: 50 }),
+    entityId: bigint("entityId", { mode: "number" }),
+    isRead: boolean("isRead").default(false).notNull(),
+    isPushed: boolean("isPushed").default(false).notNull(),
+    // Lifecycle state for highlighting
+    highlightState: notificationHighlightEnum("highlightState").default("highlighted").notNull(),
+    fadedAt: timestamp("fadedAt"),
+    lastHighlightedAt: timestamp("lastHighlightedAt").defaultNow().notNull(),
+    highlightCount: integer("highlightCount").default(1).notNull(),
+    // Archive + clearance tracking
+    archivedAt: timestamp("archivedAt"),
+    clearedAt: timestamp("clearedAt"),
+    clearedReason: notificationClearedReasonEnum("clearedReason"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  (table) => ({
+    entityIdx: index("idx_notifications_entity").on(table.entityType, table.entityId),
+    userHighlightIdx: index("idx_notifications_user_highlight").on(table.userId, table.highlightState),
+    archivedIdx: index("idx_notifications_archived").on(table.userId, table.archivedAt),
+  }),
+);
 
 export type Notification = typeof notifications.$inferSelect;
+export type NotificationInsert = typeof notifications.$inferInsert;
 
 // Supplier price history
 export const supplierPriceHistory = pgTable("supplier_price_history", {

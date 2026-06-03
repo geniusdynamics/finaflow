@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { alertsConfig, alertsLog, accounts, bills, locations } from "@db/schema";
-import { eq, and, isNull, sql, desc } from "drizzle-orm";
+import { alertsConfig, alertsLog, accounts, locations } from "@db/schema";
+import { eq, and, isNull, desc } from "drizzle-orm";
 
 type AlertsConfigInsert = typeof alertsConfig.$inferInsert;
 
@@ -68,22 +68,9 @@ export const alertsRouter = createRouter({
       }
     }
 
-    // Overdue bills check
-    const today = new Date().toISOString().split("T")[0];
-    const overdueBills = await db.select().from(bills).where(
-      and(sql`${bills.dueDate} < ${today}`, isNull(bills.deletedAt), sql`${bills.balanceDue} > 0`)
-    ).orderBy(desc(bills.dueDate)).limit(20);
-
-    for (const bill of overdueBills) {
-      const loc = await db.select().from(locations).where(eq(locations.id, bill.locationId)).limit(1);
-      alerts.push({
-        type: "overdue_bill",
-        severity: "critical",
-        title: `Overdue Bill: ${bill.billNumber ?? `BILL-${bill.id}`}`,
-        message: `${bill.description} at ${loc[0]?.name ?? "Unknown"} — Balance: ${bill.balanceDue} (Due: ${bill.dueDate})`,
-        locationId: bill.locationId,
-      });
-    }
+    // Overdue bills are now managed via notifications.generateOverdueNotifications
+    // with a full lifecycle (highlighted → faded → re-highlighted → clearance).
+    // They are intentionally excluded here to avoid duplicate entries in the panel.
 
     return alerts;
   }),

@@ -73,6 +73,6 @@ export class HttpClient {
   }
 
   post<T>(url: string, body?: unknown, config?: RequestConfig) {
-    return this.request<T>(url, { ...config, method: "POST", body });
+    return this.request<T>(url, { ...config, method: "POST", body: body as any });
   }
 }

@@ -40,6 +40,123 @@ async function tableExists(testPool: pg.Pool, tableName: string): Promise<boolea
   return Boolean(result.rows[0]?.exists);
 }
 
+/**
+ * Split a SQL file into individual statements while respecting PostgreSQL syntax:
+ *  - `--` line comments
+ *  - `/* ... *​/` block comments
+ *  - `'...'` single-quoted strings (with `''` escape)
+ *  - `$$ ... $$` dollar-quoted strings (any tag, including `$tag$ ... $tag$`)
+ *  - `"..."` double-quoted identifiers
+ *  - `;` outside any of the above ends a statement
+ */
+function splitSqlStatements(sql: string): string[] {
+  const stmts: string[] = [];
+  let buf = "";
+  let i = 0;
+  let inLineComment = false;
+  let inBlockComment = false;
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let dollarTag: string | null = null;
+  const n = sql.length;
+
+  while (i < n) {
+    const ch = sql[i];
+    const next = i + 1 < n ? sql[i + 1] : "";
+
+    if (inLineComment) {
+      buf += ch;
+      if (ch === "\n") inLineComment = false;
+      i++;
+      continue;
+    }
+    if (inBlockComment) {
+      buf += ch;
+      if (ch === "*" && next === "/") {
+        buf += "/";
+        inBlockComment = false;
+        i += 2;
+        continue;
+      }
+      i++;
+      continue;
+    }
+    if (inSingleQuote) {
+      buf += ch;
+      if (ch === "'") {
+        if (next === "'") { buf += "'"; i += 2; continue; }
+        inSingleQuote = false;
+      }
+      i++;
+      continue;
+    }
+    if (inDoubleQuote) {
+      buf += ch;
+      if (ch === '"') inDoubleQuote = false;
+      i++;
+      continue;
+    }
+    if (dollarTag !== null) {
+      if (sql.startsWith(dollarTag, i)) {
+        buf += dollarTag;
+        i += dollarTag.length;
+        dollarTag = null;
+        continue;
+      }
+      buf += ch;
+      i++;
+      continue;
+    }
+    if (ch === "-" && next === "-") { buf += "--"; inLineComment = true; i += 2; continue; }
+    if (ch === "/" && next === "*") { buf += "/*"; inBlockComment = true; i += 2; continue; }
+    if (ch === "'") { buf += ch; inSingleQuote = true; i++; continue; }
+    if (ch === '"') { buf += ch; inDoubleQuote = true; i++; continue; }
+    if (ch === "$") {
+      let j = i + 1;
+      while (j < n && /[A-Za-z0-9_]/.test(sql[j])) j++;
+      if (j < n && sql[j] === "$") {
+        const tag = sql.slice(i, j + 1);
+        buf += tag;
+        dollarTag = tag;
+        i = j + 1;
+        continue;
+      }
+      buf += ch;
+      i++;
+      continue;
+    }
+    if (ch === ";") {
+      const trimmed = buf.trim();
+      if (trimmed.length > 0) stmts.push(trimmed);
+      buf = "";
+      i++;
+      continue;
+    }
+    buf += ch;
+    i++;
+  }
+  const tail = buf.trim();
+  if (tail.length > 0) stmts.push(tail);
+  return stmts;
+}
+
+async function applyMigrationFile(testPool: pg.Pool, filePath: string): Promise<void> {
+  let sql = fs.readFileSync(filePath, "utf8");
+  const downMarker = "-- Drops all tables and enums created by this migration";
+  const downIdx = sql.indexOf(downMarker);
+  if (downIdx !== -1) sql = sql.slice(0, downIdx);
+  sql = sql.replaceAll("--> statement-breakpoint", "");
+  const statements = splitSqlStatements(sql).filter((s) => s.length > 0);
+  for (const stmt of statements) {
+    try {
+      await testPool.query(stmt);
+    } catch {
+      // Individual DDL statements may fail if already applied;
+      // continue with the next statement for idempotent setup.
+    }
+  }
+}
+
 async function ensureTestDatabase(): Promise<void> {
   const adminPool = new pg.Pool({
     connectionString: "postgresql://postgres:postgres@127.0.0.1:5432/postgres",
@@ -72,67 +189,20 @@ async function ensureTestDatabase(): Promise<void> {
       "../../db/migrations/0000_outgoing_christian_walker.sql",
     );
     if (!(await tableExists(testPool, "users"))) {
-      let sql = fs.readFileSync(baseSchemaPath, "utf8");
-      // Strip the DOWN migration section (everything from the "Drops all tables" comment onward)
-      const downMarker = "-- Drops all tables and enums created by this migration";
-      const downIdx = sql.indexOf(downMarker);
-      if (downIdx !== -1) {
-        sql = sql.slice(0, downIdx);
-      }
-      sql = sql.replaceAll("--> statement-breakpoint", "");
-      const statements = sql.split(";").filter((s) => s.trim());
-      for (const stmt of statements) {
-        try {
-          await testPool.query(stmt);
-        } catch {
-          // Individual DDL statements may fail if already applied;
-          // continue with the next statement for idempotent setup.
-        }
-      }
+      await applyMigrationFile(testPool, baseSchemaPath);
     }
 
-    const migration1Path = path.resolve(
-      import.meta.dirname,
-      "../../db/migrations/0001_misty_mulholland_black.sql",
-    );
-    const migration1Sql = fs.readFileSync(migration1Path, "utf8").replaceAll("--> statement-breakpoint", "");
-    const migration1Statements = migration1Sql.split(";").filter((s) => s.trim());
-    for (const stmt of migration1Statements) {
-      try {
-        await testPool.query(stmt);
-      } catch {
-        // Individual DDL statements may already exist;
-        // continue with the next statement for idempotent setup.
-      }
-    }
-
-    const migration2Path = path.resolve(
-      import.meta.dirname,
-      "../../db/migrations/0002_add_currency_columns.sql",
-    );
-    const migration2Sql = fs.readFileSync(migration2Path, "utf8").replaceAll("--> statement-breakpoint", "");
-    const migration2Statements = migration2Sql.split(";").filter((s) => s.trim());
-    for (const stmt of migration2Statements) {
-      try {
-        await testPool.query(stmt);
-      } catch {
-        // Individual DDL statements may already exist;
-        // continue with the next statement for idempotent setup.
-      }
-    }
-
-    const migration4Path = path.resolve(
-      import.meta.dirname,
-      "../../db/migrations/0004_add_wallet_account_type.sql",
-    );
-    const migration4Sql = fs.readFileSync(migration4Path, "utf8").replaceAll("--> statement-breakpoint", "");
-    const migration4Statements = migration4Sql.split(";").filter((s) => s.trim());
-    for (const stmt of migration4Statements) {
-      try {
-        await testPool.query(stmt);
-      } catch {
-        // Individual DDL statements may already exist;
-        // continue with the next statement for idempotent setup.
+    for (const file of [
+      "0001_misty_mulholland_black.sql",
+      "0002_add_currency_columns.sql",
+      "0004_add_wallet_account_type.sql",
+      "0010_debt_origination_and_accounting.sql",
+      "0011_coa_auto_link_and_wallet_support.sql",
+      "0012_notification_highlight_lifecycle.sql",
+    ]) {
+      const p = path.resolve(import.meta.dirname, `../../db/migrations/${file}`);
+      if (fs.existsSync(p)) {
+        await applyMigrationFile(testPool, p);
       }
     }
   } finally {

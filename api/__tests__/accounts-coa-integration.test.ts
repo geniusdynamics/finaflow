@@ -139,7 +139,7 @@ function createCaller(ctx: SeededContext) {
       currentBusiness: ctx.business,
       businessIds: [ctx.business.id],
     },
-  } as CallerContext);
+  } as any);
 }
 
 describe("operational accounts and payment-method linking", () => {

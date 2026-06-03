@@ -13,8 +13,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { BarChart3, PiggyBank, Receipt, TrendingDown, PieChart, ArrowUpRight, ArrowDownRight, AlertTriangle, Target, Wallet, Download, FileSpreadsheet, Smartphone, Plus } from "lucide-react";
+import { BarChart3, PiggyBank, Receipt, TrendingDown, PieChart, ArrowUpRight, ArrowDownRight, AlertTriangle, Target, Wallet, Download, FileSpreadsheet, Smartphone, Plus, ChevronLeft, ChevronRight, ChevronDown } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 import { MonthlyTrendChart } from "./MonthlyTrendChart";
 import { InflowOutflowPieChart } from "./InflowOutflowPieChart";
@@ -28,21 +30,18 @@ import { useReportExports } from "./useReportExports";
 
 export function OperationsReportsPanel() {
   const now = new Date();
-  const [year] = useState(now.getFullYear());
-  const [month] = useState(now.getMonth() + 1);
-  const [branchFilter] = useState<string>("");
+  const [year, setYear] = useState(now.getFullYear());
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [branchFilter, setBranchFilter] = useState<string>("all");
   const [opsTab, setOpsTab] = useState<"overview" | "budgeting">("overview");
   const [budgetOpen, setBudgetOpen] = useState(false);
   const [cogsOpen, setCogsOpen] = useState(false);
   const [selectedFlowKey, setSelectedFlowKey] = useState<"inflow" | "outflow" | null>(null);
   const [selectedBudgetCategoryId, setSelectedBudgetCategoryId] = useState<number | null>(null);
-  const [budgetForm, setBudgetForm] = useState<{ budgetType: "cogs" | "sales"; amount: string }>({
-    budgetType: "cogs",
-    amount: "",
-  });
+  const [budgetForm, setBudgetForm] = useState<Record<number, string>>({});
   const [cogsForm, setCogsForm] = useState({ target: "35", alert: "38" });
   const queryClient = useQueryClient();
-  const selectedLocationId = branchFilter ? +branchFilter : undefined;
+  const selectedLocationId = branchFilter && branchFilter !== "all" ? +branchFilter : undefined;
 
   const { data: locations } = trpc.locations.list.useQuery();
   const plQuery = trpc.reports.plStatement.useQuery({ year, month, locationId: selectedLocationId });
@@ -53,6 +52,7 @@ export function OperationsReportsPanel() {
   const cogsQuery = trpc.reports.cogsAnalysis.useQuery({ year, month, locationId: selectedLocationId });
   const cogsTargetQuery = trpc.reports.getCogsTarget.useQuery({ locationId: selectedLocationId });
   const { data: categories } = trpc.expenses.categories.useQuery();
+  const budgetsQuery = trpc.reports.budgetsList.useQuery({ year, month, locationId: selectedLocationId });
   const { data: suppliers } = trpc.suppliers.list.useQuery();
 
   const { data: salesData } = trpc.dailySales.list.useQuery({
@@ -80,9 +80,9 @@ export function OperationsReportsPanel() {
   const cogsTarget = cogsTargetQuery.data;
 
   const { exportSales, exportExpenses, exportWalletTxns, exportConsolidated } = useReportExports({
-    salesData: salesData ?? [],
+    salesData: (salesData ?? []) as any,
     expenseData: expenseData ?? [],
-    walletTxns: walletTxns ?? [],
+    walletTxns: (walletTxns ?? []) as any,
     locations: locations ?? [],
     categories: categories ?? [],
     suppliers: suppliers ?? [],
@@ -91,8 +91,13 @@ export function OperationsReportsPanel() {
     month,
   });
 
-  const setBudget = trpc.reports.setBudget.useMutation({
-    onSuccess: () => { toast.success("Budget set"); queryClient.invalidateQueries({ queryKey: ["reports.budgetVsActual"] }); setBudgetOpen(false); },
+  const batchSetBudget = trpc.reports["budgets.batchSet"].useMutation({
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["reports.budgetVsActual"] });
+      queryClient.invalidateQueries({ queryKey: ["reports.budgetsList"] });
+      setBudgetOpen(false);
+      toast.success("Budgets saved");
+    },
   });
   const setCogsT = trpc.reports.setCogsTarget.useMutation({
     onSuccess: () => { toast.success("COGS target updated"); queryClient.invalidateQueries({ queryKey: ["reports.cogsAnalysis"] }); setCogsOpen(false); },
@@ -106,6 +111,23 @@ export function OperationsReportsPanel() {
       setCogsForm(() => ({ target: cogsTarget.targetFoodCostPercent, alert: cogsTarget.alertThresholdPercent }));
     }
   }, [cogsTarget]);
+
+  useEffect(() => {
+    if (budgetsQuery.data && categories) {
+      const form: Record<number, string> = {};
+      for (const b of budgetsQuery.data) {
+        if (b.categoryId != null) {
+          form[b.categoryId] = b.amount;
+        }
+      }
+      for (const cat of categories) {
+        if (!(cat.id in form)) {
+          form[cat.id] = "0.00";
+        }
+      }
+      setBudgetForm(form);
+    }
+  }, [budgetsQuery.data, categories]);
 
   const inflowOutflowData = useMemo(
     () =>
@@ -423,52 +445,130 @@ export function OperationsReportsPanel() {
 
           <Card className="border-gray-200">
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <CardTitle className="font-serif text-lg flex items-center gap-2">
-                <Target className="h-5 w-5 text-gray-500" /> Budget vs Actual — {new Date(year, month - 1).toLocaleDateString("en-KE", { month: "long", year: "numeric" })}
-              </CardTitle>
-              <Dialog open={budgetOpen} onOpenChange={setBudgetOpen}>
-                <DialogTrigger asChild><Button size="sm" variant="outline"><Plus className="h-3 w-3 mr-1" />Set Budget</Button></DialogTrigger>
-                <DialogContent className="bg-white">
-                  <DialogHeader>
-                    <DialogTitle className="font-serif text-xl">Set Budget</DialogTitle>
-                  </DialogHeader>
-                  <form
-                    onSubmit={e => {
-                      e.preventDefault();
-                      if (!selectedLocationId) {
-                        toast.error("Select a branch before setting a budget");
-                        return;
-                      }
-                      setBudget.mutate({
-                        year,
-                        month,
-                        budgetType: budgetForm.budgetType,
-                        amount: budgetForm.amount,
-                        locationId: selectedLocationId,
-                      });
-                    }}
-                    className="space-y-3"
-                  >
-                    <div>
-                      <label className="text-sm text-gray-500">Budget Type</label>
-                      <select
-                        value={budgetForm.budgetType}
-                        onChange={e => setBudgetForm(p => ({ ...p, budgetType: e.target.value as "cogs" | "sales" }))}
-                        className="w-full rounded border px-3 py-2 text-sm"
-                        required
-                      >
-                        <option value="cogs">Cost of Goods Sold</option>
-                        <option value="sales">Sales Revenue</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-sm text-gray-500">Amount (KES)</label>
-                      <Input type="number" step="0.01" value={budgetForm.amount} onChange={e => setBudgetForm(p => ({ ...p, amount: e.target.value }))} required />
-                    </div>
-                    <Button type="submit" className="w-full bg-orange-600" disabled={setBudget.isPending}>Save Budget</Button>
-                  </form>
-                </DialogContent>
-              </Dialog>
+              <div className="flex items-center gap-2">
+                <CardTitle className="font-serif text-lg flex items-center gap-2">
+                  <Target className="h-5 w-5 text-gray-500" /> Budget vs Actual
+                </CardTitle>
+                <div className="flex items-center gap-1">
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => { setMonth(prev => prev === 1 ? 12 : prev - 1); if (month === 1) setYear(y => y - 1); }}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 gap-1 px-2 text-sm font-medium hover:bg-[#F5EDE6]">
+                        {new Date(year, month - 1).toLocaleDateString("en-KE", { month: "long", year: "numeric" })}
+                        <ChevronDown className="h-3 w-3 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 bg-white p-3" align="start">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setYear(y => y - 1)}>
+                            <ChevronLeft className="h-4 w-4" />
+                          </Button>
+                          <span className="text-sm font-semibold">{year}</span>
+                          <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setYear(y => y + 1)}>
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-3 gap-1">
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+                            <Button
+                              key={m}
+                              size="sm"
+                              variant={m === month ? "default" : "ghost"}
+                              className={`h-8 text-xs ${m === month ? "bg-[#C73E1D] text-white" : "text-[#2D2A26] hover:bg-[#F5EDE6]"}`}
+                              onClick={() => { setMonth(m); }}
+                            >
+                              {new Date(2000, m - 1).toLocaleDateString("en-KE", { month: "short" })}
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  <Button size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={() => { setMonth(prev => prev === 12 ? 1 : prev + 1); if (month === 12) setYear(y => y + 1); }}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Select value={branchFilter} onValueChange={setBranchFilter}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="All Branches" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Branches</SelectItem>
+                    {locations?.map(loc => (
+                      <SelectItem key={loc.id} value={String(loc.id)}>{loc.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Dialog open={budgetOpen} onOpenChange={setBudgetOpen}>
+                  <DialogTrigger asChild><Button size="sm" variant="outline"><Plus className="h-3 w-3 mr-1" />Set Budget</Button></DialogTrigger>
+                  <DialogContent className="bg-white max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                      <DialogTitle className="font-serif text-xl">Set Category Budgets — {new Date(year, month - 1).toLocaleDateString("en-KE", { month: "long", year: "numeric" })}</DialogTitle>
+                    </DialogHeader>
+                    <form
+                      onSubmit={async e => {
+                        e.preventDefault();
+                      if (branchFilter === "all") {
+                          toast.error("Select a specific branch to set budgets");
+                          return;
+                        }
+                        if (!categories) return;
+                        const budgets = Object.entries(budgetForm)
+                          .filter(([, amount]) => amount && parseFloat(amount) > 0)
+                          .map(([catId, amount]) => ({
+                            year,
+                            month,
+                            categoryId: Number(catId),
+                            amount: amount || "0.00",
+                            locationId: Number(branchFilter),
+                          }));
+                        if (budgets.length === 0) {
+                          toast.error("Enter at least one budget amount");
+                          return;
+                        }
+                        await batchSetBudget.mutateAsync({ budgets });
+                      }}
+                      className="space-y-4"
+                    >
+                      <p className="text-sm text-gray-500">Set budget amounts for each expense category for {new Date(year, month - 1).toLocaleDateString("en-KE", { month: "long", year: "numeric" })}.</p>
+                      {branchFilter === "all" && (
+                        <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                          Select a specific branch above to set budgets.
+                        </div>
+                      )}
+                      <div className="space-y-3">
+                        {categories?.map(cat => (
+                          <div key={cat.id} className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: cat.color || "#C73E1D" }} />
+                              <label className="text-sm text-gray-700">{cat.name}</label>
+                            </div>
+                            <div className="w-44">
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                placeholder="0.00"
+                                disabled={!branchFilter}
+                                value={budgetForm[cat.id] ?? "0.00"}
+                                onChange={e => setBudgetForm(prev => ({ ...prev, [cat.id]: e.target.value }))}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <Button type="submit" className="w-full bg-orange-600" disabled={batchSetBudget.isPending || branchFilter === "all"}>
+                        {batchSetBudget.isPending ? "Saving..." : "Save All Budgets"}
+                      </Button>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">

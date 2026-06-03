@@ -489,7 +489,7 @@ export const localAuthRouter = createRouter({
       let userId: number;
       let businessId: number;
       let locationId: number;
-      let accountRefId: number;
+      let accountRefId: number | null;
 
       try {
         const registration = await db.transaction(async (tx) => {
@@ -578,7 +578,7 @@ export const localAuthRouter = createRouter({
             referredByUserId,
             firstMonthDiscountApplied,
             subscriptionStatus,
-            subscriptionExpiry: subscriptionExpiryValue,
+            subscriptionExpiry,
             phone: input.phone || null,
             testFailPoint: ctx.req.headers.get("x-test-fail-registration-step"),
           });

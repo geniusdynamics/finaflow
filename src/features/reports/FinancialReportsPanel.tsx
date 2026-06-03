@@ -136,7 +136,14 @@ export function FinancialReportsPanel({ year }: FinancialReportsPanelProps) {
             <CardContent>
               {balanceSheetData ? (
                 <div className="space-y-4">
-                  <div className="text-center border-b pb-2">
+                  {(() => {
+                    const itemsToTotal = (items: { amount: string }[] | undefined) =>
+                      items ? items.reduce<number>((s, i) => s + (Number(i.amount.replace(/,/g, '')) || 0), 0) : 0;
+                    const currentAssetsTotal = itemsToTotal(balanceSheetData.assets?.current);
+                    const fixedAssetsTotal = itemsToTotal(balanceSheetData.assets?.fixed);
+                    return (
+                      <>
+                        <div className="text-center border-b pb-2">
                     <h3 className="font-serif text-lg">Balance Sheet</h3>
                     <p className="text-sm text-gray-500">As of {reportDate}</p>
                   </div>
@@ -146,11 +153,11 @@ export function FinancialReportsPanel({ year }: FinancialReportsPanelProps) {
                       <div className="space-y-1 text-sm">
                         <div className="flex justify-between">
                           <span>Current Assets</span>
-                          <span className="font-mono">{formatKES(balanceSheetData.assets?.current?.reduce((s: number, i: { amount: string }) => s + parseFloat(i.amount.replace(/,/g, '') || 0), 0) || "0")}</span>
+                          <span className="font-mono">{formatKES(String(currentAssetsTotal))}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Fixed Assets</span>
-                          <span className="font-mono">{formatKES(balanceSheetData.assets?.fixed?.reduce((s: number, i: { amount: string }) => s + parseFloat(i.amount.replace(/,/g, '') || 0), 0) || "0")}</span>
+                          <span className="font-mono">{formatKES(String(fixedAssetsTotal))}</span>
                         </div>
                         <div className="flex justify-between font-semibold border-t pt-1">
                           <span>Total Assets</span>
@@ -181,6 +188,9 @@ export function FinancialReportsPanel({ year }: FinancialReportsPanelProps) {
                       ⚠️ Balance sheet does not balance! Total Assets ≠ Total Liabilities + Equity
                     </div>
                   )}
+                      </>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="text-center py-12 text-gray-500">

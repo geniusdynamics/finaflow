@@ -4,14 +4,14 @@ import { z } from "zod";
 import { createRouter, walletAdmin, walletQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { providerConfigs, supportedCurrencies, exchangeRates, mobileWalletTransactions, mobileWalletProviders } from "@db/schema";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { walletRegistry } from "./lib/mobile-wallet/provider-registry";
 
 export const walletManagementRouter = createRouter({
 
   providers: createRouter({
 
-    list: walletQuery.query(async (_input, _ctx) => {
+    list: walletQuery.query(async () => {
       const db = getDb();
       const registryProviders = walletRegistry.getAll();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -148,7 +148,7 @@ export const walletManagementRouter = createRouter({
 
     latest: walletQuery
       .input(z.object({ from: z.string().optional(), to: z.string().optional() }))
-      .query(async ({ _input, _ctx }) => {
+      .query(async ({ ctx }) => {
         const { currencyConverter } = await import("./lib/currency-converter");
         const rates = await currencyConverter.getLatestRates();
         if (rates.length > 0) return rates;
@@ -187,7 +187,7 @@ export const walletManagementRouter = createRouter({
 
   currencies: createRouter({
 
-    list: walletQuery.query(async (_input, _ctx) => {
+    list: walletQuery.query(async () => {
       const db = getDb();
       try {
         const rows = await db.select().from(supportedCurrencies).orderBy(supportedCurrencies.code);

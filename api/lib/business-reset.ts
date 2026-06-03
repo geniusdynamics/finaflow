@@ -7,7 +7,7 @@
 //   - expenseCategories, revenueCategories
 //   - employees (records preserved, only payroll entries/advances cleared)
 //   - suppliers (records preserved, balances reset to zero)
-//   - accounts (system accounts preserved with balance reset, user accounts soft-deleted)
+//   - accounts (system accounts preserved with balance + openingBalance reset)
 //   - locations (records preserved, counters reset)
 //   - items, masterItems
 //   - fixedAssetDepreciation (depreciation schedule preserved, journal links cleared)
@@ -24,6 +24,7 @@
 //   - dailySales, dailySalePayments
 //   - expenses, expenseItems
 //   - bills, billItems, billPayments
+//   - debts (debt records and linked installment templates)
 //   - mpesaTransactions, dailyMpesaLedger
 //   - mobileWalletTransactions, mobileWalletDailyLedger, mobileWalletReconciliation, providerConfigs
 //   - payrollPeriods, payrollEntries, payrollAdvances
@@ -35,7 +36,8 @@
 //   - supplierPriceHistory, financialReports
 // ──────────────────────────────────────────────────────────────────────────────
 
-import { and, eq, inArray, isNull, or, sql, type SQL, type PgTable } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { type PgColumn, type PgTable } from "drizzle-orm/pg-core";
 
 import {
   accounts,
@@ -47,6 +49,7 @@ import {
   dailyMpesaLedger,
   dailySalePayments,
   dailySales,
+  debts,
   employees,
   expenseItems,
   expenses,
@@ -155,7 +158,13 @@ export async function createResetSnapshot(input: {
   const accountRows = await input.db
     .select({ id: accounts.id })
     .from(accounts)
-    .where(and(eq(accounts.businessId, input.businessId), isNull(accounts.deletedAt)));
+    .where(and(
+      or(
+        eq(accounts.businessId, input.businessId),
+        locationIds.length > 0 ? inArray(accounts.locationId, locationIds) : eq(accounts.businessId, input.businessId)
+      ),
+      isNull(accounts.deletedAt)
+    ));
   const accountIds = accountRows.map((r: { id: number }) => r.id);
 
   const snapshot: Record<string, number> = {};
@@ -163,7 +172,7 @@ export async function createResetSnapshot(input: {
   if (locationIds.length > 0) {
     const locIdSql = sql.join(locationIds.map((id: number) => sql`${id}`), sql`, `);
 
-    const countTable = async (table: PgTable, idField: Parameters<typeof sql>[0], extraCondition?: SQL) => {
+    const countTable = async (table: PgTable, idField: PgColumn, extraCondition?: SQL) => {
       const conditions = [sql`${idField} IN (${locIdSql})`];
       if (extraCondition) conditions.push(extraCondition);
       const [row] = await input.db
@@ -186,6 +195,13 @@ export async function createResetSnapshot(input: {
     snapshot.budgets = await countTable(budgets, budgets.locationId, isNull(budgets.deletedAt));
     snapshot.recurringBillTemplates = await countTable(recurringBillTemplates, recurringBillTemplates.locationId, isNull(recurringBillTemplates.deletedAt));
   }
+
+  // Count debts (business-scoped, can exist without locations)
+  const [debtCount] = await input.db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(debts)
+    .where(and(eq(debts.businessId, input.businessId), isNull(debts.deletedAt)));
+  snapshot.debts = debtCount?.count ?? 0;
 
   if (accountIds.length > 0) {
     const acctIdSql = sql.join(accountIds.map((id: number) => sql`${id}`), sql`, `);
@@ -231,7 +247,13 @@ export async function resetBusinessTransactions(input: {
     const accountRows = await tx
       .select({ id: accounts.id })
       .from(accounts)
-      .where(and(eq(accounts.businessId, input.businessId), isNull(accounts.deletedAt)));
+      .where(and(
+        or(
+          eq(accounts.businessId, input.businessId),
+          locationIds.length > 0 ? inArray(accounts.locationId, locationIds) : eq(accounts.businessId, input.businessId)
+        ),
+        isNull(accounts.deletedAt)
+      ));
     const accountIds = accountRows.map((a: { id: number }) => a.id);
 
     const businessJournalEntries = await tx
@@ -247,8 +269,9 @@ export async function resetBusinessTransactions(input: {
       const resetableKeys = [
         "daily_sale_payments", "purchase_order_items", "bill_items", "bill_payments",
         "attachments", "payroll_entries", "payroll_advances", "daily_sales",
-        "expenses", "expense_items", "bills", "mpesa_transactions",
-        "mobile_wallet_transactions", "mobile_wallet_daily_ledger", "mobile_wallet_reconciliation",
+        "expenses", "expense_items", "bills", "debts",
+        "mpesa_transactions", "mobile_wallet_transactions", "mobile_wallet_daily_ledger",
+        "mobile_wallet_reconciliation",
         "provider_configs", "payroll_periods", "daily_mpesa_ledger", "recurring_bill_templates",
         "budgets", "purchase_orders", "locations", "supplier_price_history",
         "notifications", "quick_actions_log", "webhook_deliveries",
@@ -275,24 +298,34 @@ export async function resetBusinessTransactions(input: {
 
     // ── Step 3: Helper for soft-deleting location-scoped records ───────────
 
-    const softDeleteLocationScoped = async (
+    const softDeleteLocationScoped = async <T extends {
+      id: { name: string };
+      locationId: { name: string };
+      deletedAt: { name: string };
+    }>(
       key: string,
-      table: PgTable,
+      table: T,
       extraSet: Record<string, unknown> = {},
     ) => {
       const updated = await tx
-        .update(table)
+        .update(table as any)
         .set({ deletedAt: now, ...extraSet })
-        .where(and(sql`${table.locationId} IN (${locIdSql})`, isNull(table.deletedAt)))
-        .returning({ id: table.id });
+        .where(and(sql`${(table as any).locationId} IN (${locIdSql})`, isNull((table as any).deletedAt)))
+        .returning({ id: (table as any).id });
       results[key] = { count: updated.length };
     };
 
-    const deleteLocationScoped = async (key: string, table: PgTable) => {
+    const deleteLocationScoped = async <T extends {
+      id: { name: string };
+      locationId: { name: string };
+    }>(
+      key: string,
+      table: T,
+    ) => {
       const deleted = await tx
-        .delete(table)
-        .where(sql`${table.locationId} IN (${locIdSql})`)
-        .returning({ id: table.id });
+        .delete(table as any)
+        .where(sql`${(table as any).locationId} IN (${locIdSql})`)
+        .returning({ id: (table as any).id });
       results[key] = { count: deleted.length };
     };
 
@@ -545,6 +578,14 @@ export async function resetBusinessTransactions(input: {
       .returning({ id: financialReports.id });
     results.financial_reports = { count: frDeleted.length };
 
+    // 7h. debts (business-scoped, soft-delete debt records)
+    const debtDeleted = await tx
+      .update(debts)
+      .set({ deletedAt: now, status: "cancelled" })
+      .where(and(eq(debts.businessId, input.businessId), isNull(debts.deletedAt)))
+      .returning({ id: debts.id });
+    results.debts = { count: debtDeleted.length };
+
     // ── Step 8: Reset location counters ────────────────────────────────────
 
     const resetLocations = await tx
@@ -608,12 +649,18 @@ export async function resetBusinessTransactions(input: {
       .returning({ id: journalEntries.id });
     results.journal_entries = { count: deletedJournalEntries.length };
 
-    // ── Step 11: Reset all account balances to zero, keep all active ───────
+    // ── Step 11: Reset all account balances to zero (both current and opening), keep all active ───────
 
     const resetAccounts = await tx
       .update(accounts)
-      .set({ currentBalance: "0.00", isActive: true })
-      .where(and(eq(accounts.businessId, input.businessId), isNull(accounts.deletedAt)))
+      .set({ currentBalance: "0.00", openingBalance: "0.00", isActive: true })
+      .where(and(
+        or(
+          eq(accounts.businessId, input.businessId),
+          inArray(accounts.locationId, locationIds)
+        ),
+        isNull(accounts.deletedAt)
+      ))
       .returning({ id: accounts.id });
     results.accounts = { count: resetAccounts.length };
     // User accounts are preserved (not soft-deleted), just zero-balanced
@@ -634,6 +681,9 @@ export async function resetBusinessTransactions(input: {
         (sum, r) => sum + r.count,
         0,
       );
+      const tablesCleared = Object.keys(results).filter(
+        (k) => results[k].count > 0,
+      );
       const { logAudit } = await import("./audit");
       await logAudit({
         userId: input.userId ?? 0,
@@ -644,15 +694,19 @@ export async function resetBusinessTransactions(input: {
         details: {
           operation: "reset_all_transactions",
           totalRecordsCleared: auditCount,
-          tablesAffected: Object.keys(results).filter(
-            (k) => results[k].count > 0,
-          ),
+          tablesAffected: tablesCleared,
+          accountsResetToZero: results.accounts?.count ?? 0,
+          accountsOpeningBalanceReset: results.accounts?.count ?? 0,
+          suppliersResetToZero: results.suppliers?.count ?? 0,
+          debtsCleared: results.debts?.count ?? 0,
           resetTimestamp: now.toISOString(),
+          initiatedByUserId: input.userId ?? 0,
+          outcome: "success",
         },
       });
-    } catch {
+    } catch (auditErr) {
       // Audit logging is best-effort; don't fail the reset if audit fails
-      console.warn("[business-reset] Failed to write audit log entry");
+      console.warn("[business-reset] Failed to write audit log entry:", auditErr);
     }
 
     return {

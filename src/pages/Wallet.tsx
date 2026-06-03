@@ -19,10 +19,8 @@ export function Wallet() {
   const { data: settings } = trpc.settings.list.useQuery();
   const [tab, setTab] = useState<"overview" | "transactions" | "ledger" | "import">("overview");
   const [selectedProvider, setSelectedProvider] = useState<string>("");
-  const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split("T")[0];
-  });
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split("T")[0]);
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
   const [smsText, setSmsText] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
   const [smsProvider, setSmsProvider] = useState("mpesa");
@@ -45,19 +43,44 @@ export function Wallet() {
   const { data: feeAnalysis } = trpc.dashboard.feeAnalysis.useQuery({});
   const { data: transactions, refetch } = trpc.wallet.transactions.list.useQuery({
     provider: selectedProvider || undefined,
-    dateFrom, dateTo,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
   });
   const { data: stats } = trpc.wallet.transactions.stats.useQuery({
     provider: selectedProvider || undefined,
-    dateFrom, dateTo,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
   });
   const { data: ledgers, refetch: refetchLedger } = trpc.wallet.dailyLedger.list.useQuery({
     provider: selectedProvider || undefined,
-    dateFrom, dateTo,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
   });
 
   const importSms = trpc.wallet.transactions.importSms.useMutation({
-    onSuccess: () => { setSmsText(""); setParsedPreview([]); refetch(); utils.wallet.transactions.stats.invalidate(); },
+    onSuccess: async (data) => {
+      if (data?.success) {
+        setSmsText("");
+        setParsedPreview([]);
+      }
+      try {
+        await Promise.all([
+          refetch(),
+          utils.wallet.transactions.stats.invalidate(),
+          utils.wallet.transactions.list.invalidate(),
+        ]);
+      } catch (err) {
+        console.error("[Wallet] Post-import refetch failed:", err);
+      }
+    },
+    onError: (err) => {
+      console.error("[Wallet] Import failed:", err);
+      try {
+        refetch();
+      } catch (refetchErr) {
+        console.error("[Wallet] Recovery refetch failed:", refetchErr);
+      }
+    },
   });
 
   const createExpenseFromTxn = trpc.wallet.transactions.createExpenseFromTxn.useMutation({
@@ -133,9 +156,9 @@ export function Wallet() {
     return wallet && t.locationId === wallet.locationId;
   }) : transactions;
   const rangeTxns = ledgerTxns ?? [];
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  const ledgerTotalIn = rangeTxns.filter((t: any) => parseFloat(t.amount) > 0).reduce((s: number, t: any) => s + parseFloat(t.amount), 0);
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  const ledgerTotalOut = rangeTxns.filter((t: any) => parseFloat(t.amount) < 0).reduce((s: number, t: any) => s + Math.abs(parseFloat(t.amount)), 0);
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  const ledgerTotalFees = rangeTxns.reduce((s: number, t: any) => s + parseFloat(t.txnFee || "0"), 0);
+{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  const ledgerTotalIn = rangeTxns.filter((t: any) => t.direction === "in" || parseFloat(t.amount) > 0).reduce((s: number, t: any) => s + Math.abs(parseFloat(t.amount)), 0);
+{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  const ledgerTotalOut = rangeTxns.filter((t: any) => t.direction === "out" || parseFloat(t.amount) < 0).reduce((s: number, t: any) => s + Math.abs(parseFloat(t.amount)), 0);
+  const ledgerTotalFees = rangeTxns.reduce((s: number, t: any) => s + parseFloat(t.txnFee || "0"), 0);
 
   const handleLedgerSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,15 +214,34 @@ export function Wallet() {
         </Button>
       </div>
       {importSms.data && (
-        <div className={`rounded-lg p-3 ${importSms.data.success ? 'bg-green-50' : 'bg-red-50'}`}>
-          <p className={`text-sm font-medium ${importSms.data.success ? 'text-green-700' : 'text-red-700'}`}>
-            {importSms.data.success ? `Imported ${importSms.data.imported} transactions (${importSms.data.skipped} skipped)` : 'Import failed'}
+        <div className={`rounded-lg p-3 ${importSms.data.success ? (importSms.data.imported > 0 ? 'bg-green-50' : 'bg-yellow-50') : 'bg-red-50'}`}>
+          <p className={`text-sm font-medium ${
+            !importSms.data.success
+              ? 'text-red-700'
+              : importSms.data.imported > 0
+                ? 'text-green-700'
+                : 'text-yellow-700'
+          }`}>
+            {importSms.data.success
+              ? importSms.data.imported > 0
+                ? `Imported ${importSms.data.imported} transaction${importSms.data.imported === 1 ? '' : 's'} (${importSms.data.skipped} already existed). Total now: ${importSms.data.postImportCount ?? '?'}`
+                : `No new transactions imported. ${importSms.data.skipped} already existed${importSms.data.errors?.length ? `, ${importSms.data.errors.length} invalid` : ''}.`
+              : 'Import failed. Please review the errors below and try again.'}
           </p>
           {importSms.data.errors?.length > 0 && (
             <ul className="mt-1 text-xs text-red-600 list-disc list-inside">
               {importSms.data.errors.slice(0, 5).map((e: string, i: number) => <li key={i}>{e}</li>)}
+              {importSms.data.errors.length > 5 && (
+                <li className="text-[#8D8A87]">... and {importSms.data.errors.length - 5} more</li>
+              )}
             </ul>
           )}
+        </div>
+      )}
+      {importSms.isError && !importSms.data && (
+        <div className="rounded-lg bg-red-50 p-3">
+          <p className="text-sm font-medium text-red-700">Import failed: {importSms.error?.message ?? "Unknown error"}</p>
+          <p className="mt-1 text-xs text-[#8D8A87]">Your existing transactions have not been affected.</p>
         </div>
       )}
       {parsedPreview.length > 0 && (
@@ -271,6 +313,16 @@ export function Wallet() {
             <Label className="text-xs text-[#8D8A87]">To:</Label>
             <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="rounded-lg border border-[#E8E0D8] px-3 py-1.5 text-sm" />
           </div>
+          {(dateFrom || dateTo) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setDateFrom(""); setDateTo(""); }}
+              className="text-xs text-[#8D8A87] hover:text-[#2D2A26]"
+            >
+              Clear dates (show all)
+            </Button>
+          )}
         </div>
 
         {tab === "overview" && (

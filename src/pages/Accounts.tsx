@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "react-router";
 import { Layout } from "@/components/Layout";
+import { AddDebtDialog } from "@/components/AddDebtDialog";
 import { trpc } from "@/providers/trpc";
 import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
@@ -17,12 +18,13 @@ import { LocationSelector } from "@/components/LocationSelector";
 import { toast } from "sonner";
 import { ChartOfAccounts } from "./ChartOfAccounts";
 import { JournalEntries } from "./JournalEntries";
+import { Debts } from "./Debts";
 
 const accountPalette = ["#2E7D32", "#388E3C", "#43A047", "#C77D2D", "#D4A854", "#B8872E", "#9E9D24", "#5D4037"];
 
 export function Accounts() {
   type CoaAccountType = "asset" | "liability" | "equity" | "revenue" | "expense";
-  type OperationalSubType = "" | "cash" | "bank";
+  type OperationalSubType = "" | "cash" | "bank" | "prepaid_expense" | "accounts_receivable" | "fixed_asset";
 
   const { user } = useAuth();
   const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.ACCOUNTS_MANAGE);
@@ -33,8 +35,8 @@ export function Accounts() {
   const [section, setSection] = useState<"accounts" | "chart-of-accounts" | "journal-entries">(
     sectionParam === "chart-of-accounts" || sectionParam === "journal-entries" ? sectionParam : "accounts"
   );
-  const [tab, setTab] = useState<"accounts" | "payment-methods">(
-    tabParam === "payment-methods" ? "payment-methods" : "accounts"
+  const [tab, setTab] = useState<"accounts" | "payment-methods" | "debts">(
+    tabParam === "payment-methods" ? "payment-methods" : tabParam === "debts" ? "debts" : "accounts"
   );
 
   useEffect(() => {
@@ -45,6 +47,8 @@ export function Accounts() {
     const tp = searchParams.get("tab");
     if (tp === "payment-methods") {
       setTab("payment-methods");
+    } else if (tp === "debts") {
+      setTab("debts");
     }
   }, [searchParams]);
 
@@ -77,7 +81,7 @@ export function Accounts() {
   const [form, setForm] = useState({
     locationId: "", name: "",     type: "cash" as "cash" | "wallet" | "bank_account",
     accountCode: "", accountNumber: "", openingBalance: "0.00", isPaymentMethod: true,
-    accountType: "asset" as CoaAccountType, accountSubType: "" as OperationalSubType, isContra: false, linkToCoa: false,
+    accountType: "asset" as CoaAccountType, accountSubType: "cash" as OperationalSubType, isContra: false, linkToCoa: false,
   });
   const [editForm, setEditForm] = useState({ name: "", accountCode: "", accountNumber: "", isPaymentMethod: true, isActive: true, accountType: "asset" as CoaAccountType, accountSubType: "" as OperationalSubType, isContra: false, linkToCoa: false });
   const [drawingForm, setDrawingForm] = useState({ amount: "", description: "", date: getLocalDateString() });
@@ -92,8 +96,10 @@ export function Accounts() {
   } = trpc.accounts.balanceHistory.useQuery(
     { days: 30 },
     {
-      refetchInterval: 15000,
-      refetchOnWindowFocus: true,
+      refetchInterval: 60000,
+      refetchOnWindowFocus: false,
+      placeholderData: (prev) => prev,
+      staleTime: 30000,
     }
   );
   const { data: ledger } = trpc.accounts.ledger.useQuery(
@@ -149,6 +155,10 @@ export function Accounts() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    // ABOUTME: Accounts are ALWAYS auto-linked to CoA on the backend.
+    // ABOUTME: The checkbox only controls whether the user wants to override the default CoA mapping.
+    // ABOUTME: When unchecked, accountType/accountSubType are omitted and backend uses defaults.
+    // ABOUTME: When checked, the user's selection is sent for manual override.
     createAccount.mutate({
       locationId: parseInt(form.locationId), name: form.name, type: form.type,
       accountCode: form.accountCode || undefined, accountNumber: form.accountNumber || undefined,
@@ -293,23 +303,39 @@ export function Accounts() {
                         <Input type="number" step="0.01" value={form.openingBalance} onChange={e => setForm(p => ({ ...p, openingBalance: e.target.value }))} className="pl-10" />
                       </div>
                     </div>
+                    {/* ABOUTME: Accounts are ALWAYS auto-linked to CoA. The checkbox enables manual override. */}
                     <div className="flex items-center gap-2 pt-2">
                       <input type="checkbox" id="linkToCoa" checked={form.linkToCoa} onChange={e => setForm(p => ({ ...p, linkToCoa: e.target.checked }))} className="rounded" />
-                      <Label htmlFor="linkToCoa" className="text-sm font-medium">Show in Chart of Accounts</Label>
+                      <Label htmlFor="linkToCoa" className="text-sm font-medium">Override CoA Mapping</Label>
+                      <span className="group relative ml-1 inline-flex cursor-help">
+                        <span className="text-xs text-[#8D8A87] underline decoration-dotted">(Auto-linked to {form.type === "bank_account" ? "Bank Accounts (asset/bank)" : form.type === "wallet" ? "Wallet Accounts (asset/cash)" : "Cash Accounts (asset/cash)"})</span>
+                      </span>
                     </div>
                     {form.linkToCoa && (
                       <>
-                        <p className="text-xs text-[#8D8A87]">The account balance will sync to the corresponding Chart of Accounts entry, making it visible in financial statements.</p>
+                        <p className="text-xs text-[#8D8A87]">Override the default CoA mapping. Select a different Asset sub-type for this account. Invalid assignments (e.g. Bank to Liability) are blocked.</p>
                         <div className="grid gap-4 sm:grid-cols-2">
                           <div className="space-y-2"><Label>Account Type</Label>
-                            <select value="asset" onChange={() => undefined} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm" disabled>
+                            <select value={form.accountType} onChange={e => {
+                              const val = e.target.value as CoaAccountType;
+                              // Reset sub-type when account type changes
+                              setForm(p => ({ ...p, accountType: val, accountSubType: "" as OperationalSubType }));
+                            }} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
                               <option value="asset">Asset</option>
+                              <option value="liability" disabled>Liability (not allowed for operational accounts)</option>
+                              <option value="equity" disabled>Equity (not allowed for operational accounts)</option>
+                              <option value="revenue" disabled>Revenue (not allowed for operational accounts)</option>
+                              <option value="expense" disabled>Expense (not allowed for operational accounts)</option>
                             </select>
                           </div>
                           <div className="space-y-2"><Label>Sub-Type</Label>
                             <select value={form.accountSubType} onChange={e => setForm(p => ({ ...p, accountSubType: e.target.value as OperationalSubType }))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
                               <option value="">Select asset sub-type...</option>
-                              {form.type === "bank_account" ? <option value="bank">Bank</option> : <option value="cash">Cash</option>}
+                              <option value="cash">Cash</option>
+                              <option value="bank">Bank</option>
+                              <option value="prepaid_expense">Prepaid Expenses</option>
+                              <option value="accounts_receivable">Accounts Receivable</option>
+                              <option value="fixed_asset">Fixed Assets</option>
                             </select>
                           </div>
                         </div>
@@ -425,6 +451,11 @@ export function Accounts() {
               </Dialog>
             </div>
           )}
+          {tab === "debts" && canManage && (
+            <div className="flex gap-2">
+              <AddDebtDialog onSuccess={() => { utils.accounts.list.invalidate(); utils.accounts.balanceHistory.invalidate(); }} />
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
@@ -434,6 +465,9 @@ export function Accounts() {
           </button>
           <button onClick={() => setTab("payment-methods")} className={`px-4 py-2 text-sm font-medium ${tab === "payment-methods" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
             <CreditCard className="mr-1 inline h-4 w-4"/>Payment Methods
+          </button>
+          <button onClick={() => setTab("debts")} className={`px-4 py-2 text-sm font-medium ${tab === "debts" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <Landmark className="mr-1 inline h-4 w-4"/>Debts
           </button>
         </div>
 
@@ -556,11 +590,21 @@ export function Accounts() {
             <h2 className="font-medium text-[#2D2A26]">Your Accounts</h2>
             {accounts?.map((account) => {
               const locationName = locations?.find(l => l.id === account.locationId)?.name ?? "";
+              const isSelected = selectedAccount === account.id;
               return (
-                <button
+                <div
                   key={account.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-pressed={isSelected}
                   onClick={() => setSelectedAccount(account.id)}
-                  className={`w-full rounded-xl border p-4 text-left transition-all ${selectedAccount === account.id ? "border-[#C73E1D] bg-[#C73E1D]/5" : "border-[#E8E0D8] bg-white hover:border-[#D4A854]"}`}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      setSelectedAccount(account.id);
+                    }
+                  }}
+                  className={`w-full cursor-pointer rounded-xl border p-4 text-left transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-[#C73E1D]/40 ${isSelected ? "border-[#C73E1D] bg-[#C73E1D]/5" : "border-[#E8E0D8] bg-white hover:border-[#D4A854]"}`}
                 >
                   <div className="flex items-center gap-3">
                     <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${getAccountColor(account.type)}`}>
@@ -656,7 +700,7 @@ export function Accounts() {
                       </DialogContent>
                     </Dialog>
                   </div>
-                </button>
+                </div>
               );
             })}
             {(!accounts || accounts.length === 0) && (
@@ -766,6 +810,9 @@ export function Accounts() {
             </div>
           </>
         )}
+
+        {tab === "debts" && <Debts embedded />}
+
         </>
         )}
 

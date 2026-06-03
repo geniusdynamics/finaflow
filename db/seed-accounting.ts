@@ -1,6 +1,6 @@
 import { getDb } from "../api/queries/connection";
 import { accounts, expenseCategories } from "./schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 const defaultAccounts = [
   { accountCode: "1000", name: "Cash - Main", accountType: "asset", accountSubType: "cash", type: "cash" as const, openingBalance: "0.00" },
@@ -94,16 +94,14 @@ const expenseCategoryMappings: Record<string, { accountingClass: string; default
 export async function seedAccountingData(businessId: number, locationId?: number) {
   const db = getDb();
 
-  for (const account of defaultAccounts) {
-    const existing = await db.query.accounts.findFirst({
-      where: and(
-        eq(accounts.accountCode, account.accountCode),
-        eq(accounts.businessId, businessId)
-      ),
-    });
-
-    if (!existing) {
-      await db.insert(accounts).values({
+  // Idempotent upsert: the unique index on (businessId, systemKey) makes ON CONFLICT
+  // safe, and DO NOTHING on the systemKey conflict lets duplicate accountCode entries
+  // (e.g. 2100 appears twice for Rent/Salaries) coexist as long as their accountType
+  // + accountSubType differ. For exact duplicate systemKeys, only the first one wins.
+  await db
+    .insert(accounts)
+    .values(
+      defaultAccounts.map((account) => ({
         businessId,
         locationId,
         name: account.name,
@@ -120,59 +118,53 @@ export async function seedAccountingData(businessId: number, locationId?: number
         isPaymentMethod: account.accountSubType === "cash" || account.accountSubType === "bank",
         isActive: true,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
-    }
+      } as any))
+    )
+    .onConflictDoNothing({ target: [accounts.businessId, accounts.systemKey] });
+
+  // Reload the canonical list after the upsert so the category→account resolution
+  // below uses whatever rows actually ended up in the database.
+  const allAccounts = await db.query.accounts.findMany({
+    where: eq(accounts.businessId, businessId),
+  });
+  const accountByCode = new Map<string, typeof allAccounts[number]>();
+  for (const a of allAccounts) {
+    if (a.accountCode) accountByCode.set(a.accountCode, a);
   }
 
   for (const cat of defaultExpenseCategories) {
-    const existing = await db.query.expenseCategories.findFirst({
-      where: and(eq(expenseCategories.name, cat.name), eq(expenseCategories.businessId, businessId)),
-    });
-    if (!existing) {
-      const mapping = expenseCategoryMappings[cat.name];
-      let defaultAccountId: number | undefined;
-      if (mapping) {
-        const account = await db.query.accounts.findFirst({
-          where: and(
-            eq(accounts.accountCode, mapping.defaultAccountCode),
-            eq(accounts.businessId, businessId)
-          ),
-        });
-        if (account) {
-          defaultAccountId = account.id;
-        }
-      }
-      await db.insert(expenseCategories).values({
-        ...cat,
-        businessId,
-        locationId,
+    const mapping = expenseCategoryMappings[cat.name];
+    const account = mapping ? accountByCode.get(mapping.defaultAccountCode) : undefined;
+    await db.insert(expenseCategories).values({
+      ...cat,
+      businessId,
+      locationId,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        accountingClass: (mapping?.accountingClass || "operating_expense") as any,
-        defaultAccountId: defaultAccountId || 1,
+      accountingClass: (mapping?.accountingClass || "operating_expense") as any,
+      defaultAccountId: account?.id ?? null,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any);
+    } as any).onConflictDoNothing();
+  }
+
+  // Re-derive the category→account mapping in case any categories were just created
+  // and their defaultAccountId was set to a real account, or any previously-seeded
+  // categories had a stale default that needs correcting now that the accounts exist.
+  const allCategories = await db.query.expenseCategories.findMany({
+    where: eq(expenseCategories.businessId, businessId),
+  });
+  for (const cat of allCategories) {
+    const mapping = expenseCategoryMappings[cat.name];
+    if (!mapping) continue;
+    const account = accountByCode.get(mapping.defaultAccountCode);
+    if (account && cat.defaultAccountId !== account.id) {
+      await db.update(expenseCategories).set({
+        defaultAccountId: account.id,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any).where(eq(expenseCategories.id, cat.id));
     }
   }
 
-  for (const [categoryName, mapping] of Object.entries(expenseCategoryMappings)) {
-    const category = await db.query.expenseCategories.findFirst({
-      where: and(eq(expenseCategories.name, categoryName), eq(expenseCategories.businessId, businessId)),
-    });
-
-    if (category) {
-      const account = await db.query.accounts.findFirst({
-        where: and(
-          eq(accounts.accountCode, mapping.defaultAccountCode),
-          eq(accounts.businessId, businessId)
-        ),
-      });
-
-      if (account && category.defaultAccountId !== account.id) {
-        await db.update(expenseCategories).set({
-          defaultAccountId: account.id,
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any).where(eq(expenseCategories.id, category.id));
-      }
-    }
-  }
+  // Touch sql so the import is not unused in environments where the linter
+  // removes the previous `and()` helper entirely.
+  void sql;
 }

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, billQuery, billCreate, billPay, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, expenseCategories } from "@db/schema";
+import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, expenseCategories, debts } from "@db/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { notFutureDateString } from "./lib/future-date";
@@ -9,6 +9,8 @@ import { ensureSystemAccount } from "./lib/accounting-accounts";
 import { getExpenseAccountSubType } from "./lib/accounting-maps";
 import { reverseLedgerEntriesForTransaction } from "./lib/accounting-reversal";
 import { payBill } from "./lib/bill-payment";
+import { clearNotificationsForBill } from "./lib/notification-clearance";
+import type { DbClient } from "./lib/account-subscriptions";
 
 type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -99,8 +101,8 @@ export const batchBillPaymentInputSchema = z.object({
   reference: z.string().optional(),
 });
 
-async function resolveBillCategoryId(tx: Tx, billId: number, supplierId?: number | null) {
-  const itemCategories = await tx
+async function resolveBillCategoryId(db: DbClient, billId: number, supplierId?: number | null) {
+  const itemCategories = await db
     .select({ categoryId: billItems.categoryId })
     .from(billItems)
     .where(and(eq(billItems.billId, billId), isNull(billItems.deletedAt), sql`${billItems.categoryId} IS NOT NULL`));
@@ -112,7 +114,7 @@ async function resolveBillCategoryId(tx: Tx, billId: number, supplierId?: number
   }
 
   if (distinctCategoryIds.length > 1) {
-    const categories = await tx
+    const categories = await db
       .select({ id: expenseCategories.id, name: expenseCategories.name })
       .from(expenseCategories)
       .where(inArray(expenseCategories.id, distinctCategoryIds as number[]));
@@ -123,13 +125,13 @@ async function resolveBillCategoryId(tx: Tx, billId: number, supplierId?: number
     );
   }
 
-  const [bill] = await tx.select().from(bills).where(eq(bills.id, billId)).limit(1);
+  const [bill] = await db.select().from(bills).where(eq(bills.id, billId)).limit(1);
   if (bill?.categoryId) {
     return bill.categoryId;
   }
 
   if (supplierId) {
-    const [supplier] = await tx.select().from(suppliers).where(eq(suppliers.id, supplierId)).limit(1);
+    const [supplier] = await db.select().from(suppliers).where(eq(suppliers.id, supplierId)).limit(1);
     if (supplier?.autoCategoryId) {
       return supplier.autoCategoryId;
     }
@@ -197,7 +199,7 @@ export const billsRouter = createRouter({
           categoryId: input.categoryId,
           billNumber, description: input.description,
           amount: input.amount, balanceDue: input.amount,
-          issueDate: new Date(input.issueDate), dueDate: new Date(input.dueDate),
+          issueDate: input.issueDate, dueDate: input.dueDate,
         } as BillInsert).returning();
         billId = result.id;
 
@@ -232,21 +234,21 @@ export const billsRouter = createRouter({
           expenseAccountId = expenseCategory[0].defaultAccountId;
         } else if (resolvedCategoryId) {
           const accountingClass = expenseCategory[0]?.accountingClass || "operating_expense";
-          expenseAccountId = await ensureSystemAccount({
+          expenseAccountId = (await ensureSystemAccount({
             businessId,
             accountType: "expense",
             accountSubType: getExpenseAccountSubType(accountingClass),
             name: expenseCategory[0]?.name || input.description,
-          });
+          })).id;
         }
 
         const liabilityAcctId = input.liabilityAccountId
-          ?? await ensureSystemAccount({
+          ?? (await ensureSystemAccount({
             businessId,
             accountType: "liability",
             accountSubType: "accounts_payable",
             name: "Accounts Payable",
-          });
+          })).id;
         const [apAccount] = await tx
           .select()
           .from(accounts)
@@ -312,7 +314,7 @@ export const billsRouter = createRouter({
       }
 
       const result = await db.transaction(async (tx) => {
-        return payBill({
+        const payResult = await payBill({
           db: tx,
           billId: input.billId,
           paymentMethod: input.paymentMethod,
@@ -330,6 +332,34 @@ export const billsRouter = createRouter({
           billNumber: bill.billNumber,
           description: bill.description,
         });
+
+        // If this bill is linked to a debt, recompute the debt's paidAmount and status
+        // from the sum of all linked bills' amountPaid. This keeps the loan balance in sync
+        // with the bill payment system that already handles loan reduction via payBill.
+        if (bill.debtId) {
+          const linkedBills = await tx
+            .select({ amountPaid: bills.amountPaid })
+            .from(bills)
+            .where(and(eq(bills.debtId, bill.debtId), isNull(bills.deletedAt)));
+          const totalPaid = linkedBills.reduce((sum, b) => sum.plus(d(b.amountPaid || "0")), d(0));
+
+          const [debt] = await tx.select().from(debts).where(eq(debts.id, bill.debtId)).limit(1);
+          if (debt) {
+            const totalAmount = d(debt.totalAmount || "0");
+            const isFullyPaid = totalPaid.gte(totalAmount);
+            await tx.update(debts).set({
+              paidAmount: totalPaid.toFixed(2),
+              status: isFullyPaid ? "paid" : debt.status === "paid" ? "active" : debt.status,
+            }).where(eq(debts.id, bill.debtId));
+          }
+        }
+
+        // Automatic notification clearance: archive any active bill-typed
+        // notifications for this user + bill, so the panel updates the moment
+        // the payment commits. Atomic with the rest of the transaction.
+        await clearNotificationsForBill(tx, { userId: enteredBy, billId: input.billId });
+
+        return payResult;
       });
 
       return { id: result.paymentId, newBalanceDue: result.newBalanceDue, status: result.status, success: true };

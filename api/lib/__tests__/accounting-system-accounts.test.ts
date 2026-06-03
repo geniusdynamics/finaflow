@@ -43,19 +43,19 @@ describe("ensureSystemAccount", () => {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any).returning();
 
-    const firstId = await ensureSystemAccount({
+    const firstId = (await ensureSystemAccount({
       businessId: business.id,
       accountType: "expense",
       accountSubType: "operating_expense",
       name: "Operating Expenses",
-    });
+    })).id;
 
-    const secondId = await ensureSystemAccount({
+    const secondId = (await ensureSystemAccount({
       businessId: business.id,
       accountType: "expense",
       accountSubType: "operating_expense",
       name: "Operating Expenses",
-    });
+    })).id;
 
     expect(secondId).toBe(firstId);
 

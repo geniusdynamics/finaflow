@@ -30,13 +30,16 @@
 
 ## Navigation & Layout
 - Sidebar items defined in `src/components/Layout.tsx` (allNavItems array)
-- **Accounting Hub**: Accounts page at `/accounts` hosts three sections via URL param `?section=`:
+- **Accounting Hub**: Accounts page at `/accounts` hosts four sections via URL param `?section=`:
   - `accounts` (default): Legacy accounts & payment-methods tabbed view
   - `chart-of-accounts`: Embedded ChartOfAccounts component
   - `journal-entries`: Embedded JournalEntries component
+  - **`debts`**: Embedded Debts component with debt cards, payments, progress tracking
+- **Debts tab** inside Accounts page: Third tab alongside "Accounts" and "Payment Methods" renders `<Debts embedded />`. Full standalone page at `src/pages/Debts.tsx` exported as `Debts` with `embedded?: boolean` prop.
 - **Calendar Hub**: Calendar page at `/calendar` hosts two sections via URL param `?section=`:
   - `calendar` (default): Cashflow calendar timeline view
   - `payments`: Embedded DailyPayments component
+- **Settings page** (`src/pages/Settings.tsx`): Redesigned with profile-like vertical navigation. Desktop shows sticky sidebar (`lg:block w-64`), mobile shows full-width nav list (`lg:hidden`). Nav items: Features, Account, Wallets, Integrations, Feedback — each with icon, label, description.
 - Old standalone routes (`/chart-of-accounts`, `/journal-entries`, `/daily-payments`) redirect to their respective hub pages with `?section=...`
 - Each section renders without its own `<Layout>` wrapper when embedded; standalone pages accept `embedded?: boolean` prop
 

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
+import { APP_VERSION_DISPLAY } from "@/lib/version";
 import { MobileBottomNavigation } from "@/components/MobileNavigation";
 
 const allNavItems = [
@@ -53,14 +54,33 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const { data: alertList } = trpc.alerts.checkAll.useQuery(undefined, { refetchInterval: 60000 });
   const { data: notifCount } = trpc.notifications.unreadCount.useQuery(undefined, { refetchInterval: 30000 });
+  const { data: highlightedCount } = trpc.notifications.highlightedCount.useQuery(undefined, { refetchInterval: 30000 });
   const { data: notifList } = trpc.notifications.list.useQuery({ limit: 20, unreadOnly: false });
   const utils = trpc.useUtils();
   const markNotifRead = trpc.notifications.markRead.useMutation({ onSuccess: () => utils.notifications.invalidate() });
+  const clickFadeNotif = trpc.notifications.clickFade.useMutation({ onSuccess: () => utils.notifications.invalidate() });
+  const dismissNotif = trpc.notifications.dismiss.useMutation({ onSuccess: () => utils.notifications.invalidate() });
+  const clearAllNotifs = trpc.notifications.clearAll.useMutation({
+    onSuccess: (res) => {
+      utils.notifications.invalidate();
+      if (typeof window !== "undefined" && res?.cleared != null) {
+        // Lightweight ack for screen readers; non-blocking.
+        window.dispatchEvent(new CustomEvent("finaflow:notifications-cleared", { detail: { cleared: res.cleared } }));
+      }
+    },
+  });
   const genOverdueNotifs = trpc.notifications.generateOverdueNotifications.useMutation({ onSuccess: () => utils.notifications.invalidate() });
+  const autoReHighlight = trpc.notifications.autoReHighlight.useMutation({ onSuccess: () => utils.notifications.invalidate() });
 
   useEffect(() => {
-    const timer = setTimeout(() => { genOverdueNotifs.mutate(); }, 3000);
-    return () => clearTimeout(timer);
+    const overdueTimer = setTimeout(() => { genOverdueNotifs.mutate(); }, 3000);
+    // Re-highlight sweep runs on mount and every 5 minutes for faded items.
+    autoReHighlight.mutate();
+    const reHighlightTimer = setInterval(() => { autoReHighlight.mutate(); }, 5 * 60 * 1000);
+    return () => {
+      clearTimeout(overdueTimer);
+      clearInterval(reHighlightTimer);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -82,29 +102,62 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <Bell className="h-4 w-4 shrink-0 text-[#8D8A87]" />
           {!sidebarCollapsed && <><span className="flex-1 text-left">Notifications</span>
           <div className="flex gap-1">
-            {notifCount !== undefined && notifCount > 0 && (
-              <span className="rounded-full bg-[#D32F2F] px-2 py-0.5 text-[10px] font-bold text-white">{notifCount}</span>
+            {highlightedCount !== undefined && highlightedCount > 0 && (
+              <span className="rounded-full bg-[#D32F2F] px-2 py-0.5 text-[10px] font-bold text-white">{highlightedCount}</span>
             )}
-            {alertList && alertList.length > 0 && (!notifCount || notifCount === 0) && (
+            {alertList && alertList.length > 0 && (!highlightedCount || highlightedCount === 0) && (
               <span className="rounded-full bg-[#ED6C02] px-2 py-0.5 text-[10px] font-bold text-white">{alertList.length}</span>
             )}
           </div></>}
         </button>
         {alertOpen && (
           <div className="absolute bottom-full left-0 right-0 mb-1 max-h-72 overflow-y-auto rounded-lg border border-[#E8E0D8] bg-white shadow-lg">
-            <div className="border-b border-[#E8E0D8] px-3 py-2">
-              <button onClick={() => genOverdueNotifs.mutate()} disabled={genOverdueNotifs.isPending} className="w-full rounded bg-[#C73E1D] px-2 py-1.5 text-[10px] font-medium text-white hover:bg-[#C73E1D]/90 disabled:opacity-50">
-                {genOverdueNotifs.isPending ? "Scanning..." : "Check for overdue bills"}
+            <div className="flex items-center gap-1.5 border-b border-[#E8E0D8] px-2 py-1.5">
+              <button
+                onClick={() => genOverdueNotifs.mutate()}
+                disabled={genOverdueNotifs.isPending}
+                aria-label="Check for overdue bills"
+                className="w-1/2 rounded bg-[#C73E1D] px-1.5 py-1 text-[9px] font-medium text-white hover:bg-[#C73E1D]/90 disabled:opacity-50"
+              >
+                {genOverdueNotifs.isPending ? "..." : "Check Bills"}
+              </button>
+              <button
+                onClick={() => clearAllNotifs.mutate()}
+                disabled={clearAllNotifs.isPending || !notifList || notifList.length === 0}
+                aria-label="Clear all notifications"
+                className="w-1/2 rounded border border-[#E8E0D8] bg-white px-1.5 py-1 text-[9px] font-medium text-[#2D2A26] hover:bg-[#F5EDE6] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {clearAllNotifs.isPending ? "..." : "Clear All"}
               </button>
             </div>
             {notifList && notifList.length > 0 && (
               <div className="border-b border-[#E8E0D8]">
-                {notifList.slice(0, 10).map(n => (
-                  <div key={n.id} onClick={() => !n.isRead && markNotifRead.mutate({ id: n.id })} className={`cursor-pointer border-b border-[#E8E0D8] px-3 py-2 text-xs ${n.severity === "critical" ? "bg-[#D32F2F]/5 text-[#D32F2F]" : n.severity === "warning" ? "bg-[#ED6C02]/5 text-[#EDA102]" : "text-[#2D2A26]"} ${!n.isRead ? "font-medium" : "opacity-60"}`}>
-                    <p className="flex items-center gap-1"><span className="text-[10px]">{!n.isRead && "● "}</span>{n.title}</p>
-                    <p className="text-[10px] opacity-70">{n.message}</p>
-                  </div>
-                ))}
+                {notifList.slice(0, 10).map(n => {
+                  const isFaded = n.highlightState === "faded";
+                  return (
+                    <div
+                      key={n.id}
+                      onClick={() => clickFadeNotif.mutate({ id: n.id })}
+                      className={`group flex items-start gap-2 border-b border-[#E8E0D8] px-3 py-2 text-xs transition-colors ${n.severity === "critical" ? "bg-[#D32F2F]/5 text-[#D32F2F]" : n.severity === "warning" ? "bg-[#ED6C02]/5 text-[#EDA102]" : "text-[#2D2A26]"} ${isFaded ? "opacity-50" : !n.isRead ? "font-medium" : "opacity-80"} hover:bg-[#F5EDE6]`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="flex items-center gap-1">
+                          <span className="text-[10px]">{!isFaded && !n.isRead && "● "}</span>
+                          {n.title}
+                        </p>
+                        <p className="text-[10px] opacity-70">{n.message}</p>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Dismiss notification"
+                        onClick={(e) => { e.stopPropagation(); dismissNotif.mutate({ id: n.id }); }}
+                        className="shrink-0 rounded p-1 text-[#8D8A87] opacity-0 transition-opacity hover:bg-[#E8E0D8] hover:text-[#2D2A26] group-hover:opacity-100 focus:opacity-100"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
             )}
             {alertList?.map((alert, i) => (
@@ -191,6 +244,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="flex-1 min-w-0">
               <h1 className="font-serif text-lg font-bold leading-tight text-[#2D2A26]">Finaflow</h1>
               <p className="text-[10px] uppercase tracking-wider text-[#8D8A87]">Cashflow Manager</p>
+              <p className="mt-0.5 text-[10px] font-mono text-[#D4A854]">{APP_VERSION_DISPLAY}</p>
             </div>
           )}
         </div>
@@ -241,7 +295,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#C73E1D]">
               <Receipt className="h-4 w-4 text-white" />
             </div>
-            <span className="font-serif text-base font-bold text-[#2D2A26]">Finaflow</span>
+            <div>
+              <span className="font-serif text-base font-bold text-[#2D2A26]">Finaflow</span>
+              <span className="ml-2 font-mono text-[10px] text-[#D4A854]">{APP_VERSION_DISPLAY}</span>
+            </div>
           </div>
           <button
             onClick={() => setMenuOpen(!menuOpen)}

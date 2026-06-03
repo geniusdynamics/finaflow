@@ -4,7 +4,7 @@ import { auditLog } from "@db/schema";
 export async function logAudit(params: {
   userId: string | number;
   businessId?: string | number;
-  action: "CREATE" | "UPDATE" | "DELETE" | "RESTORE" | "LOGIN" | "LOGOUT";
+  action: "CREATE" | "UPDATE" | "DELETE" | "RESTORE" | "LOGIN" | "LOGOUT" | "DOWNLOAD";
   resource: string;
   resourceId?: string | number;
   details?: Record<string, unknown>;

@@ -3,14 +3,16 @@ import { useNavigate, useSearchParams } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions";
+import { APP_VERSION_FULL } from "@/lib/version";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Settings as SettingsIcon, Camera, Briefcase, Shield, Crown, Award, ArrowUpCircle, ArrowDownCircle, Users, MapPin, Gift, Clock, Key, Trash2, Plus, Copy, CheckCircle, Webhook, AlertCircle, Plug, MessageSquare, Eye, RefreshCw, DollarSign, Wallet, Smartphone, Activity, AlertCircle as AlertCircleIcon, CheckCircle2 } from "lucide-react";
+import { Settings as SettingsIcon, Camera, Briefcase, Shield, Crown, Award, ArrowUpCircle, ArrowDownCircle, Users, MapPin, Gift, Clock, Key, Trash2, Plus, Copy, CheckCircle, Webhook, AlertCircle, Plug, MessageSquare, Eye, RefreshCw, DollarSign, Wallet, Smartphone, Activity, AlertCircle as AlertCircleIcon, CheckCircle2, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 const PLAN_DETAILS: Record<string, { label: string; price: string; businesses: number; branches: number; users: number; transactions: string; payroll: string; support: string; color: string; features: string[] }> = {
@@ -32,10 +34,20 @@ export function Settings() {
   const [tab, setTab] = useState<"features" | "account" | "integrations" | "feedback" | "wallets">(tabParam || "features");
   const [walletSubTab, setWalletSubTab] = useState<"providers" | "rates" | "currencies">("providers");
 
+  const isMobile = useIsMobile();
+
   const handleTabChange = (newTab: typeof tab) => {
     setTab(newTab);
     setSearchParams({ tab: newTab }, { replace: true });
   };
+
+  const navItems: { id: typeof tab; label: string; description: string; icon: React.ReactNode }[] = [
+    { id: "features", label: "Features", description: "Photos, multi-currency, multi-business", icon: <SettingsIcon className="h-5 w-5" /> },
+    { id: "account", label: "Account", description: "Plans, subscription, billing", icon: <Shield className="h-5 w-5" /> },
+    { id: "wallets", label: "Wallets", description: "Providers, rates, currencies", icon: <Wallet className="h-5 w-5" /> },
+    { id: "integrations", label: "Integrations", description: "API keys, webhooks, exchanges", icon: <Plug className="h-5 w-5" /> },
+    { id: "feedback", label: "Feedback", description: "Questionnaires and responses", icon: <MessageSquare className="h-5 w-5" /> },
+  ];
   
   // Feedback state
   const [qOpen, setQOpen] = useState(false);
@@ -176,30 +188,80 @@ export function Settings() {
 
   return (
     <Layout>
-      <div className="space-y-6">
-        <div>
+      <div className="lg:flex lg:gap-8">
+        {/* Sidebar header (mobile) */}
+        <div className="lg:hidden">
           <h1 className="font-serif text-2xl font-bold text-[#2D2A26]">Settings</h1>
-          <p className="mt-1 text-sm text-[#8D8A87]">Configure Finaflow for your business needs</p>
+          <p className="mt-1 mb-4 text-sm text-[#8D8A87]">Configure Finaflow for your business needs</p>
+          {/* Mobile nav list */}
+          <div className="mb-6 space-y-1">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => handleTabChange(item.id)}
+                className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-all ${
+                  tab === item.id
+                    ? "bg-[#C73E1D]/10 text-[#C73E1D] border-l-2 border-[#C73E1D]"
+                    : "text-[#2D2A26] hover:bg-[#F5EDE6] border-l-2 border-transparent"
+                }`}
+              >
+                <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                  tab === item.id ? "bg-[#C73E1D] text-white" : "bg-[#F5EDE6] text-[#8D8A87]"
+                }`}>
+                  {item.icon}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{item.label}</p>
+                  <p className="text-xs text-[#8D8A87] truncate">{item.description}</p>
+                </div>
+                <ChevronRight className={`h-4 w-4 shrink-0 ${tab === item.id ? "text-[#C73E1D]" : "text-[#8D8A87]"}`} />
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Tab switcher */}
-        <div className="flex gap-1 rounded-lg border border-[#E8E0D8] bg-white p-1 w-fit">
-          <button onClick={() => handleTabChange("features")} className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${tab === "features" ? "bg-[#C73E1D] text-white" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
-            <SettingsIcon className="inline h-4 w-4 mr-1" />Features
-          </button>
-          <button onClick={() => handleTabChange("account")} className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${tab === "account" ? "bg-[#C73E1D] text-white" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
-            <Shield className="inline h-4 w-4 mr-1" />Account
-          </button>
-          <button onClick={() => handleTabChange("wallets")} className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${tab === "wallets" ? "bg-[#C73E1D] text-white" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
-            <Wallet className="inline h-4 w-4 mr-1" />Wallets
-          </button>
-          <button onClick={() => handleTabChange("integrations")} className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${tab === "integrations" ? "bg-[#C73E1D] text-white" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
-            <Plug className="inline h-4 w-4 mr-1" />Integrations
-          </button>
-          <button onClick={() => handleTabChange("feedback")} className={`rounded-md px-4 py-2 text-sm font-medium transition-all ${tab === "feedback" ? "bg-[#C73E1D] text-white" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
-            <MessageSquare className="inline h-4 w-4 mr-1" />Feedback
-          </button>
+        {/* Desktop sidebar */}
+        <div className="hidden lg:block w-64 shrink-0">
+          <div className="sticky top-6">
+            <h1 className="font-serif text-2xl font-bold text-[#2D2A26]">Settings</h1>
+            <p className="mt-1 mb-6 text-sm text-[#8D8A87]">Configure Finaflow</p>
+            <nav className="space-y-1">
+              {navItems.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => handleTabChange(item.id)}
+                  className={`flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-all ${
+                    tab === item.id
+                      ? "bg-[#C73E1D]/10 text-[#C73E1D] border-l-2 border-[#C73E1D]"
+                      : "text-[#2D2A26] hover:bg-[#F5EDE6] border-l-2 border-transparent"
+                  }`}
+                >
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                    tab === item.id ? "bg-[#C73E1D] text-white" : "bg-[#F5EDE6] text-[#8D8A87]"
+                  }`}>
+                    {item.icon}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{item.label}</p>
+                    <p className="text-xs text-[#8D8A87] truncate">{item.description}</p>
+                  </div>
+                </button>
+              ))}
+            </nav>
+          </div>
         </div>
+
+        {/* Content area */}
+        <div className="flex-1 min-w-0 space-y-6">
+          {/* Desktop heading */}
+          <div className="hidden lg:block">
+            <h2 className="font-serif text-xl font-bold text-[#2D2A26]">
+              {navItems.find(n => n.id === tab)?.label}
+            </h2>
+            <p className="mt-1 text-sm text-[#8D8A87]">
+              {navItems.find(n => n.id === tab)?.description}
+            </p>
+          </div>
 
         {tab === "features" && (
           <>
@@ -957,7 +1019,13 @@ export function Settings() {
             </Card>
           </>
         )}
-      </div>
+
+        {/* Application Version */}
+        <div className="border-t border-[#E8E0D8] pt-4 mt-8">
+          <p className="font-mono text-xs text-[#8D8A87]">{APP_VERSION_FULL}</p>
+        </div>
+        </div>{/* end content-area */}
+      </div>{/* end lg:flex */}
     </Layout>
   );
 }

@@ -1,7 +1,7 @@
 {
   "name": "my-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.9.8",
   "type": "module",
   "scripts": {
     "dev": "scripts\\dev.cmd",
@@ -20,7 +20,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:migrate:run": "tsx scripts/run-migrations.ts",
     "db:fix:ap": "tsx scripts/fix-duplicate-ap-accounts.ts",
-    "db:push": "drizzle-kit push"
+    "db:fix:wallet": "tsx scripts/fix-mobile-wallet-transactions.ts",
+    "db:push": "drizzle-kit push",
+    "db:reset:test": "tsx scripts/reset-test-db.ts"
   },
   "portless": {
     "name": "finaflow",

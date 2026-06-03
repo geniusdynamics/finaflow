@@ -160,7 +160,7 @@ function createCaller(ctx: SeededContext) {
       currentBusiness: ctx.business,
       businessIds: [ctx.business.id],
     },
-  } as CallerContext);
+  } as any);
 }
 
 describe("expense categories dual-mode behavior", () => {
@@ -704,7 +704,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
   }
 
   it("creates a billPayments record when paying via expense with billId", async () => {
-    const { ctx, caller, paymentAccount, createdBill } = await seedPathBTest(`BP${Date.now()}`);
+    const { ctx, caller, paymentAccount, createdBill, supplier } = await seedPathBTest(`BP${Date.now()}`);
     const db = getTestDb();
 
     const category = await caller.expenses.createCategory({
@@ -721,7 +721,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
       paymentMethod: "cash",
       accountId: paymentAccount.id,
       billId: createdBill.id,
-      supplierId: createdBill.supplierId,
+      supplierId: supplier.id,
     });
 
     const payments = await db
@@ -735,7 +735,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
   });
 
   it("marks the bill as paid when full amount is paid via expense", async () => {
-    const { ctx, caller, paymentAccount, createdBill } = await seedPathBTest(`FULL${Date.now()}`);
+    const { ctx, caller, paymentAccount, createdBill, supplier } = await seedPathBTest(`FULL${Date.now()}`);
     const db = getTestDb();
 
     const category = await caller.expenses.createCategory({
@@ -752,7 +752,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
       paymentMethod: "cash",
       accountId: paymentAccount.id,
       billId: createdBill.id,
-      supplierId: createdBill.supplierId,
+      supplierId: supplier.id,
     });
 
     const [updatedBill] = await db
@@ -767,7 +767,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
   });
 
   it("marks the bill as partial when partial amount is paid via expense", async () => {
-    const { ctx, caller, paymentAccount, createdBill } = await seedPathBTest(`PART${Date.now()}`);
+    const { ctx, caller, paymentAccount, createdBill, supplier } = await seedPathBTest(`PART${Date.now()}`);
     const db = getTestDb();
 
     const category = await caller.expenses.createCategory({
@@ -784,7 +784,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
       paymentMethod: "cash",
       accountId: paymentAccount.id,
       billId: createdBill.id,
-      supplierId: createdBill.supplierId,
+      supplierId: supplier.id,
     });
 
     const [updatedBill] = await db
@@ -828,7 +828,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
   });
 
   it("creates AP ledger debit entry when paying via expense with billId", async () => {
-    const { db, ctx, caller, paymentAccount, createdBill } = await seedPathBTest(`AP${Date.now()}`);
+    const { db, ctx, caller, paymentAccount, createdBill, supplier } = await seedPathBTest(`AP${Date.now()}`);
 
     const apAccount = await db.query.accounts.findFirst({
       where: and(
@@ -852,7 +852,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
       paymentMethod: "cash",
       accountId: paymentAccount.id,
       billId: createdBill.id,
-      supplierId: createdBill.supplierId,
+      supplierId: supplier.id,
     });
 
     const apLedgerEntries = await db
@@ -924,7 +924,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
       req: new Request("http://localhost"),
       resHeaders: new Headers(),
       user: { ...ctxA.user, currentBusiness: ctxA.business, businessIds: [ctxA.business.id] },
-    } as CallerContext);
+    } as any);
 
     const catA = await callerA.expenses.createCategory({ name: `Cross A ${Date.now()}`, accountingClass: "operating_expense" });
     await ensureSystemAccount({ businessId: ctxA.business.id, accountType: "liability", accountSubType: "accounts_payable", name: "AP" });
@@ -942,7 +942,7 @@ describe("expenses with billId (Path B) — bill payment consolidation", () => {
       req: new Request("http://localhost"),
       resHeaders: new Headers(),
       user: { ...ctxB.user, currentBusiness: ctxB.business, businessIds: [ctxB.business.id] },
-    } as CallerContext);
+    } as any);
 
     const catB = await callerB.expenses.createCategory({ name: `Cross B ${Date.now()}`, accountingClass: "operating_expense" });
     await ensureSystemAccount({ businessId: ctxB.business.id, accountType: "liability", accountSubType: "accounts_payable", name: "AP" });

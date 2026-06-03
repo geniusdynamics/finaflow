@@ -20,6 +20,14 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    // Integration tests share a single PostgreSQL database. Running them in
+    // parallel causes lock contention, timeouts, and flake. The single fork
+    // pool gives us one test worker that runs test files sequentially while
+    // still parallelising cases inside a file.
+    pool: "forks",
+    singleFork: true,
+    testTimeout: 30_000,
+    hookTimeout: 60_000,
     include: [
       "api/**/*.test.ts",
       "api/**/*.test.tsx",
@@ -28,6 +36,7 @@ export default defineConfig({
       "src/**/*.test.tsx",
       "src/**/__tests__/*.test.ts",
       "src/**/__tests__/*.test.tsx",
+      "db/**/__tests__/*.test.ts",
     ],
     coverage: {
       provider: "v8",

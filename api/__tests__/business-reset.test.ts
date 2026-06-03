@@ -12,6 +12,7 @@ import {
   businesses,
   dailySales,
   dailySalePayments,
+  debts,
   expenses,
   expenseItems,
   journalEntries,
@@ -55,6 +56,7 @@ type SeededContext = {
   location: { id: number };
   owner: { id: number; role: string; currentBusinessId: number };
   operationalAccount: { id: number };
+  operationalAccountNoBizId: { id: number };
   systemAccount: { id: number };
   journalEntry: { id: number };
   employee: { id: number };
@@ -66,6 +68,7 @@ type SeededContext = {
   category: { id: number };
   payrollPeriod: { id: number };
   purchaseOrder: { id: number };
+  debt: { id: number };
 };
 
 async function seedResetContext(seed: string): Promise<SeededContext> {
@@ -104,7 +107,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     nextExpenseNumber: 27,
   } satisfies typeof locations.$inferInsert).returning());
 
-  // Create operational (user) account
+  // Create operational (user) account (with businessId set — CoA-linked account)
   const opAccount = await firstRow<typeof accounts.$inferSelect>(db.insert(accounts).values({
     businessId: business.id,
     locationId: location.id,
@@ -112,6 +115,18 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     type: "cash",
     currentBalance: "450.00",
     openingBalance: "100.00",
+    isActive: true,
+  } satisfies typeof accounts.$inferInsert).returning());
+
+  // Create realistic operational account WITHOUT businessId — simulates the production
+  // scenario where operational accounts only have locationId set, businessId is NULL
+  const operationalAccountNoBizId = await firstRow<typeof accounts.$inferSelect>(db.insert(accounts).values({
+    locationId: location.id,
+    businessId: null as unknown as undefined,
+    name: "M-PESA Till",
+    type: "bank_account",
+    currentBalance: "4599.00",
+    openingBalance: "1000.00",
     isActive: true,
   } satisfies typeof accounts.$inferInsert).returning());
 
@@ -250,9 +265,10 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
   } satisfies typeof billItems.$inferInsert);
 
   // Create M-PESA transaction (txnId limited to varchar(20))
+  const uniqueTag = `${seed}-${Math.random().toString(36).slice(2, 8)}`;
   await db.insert(mpesaTransactions).values({
     locationId: location.id,
-    txnId: `TXN-${seed}`.slice(0, 20),
+    txnId: `TXN-${uniqueTag}`.slice(0, 20),
     txnDate: "2026-05-16",
     txnType: "topup",
     amount: "500.00",
@@ -323,6 +339,18 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     isActive: true,
   } satisfies typeof recurringBillTemplates.$inferInsert);
 
+  // Create debt record
+  const debt = await firstRow<typeof debts.$inferSelect>(db.insert(debts).values({
+    locationId: location.id,
+    businessId: business.id,
+    creditorName: `Creditor ${seed}`,
+    totalAmount: "10000.00",
+    paidAmount: "2000.00",
+    dueDate: new Date("2026-12-31"),
+    status: "active",
+    createdBy: owner.id,
+  } satisfies typeof debts.$inferInsert).returning());
+
   // Create notification
   await db.insert(notifications).values({
     userId: owner.id,
@@ -339,6 +367,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     location,
     owner: { id: owner.id, role: owner.role, currentBusinessId: business.id },
     operationalAccount: opAccount,
+    operationalAccountNoBizId,
     systemAccount: sysAccount,
     journalEntry: entry,
     employee,
@@ -350,6 +379,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     category,
     payrollPeriod,
     purchaseOrder: po,
+    debt,
   };
 }
 
@@ -372,6 +402,7 @@ async function cleanupResetContext(accountId: string) {
     await db.delete(purchaseOrders).where(sql`${purchaseOrders.locationId} IN (${locIdSql})`);
     await db.delete(recurringBillTemplates).where(sql`${recurringBillTemplates.locationId} IN (${locIdSql})`);
     await db.delete(mpesaTransactions).where(sql`${mpesaTransactions.locationId} IN (${locIdSql})`);
+    await db.delete(debts).where(sql`${debts.locationId} IN (${locIdSql})`);
   }
 
   const journalRows = await db.select({ id: journalEntries.id }).from(journalEntries).where(eq(journalEntries.businessId, business.id));
@@ -411,6 +442,14 @@ async function cleanupResetContext(accountId: string) {
   // Delete expense_categories FIRST (FK references accounts.id via defaultAccountId)
   await db.delete(expenseCategories).where(eq(expenseCategories.businessId, business.id));
   await db.delete(accounts).where(eq(accounts.businessId, business.id));
+  // Also clean up accounts with only locationId (no businessId)
+  if (locIds.length > 0) {
+    const locIdSql = sql.join(locIds.map((id) => sql`${id}`), sql`, `);
+    await db.delete(accounts).where(and(
+      isNull(accounts.businessId),
+      sql`${accounts.locationId} IN (${locIdSql})`
+    ));
+  }
   await db.delete(suppliers).where(eq(suppliers.businessId, business.id));
   await db.delete(employees).where(sql`${employees.id} > 0`);
   await db.delete(locations).where(eq(locations.businessId, business.id));
@@ -462,6 +501,7 @@ describe("resetBusinessTransactions", () => {
     expect(savedSystemAccount).toBeDefined();
     expect(savedSystemAccount.deletedAt).toBeNull();
     expect(savedSystemAccount.currentBalance).toBe("0.00");
+    expect(savedSystemAccount.openingBalance).toBe("0.00");
     expect(savedSystemAccount.isActive).toBe(true);
 
     // Verify user account preserved with balance reset
@@ -473,6 +513,7 @@ describe("resetBusinessTransactions", () => {
     expect(savedOperationalAccount.deletedAt).toBeNull();
     expect(savedOperationalAccount.isActive).toBe(true);
     expect(savedOperationalAccount.currentBalance).toBe("0.00");
+    expect(savedOperationalAccount.openingBalance).toBe("0.00");
 
     // Verify journal entry hard-deleted
     const journalEntriesAfter = await db
@@ -547,6 +588,15 @@ describe("resetBusinessTransactions", () => {
     expect(savedSupplier.currentBalance).toBe("0.00");
     expect(savedSupplier.totalBilled).toBe("0.00");
     expect(savedSupplier.totalPaid).toBe("0.00");
+
+    // Verify debt soft-deleted
+    const [savedDebt] = await db
+      .select()
+      .from(debts)
+      .where(eq(debts.id, ctx.debt.id))
+      .limit(1);
+    expect(savedDebt.deletedAt).not.toBeNull();
+    expect(savedDebt.status).toBe("cancelled");
 
     // Verify audit log entry was written
     const auditEntries = await db
@@ -674,6 +724,7 @@ describe("resetBusinessTransactions", () => {
     expect(result.results.expenses.count).toBe(1);
     expect(result.results.expense_items.count).toBe(1);
     expect(result.results.bills.count).toBe(1);
+    expect(result.results.debts.count).toBe(1);
     expect(result.results.mpesa_transactions.count).toBe(1);
     expect(result.results.journal_entries.count).toBe(1);
     expect(result.results.locations.count).toBe(1);
