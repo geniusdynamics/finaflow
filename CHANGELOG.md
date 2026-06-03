@@ -1,8 +1,9 @@
 # Changelog
 
-## [Unreleased] — Business Reset Enhancement: Complete System Reset with Multi-Level Confirmation
+## [Unreleased] — Payroll Salary Expense Fix
 
 ### Fixed
+- **[CRITICAL] Salary expense (6300) debited with net pay instead of gross pay** — When marking payroll as paid, the `markPaid` mutation was recording the Salaries & Wages expense (account 6300) as a debit of only `totalNetPay` (the net amount paid to employees). This understated the true cost of employment by excluding all statutory deductions (PAYE, NSSF, NHIF, Housing Levy). Fixed to debit `totalGross` (net pay + all deductions), correctly reflecting the full gross salary cost in the ledger. Verified that liability accounts 2200 (PAYE), 2300 (NSSF), and 2400 (NHIF) are all credited correctly.
 - **`openingBalance` not reset on accounts** — The reset function only reset `currentBalance` to `0.00` but left `openingBalance` untouched, causing bank account values and displayed balances to appear retained after reset. Now both `currentBalance` and `openingBalance` are reset to `0.00` for all accounts.
 - **Debt records not cleared on reset** — The `debts` table was completely absent from the reset function. Debt records were never soft-deleted or cancelled during a business reset. Added proper debt clearing with status set to `cancelled` and `deletedAt` timestamp.
 - **[CRITICAL] Operational accounts (Cash Drawer, M-PESA, Bank) not reset** — The root cause of bank account balances and ledger entries surviving the reset was that all account queries in the reset function filtered by `businessId` only. However, operational accounts (Cash Drawer, M-PESA Till, Bank Account) use `locationId` as their identifier and have `businessId = NULL` in the database. The reset completely missed these accounts, leaving their balances and transaction histories intact.

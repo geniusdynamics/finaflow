@@ -150,17 +150,18 @@ if (runStandaloneServer) {
 walletRegistry.register(mpesaProvider);
 walletRegistry.register(airtelMoneyProvider);
 
+const sasapayProvider = new SasapayProvider({
+  apiKey: process.env.SASAPAY_API_KEY ?? "",
+  apiSecret: process.env.SASAPAY_API_SECRET ?? "",
+  merchantCode: process.env.SASAPAY_MERCHANT_CODE ?? "",
+  callbackUrl: process.env.SASAPAY_CALLBACK_URL ?? "",
+});
+walletRegistry.register(sasapayProvider);
+
 if (process.env.SASAPAY_API_KEY && process.env.SASAPAY_API_SECRET) {
-  const sasapayProvider = new SasapayProvider({
-    apiKey: process.env.SASAPAY_API_KEY,
-    apiSecret: process.env.SASAPAY_API_SECRET,
-    merchantCode: process.env.SASAPAY_MERCHANT_CODE,
-    callbackUrl: process.env.SASAPAY_CALLBACK_URL,
-  });
-  walletRegistry.register(sasapayProvider);
   console.log("[boot] Sasapay provider registered with API credentials");
 } else {
-  console.log("[boot] Sasapay provider not registered (SASAPAY_API_KEY/SASAPAY_API_SECRET not set)");
+  console.log("[boot] Sasapay provider registered (API credentials not configured — set SASAPAY_API_KEY and SASAPAY_API_SECRET to enable live transactions)");
 }
 
 console.log("[boot] Registered wallet providers:", walletRegistry.getAll().map((p) => p.code).join(", "));
