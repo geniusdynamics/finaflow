@@ -312,14 +312,14 @@ export const payrollRouter = createRouter({
             ),
           });
           if (salaryExpenseAcct) {
-            const expenseNewBal = d(salaryExpenseAcct.currentBalance || "0").plus(totalNetPay);
+            const expenseNewBal = d(salaryExpenseAcct.currentBalance || "0").plus(totalGross);
             await tx.insert(ledgerEntries).values({
               accountId: salaryExpenseAcct.id,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
               transactionType: "payroll" as any,
               transactionId: input.periodId,
               entryType: "debit",
-              amount: totalNetPay.toFixed(2),
+              amount: totalGross.toFixed(2),
               balanceAfter: expenseNewBal.toFixed(2),
               entryDate: paymentDateStr,
               createdBy: userId,
