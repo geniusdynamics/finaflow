@@ -86,23 +86,25 @@ async function fixMobileWalletTransactions() {
       soft_deleted_count: string;
       live_count: string;
     }>(
-      `SELECT t1."provider", t1."provider_txn_id",
-              (SELECT COUNT(*) FROM "mobile_wallet_transactions" t2
-                WHERE t2."provider" = t1."provider"
-                  AND t2."provider_txn_id" = t1."provider_txn_id"
-                  AND t2."deletedAt" IS NOT NULL)::text AS soft_deleted_count,
-              (SELECT COUNT(*) FROM "mobile_wallet_transactions" t3
-                WHERE t3."provider" = t1."provider"
-                  AND t3."provider_txn_id" = t1."provider_txn_id"
-                  AND t3."deletedAt" IS NULL)::text AS live_count
-       FROM "mobile_wallet_transactions" t1
-       WHERE t1."deletedAt" IS NOT NULL
-       GROUP BY t1."provider", t1."provider_txn_id"
-       HAVING (SELECT COUNT(*) FROM "mobile_wallet_transactions" t3
-                WHERE t3."provider" = t1."provider"
-                  AND t3."provider_txn_id" = t1."provider_txn_id"
-                  AND t3."deletedAt" IS NULL) = 0
-       ORDER BY soft_deleted_count::int DESC
+      `SELECT * FROM (
+         SELECT t1."provider", t1."provider_txn_id",
+                (SELECT COUNT(*) FROM "mobile_wallet_transactions" t2
+                  WHERE t2."provider" = t1."provider"
+                    AND t2."provider_txn_id" = t1."provider_txn_id"
+                    AND t2."deletedAt" IS NOT NULL)::text AS soft_deleted_count,
+                (SELECT COUNT(*) FROM "mobile_wallet_transactions" t3
+                  WHERE t3."provider" = t1."provider"
+                    AND t3."provider_txn_id" = t1."provider_txn_id"
+                    AND t3."deletedAt" IS NULL)::text AS live_count
+         FROM "mobile_wallet_transactions" t1
+         WHERE t1."deletedAt" IS NOT NULL
+         GROUP BY t1."provider", t1."provider_txn_id"
+         HAVING (SELECT COUNT(*) FROM "mobile_wallet_transactions" t3
+                  WHERE t3."provider" = t1."provider"
+                    AND t3."provider_txn_id" = t1."provider_txn_id"
+                    AND t3."deletedAt" IS NULL) = 0
+       ) AS blocking
+       ORDER BY blocking.soft_deleted_count::int DESC
        LIMIT 20`,
     );
     if (blockingRows.rows.length === 0) {
