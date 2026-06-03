@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
+import { APP_VERSION_DISPLAY } from "@/lib/version";
 import { MobileBottomNavigation } from "@/components/MobileNavigation";
 
 const allNavItems = [
@@ -243,6 +244,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="flex-1 min-w-0">
               <h1 className="font-serif text-lg font-bold leading-tight text-[#2D2A26]">Finaflow</h1>
               <p className="text-[10px] uppercase tracking-wider text-[#8D8A87]">Cashflow Manager</p>
+              <p className="mt-0.5 text-[10px] font-mono text-[#D4A854]">{APP_VERSION_DISPLAY}</p>
             </div>
           )}
         </div>
@@ -293,7 +295,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#C73E1D]">
               <Receipt className="h-4 w-4 text-white" />
             </div>
-            <span className="font-serif text-base font-bold text-[#2D2A26]">Finaflow</span>
+            <div>
+              <span className="font-serif text-base font-bold text-[#2D2A26]">Finaflow</span>
+              <span className="ml-2 font-mono text-[10px] text-[#D4A854]">{APP_VERSION_DISPLAY}</span>
+            </div>
           </div>
           <button
             onClick={() => setMenuOpen(!menuOpen)}

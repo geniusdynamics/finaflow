@@ -5,6 +5,7 @@ import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions";
+import { APP_VERSION_FULL } from "@/lib/version";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -1018,7 +1019,12 @@ export function Settings() {
             </Card>
           </>
         )}
-      </div>{/* end content-area */}
+
+        {/* Application Version */}
+        <div className="border-t border-[#E8E0D8] pt-4 mt-8">
+          <p className="font-mono text-xs text-[#8D8A87]">{APP_VERSION_FULL}</p>
+        </div>
+        </div>{/* end content-area */}
       </div>{/* end lg:flex */}
     </Layout>
   );

@@ -1,5 +1,26 @@
 # Changelog
 
+## [Unreleased] — Comprehensive Versioning & Changelog Management
+
+### Added
+- **Centralized version source** (`src/lib/version.ts`) — Single source of truth for the application version number (`APP_VERSION`), with derived display constants `APP_VERSION_DISPLAY` (`V:0.9.8`) and `APP_VERSION_FULL` (`Version: 0.9.8`). All version displays across the app import from this single file, guaranteeing consistency.
+- **Version display in sidebar** — `src/components/Layout.tsx` now renders the version number (`V:0.9.8`) in gold monospace below the "Cashflow Manager" subtitle in the desktop sidebar, visible whenever the sidebar is expanded.
+- **Version display in mobile header** — `src/components/Layout.tsx` mobile header now includes the version number (`V:0.9.8`) next to the "Finaflow" branding, ensuring version visibility on all screen sizes.
+- **Version display in Settings page** — `src/pages/Settings.tsx` now shows the full version string (`Version: 0.9.8`) at the bottom of the settings content area, providing a clear reference point for debugging and support.
+- **package.json version sync** — The `version` field in `package.json` is now set to `0.9.8`, matching the centralized version source.
+
+### Changed
+- **`src/lib/version.ts`** — New centralized version module (baseline: `0.9.8`)
+- **`src/components/Layout.tsx`** — Imported `APP_VERSION_DISPLAY` and added version rendering to both desktop sidebar and mobile header
+- **`src/pages/Settings.tsx`** — Imported `APP_VERSION_FULL` and added version display at the bottom of the settings page
+- **`package.json`** — Version updated from `0.0.0` to `0.9.8`
+
+### Files
+- `src/lib/version.ts` — centralized version source
+- `src/components/Layout.tsx` — version display in sidebar + mobile header
+- `src/pages/Settings.tsx` — version display in settings page
+- `package.json` — version field synced
+
 ## [Unreleased] — Homepage: GitHub Links, "How it Works", and FAQ
 
 ### Added
