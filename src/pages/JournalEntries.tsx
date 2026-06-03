@@ -1,5 +1,6 @@
 // ABOUTME: Journal Entries management page for double-entry bookkeeping
-import { useState, useMemo } from "react";
+// ABOUTME: Uses an AccountCombobox for line selection so CoA and operational accounts are searchable.
+import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { formatKES } from "@/lib/utils";
@@ -7,9 +8,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, BookOpen, CheckCircle, XCircle, RotateCcw, Trash2, Search, AlertTriangle } from "lucide-react";
+import { Plus, BookOpen, CheckCircle, XCircle, RotateCcw, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
+import { AccountCombobox } from "@/components/AccountCombobox";
 
 export function JournalEntries({ embedded }: { embedded?: boolean }) {
   const [page, setPage] = useState(1);
@@ -310,7 +312,6 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
   const [reference, setReference] = useState("");
   const [lines, setLines] = useState([{ accountId: "", debit: "", credit: "", description: "" }]);
   const [postImmediately, setPostImmediately] = useState(true);
-  const [searchTerms, setSearchTerms] = useState<string[]>([]);
 
   const utils = trpc.useUtils();
   const createMutation = trpc.journal.create.useMutation({
@@ -322,79 +323,13 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
     onError: (e) => toast.error(e.message),
   });
 
-  // Fetch both operational accounts and CoA entries for hierarchical dropdown
-  const { data: journalAccounts } = trpc.accounts.listForJournal.useQuery();
-
-  // Build a hierarchical structure for the account dropdown
-  const hierarchicalAccounts = useMemo(() => {
-    const groups: Record<string, { label: string; options: { id: number; name: string; code?: string; subType?: string }[] }> = {};
-
-    // Add CoA accounts grouped by type/subtype
-    if (journalAccounts?.coa) {
-      for (const acc of journalAccounts.coa) {
-        const typeLabel = acc.accountType ? acc.accountType.charAt(0).toUpperCase() + acc.accountType.slice(1) : "Unclassified";
-        const subTypeLabel = acc.accountSubType ? acc.accountSubType.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) : "";
-        const groupKey = `coa-${typeLabel}-${subTypeLabel}`;
-        if (!groups[groupKey]) {
-          groups[groupKey] = {
-            label: `${typeLabel}${subTypeLabel ? ` → ${subTypeLabel}` : ""}`,
-            options: [],
-          };
-        }
-        groups[groupKey].options.push({
-          id: acc.id,
-          name: acc.name,
-          code: acc.accountCode || undefined,
-          subType: acc.accountSubType || undefined,
-        });
-      }
-    }
-
-    // Add operational accounts grouped by type
-    if (journalAccounts?.operational) {
-      const opGroupKey = "operational";
-      if (!groups[opGroupKey]) {
-        groups[opGroupKey] = {
-          label: "Operational Accounts",
-          options: [],
-        };
-      }
-      for (const acc of journalAccounts.operational) {
-        groups[opGroupKey].options.push({
-          id: acc.id,
-          name: acc.name,
-          code: acc.accountCode || acc.type,
-        });
-      }
-    }
-
-    return groups;
-  }, [journalAccounts]);
-
-  // Flatten options for search functionality
-  const allOptions = useMemo(() => {
-    const opts: { id: number; label: string; groupLabel: string }[] = [];
-    for (const [, group] of Object.entries(hierarchicalAccounts)) {
-      for (const opt of group.options) {
-        opts.push({
-          id: opt.id,
-          label: opt.code ? `${opt.code} - ${opt.name}` : opt.name,
-          groupLabel: group.label,
-        });
-      }
-    }
-    return opts;
-  }, [hierarchicalAccounts]);
-
   const addLine = () => {
     setLines([...lines, { accountId: "", debit: "", credit: "", description: "" }]);
-    setSearchTerms([...searchTerms, ""]);
   };
 
   const removeLine = (idx: number) => {
     if (lines.length > 2) {
       setLines(lines.filter((_, i) => i !== idx));
-      setSearchTerms(searchTerms.filter((_, i) => i !== idx));
     }
   };
 
@@ -403,12 +338,6 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (updated[idx] as any)[field] = value;
     setLines(updated);
-  };
-
-  const updateSearchTerm = (idx: number, value: string) => {
-    const updated = [...searchTerms];
-    updated[idx] = value;
-    setSearchTerms(updated);
   };
 
   const totalDebit = lines.reduce((sum, l) => sum + (parseFloat(l.debit) || 0), 0);
@@ -423,25 +352,6 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
 
   // Check if any line has neither debit nor credit
   const hasEmptyLines = lines.some((l) => !l.debit && !l.credit);
-
-  // Filter options based on search term for a specific line
-  const getFilteredOptions = (idx: number) => {
-    const term = searchTerms[idx]?.toLowerCase() || "";
-    if (!term) return hierarchicalAccounts;
-
-    const filtered: typeof hierarchicalAccounts = {};
-    for (const [key, group] of Object.entries(hierarchicalAccounts)) {
-      const matchingOptions = group.options.filter(
-        (opt) =>
-          opt.name.toLowerCase().includes(term) ||
-          (opt.code && opt.code.toLowerCase().includes(term))
-      );
-      if (matchingOptions.length > 0) {
-        filtered[key] = { ...group, options: matchingOptions };
-      }
-    }
-    return filtered;
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -487,183 +397,178 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
-        <div>
-          <label className="text-sm text-[#8D8A87]">Entry Date</label>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-[#8D8A87]">Entry Date</label>
           <input
             type="date"
             value={entryDate}
             onChange={(e) => setEntryDate(e.target.value)}
-            className="w-full rounded border px-3 py-2"
+            className="w-full rounded-md border border-[#E8E0D8] bg-white px-3 py-2 text-sm focus:border-[#C73E1D] focus:outline-none focus:ring-1 focus:ring-[#C73E1D]"
             required
           />
         </div>
-        <div>
-          <label className="text-sm text-[#8D8A87]">Reference</label>
-          <Input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="Optional reference" />
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-[#8D8A87]">Reference</label>
+          <Input
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            placeholder="Optional reference"
+            className="text-sm"
+          />
         </div>
       </div>
-      <div>
-        <label className="text-sm text-[#8D8A87]">Description</label>
+      <div className="space-y-1">
+        <label className="text-xs font-medium text-[#8D8A87]">Description</label>
         <Input
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Description of this transaction"
           required
+          className="text-sm"
         />
       </div>
 
       <div className="border-t pt-4">
-        <div className="mb-2 flex items-center justify-between">
-          <h4 className="font-semibold">Journal Lines</h4>
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h4 className="font-semibold text-[#2D2A26]">Journal Lines</h4>
+            <p className="text-[11px] text-[#8D8A87]">
+              Use the account picker to choose any Chart-of-Accounts entry or operational account.
+            </p>
+          </div>
           <Button type="button" size="sm" variant="outline" onClick={addLine}>
-            <Plus className="h-4 w-4 mr-1" /> Add Line
+            <Plus className="h-3.5 w-3.5 mr-1" /> Add Line
           </Button>
         </div>
 
         <div className="space-y-2">
-          {lines.map((line, idx) => {
-            const filteredGroups = getFilteredOptions(idx);
-            return (
-              <div key={idx} className="flex items-start gap-2 rounded border p-2">
-                <div className="flex-1">
-                  {/* Search input for filtering accounts */}
-                  <div className="relative mb-1">
-                    <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-[#8D8A87]" />
-                    <input
-                      type="text"
-                      value={searchTerms[idx] || ""}
-                      onChange={(e) => updateSearchTerm(idx, e.target.value)}
-                      placeholder="Search accounts..."
-                      className="w-full rounded border border-[#E8E0D8] pl-7 pr-2 py-1 text-xs"
-                    />
-                  </div>
-                  {/* Hierarchical account selector */}
-                  <select
-                    value={line.accountId}
-                    onChange={(e) => updateLine(idx, "accountId", e.target.value)}
-                    className="w-full rounded border px-2 py-1 text-sm"
-                    required
-                    size={5}
-                  >
-                    <option value="">Select Account</option>
-                    {Object.entries(filteredGroups).map(([groupKey, group]) => (
-                      <optgroup key={groupKey} label={group.label}>
-                        {group.options.map((opt) => (
-                          <option key={opt.id} value={opt.id}>
-                            {opt.code ? `${opt.code} - ${opt.name}` : opt.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                  {/* Show CoA details for selected account */}
-                  {line.accountId && journalAccounts && (
-                    <div className="mt-1 text-xs text-[#8D8A87]">
-                      {(() => {
-                        const allAccs = [...(journalAccounts.coa || []), ...(journalAccounts.operational || [])];
-                        const sel = allAccs.find((a) => a.id === parseInt(line.accountId));
-                        if (!sel) return null;
-                        const parts: string[] = [];
-                        if (sel.accountType) parts.push(sel.accountType.charAt(0).toUpperCase() + sel.accountType.slice(1));
-                        if (sel.accountSubType) parts.push(sel.accountSubType.replace(/_/g, " "));
-                        if (sel.accountCode) parts.push(`Code: ${sel.accountCode}`);
-                        return parts.length > 0 ? <span>{parts.join(" · ")}</span> : null;
-                      })()}
-                    </div>
-                  )}
-                </div>
-                <div className="w-28">
+          {lines.map((line, idx) => (
+            <div
+              key={idx}
+              className="grid grid-cols-12 items-start gap-2 rounded-lg border border-[#E8E0D8] bg-white p-2"
+            >
+              <div className="col-span-6">
+                <AccountCombobox
+                  value={line.accountId}
+                  onChange={(v) => updateLine(idx, "accountId", v)}
+                  excludeIds={lines
+                    .map((l, i) => (i !== idx && l.accountId ? parseInt(l.accountId) : null))
+                    .filter((id): id is number => id !== null)}
+                />
+              </div>
+              <div className="col-span-2">
+                <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8D8A87]">
+                  Debit
+                </label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[#8D8A87]">
+                    KES
+                  </span>
                   <input
                     type="number"
                     step="0.01"
+                    min="0"
                     value={line.debit}
                     onChange={(e) => {
                       updateLine(idx, "debit", e.target.value);
                       if (e.target.value) updateLine(idx, "credit", "");
                     }}
-                    placeholder="Debit"
-                    className="w-full rounded border px-2 py-1 text-sm text-right"
+                    placeholder="0.00"
+                    className="w-full rounded-md border border-[#E8E0D8] bg-white px-2 py-1.5 pl-9 text-right text-sm font-mono focus:border-[#C73E1D] focus:outline-none focus:ring-1 focus:ring-[#C73E1D]"
                   />
                 </div>
-                <div className="w-28">
+              </div>
+              <div className="col-span-2">
+                <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8D8A87]">
+                  Credit
+                </label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[#8D8A87]">
+                    KES
+                  </span>
                   <input
                     type="number"
                     step="0.01"
+                    min="0"
                     value={line.credit}
                     onChange={(e) => {
                       updateLine(idx, "credit", e.target.value);
                       if (e.target.value) updateLine(idx, "debit", "");
                     }}
-                    placeholder="Credit"
-                    className="w-full rounded border px-2 py-1 text-sm text-right"
+                    placeholder="0.00"
+                    className="w-full rounded-md border border-[#E8E0D8] bg-white px-2 py-1.5 pl-9 text-right text-sm font-mono focus:border-[#C73E1D] focus:outline-none focus:ring-1 focus:ring-[#C73E1D]"
                   />
                 </div>
-                <div className="w-32">
-                  <input
-                    type="text"
-                    value={line.description}
-                    onChange={(e) => updateLine(idx, "description", e.target.value)}
-                    placeholder="Memo (optional)"
-                    className="w-full rounded border px-2 py-1 text-sm"
-                  />
-                </div>
+              </div>
+              <div className="col-span-1 flex items-end">
+                <Input
+                  value={line.description}
+                  onChange={(e) => updateLine(idx, "description", e.target.value)}
+                  placeholder="Memo"
+                  className="h-[34px] text-xs"
+                />
+              </div>
+              <div className="col-span-1 flex items-end justify-end">
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
                   onClick={() => removeLine(idx)}
                   disabled={lines.length <= 2}
+                  className="h-[34px] w-[34px] p-0"
+                  title="Remove line"
                 >
-                  <Trash2 className="h-4 w-4 text-[#D32F2F]" />
+                  <Trash2 className="h-3.5 w-3.5 text-[#D32F2F]" />
                 </Button>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
 
         {/* Balance validation summary */}
-        <div className="mt-2 flex items-center justify-between border-t pt-2">
-          <div className="flex items-center gap-4 text-sm">
+        <div className="mt-3 flex items-center justify-between rounded-md bg-[#F5EDE6] px-3 py-2 text-sm">
+          <div className="flex items-center gap-4">
             <span className="text-[#8D8A87]">
-              Total Debit: <span className="font-mono font-semibold">{formatKES(totalDebit.toString())}</span>
+              Total Debit: <span className="font-mono font-semibold text-[#2D2A26]">{formatKES(totalDebit.toString())}</span>
             </span>
             <span className="text-[#8D8A87]">
-              Total Credit: <span className="font-mono font-semibold">{formatKES(totalCredit.toString())}</span>
+              Total Credit: <span className="font-mono font-semibold text-[#2D2A26]">{formatKES(totalCredit.toString())}</span>
             </span>
           </div>
           {isBalanced && totalDebit > 0 ? (
-            <span className="flex items-center gap-1 text-xs text-[#2E7D32]">
-              <CheckCircle className="h-3 w-3" /> Balanced
+            <span className="flex items-center gap-1 text-xs font-medium text-[#2E7D32]">
+              <CheckCircle className="h-3.5 w-3.5" /> Balanced
             </span>
           ) : (
-            <span className="flex items-center gap-1 text-xs text-[#D32F2F]">
-              <AlertTriangle className="h-3 w-3" /> Not balanced
+            <span className="flex items-center gap-1 text-xs font-medium text-[#D32F2F]">
+              <AlertTriangle className="h-3.5 w-3.5" /> Not balanced
             </span>
           )}
         </div>
 
         {/* Inline validation messages */}
         {!isBalanced && totalDebit > 0 && (
-          <p className="text-center text-xs text-[#D32F2F]">
-            ⚠️ Entry is not balanced! Debits ({formatKES(totalDebit.toString())}) must equal Credits ({formatKES(totalCredit.toString())}).
+          <p className="mt-2 text-center text-xs text-[#D32F2F]">
+            Entry is not balanced! Debits ({formatKES(totalDebit.toString())}) must equal Credits ({formatKES(totalCredit.toString())}).
           </p>
         )}
         {hasInvalidLines && (
-          <p className="text-center text-xs text-[#D32F2F]">
-            ⚠️ Each journal line can have either a debit OR a credit amount, not both.
+          <p className="mt-2 text-center text-xs text-[#D32F2F]">
+            Each journal line can have either a debit OR a credit amount, not both.
           </p>
         )}
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 rounded-md border border-[#E8E0D8] bg-[#F5EDE6] px-3 py-2">
         <input
           type="checkbox"
           id="postImmediately"
           checked={postImmediately}
           onChange={(e) => setPostImmediately(e.target.checked)}
+          className="rounded"
         />
-        <label htmlFor="postImmediately" className="text-sm">
+        <label htmlFor="postImmediately" className="text-sm text-[#2D2A26]">
           Post immediately (affect account balances)
         </label>
       </div>

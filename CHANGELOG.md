@@ -1,5 +1,20 @@
 # Changelog
 
+## [Unreleased] — Journal Entry Form: Searchable Account Combobox
+
+### Fixed
+- **Broken account selector on manual journal entries** in `src/pages/JournalEntries.tsx` — The previous implementation rendered the account picker as a native `<select size={5}>` widget with a separate search input above it. Inside the dialog's narrow form layout the widget collapsed to a tiny scrollable list (only ~20 px wide), the optgroup labels were clipped to a single character, and the search input was a sibling rather than a live filter — making it effectively impossible to find the right Chart-of-Accounts entry for a fund movement. Replaced the entire widget with a proper searchable combobox.
+
+### Added
+- **`AccountCombobox` component** in `src/components/AccountCombobox.tsx` — A Popover + Command (cmdk) based combobox for picking any Chart-of-Accounts entry or operational account from the journal line. Features: live search across name, code, account type, and sub-type; grouped list with a sensible display order (Asset → Cash, Asset → Bank, Asset → Prepaid Expenses, Asset → Accounts Receivable, Asset → Fixed Assets, then Liability, Equity, Revenue, Expense, Operational Accounts); selected-value preview showing code chip + name + type/subtype; ability to exclude already-selected account ids from each line's dropdown (via `excludeIds` prop) so the same account can't be picked twice in one entry; rich option preview with code, name, and type/subtype.
+
+### Changed
+- **`src/pages/JournalEntries.tsx` form layout** — Each journal line is now a 12-column grid: 6 cols for the account combobox, 2 cols for Debit (with a `KES` prefix and 0.00 placeholder), 2 cols for Credit, 1 col for Memo, 1 col for the delete button. Field labels (`Debit` / `Credit`) appear above the inputs. The balance summary was promoted into a colored bar (`bg-[#F5EDE6]`) at the bottom of the line list, and the "Post immediately" checkbox now lives in a bordered callout for clarity. Removed all the now-unneeded `searchTerms` state, `getFilteredOptions` helper, and the broken native `<select>` widget.
+
+### Files
+- `src/components/AccountCombobox.tsx` — new searchable combobox
+- `src/pages/JournalEntries.tsx` — rewrote `JournalEntryForm` body; removed unused `Search` and `useMemo` imports
+
 ## [Unreleased] — Accounts & Chart of Accounts Loading Fix (Migration Recovery)
 
 ### Fixed
