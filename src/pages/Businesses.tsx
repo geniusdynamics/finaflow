@@ -60,6 +60,8 @@ export function Businesses() {
   const [editForm, setEditForm] = useState<Record<string, string>>({});
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetConfirmText, setResetConfirmText] = useState("");
+  const [resetAcknowledged, setResetAcknowledged] = useState(false);
+  const [resetStep, setResetStep] = useState<"review" | "confirm">("review");
 
   const { data: businesses, refetch: refetchBusinesses } = trpc.businesses.list.useQuery();
   const { data: resetInfo, refetch: refetchResetInfo } = trpc.dashboard.resetValidation.useQuery(undefined, {
@@ -127,12 +129,18 @@ export function Businesses() {
   const openResetDialog = () => {
     setResetDialogOpen(true);
     setResetConfirmText("");
+    setResetAcknowledged(false);
+    setResetStep("review");
     refetchResetInfo();
   };
 
   const executeReset = () => {
     if (resetConfirmText !== "RESET") {
       toast.error("Please type 'RESET' to confirm");
+      return;
+    }
+    if (!resetAcknowledged) {
+      toast.error("Please acknowledge the consequences of reset");
       return;
     }
     resetAll.mutate();
@@ -353,20 +361,122 @@ export function Businesses() {
                                       </div>
                                     </div>
 
-                                    {/* Confirmation input */}
-                                    <div className="rounded-lg border border-[#D32F2F]/30 bg-[#D32F2F]/5 p-4">
-                                      <Label className="text-sm font-semibold text-[#D32F2F] flex items-center gap-1">
-                                        <AlertTriangle className="h-4 w-4" />
-                                        Type <span className="font-mono bg-[#D32F2F]/10 px-1.5 py-0.5 rounded text-sm">RESET</span> to confirm
-                                      </Label>
-                                      <Input
-                                        value={resetConfirmText}
-                                        onChange={(e) => setResetConfirmText(e.target.value)}
-                                        placeholder='Type "RESET" to confirm'
-                                        className="mt-2 border-[#D32F2F]/50 focus:border-[#D32F2F]"
-                                        autoFocus
-                                      />
-                                    </div>
+                                    {/* Confirmation section */}
+                                    {resetStep === "review" ? (
+                                      <div className="rounded-lg border border-[#C73E1D]/30 bg-[#C73E1D]/5 p-4 space-y-3">
+                                        <div className="flex items-center gap-2 text-[#C73E1D]">
+                                          <AlertTriangle className="h-5 w-5" />
+                                          <span className="text-sm font-semibold">Step 1 of 2: Review Complete</span>
+                                        </div>
+                                        <p className="text-xs text-[#8D8A87]">
+                                          Review the records above carefully. All transactional data will be permanently removed.
+                                          System configuration, accounts, and reference data will be preserved.
+                                        </p>
+                                        <div className="flex items-center gap-2">
+                                          <Button
+                                            variant="outline"
+                                            className="flex-1"
+                                            onClick={() => {
+                                              setResetDialogOpen(false);
+                                              setResetConfirmText("");
+                                              setResetAcknowledged(false);
+                                            }}
+                                          >
+                                            Cancel
+                                          </Button>
+                                          <Button
+                                            variant="outline"
+                                            className="flex-1 border-[#C73E1D] text-[#C73E1D] hover:bg-[#C73E1D]/5"
+                                            onClick={() => setResetStep("confirm")}
+                                          >
+                                            Continue to Confirmation
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        {/* Level 1: Type RESET */}
+                                        <div className="rounded-lg border border-[#D32F2F]/30 bg-[#D32F2F]/5 p-4 space-y-3">
+                                          <Label className="text-sm font-semibold text-[#D32F2F] flex items-center gap-1">
+                                            <AlertTriangle className="h-4 w-4" />
+                                            Step 2 of 2: Final Confirmation
+                                          </Label>
+                                          <p className="text-xs text-[#8D8A87]">
+                                            This action <strong>cannot be undone</strong>. All transactions, bills, expenses,
+                                            sales, debts, payroll records, and ledger entries will be permanently deleted.
+                                          </p>
+                                          <p className="text-xs text-[#8D8A87]">
+                                            The following <strong>will be preserved</strong>: business settings, user accounts,
+                                            locations, suppliers, employees, expense categories, system accounts,
+                                            Chart of Accounts, payment methods, documents, API keys, partner allocations, and audit logs.
+                                          </p>
+                                          <div>
+                                            <Label className="text-sm font-semibold text-[#D32F2F] flex items-center gap-1">
+                                              Type <span className="font-mono bg-[#D32F2F]/10 px-1.5 py-0.5 rounded text-sm">RESET</span> to confirm
+                                            </Label>
+                                            <Input
+                                              value={resetConfirmText}
+                                              onChange={(e) => setResetConfirmText(e.target.value)}
+                                              placeholder='Type "RESET" to confirm'
+                                              className="mt-2 border-[#D32F2F]/50 focus:border-[#D32F2F]"
+                                              autoFocus
+                                            />
+                                          </div>
+                                          {/* Level 2: Acknowledge consequences */}
+                                          <div className="flex items-start gap-2 rounded-lg border border-[#D32F2F]/20 bg-white p-3">
+                                            <input
+                                              type="checkbox"
+                                              id="reset-acknowledge"
+                                              checked={resetAcknowledged}
+                                              onChange={(e) => setResetAcknowledged(e.target.checked)}
+                                              className="mt-0.5 h-4 w-4 accent-[#D32F2F]"
+                                            />
+                                            <label htmlFor="reset-acknowledge" className="text-xs text-[#2D2A26] leading-relaxed">
+                                              I acknowledge that this will permanently delete all transactional data including
+                                              invoices, expenses, sales records, bank transactions, debts, and payroll entries.
+                                              Account balances and opening balances will be reset to zero.
+                                              This action cannot be reversed.
+                                            </label>
+                                          </div>
+                                        </div>
+
+                                        <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E8E0D8]">
+                                           <Button
+                                             variant="outline"
+                                             onClick={() => {
+                                               setResetDialogOpen(false);
+                                               setResetConfirmText("");
+                                               setResetAcknowledged(false);
+                                             }}
+                                           >
+                                             Cancel
+                                           </Button>
+                                           <Button
+                                             variant="outline"
+                                             onClick={() => setResetStep("review")}
+                                           >
+                                             Back to Review
+                                           </Button>
+                                          <Button
+                                            className="bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
+                                            onClick={executeReset}
+                                            disabled={resetConfirmText !== "RESET" || !resetAcknowledged || resetAll.isPending || !resetInfo?.hasRecordsToReset}
+                                          >
+                                            {resetAll.isPending ? (
+                                              <>
+                                                <Clock className="mr-2 h-4 w-4 animate-spin" />
+                                                Resetting...
+                                              </>
+                                            ) : (
+                                              <>
+                                                <RotateCcw className="mr-2 h-4 w-4" />
+                                                Execute Reset
+                                              </>
+                                            )}
+                                          </Button>
+                                        </div>
+                                      </>
+                                    )}
                                   </div>
                                 ) : (
                                   <div className="flex items-center justify-center py-8">
@@ -378,34 +488,6 @@ export function Businesses() {
                                 )}
                               </ScrollArea>
 
-                              <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E8E0D8]">
-                                <Button
-                                  variant="outline"
-                                  onClick={() => {
-                                    setResetDialogOpen(false);
-                                    setResetConfirmText("");
-                                  }}
-                                >
-                                  Cancel
-                                </Button>
-                                <Button
-                                  className="bg-[#D32F2F] hover:bg-[#B71C1C] text-white"
-                                  onClick={executeReset}
-                                  disabled={resetConfirmText !== "RESET" || resetAll.isPending || !resetInfo?.hasRecordsToReset}
-                                >
-                                  {resetAll.isPending ? (
-                                    <>
-                                      <Clock className="mr-2 h-4 w-4 animate-spin" />
-                                      Resetting...
-                                    </>
-                                  ) : (
-                                    <>
-                                      <RotateCcw className="mr-2 h-4 w-4" />
-                                      Execute Reset
-                                    </>
-                                  )}
-                                </Button>
-                              </div>
                             </DialogContent>
                           </Dialog>
                         </>)}

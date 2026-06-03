@@ -1,5 +1,31 @@
 # Changelog
 
+## [Unreleased] — Business Reset Enhancement: Complete System Reset with Multi-Level Confirmation
+
+### Fixed
+- **`openingBalance` not reset on accounts** — The reset function only reset `currentBalance` to `0.00` but left `openingBalance` untouched, causing bank account values and displayed balances to appear retained after reset. Now both `currentBalance` and `openingBalance` are reset to `0.00` for all accounts.
+- **Debt records not cleared on reset** — The `debts` table was completely absent from the reset function. Debt records were never soft-deleted or cancelled during a business reset. Added proper debt clearing with status set to `cancelled` and `deletedAt` timestamp.
+
+### Added
+- **Multi-level confirmation wizard** — Reset dialog now has a two-step flow:
+  - Step 1 (Review): Shows all records to be cleared and preserved with a "Continue to Confirmation" button
+  - Step 2 (Confirm): Requires both (a) typing "RESET" in the confirmation field AND (b) checking an acknowledgment checkbox that explicitly lists what will be deleted (invoices, expenses, sales, bank transactions, debts, payroll entries) and confirms that account balances and opening balances will be reset to zero
+  - Execute Reset button only enables when both confirmation conditions are met
+  - Cancel and Back buttons available at both steps
+- **`debts` table to reset scope** — Debts are now soft-deleted with `status: "cancelled"` during reset. Added to short-circuit path, snapshot counting, and the main clearing logic (Step 7h).
+- **Enhanced audit logging** — Reset audit entries now include: `accountsResetToZero`, `accountsOpeningBalanceReset`, `suppliersResetToZero`, `debtsCleared`, `initiatedByUserId`, and `outcome: "success"`. Error logging now captures the actual error message for debugging.
+- **Debt clearing in integration tests** — Test seed context now creates a debt record, and tests verify it is soft-deleted with cancelled status after reset. Test cleanup also removes debt records.
+
+### Changed
+- **`api/lib/business-reset.ts`** — Step 11 now resets `openingBalance: "0.00"` alongside `currentBalance: "0.00"` on all accounts. Added Step 7h for debts soft-deletion. Updated snapshot to count debts. Updated audit log to include detailed metrics.
+- **`src/pages/Businesses.tsx`** — Reset dialog redesigned with two-step wizard (review → confirm), acknowledgment checkbox, preserved records summary, Cancel/Back buttons at every step, and disabled-until-confirmed Execute button.
+- **`api/__tests__/business-reset.test.ts`** — Added `debts` import, `debt` to SeededContext, debt record in seed function, `openingBalance` assertions in account checks, debt deletion verification, and debt cleanup in teardown.
+
+### Files
+- `api/lib/business-reset.ts` — openingBalance reset, debts clearing, enhanced audit logging
+- `src/pages/Businesses.tsx` — two-step wizard, acknowledgment checkbox, cancel/back navigation
+- `api/__tests__/business-reset.test.ts` — debt tests, openingBalance assertions
+
 ## [Unreleased] — Journal Entry Form: Searchable Account Combobox
 
 ### Fixed

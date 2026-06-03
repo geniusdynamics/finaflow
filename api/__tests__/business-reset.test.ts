@@ -12,6 +12,7 @@ import {
   businesses,
   dailySales,
   dailySalePayments,
+  debts,
   expenses,
   expenseItems,
   journalEntries,
@@ -66,6 +67,7 @@ type SeededContext = {
   category: { id: number };
   payrollPeriod: { id: number };
   purchaseOrder: { id: number };
+  debt: { id: number };
 };
 
 async function seedResetContext(seed: string): Promise<SeededContext> {
@@ -323,6 +325,18 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     isActive: true,
   } satisfies typeof recurringBillTemplates.$inferInsert);
 
+  // Create debt record
+  const debt = await firstRow<typeof debts.$inferSelect>(db.insert(debts).values({
+    locationId: location.id,
+    businessId: business.id,
+    creditorName: `Creditor ${seed}`,
+    totalAmount: "10000.00",
+    paidAmount: "2000.00",
+    dueDate: new Date("2026-12-31"),
+    status: "active",
+    createdBy: owner.id,
+  } satisfies typeof debts.$inferInsert).returning());
+
   // Create notification
   await db.insert(notifications).values({
     userId: owner.id,
@@ -350,6 +364,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     category,
     payrollPeriod,
     purchaseOrder: po,
+    debt,
   };
 }
 
@@ -372,6 +387,7 @@ async function cleanupResetContext(accountId: string) {
     await db.delete(purchaseOrders).where(sql`${purchaseOrders.locationId} IN (${locIdSql})`);
     await db.delete(recurringBillTemplates).where(sql`${recurringBillTemplates.locationId} IN (${locIdSql})`);
     await db.delete(mpesaTransactions).where(sql`${mpesaTransactions.locationId} IN (${locIdSql})`);
+    await db.delete(debts).where(sql`${debts.locationId} IN (${locIdSql})`);
   }
 
   const journalRows = await db.select({ id: journalEntries.id }).from(journalEntries).where(eq(journalEntries.businessId, business.id));
@@ -462,6 +478,7 @@ describe("resetBusinessTransactions", () => {
     expect(savedSystemAccount).toBeDefined();
     expect(savedSystemAccount.deletedAt).toBeNull();
     expect(savedSystemAccount.currentBalance).toBe("0.00");
+    expect(savedSystemAccount.openingBalance).toBe("0.00");
     expect(savedSystemAccount.isActive).toBe(true);
 
     // Verify user account preserved with balance reset
@@ -473,6 +490,7 @@ describe("resetBusinessTransactions", () => {
     expect(savedOperationalAccount.deletedAt).toBeNull();
     expect(savedOperationalAccount.isActive).toBe(true);
     expect(savedOperationalAccount.currentBalance).toBe("0.00");
+    expect(savedOperationalAccount.openingBalance).toBe("0.00");
 
     // Verify journal entry hard-deleted
     const journalEntriesAfter = await db
@@ -547,6 +565,15 @@ describe("resetBusinessTransactions", () => {
     expect(savedSupplier.currentBalance).toBe("0.00");
     expect(savedSupplier.totalBilled).toBe("0.00");
     expect(savedSupplier.totalPaid).toBe("0.00");
+
+    // Verify debt soft-deleted
+    const [savedDebt] = await db
+      .select()
+      .from(debts)
+      .where(eq(debts.id, ctx.debt.id))
+      .limit(1);
+    expect(savedDebt.deletedAt).not.toBeNull();
+    expect(savedDebt.status).toBe("cancelled");
 
     // Verify audit log entry was written
     const auditEntries = await db
@@ -674,6 +701,7 @@ describe("resetBusinessTransactions", () => {
     expect(result.results.expenses.count).toBe(1);
     expect(result.results.expense_items.count).toBe(1);
     expect(result.results.bills.count).toBe(1);
+    expect(result.results.debts.count).toBe(1);
     expect(result.results.mpesa_transactions.count).toBe(1);
     expect(result.results.journal_entries.count).toBe(1);
     expect(result.results.locations.count).toBe(1);
