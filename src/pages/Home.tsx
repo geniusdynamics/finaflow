@@ -9,6 +9,7 @@ import {
   Menu, X, BarChart3, Wallet, Receipt, PiggyBank,
   ChevronRight, Globe, Lock, Clock,
   RefreshCw, Building2, Percent, HeartHandshake,
+  Github, Star, Plus, Sparkles, HelpCircle, BookOpen,
 } from "lucide-react";
 
 import cashflowDashImg from "/resources/cashflow dash.png";
@@ -169,7 +170,25 @@ export default function Home() {
             <div className="hidden items-center gap-6 text-sm text-[#2D2A26] md:flex">
               <a href="#showcase" className="hover:text-[#C73E1D]">Product</a>
               <a href="#features" className="hover:text-[#C73E1D]">Features</a>
+              <a href="#how-it-works" className="hover:text-[#C73E1D]">How it works</a>
               <a href="#pricing" className="hover:text-[#C73E1D]">Pricing</a>
+              <a
+                href="#faq"
+                className="hover:text-[#C73E1D]"
+              >
+                FAQ
+              </a>
+              <a
+                href="https://github.com/geniusdynamics/finaflow"
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Star Finaflow on GitHub"
+                className="group inline-flex items-center gap-1.5 rounded-md border border-[#2D2A26] bg-[#2D2A26] px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-[#1a1815]"
+              >
+                <Github className="h-3.5 w-3.5" />
+                <Star className="h-3 w-3 transition-all group-hover:scale-110 group-hover:fill-yellow-400 group-hover:text-yellow-400" />
+                <span>Star</span>
+              </a>
               <Link to="/login" className="font-medium hover:text-[#C73E1D]">Sign In</Link>
               <Link to="/login?type=standard"><Button className="bg-[#C73E1D] hover:bg-[#C73E1D]/90 text-sm">Get Started</Button></Link>
             </div>
@@ -179,11 +198,21 @@ export default function Home() {
           </div>
           {mobileMenuOpen && (
             <div className="border-t border-[#E8E0D8] px-4 py-3 md:hidden space-y-2 text-sm">
-              <a href="#showcase" className="block py-1">Product</a>
-              <a href="#features" className="block py-1">Features</a>
-              <a href="#pricing" className="block py-1">Pricing</a>
-              <Link to="/login?type=standard" className="block py-1 font-medium">Sign In</Link>
-              <Link to="/login?type=standard" className="block py-1 font-medium text-[#C73E1D]">Get Started</Link>
+              <a href="#showcase" onClick={() => setMobileMenuOpen(false)} className="block py-1">Product</a>
+              <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block py-1">Features</a>
+              <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="block py-1">How it works</a>
+              <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="block py-1">Pricing</a>
+              <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block py-1">FAQ</a>
+              <a
+                href="https://github.com/geniusdynamics/finaflow"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 py-1 font-medium"
+              >
+                <Github className="h-3.5 w-3.5" /> Star us on GitHub
+              </a>
+              <Link to="/login?type=standard" onClick={() => setMobileMenuOpen(false)} className="block py-1 font-medium">Sign In</Link>
+              <Link to="/login?type=standard" onClick={() => setMobileMenuOpen(false)} className="block py-1 font-medium text-[#C73E1D]">Get Started</Link>
             </div>
           )}
         </nav>
@@ -333,6 +362,70 @@ export default function Home() {
           </div>
         </section>
 
+        {/* How it Works */}
+        <section id="how-it-works" className="py-20 md:py-28">
+          <div className="mx-auto max-w-6xl px-4">
+            <div className="mb-12 text-center">
+              <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[#C73E1D]/20 bg-[#C73E1D]/5 px-3 py-1 text-xs font-medium text-[#C73E1D]">
+                <Sparkles className="h-3 w-3" /> Live in minutes
+              </div>
+              <h2 className="font-serif text-4xl font-bold text-[#2D2A26]">
+                From signup to first report in under 5 minutes
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm text-[#8D8A87]">
+                No spreadsheets, no consultants, no setup fees. Just three simple steps.
+              </p>
+            </div>
+            <div className="grid gap-6 md:grid-cols-3">
+              {[
+                {
+                  step: "01",
+                  icon: Plus,
+                  title: "Create your free account",
+                  desc: "Sign up with your business name and you're in. No credit card, no commitments — the Free plan stays free forever.",
+                  detail: "Takes ~30 seconds",
+                },
+                {
+                  step: "02",
+                  icon: RefreshCw,
+                  title: "Connect or import your data",
+                  desc: "Paste an M-Pesa SMS, upload a CSV, or start fresh with Demo Mode to explore the platform with realistic sample data.",
+                  detail: "Optional — guided tour included",
+                },
+                {
+                  step: "03",
+                  icon: BarChart3,
+                  title: "See your business clearly",
+                  desc: "Your real-time dashboard, reports, and alerts are live the moment your first transaction is recorded. No more month-end surprises.",
+                  detail: "Insights from day one",
+                },
+              ].map((s, i) => (
+                <div key={i} className="relative rounded-2xl border border-[#E8E0D8] bg-white p-6 transition-shadow hover:shadow-md">
+                  <div className="mb-4 flex items-center justify-between">
+                    <span className="font-mono text-3xl font-bold text-[#C73E1D]/20">{s.step}</span>
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C73E1D]/10">
+                      <s.icon className="h-5 w-5 text-[#C73E1D]" />
+                    </div>
+                  </div>
+                  <h3 className="text-base font-semibold text-[#2D2A26]">{s.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-[#8D8A87]">{s.desc}</p>
+                  <div className="mt-4 flex items-center gap-1.5 border-t border-[#E8E0D8] pt-3 text-xs font-medium text-[#2E7D32]">
+                    <CheckCircle className="h-3 w-3" />
+                    {s.detail}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-10 text-center">
+              <Link to="/login?type=standard">
+                <Button className="bg-[#C73E1D] px-6 py-5 text-sm hover:bg-[#C73E1D]/90">
+                  Start your free account <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </section>
+
         {/* Features Grid */}
         <section id="features" className="border-t border-[#E8E0D8] bg-[#F5EDE6] py-20">
           <div className="mx-auto max-w-6xl px-4">
@@ -422,6 +515,86 @@ export default function Home() {
           </div>
         </section>
 
+        {/* FAQ */}
+        <section id="faq" className="border-t border-[#E8E0D8] py-20 md:py-28">
+          <div className="mx-auto max-w-3xl px-4">
+            <div className="mb-12 text-center">
+              <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[#C73E1D]/20 bg-[#C73E1D]/5 px-3 py-1 text-xs font-medium text-[#C73E1D]">
+                <HelpCircle className="h-3 w-3" /> Questions, answered
+              </div>
+              <h2 className="font-serif text-4xl font-bold text-[#2D2A26]">
+                Frequently asked questions
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm text-[#8D8A87]">
+                Everything new users ask before getting started. Don't see your question? Reach out — we usually reply within a few hours.
+              </p>
+            </div>
+            <div className="space-y-3">
+              {[
+                {
+                  q: "Is my financial data really safe?",
+                  a: "Yes. All traffic is encrypted in transit (HTTPS) and at rest. Authentication uses JWT in httpOnly cookies with CSRF protection, every mutation is rate-limited, and full audit logs are kept for sensitive operations. Your data is yours — we never share it with third parties.",
+                },
+                {
+                  q: "How does the M-Pesa integration work?",
+                  a: "Paste or forward any M-Pesa SMS to Finaflow and we automatically parse the transaction, match it to the right account, and reconcile it against your sales or bills. You can also upload CSV exports from your M-Pesa statement for bulk imports.",
+                },
+                {
+                  q: "What does the Free plan include?",
+                  a: "The Free plan includes 1 business, 1 branch, 1 user, and 100 transactions per month — with no time limit and no credit card required. It covers daily sales, basic expenses, M-Pesa import, and KRA-ready reports. Upgrade only when you outgrow it.",
+                },
+                {
+                  q: "Can I import my existing data?",
+                  a: "Yes. You can import sales, expenses, and account balances via CSV, or start with Demo Mode to explore the platform with realistic sample data first. Many users run a side-by-side comparison for a week before going live.",
+                },
+                {
+                  q: "Do you support multi-location businesses?",
+                  a: "Absolutely. Add as many branches as you need (from 1 on the Free plan up to unlimited on Pro), track sales and expenses per location, and roll up reports to a consolidated business view. Perfect for retail chains, restaurants, and service businesses with multiple offices.",
+                },
+                {
+                  q: "Is Finaflow open source?",
+                  a: "Yes — the core platform is open source on GitHub. You can self-host, audit the code, file issues, and contribute features. The hosted version at finaflow.app is maintained by the genius team and includes managed updates, backups, and support.",
+                },
+              ].map((item, i) => (
+                <details
+                  key={i}
+                  className="group rounded-xl border border-[#E8E0D8] bg-white p-5 transition-shadow open:shadow-md hover:shadow-sm"
+                >
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-4 text-sm font-semibold text-[#2D2A26]">
+                    <span className="flex items-center gap-2">
+                      <BookOpen className="h-4 w-4 shrink-0 text-[#C73E1D]" />
+                      {item.q}
+                    </span>
+                    <Plus className="h-4 w-4 shrink-0 text-[#8D8A87] transition-transform group-open:rotate-45" />
+                  </summary>
+                  <p className="mt-3 pl-6 text-sm leading-relaxed text-[#8D8A87]">{item.a}</p>
+                </details>
+              ))}
+            </div>
+            <div className="mt-10 flex flex-col items-center gap-2 rounded-2xl border border-[#C73E1D]/20 bg-[#C73E1D]/5 p-6 text-center">
+              <p className="text-sm text-[#2D2A26]">
+                Still have questions? We're happy to help.
+              </p>
+              <div className="flex flex-wrap justify-center gap-3">
+                <Link to="/login?type=standard">
+                  <Button className="bg-[#C73E1D] px-5 py-2 text-sm hover:bg-[#C73E1D]/90">
+                    Get started free
+                  </Button>
+                </Link>
+                <a
+                  href="https://github.com/geniusdynamics/finaflow/discussions"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-[#2D2A26] bg-white px-5 py-2 text-sm font-medium text-[#2D2A26] transition-colors hover:bg-[#F5EDE6]"
+                >
+                  <Github className="h-4 w-4" />
+                  Ask on GitHub
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Partner CTA */}
         <section className="border-t border-[#E8E0D8] bg-[#F5EDE6] py-20">
           <div className="mx-auto max-w-3xl px-4 text-center">
@@ -451,9 +624,30 @@ export default function Home() {
                   <Landmark className="h-3 w-3 text-white" />
                 </div>
                 <span className="font-serif text-sm font-bold text-[#2D2A26]">Finaflow</span>
+                <span className="text-xs text-[#8D8A87]">
+                  by {" "}
+                  <a
+                    href="https://genius.africa"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-[#2D2A26] underline decoration-[#D4A854] decoration-2 underline-offset-4 transition-colors hover:text-[#C73E1D]"
+                  >
+                    genius
+                  </a>
+                </span>
               </div>
               <p className="text-xs text-[#8D8A87]">{"\u00A9"} 2026 Finaflow. Built for African Businesses.</p>
-              <div className="flex gap-4 text-xs text-[#8D8A87]">
+              <div className="flex items-center gap-4 text-xs text-[#8D8A87]">
+                <a
+                  href="https://github.com/geniusdynamics/finaflow"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Finaflow on GitHub"
+                  className="flex items-center gap-1 transition-colors hover:text-[#2D2A26]"
+                >
+                  <Github className="h-3.5 w-3.5" />
+                  <span>GitHub</span>
+                </a>
                 <Link to="/login" className="hover:text-[#2D2A26]">Sign In</Link>
                 <Link to="/login?type=standard" className="hover:text-[#2D2A26]">Sign Up</Link>
               </div>

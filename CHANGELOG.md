@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased] — Homepage: GitHub Links, "How it Works", and FAQ
+
+### Added
+- **GitHub star button in top-right navigation** — A compact dark pill button with the GitHub mark and a `Star` icon links to `https://github.com/geniusdynamics/finaflow` in a new tab. The star icon animates (scale + fill yellow) on hover to invite interaction. Includes proper `aria-label`, `target="_blank"`, and `rel="noopener noreferrer"`.
+- **GitHub link in mobile menu** — The same repo URL is added to the collapsible mobile nav so the project link is reachable on phones.
+- **"by genius" attribution in footer** — Next to the `Finaflow` logo in the footer, a small `by genius` line is rendered with an underlined link to `https://genius.africa` (opens in a new tab). The link uses the gold accent (`#D4A854`) for the underline and the brand red on hover, matching the rest of the palette.
+- **GitHub icon link in footer** — The footer now also exposes a `GitHub` link (with the GitHub icon) alongside `Sign In` and `Sign Up` so the open-source repo is discoverable from the bottom of the page.
+- **"How it works" 3-step onboarding section** — A new section (id `how-it-works`, linked from the main nav) explains the path from signup to first report in three numbered cards: `01 Create your free account` → `02 Connect or import your data` → `03 See your business clearly`. Each step lists a time-to-value detail (e.g. "Takes ~30 seconds") and the section ends with a primary CTA to start a free account.
+- **FAQ accordion section** — A new section (id `faq`, linked from the main nav) presents six common pre-signup questions in a native `<details>` / `<summary>` accordion (security, M-Pesa integration, Free plan scope, CSV import, multi-location, open-source). Each question uses a `+` icon that rotates to `×` when expanded. The section closes with a help callout linking to the GitHub Discussions page.
+- **New nav links: `How it works` and `FAQ`** — Both new sections are reachable from the desktop and mobile navigation bars, with mobile menu auto-closing on selection.
+
+### Changed
+- **`src/pages/Home.tsx`** — Added `Github`, `Star`, `Plus`, `Sparkles`, `HelpCircle`, `BookOpen` to the lucide-react import; inserted the GitHub pill into the desktop nav; added the new `How it works` and `FAQ` sections; added `by genius` and a footer GitHub link; updated the mobile menu with the new links and GitHub entry. No existing content was removed — only augmented.
+
+### Files
+- `src/pages/Home.tsx` — homepage layout, navigation, FAQ, and how-it-works additions
+- `CHANGELOG.md` — this entry
+
 ## [Unreleased] — Payroll Salary Expense Fix
 
 ### Fixed
