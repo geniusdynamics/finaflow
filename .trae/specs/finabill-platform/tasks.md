@@ -1,522 +1,529 @@
-# FinaFlow Billing Module - Implementation Tasks
+# FinaBill Platform — Implementation Tasks
 
-> **All file paths are relative to**: `d:\DevCenter\abuilds\fina\finaflow\`
-> **Architecture**: Context-switching single app (not a separate application)
-
----
-
-## Phase 1: Foundation
-
-### Task 1.1: Database Schema Changes
-
-- [ ] **1.1.1**: Add `primaryMode` column to `businesses` table in `db/schema.ts`:
-  - `primaryMode: varchar("primaryMode", { length: 20 }).default("both").notNull()`
-- [ ] **1.1.2**: Create `customers` table in `db/schema.ts`:
-  - Columns: id, businessId, customerNumber, name, email, phone, billingAddress, paymentTerms, creditLimit, currency, notes, isActive, createdAt, updatedAt, deletedAt
-  - Indexes: businessId, email
-- [ ] **1.1.3**: Create `invoices` table in `db/schema.ts`:
-  - Columns: id, businessId, locationId, customerId, invoiceNumber, status (draft/sent/partial/paid/overdue/void/credit_note), issueDate, dueDate, currency, subtotal, discountType, discountValue, discountAmount, taxTotal, grandTotal, amountPaid, balanceDue, notes, terms, isRecurring, recurringTemplateId, sourceType, sourceId, voidReason, voidedAt, createdBy, createdAt, updatedAt, deletedAt
-  - Indexes: businessId, customerId, status, issueDate, dueDate
-- [ ] **1.1.4**: Create `invoice_items` table in `db/schema.ts`:
-  - Columns: id, invoiceId (cascade delete), lineNumber, description, quantity, unitPrice, taxRate, taxAmount, discountRate, discountAmount, lineTotal, revenueCategoryId, createdAt
-  - Index: invoiceId
-- [ ] **1.1.5**: Create `invoice_payments` table in `db/schema.ts`:
-  - Columns: id, businessId, invoiceId, paymentMethod, amount, reference, paymentDate, currency, exchangeRate, notes, accountId, isReconciled, reconciledAt, createdBy, createdAt
-  - Indexes: invoiceId, paymentDate, paymentMethod
-- [ ] **1.1.6**: Create `recurring_invoice_templates` table in `db/schema.ts`:
-  - Columns: id, businessId, customerId, name, description, frequency (weekly/monthly/quarterly/annually), interval, nextDueDate, endDate, isActive, notes, terms, lastGeneratedDate, totalGenerated, createdAt, updatedAt, deletedAt
-  - Indexes: (businessId, isActive), nextDueDate
-- [ ] **1.1.7**: Create `recurring_template_items` table in `db/schema.ts`:
-  - Columns: id, templateId (cascade delete), description, quantity, unitPrice, taxRate, revenueCategoryId, createdAt
-- [ ] **1.1.8**: Create `recurring_invoice_generations` table in `db/schema.ts`:
-  - Columns: id, templateId, invoiceId, generatedDate, status (success/skipped/failed), skipReason, errorMessage, createdAt
-- [ ] **1.1.9**: Create `payment_reminders` table in `db/schema.ts`:
-  - Columns: id, businessId, invoiceId, reminderType (first_reminder/second_reminder/final_reminder), scheduledDate, sentDate, status (pending/sent/failed), deliveryLog (jsonb), createdAt
-- [ ] **1.1.10**: Create `invoice_email_logs` table in `db/schema.ts`:
-  - Columns: id, invoiceId, recipient, emailType (invoice_sent/payment_reminder/payment_receipt), status (sent/delivered/opened/bounced/failed), sentAt, deliveredAt, openedAt, errorMessage, createdAt
-- [ ] **1.1.11**: Create `business_profiles` table in `db/schema.ts`:
-  - Columns: id, businessId (unique), logoUrl, businessName, address, phone, email, website, taxRegistrationNo, defaultTaxRate, invoicePrefix, invoiceNumberStart, paymentTerms, footerText, accentColor, createdAt, updatedAt
-- [ ] **1.1.12**: Generate Drizzle migration: `npm run db:generate`
-- [ ] **1.1.13**: Add TypeScript types and insert types for all new tables (e.g. `Customer`, `Invoice`, `InvoicePayment`, etc.)
-
-### Task 1.2: Context Switching Infrastructure
-
-- [ ] **1.2.1**: Create `src/hooks/useBillingContext.ts`:
-  - State: `activeMode` — 'expenses' | 'billing'
-  - `setMode(mode)` function
-  - Persisted to localStorage (`finaflow_ui_mode`)
-  - `getDefaultMode` reads from user's current business `primaryMode`
-  - Returns current mode, setMode, isExpenses, isBilling helpers
-- [ ] **1.2.2**: Modify `src/components/Layout.tsx`:
-  - Add mode toggle at top of sidebar (before nav items)
-  - Mode toggle shows active mode name with dropdown to switch
-  - Desktop: dropdown button in sidebar header
-  - Mobile: mode toggle in mobile header
-  - `navItems` filtered based on `activeMode`
-  - Import `useBillingContext` hook
-- [ ] **1.2.3**: Create expense mode nav items:
-  - Dashboard, Daily Sales, Expenses, Suppliers, Bills (All Bills, Recurring Bills), Accounts, Payroll, Wallet, Calendar, Reports, Settings, Partner
-- [ ] **1.2.4**: Create billing mode nav items:
-  - Billing Dashboard, Invoices (All Invoices, Create Invoice, Recurring), Customers (All Customers, Add Customer), Payments Received, Reports (Revenue, Aging, Invoice Status), Settings
-- [ ] **1.2.5**: Modify `src/components/MobileBottomNavigation.tsx`:
-  - Context-switch bottom nav items based on active mode
-  - Expenses mode: Dashboard, Sales, Expenses, Bills, Reports
-  - Billing mode: Dashboard, Invoices, Customers, Payments, Reports
-- [ ] **1.2.6**: Create route configuration for billing pages in `src/App.tsx`:
-  - `/billing` → BillingDashboard (lazy loaded)
-  - `/billing/invoices` → Invoices
-  - `/billing/invoices/create` → InvoiceBuilder
-  - `/billing/invoices/:id` → InvoiceDetail
-  - `/billing/invoices/:id/edit` → InvoiceBuilder
-  - `/billing/customers` → Customers
-  - `/billing/customers/:id` → CustomerDetail
-  - `/billing/recurring` → RecurringInvoices
-  - `/billing/payments` → Payments
-  - `/billing/reports` → BillingReports
-- [ ] **1.2.7**: Add `ProtectedRoute` wrapping for all billing routes
-
-### Task 1.3: Permissions
-
-- [ ] **1.3.1**: Add new permission constants in `src/lib/permissions.ts`:
-  - `INVOICES_VIEW`, `INVOICES_CREATE`, `INVOICES_SEND`, `INVOICES_VOID`, `INVOICES_PAY`
-  - `CUSTOMERS_VIEW`, `CUSTOMERS_MANAGE`
-  - `RECURRING_MANAGE`
-  - `BILLING_REPORTS_VIEW`
-  - `BILLING_SETTINGS_MANAGE`
-- [ ] **1.3.2**: Add permissions to `db/schema.ts` if permissions are DB-backed
-- [ ] **1.3.3**: Add permissions seed data in `db/seed.ts`:
-  - Owner role gets all billing permissions
-  - Admin gets all billing permissions
-  - Manager gets: INVOICES_VIEW, INVOICES_CREATE, INVOICES_SEND, CUSTOMERS_VIEW, CUSTOMERS_MANAGE, BILLING_REPORTS_VIEW
-  - Employee gets: INVOICES_VIEW, CUSTOMERS_VIEW
-  - Viewer gets: INVOICES_VIEW, CUSTOMERS_VIEW, BILLING_REPORTS_VIEW
+> **All file paths are relative to**: `d:\DevCenter\abuilds\fina\finabill\`
+> **Architecture**: Standalone application — NOT embedded in FinaFlow
+> **Integration**: Bi-directional API sync with FinaFlow via integration page
+> **Phases**: 8 phases, listed in dependency order
 
 ---
 
-## Phase 2: Core Features
+## Phase 1: Foundation — Monorepo & Auth
+
+### Task 1.1: Project Scaffold
+- [ ] **1.1.1**: Create `/finabill/` project root with `package.json`, `tsconfig.json`, `.gitignore`, `AGENTS.md`
+- [ ] **1.1.2**: Create `apps/web/` with Vite + React 19 + TypeScript scaffold
+- [ ] **1.1.3**: Create `api/` with Hono.js + tRPC scaffold
+- [ ] **1.1.4**: Create `packages/shared/` for `@finabill/shared`
+- [ ] **1.1.5**: Create `db/` with Drizzle ORM + migrations config
+- [ ] **1.1.6**: Setup path aliases (`@/` → `apps/web/`, `@api/` → `api/`, `@db/` → `db/`, `@shared/` → `packages/shared/src/`)
+- [ ] **1.1.7**: Setup ESLint + Prettier configs
+- [ ] **1.1.8**: Setup HMR dev server (Vite on 5173, API on 3001)
+
+### Task 1.2: Authentication
+- [ ] **1.2.1**: Create `api/routers/auth-router.ts`:
+  - [ ] `auth.register` — Business + owner user registration
+  - [ ] `auth.login` — Email/password login, return JWT in httpOnly cookie
+  - [ ] `auth.logout` — Clear cookie
+  - [ ] `auth.me` — Return current user + business context
+- [ ] **1.2.2**: Create `api/middleware/auth.ts`:
+  - [ ] JWT verification middleware (same pattern as FinaFlow)
+  - [ ] Business context extraction
+  - [ ] Role/permission extraction
+- [ ] **1.2.3**: Create `apps/web/src/providers/auth.tsx`:
+  - [ ] AuthProvider context with login/logout/me
+  - [ ] ProtectedRoute component
+  - [ ] useAuth hook
+
+### Task 1.3: Database Foundation
+- [ ] **1.3.1**: Create `db/schema.ts` with core tables:
+  - [ ] `businesses` — Subscription tier, currency, branding fields
+  - [ ] `users` — Email, name, role, businessId FK
+  - [ ] `customers` — Full: type (business/individual), salutation, names, company, displayName, contacts, billing/shipping address (jsonb), language, taxRate, taxExempt, companyId, enablePortal, remarks
+  - [ ] `customers_contact_persons` — salutation, name, email, workPhone, mobile per customer
+  - [ ] `items` — With incomeAccountId (COA FK), type (goods/service), unitType, isTrackable
+  - [ ] `products` — Plan products with email notification, redirect URL, auto-gen numbers
+  - [ ] `subscription_tiers` enum (free, standard, premium, finance_plus)
+- [ ] **1.3.2**: Create `db/connection.ts` — PostgreSQL connection pool
+- [ ] **1.3.3**: Generate initial Drizzle migration
+- [ ] **1.3.4**: Create `db/seed.ts` — Default admin user seeding
+
+### Task 1.4: UI Foundation
+- [ ] **1.4.1**: Setup Tailwind CSS with FinaBill color palette:
+  - Background `#F8F9FA`, Surface `#FFFFFF`
+  - Text Primary `#1A1A2E`, Text Secondary `#6B7280`
+  - Accent `#2563EB`, Success `#059669`, Warning `#D97706`, Danger `#DC2626`
+  - Border `#E5E7EB`, Muted `#9CA3AF`
+- [ ] **1.4.2**: Add shadcn/ui primitives (Button, Input, Select, Card, Table, Dialog, Badge, Tabs)
+- [ ] **1.4.3**: Create base Layout component with sidebar navigation
+- [ ] **1.4.4**: Create global search command palette (⌘K)
+- [ ] **1.4.5**: Create inline form wrapper component (for inline create/edit UX)
+- [ ] **1.4.6**: Create responsive mobile navigation
+
+### Task 1.5: Shared Library
+- [ ] **1.5.1**: Setup `packages/shared/` package with TypeScript + build config
+- [ ] **1.5.2**: Define shared type definitions:
+  - [ ] `customer.ts` — Customer, CustomerCreate, CustomerUpdate
+  - [ ] `item.ts` — Item, ItemCreate
+  - [ ] `invoice.ts` — Invoice, InvoiceItem, InvoiceStatus enum
+  - [ ] `quote.ts` — Quote, QuoteItem, QuoteStatus enum
+  - [ ] `subscription.ts` — Subscription, Plan, Addon, Coupon
+  - [ ] `payment.ts` — Payment, PaymentMethod enum
+  - [ ] `common.ts` — Pagination, DateRange, ApiResponse, BusinessContext
+  - [ ] `integration.ts` — SyncPayload, SyncResult, ConnectionStatus
+- [ ] **1.5.3**: Define Zod validation schemas
+- [ ] **1.5.4**: Implement utility functions (currency, dates, invoice calc, pagination)
+- [ ] **1.5.5**: Export all from `src/index.ts`
+
+### Task 1.6: Rate Limiting & Security
+- [ ] **1.6.1**: Create `api/middleware/rate-limit.ts` (login: 10/min, API: 100/min)
+- [ ] **1.6.2**: Create `api/middleware/audit.ts` — Audit logging for mutations
+- [ ] **1.6.3**: Implement CSRF protection on mutation endpoints
+- [ ] **1.6.4**: Implement input validation on all endpoints
+
+---
+
+## Phase 2: Core CRM & Sales
 
 ### Task 2.1: Customer Management
+- [ ] **2.1.1**: Create `db/schema.ts` additions:
+  - [ ] `customers_contact_persons` table (salutation, first name, last name, email, work phone, mobile)
+- [ ] **2.1.2**: Create `api/routers/customers-router.ts`:
+  - [ ] `customers.list` — Paginated list with search + filters
+  - [ ] `customers.getById` — Single customer with stats + contact persons + addresses
+  - [ ] `customers.create` — Create with type (Business/Individual), contact info, address tabs (billing + shipping)
+  - [ ] `customers.update` — Update inline
+  - [ ] `customers.delete` — Soft delete
+  - [ ] `customers.getStatement` — Invoice history + aging
+  - [ ] `customers.contactPersons.list/create/delete` — Contact person CRUD
+- [ ] **2.1.3**: Create `apps/web/src/pages/Customers.tsx`:
+  - [ ] List page with search + inline create form
+  - [ ] Customer detail page with tabbed sections: Address, Contact Persons, Custom Fields, Reporting Tags
+  - [ ] Inline editing on detail page
+  - [ ] Statement view with invoice history table
+- [ ] **2.1.4**: Wire routes: `/customers`, `/customers/:id`
 
-- [ ] **2.1.1**: Create `api/customers-router.ts`:
-  - `customers.list` — Paginated list with search (name, email, phone, customerNumber), filter by businessId
-  - `customers.getById` — Single customer with stats (totalInvoiced, totalPaid, balance) via aggregate queries
-  - `customers.create` — Create customer with auto-generated customerNumber (CUST-XXXX), validate unique
-  - `customers.update` — Update customer fields, validate email uniqueness
-  - `customers.delete` — Soft delete, check no outstanding (non-void) invoices
-  - `customers.getStatement` — Invoice list with balances, aging for a customer
-  - All endpoints use existing auth middleware and businessId scoping
-  - Rate limiting: 30/min
-- [ ] **2.1.2**: Create `src/pages/billing/Customers.tsx`:
-  - List page with search bar and paginated table
-  - Columns: Customer Number, Name, Email, Phone, Total Invoiced, Balance, Status, Actions
-  - Status indicator (active/inactive via isActive field)
-  - Quick actions dropdown: Create Invoice, View Statement
-  - Create/Edit customer dialog (name, email, phone, billing address, payment terms, credit limit, currency)
-  - Mobile: card-based layout
-  - FinaFlow pattern: search bar + table with same styling as Suppliers page
-- [ ] **2.1.3**: Create `src/pages/billing/CustomerDetail.tsx`:
-  - Info cards (contact info, payment terms, credit limit, currency)
-  - Invoice history table with status badges, amounts, dates
-  - Statement summary (total invoiced, total paid, current balance)
-  - Aging breakdown: 0-30, 31-60, 61-90, 90+ days
-  - Quick action buttons: Create Invoice, Record Payment
-  - Mobile responsive layout
-- [ ] **2.1.4**: Wire routes in App.tsx: `/billing/customers`, `/billing/customers/:id`
+### Task 2.2: Product Catalogue (Items)
+- [ ] **2.2.1**: Create `api/routers/items-router.ts`:
+  - [ ] `items.list` — Paginated with search
+  - [ ] `items.getById` — Single item
+  - [ ] `items.create` — Create with SKU, type (Goods/Service), unit, COA income account selection
+  - [ ] `items.update` — Update inline
+  - [ ] `items.delete` — Soft delete
+- [ ] **2.2.2**: Create `api/routers/price-lists-router.ts`:
+  - [ ] `priceLists.list` — List price lists
+  - [ ] `priceLists.create` — Create with items + overrides
+  - [ ] `priceLists.update` — Update
+  - [ ] `priceLists.delete` — Delete
+- [ ] **2.2.3**: Create `apps/web/src/pages/Items.tsx`:
+  - [ ] List with inline create
+  - [ ] Item detail with inline edit
+  - [ ] Price list management UI
+- [ ] **2.2.4**: Wire routes: `/catalogue/items`, `/catalogue/price-lists`
 
-### Task 2.2: Invoice Management
+### Task 2.3: Quotes
+- [ ] **2.3.1**: Create `api/routers/quotes-router.ts`:
+  - [ ] `quotes.list` — Paginated with status/date/customer filters
+  - [ ] `quotes.getById` — Full quote with items
+  - [ ] `quotes.create` — Create with line items, auto quoteNumber (QOT-XXXX)
+  - [ ] `quotes.update` — Update draft only
+  - [ ] `quotes.send` — Change to 'sent', trigger email
+  - [ ] `quotes.accept` — Change to 'accepted'
+  - [ ] `quotes.decline` — Change to 'declined' with reason
+  - [ ] `quotes.convertToInvoice` — Create invoice from quote
+  - [ ] `quotes.downloadPdf` — Generate PDF
+- [ ] **2.3.2**: Create `apps/web/src/pages/Quotes.tsx`:
+  - [ ] List with status tabs (All, Draft, Sent, Accepted, Declined, Expired, Converted)
+  - [ ] Inline quote builder with line items
+  - [ ] Quote detail + actions (Send, Accept, Decline, Convert, Download PDF)
+- [ ] **2.3.3**: Wire routes: `/sales/quotes`, `/sales/quotes/:id`, `/sales/quotes/create`
 
-- [ ] **2.2.1**: Create `api/invoices-router.ts`:
-  - `invoices.list` — Paginated list with filters: status, dateRange (issueDate), customerId, currency. Sorted by issueDate desc
-  - `invoices.getById` — Full invoice with line items (joined) and payments (joined). Include customer info
-  - `invoices.create` — Create invoice with line items in a transaction:
-    - Validate customer exists and is active
-    - Validate line items (non-empty, positive qty/price)
-    - Auto-calculate: subtotal, discountAmount, taxAmount per item, grandTotal
-    - Auto-generate invoice number (from business_profiles)
-    - Set status to 'draft'
-    - Create invoice + all invoice_items in one transaction
-  - `invoices.update` — Update draft invoice only (replace line items in transaction)
-  - `invoices.send` — Change status to 'sent', set issueDate if not set, trigger email dispatch
-  - `invoices.void` — Void invoice with reason:
-    - Check not already paid (or reverse payments)
-    - Set status to 'void', set voidReason, voidedAt
-    - If payments exist, create credit note invoice or reversing journal entry
-  - `invoices.downloadPdf` — Generate PDF on-demand, return as file response
-  - `invoices.getNextNumber` — Return next available invoice number (from business_profiles + 1, without incrementing)
-  - All endpoints use existing auth middleware and businessId scoping
-  - Rate limiting: 20/min
-- [ ] **2.2.2**: Create `src/pages/billing/Invoices.tsx`:
-  - List with status tabs (All, Draft, Sent, Paid, Overdue, Void) using FinaFlow button-tab pattern
-  - Table with columns: Invoice Number, Customer, Issue Date, Due Date, Grand Total, Balance Due, Status, Actions
-  - Status badges with color coding:
-    - Draft: gray (#8D8A87)
-    - Sent: blue (#0288D1)
-    - Partial: orange (#ED6C02)
-    - Paid: green (#2E7D32)
-    - Overdue: red (#D32F2F)
-    - Void: muted gray
-  - Search by invoice number or customer name
-  - Date range filter
-  - Quick actions dropdown: View, Send, Download PDF, Record Payment, Void
-  - FinaFlow table styling: border-b divides, hover:bg[#F5EDE6]/50 rows
-  - Mobile: card-based layout
-- [ ] **2.2.3**: Create `src/pages/billing/InvoiceBuilder.tsx`:
-  - Customer selector (searchable dropdown with name, email, phone display)
-  - Invoice date input (default: today)
-  - Due date auto-computed from payment terms (default: net30 from invoice date)
-  - Currency selector (default: from customer or business)
-  - Line items table:
-    - Add/remove rows
-    - Each row: description (text), quantity (number), unitPrice (decimal), taxRate (dropdown or input), revenueCategory (dropdown from revenue_categories), lineTotal (auto, read-only)
-    - Row actions: delete, duplicate
-    - Add line item button
-  - Totals section (real-time):
-    - Subtotal (sum of all qty × unitPrice)
-    - Discount (dropdown: percentage/fixed, input for value)
-    - Tax total (sum of all line item taxAmount)
-    - Grand total
-  - Notes text area
-  - Payment terms text area
-  - Action buttons: "Save as Draft" (bg-gray), "Save and Send" (bg-[#C73E1D])
-  - Mobile: stacked form layout, touch-friendly line item controls
-- [ ] **2.2.4**: Create `src/pages/billing/InvoiceDetail.tsx`:
-  - Professional invoice display (print-friendly, uses @media print)
-  - Business info header (from business_profiles)
-  - Customer info block
-  - Invoice header: number, status badge, issue date, due date
-  - Line items table
-  - Totals section
-  - Payment history table (if any payments recorded)
-  - Email log entries (if any)
-  - Action buttons: Send, Download PDF, Record Payment, Void
-  - Status change confirmation dialogs
-- [ ] **2.2.5**: Wire routes in App.tsx: `/billing/invoices`, `/billing/invoices/create`, `/billing/invoices/:id`, `/billing/invoices/:id/edit`
+### Task 2.4: Invoices
+- [ ] **2.4.1**: Create `api/routers/invoices-router.ts`:
+  - [ ] `invoices.list` — Paginated with status/date/customer/currency filters
+  - [ ] `invoices.getById` — Full invoice with items + payments
+  - [ ] `invoices.create` — Create with line items, auto invoiceNumber (INV-XXXX)
+  - [ ] `invoices.update` — Update draft only
+  - [ ] `invoices.send` — Change to 'sent', trigger email with PDF
+  - [ ] `invoices.void` — Void with reason
+  - [ ] `invoices.downloadPdf` — Generate PDF
+  - [ ] `invoices.getNextNumber` — Preview next number
+- [ ] **2.4.2**: Create `apps/web/src/pages/Invoices.tsx`:
+  - [ ] List with status tabs (All, Draft, Sent, Paid, Overdue, Void)
+  - [ ] Inline invoice builder with line items from catalogue
+  - [ ] Invoice detail with payment history
+- [ ] **2.4.3**: Wire routes: `/sales/invoices`, `/sales/invoices/:id`, `/sales/invoices/create`
 
-### Task 2.3: Invoice PDF Generation
+### Task 2.5: Sales Receipts
+- [ ] **2.5.1**: Create `api/routers/sales-receipts-router.ts`:
+  - [ ] `salesReceipts.list` — List with filters
+  - [ ] `salesReceipts.getById` — Full receipt
+  - [ ] `salesReceipts.create` — Create with immediate payment
+  - [ ] `salesReceipts.downloadPdf` — Generate PDF
+- [ ] **2.5.2**: Create `apps/web/src/pages/SalesReceipts.tsx`:
+  - [ ] List page
+  - [ ] Inline receipt creation form (simpler than invoice)
+- [ ] **2.5.3**: Wire routes: `/sales/receipts`, `/sales/receipts/create`
 
-- [ ] **2.3.1**: Install PDF generation library (pdfkit)
-- [ ] **2.3.2**: Create `api/lib/invoice-pdf.ts`:
-  - `generateInvoicePdf(invoiceId)` function
-  - Fetch full invoice with items, customer, business profile
-  - Generate PDF with:
-    - Business logo (base64 from business_profiles)
-    - Business name, address, phone, email, tax reg no
-    - Customer name, address
-    - Invoice number, issue date, due date, status
-    - Line items table with headers (Description, Qty, Unit Price, Tax, Total)
-    - Totals section (subtotal, discount, tax, grand total)
-    - Amount in words (utility function)
-    - Payment terms and notes
-    - Accent color from business_profiles.accentColor
-  - Return PDF as Buffer
-- [ ] **2.3.3**: Wire into `invoices.downloadPdf` endpoint — return as octet-stream with Content-Disposition
+### Task 2.6: Credit Notes
+- [ ] **2.6.1**: Create `api/routers/credit-notes-router.ts`:
+  - [ ] `creditNotes.list` — List with filters
+  - [ ] `creditNotes.getById` — Full credit note
+  - [ ] `creditNotes.create` — Create linked to invoice
+  - [ ] `creditNotes.apply` — Apply credit to invoice
+- [ ] **2.6.2**: Create `apps/web/src/pages/CreditNotes.tsx`
+- [ ] **2.6.3**: Wire routes: `/sales/credit-notes`
+
+### Task 2.7: PDF Generation
+- [ ] **2.7.1**: Create `api/lib/pdf-generator.ts`:
+  - [ ] `generateQuotePdf(quoteId)` — Quote PDF with branding
+  - [ ] `generateInvoicePdf(invoiceId)` — Invoice PDF with branding
+  - [ ] `generateReceiptPdf(receiptId)` — Receipt PDF
+  - [ ] `generateCreditNotePdf(creditNoteId)` — Credit note PDF
+- [ ] **2.7.2**: Wire PDF generation into all download endpoints
 
 ---
 
-## Phase 3: Billing Operations
+## Phase 3: Payments & Expenses
 
-### Task 3.1: Payment Recording
+### Task 3.1: Payments Received
+- [ ] **3.1.1**: Create `api/routers/payments-router.ts`:
+  - [ ] `payments.list` — List with date/method/customer filters
+  - [ ] `payments.record` — Record payment against invoice/receipt
+  - [ ] `payments.getByInvoice` — All payments for an invoice
+  - [ ] `payments.refund` — Refund a payment
+- [ ] **3.1.2**: Create `apps/web/src/pages/Payments.tsx`:
+  - [ ] List with filters + payment method breakdown card
+  - [ ] Inline record payment form
+- [ ] **3.1.3**: Wire route: `/payments`
 
-- [ ] **3.1.1**: Create `api/invoice-payments-router.ts`:
-  - `invoicePayments.list` — Payments list with filters: date range, payment method, invoiceId, customerId (via join)
-  - `invoicePayments.record` — Record payment in transaction:
-    - Validate invoice exists and has balanceDue > 0
-    - Validate amount > 0 and <= balanceDue
-    - Find appropriate accountId by payment method (use accounting-maps.ts patterns):
-      - cash → find cash account
-      - mpesa → find mpesa account
-      - bank_transfer → find bank account
-      - card → find bank account
-    - Create invoice_payment record
-    - Update invoice.amountPaid (accumulate) and balanceDue (computed)
-    - Update invoice.status:
-      - If amountPaid >= grandTotal → 'paid'
-      - If amountPaid > 0 → 'partial'
-    - Create journal entry in FinaFlow's journal system:
-      - Debit: the cash/bank account (by payment method)
-      - Credit: Revenue account (from invoice items' revenueCategory → incomeAccountId)
-      - Or aggregate: if multiple revenue categories, credit proportionally
-    - Rate limiting: 20/min
-  - `invoicePayments.getByInvoice` — All payments for a specific invoice, ordered by paymentDate desc
-  - `invoicePayments.delete` — Reverse a payment (within configurable cancelation period, default 24h):
-    - Only if invoice is not fully reconciled
-    - Reverse the amount from invoice.amountPaid
-    - Reverse the journal entry
-    - Update invoice status back
-- [ ] **3.1.2**: Create `src/pages/billing/Payments.tsx`:
-  - Payments list with filters: date range, payment method
-  - Table: Date, Invoice #, Customer, Amount, Method, Reference, Status
-  - Payment method breakdown summary card (cash total, mpesa total, bank total)
-  - Record payment dialog (opened from invoice detail or standalone):
-    - Invoice selector (searchable)
-    - Amount (pre-filled if from invoice detail)
-    - Payment method dropdown
-    - Reference input
-    - Payment date (default: today)
-    - Notes text area
-  - Mobile-friendly layout
-- [ ] **3.1.3**: Wire routes: `/billing/payments`
+### Task 3.2: Payment Links
+- [ ] **3.2.1**: Create `api/routers/payment-links-router.ts`:
+  - [ ] `paymentLinks.list` — List
+  - [ ] `paymentLinks.create` — Create shareable link
+  - [ ] `paymentLinks.update` — Update
+  - [ ] `paymentLinks.delete` — Delete
+- [ ] **3.2.2**: Create payment link UI in Payments page
+- [ ] **3.2.3**: Wire route: `/payments/links`
 
-### Task 3.2: Recurring Invoice Engine
-
-- [ ] **3.2.1**: Create `api/recurring-invoices-router.ts`:
-  - `recurringInvoices.list` — List templates with status, next due date, customer name
-  - `recurringInvoices.create` — Create template with items in transaction:
-    - Validate customer, frequency, nextDueDate
-    - Create template + template items
-  - `recurringInvoices.update` — Update template, replace items
-  - `recurringInvoices.delete` — Soft delete (set isActive = false, deletedAt)
-  - `recurringInvoices.triggerNow` — Manually generate invoice from template:
-    - Creates invoice from template items
-    - Updates nextDueDate
-    - Creates generation log
-  - `recurringInvoices.skipNext` — Skip next occurrence:
-    - Advance nextDueDate without generating
-    - Create generation log with status 'skipped' and skipReason
-  - `recurringInvoices.getGenerationLog` — History of auto-generations for a template
-- [ ] **3.2.2**: Create `api/cron/recurring-invoices.ts`:
-  - Scheduled task that checks every hour (or daily at 00:00)
-  - Queries active templates where nextDueDate <= today
-  - For each template in transaction:
-    - Create invoice from template items (same logic as invoices.create)
-    - Compute new nextDueDate by frequency:
-      - weekly: add 7 days
-      - monthly: add 1 month
-      - quarterly: add 3 months
-      - annually: add 1 year
-    - If endDate is set and new date > endDate, set isActive = false
-    - Update lastGeneratedDate, totalGenerated
-    - Create generation log entry
-    - Optionally send invoice via email (sendInvoice mutation)
-  - Uses db.transaction() for each template
-  - Logging: success/failure per template
-- [ ] **3.2.3**: Create `src/pages/billing/RecurringInvoices.tsx`:
-  - Template list with status indicator (active/inactive badge)
-  - Create/edit template dialog:
-    - Customer selector
-    - Template name
-    - Description
-    - Frequency selector (weekly/monthly/quarterly/annually)
-    - Interval (every N periods)
-    - Next due date picker
-    - End date picker (optional)
-    - Line items (same pattern as invoice builder)
-    - Notes and terms text areas
-  - Template detail view:
-    - Basic info card
-    - Items table
-    - Generation history log with status badges
-  - Action buttons: Trigger Now, Skip Next, Edit, Deactivate
-  - Mobile-friendly layout
-- [ ] **3.2.4**: Wire routes: `/billing/recurring`
-- [ ] **3.2.5**: Register cron job in the app's initialization (or as a scheduled task via Schedule tool)
-
-### Task 3.3: Email Delivery
-
-- [ ] **3.3.1**: Create `api/lib/email.ts`:
-  - Configure email transport (SendGrid, SMTP, or SES)
-  - `sendInvoiceEmail(invoiceId)` — Send invoice to customer email with PDF attachment
-  - `sendPaymentReminder(invoiceId, reminderType)` — Send reminder email
-  - `sendPaymentReceipt(invoiceId, paymentId)` — Send receipt email
-  - Track delivery status (sent, failed, bounced)
-  - Create invoice_email_log entries
-  - Configurable sender name/email from business_profiles
-- [ ] **3.3.2**: Create `api/email-router.ts`:
-  - `email.sendInvoice` — Send invoice email (called from invoices.send)
-  - `email.resendInvoice` — Resend to same or different email
-  - `email.getEmailLogs` — Delivery logs for an invoice
-  - `email.sendReminder` — Send manual reminder
-- [ ] **3.3.3**: Create `api/cron/payment-reminders.ts`:
-  - Daily cron for overdue invoices
-  - Finds invoices where status IN ('sent', 'partial') AND dueDate < today AND balanceDue > 0
-  - Groups by days overdue:
-    - 7 days → first_reminder (if no reminder sent yet)
-    - 14 days → second_reminder (if first was sent)
-    - 30+ days → final_reminder (if second was sent)
-  - Creates payment_reminders entries
-  - Sends reminder emails via email service
-  - Updates payment_reminders status after sending
-
-### Task 3.4: Business Branding / Profile
-
-- [ ] **3.4.1**: Create `api/billing-profile-router.ts`:
-  - `billingProfile.get` — Get business profile (create default if not exists)
-  - `billingProfile.update` — Update branding settings:
-    - Logo upload (store as base64 or file path)
-    - Business name, address, phone, email, website
-    - Tax registration number
-    - Default tax rate
-    - Invoice prefix, invoice number start
-    - Default payment terms text
-    - Footer text
-    - Accent color (hex)
-- [ ] **3.4.2**: Create billing settings section (integrated into existing Settings page or separate page):
-  - Business profile tab with upload logo
-  - Invoice settings tab (prefix, default terms, default tax rate)
-  - Email settings tab (sender name, sender email, reminder intervals)
-  - Same UI patterns as existing Settings page
+### Task 3.3: Expenses
+- [ ] **3.3.1**: Create `api/routers/expenses-router.ts`:
+  - [ ] `expenses.list` — List with category/date filters
+  - [ ] `expenses.create` — Create with receipt upload
+  - [ ] `expenses.update` — Update
+  - [ ] `expenses.delete` — Delete
+- [ ] **3.3.2**: Create `api/routers/expense-categories-router.ts`:
+  - [ ] `expenseCategories.list` — List
+  - [ ] `expenseCategories.create` — Create
+  - [ ] `expenseCategories.update` — Update
+  - [ ] `expenseCategories.delete` — Delete
+- [ ] **3.3.3**: Create `apps/web/src/pages/Expenses.tsx`:
+  - [ ] List with inline create form
+  - [ ] Receipt upload (photo capture)
+  - [ ] Recurring expenses list + create
+- [ ] **3.3.4**: Wire routes: `/expenses`, `/expenses/recurring`
 
 ---
 
-## Phase 4: Reports & Dashboard
+## Phase 4: Subscriptions & Recurring
 
-### Task 4.1: Billing Dashboard
+### Task 4.1: Products, Plans & Addons
+- [ ] **4.1.0**: Create `api/routers/products-router.ts`:
+  - [ ] `products.list` — List products
+  - [ ] `products.create` — Create product (name, description, email recipients, redirect URL, auto-generate numbers)
+  - [ ] `products.update` — Update
+  - [ ] `products.delete` — Delete
+- [ ] **4.1.1**: Create `api/routers/plans-router.ts`:
+  - [ ] `plans.list` — List subscription plans
+  - [ ] `plans.create` — Create with items
+  - [ ] `plans.update` — Update
+  - [ ] `plans.delete` — Deactivate
+- [ ] **4.1.2**: Create `api/routers/addons-router.ts`:
+  - [ ] `addons.list` — List addons
+  - [ ] `addons.create` — Create
+  - [ ] `addons.update` — Update
+  - [ ] `addons.delete` — Deactivate
+- [ ] **4.1.3**: Create `apps/web/src/pages/Plans.tsx`:
+  - [ ] Plan list with inline create/edit
+  - [ ] Plan detail with items table
+  - [ ] Addon management UI
+- [ ] **4.1.4**: Wire routes: `/subscriptions/plans`, `/subscriptions/addons`
 
-- [ ] **4.1.1**: Create `api/billing-dashboard-router.ts`:
-  - `billingDashboard.summary` — Revenue KPIs:
-    - Invoiced this month (sum of grandTotal where status != 'void' AND issueDate in current month)
-    - Collected this month (sum of invoice_payments where paymentDate in current month)
-    - Outstanding (sum of balanceDue where status IN ('sent', 'partial', 'overdue'))
-    - Overdue total (sum of balanceDue where status IN ('sent', 'partial') AND dueDate < today)
-    - Invoice count by status
-    - Month-over-month change percentages
-  - `billingDashboard.recentInvoices` — Last 10 invoices with customer name
-  - `billingDashboard.upcomingRecurring` — Next 5 recurring templates by nextDueDate
-  - `billingDashboard.agingSummary` — Total outstanding by bucket (0-30, 31-60, 61-90, 90+)
-  - `billingDashboard.monthlyRevenue` — Monthly revenue trend (last 12 months, sum of payments by month)
-- [ ] **4.1.2**: Create `src/pages/billing/BillingDashboard.tsx`:
-  - Revenue summary cards (same card pattern as main Dashboard):
-    - Invoiced This Month (with trend indicator)
-    - Collected This Month (with trend indicator)
-    - Outstanding
-    - Overdue (in red if > 0)
-  - Monthly revenue trend chart (recharts BarChart)
-  - Recent invoices list (last 10, mini table)
-  - Upcoming recurring invoices (next 5, list view)
-  - Aging summary cards (buckets with amounts)
-  - FinaFlow design patterns: rounded-2xl cards, serif titles, monospace amounts
-- [ ] **4.1.3**: Wire route: `/billing` (also `/billing/dashboard`)
+### Task 4.2: Coupons & Pricing
+- [ ] **4.2.1**: Create `api/routers/coupons-router.ts`:
+  - [ ] `coupons.list` — List coupons
+  - [ ] `coupons.create` — Create with validation rules
+  - [ ] `coupons.update` — Update
+  - [ ] `coupons.delete` — Deactivate
+  - [ ] `coupons.validate` — Validate coupon code at checkout
+- [ ] **4.2.2**: Create `api/routers/pricing-widgets-router.ts`:
+  - [ ] `pricingWidgets.list` — List widgets
+  - [ ] `pricingWidgets.create` — Create tiered/volume/usage config
+  - [ ] `pricingWidgets.update` — Update
+  - [ ] `pricingWidgets.delete` — Delete
+- [ ] **4.2.3**: Create coupon + pricing widget UI
+- [ ] **4.2.4**: Wire routes: `/subscriptions/coupons`, `/subscriptions/pricing`
 
-### Task 4.2: Billing Reports
+### Task 4.3: Subscriptions Engine
+- [ ] **4.3.1**: Install + configure Stripe SDK
+- [ ] **4.3.2**: Create `api/lib/stripe.ts`:
+  - [ ] Stripe customer creation
+  - [ ] Payment method management
+  - [ ] Subscription creation on Stripe side
+  - [ ] Webhook handling (payment_intent.succeeded, invoice.paid, etc.)
+- [ ] **4.3.3**: Create `api/routers/subscriptions-router.ts`:
+  - [ ] `subscriptions.list` — List with status filters
+  - [ ] `subscriptions.create` — Create with plan + addons + coupon
+  - [ ] `subscriptions.getById` — Full subscription detail
+  - [ ] `subscriptions.pause` — Pause billing
+  - [ ] `subscriptions.resume` — Resume billing
+  - [ ] `subscriptions.cancel` — Cancel with reason
+  - [ ] `subscriptions.updatePlan` — Change plan with proration
+  - [ ] `subscriptions.addAddon` — Attach addon
+  - [ ] `subscriptions.removeAddon` — Detach addon
+- [ ] **4.3.4**: Create `apps/web/src/pages/Subscriptions.tsx`:
+  - [ ] List with status badges
+  - [ ] Subscription detail with plan, addons, coupon
+  - [ ] Actions: Pause, Resume, Cancel, Change Plan
+  - [ ] Invoice history for subscription
+- [ ] **4.3.5**: Wire routes: `/subscriptions`, `/subscriptions/:id`, `/subscriptions/create`
 
-- [ ] **4.2.1**: Create `api/billing-reports-router.ts`:
-  - `billingReports.revenueByPeriod`:
-    - Input: dateRange, grouping (monthly/quarterly/yearly)
-    - Output: periods with invoiced, collected, outstanding
-    - Group by period using SQL date truncation
-  - `billingReports.customerAging`:
-    - Input: asOf date (default: today)
-    - Output: buckets (0-30, 31-60, 61-90, 90+) with customer counts and totals
-    - Query: invoices with status IN ('sent', 'partial') AND dueDate <= asOf
-  - `billingReports.invoiceStatusDistribution`:
-    - Output: count and total amount by status
-  - `billingReports.revenueByCategory`:
-    - Input: dateRange
-    - Output: revenue categories with totals (from invoice_items.revenueCategoryId → revenue_categories.name)
-  - All endpoints: CSV export option
-- [ ] **4.2.2**: Create `src/pages/billing/BillingReports.tsx`:
-  - Tab-based layout: Revenue, Aging, Status Distribution, Revenue by Category
-  - FinaFlow button-tab pattern (border-b-2)
-  - Revenue by period:
-    - Date range picker
-    - Grouping selector (monthly/quarterly/yearly)
-    - Bar chart (recharts)
-    - Data table below
-    - CSV export button
-  - Customer aging:
-    - As-of date display
-    - Bucket breakdown cards
-    - Table with bucket, count, total
-  - Invoice status distribution:
-    - Pie chart (recharts PieChart)
-    - Summary table
-  - Revenue by category:
-    - Bar chart
-    - Table with category, amount, percentage
-  - Mobile responsive: charts stack vertically
-- [ ] **4.2.3**: Wire route: `/billing/reports`
+### Task 4.4: Cron — Recurring Invoice Generation
+- [ ] **4.4.1**: Create `api/cron/recurring-invoices.ts`:
+  - [ ] Daily check for subscription billing cycles
+  - [ ] Generate invoices for due subscriptions
+  - [ ] Handle proration
+  - [ ] Create payment intents via Stripe
+  - [ ] Log generation results
 
-### Task 4.3: Integration with Existing Reports
+### Task 4.5: Dunning Management
+- [ ] **4.5.1**: Create `api/cron/dunning.ts`:
+  - [ ] Failed payment retry logic (3 attempts at 3-day intervals)
+  - [ ] Escalation: email notification → suspend subscription
+  - [ ] Update subscription status to 'past_due' during retry window
+  - [ ] Update to 'canceled' after all retries fail
 
-- [ ] **4.3.1**: Update `api/reports-router.ts` to include billing data:
-  - P&L Statement: Include revenue from invoice payments (through journal entries) alongside existing expense data
-  - Balance Sheet: Accounts receivable (sum of balanceDue for non-void invoices) as a current asset
-  - Cash Flow: Include incoming payments in operating cash inflows
-- [ ] **4.3.2**: Update Reports.tsx main tab to include billing-related report sections
-  - Only visible if user has billing permissions and has billing data
+### Task 4.6: Hosted Payment Pages
+- [ ] **4.6.1**: Implement Stripe Checkout integration for one-time payments
+- [ ] **4.6.2**: Implement Stripe Customer Portal for subscription management
+- [ ] **4.6.3**: Create custom hosted payment page (optional — if not using Stripe's)
 
 ---
 
-## Phase 5: Onboarding & Polish
+## Phase 5: Time Tracking & Projects
 
-### Task 5.1: Business Onboarding Flow
+### Task 5.1: Projects
+- [ ] **5.1.1**: Create `api/routers/projects-router.ts`:
+  - [ ] `projects.list` — List with customer/status filters
+  - [ ] `projects.create` — Create with budget
+  - [ ] `projects.update` — Update
+  - [ ] `projects.delete` — Soft delete
+  - [ ] `projects.getProfitability` — Revenue vs tracked hours
+- [ ] **5.1.2**: Create `apps/web/src/pages/Projects.tsx`:
+  - [ ] List with status badges
+  - [ ] Project detail with budget tracking
+  - [ ] Project profitability view
+- [ ] **5.1.3**: Wire routes: `/time/projects`, `/time/projects/:id`
 
-- [ ] **5.1.1**: Add `primaryMode` selection step to business creation flow (in `api/businesses-router.ts`):
-  - Accept `primaryMode` in create mutation
-  - Set default mode based on selection
-- [ ] **5.1.2**: Create onboarding UI step for primary mode selection:
-  - Three-option card selector (Track Expenses, Send Invoices, Both)
-  - Clean design with icons
-  - Store selection in business creation payload
-- [ ] **5.1.3**: Update `useBillingContext` to respect `primaryMode` on initial load:
-  - Read `user.currentBusiness.primaryMode`
-  - Set default mode accordingly
-  - Override with localStorage preference if user has manually switched before
+### Task 5.2: Timesheets
+- [ ] **5.2.1**: Create `api/routers/timesheets-router.ts`:
+  - [ ] `timesheets.list` — List with date/project/user filters
+  - [ ] `timesheets.create` — Log time entry
+  - [ ] `timesheets.update` — Update entry
+  - [ ] `timesheets.delete` — Delete entry
+  - [ ] `timesheets.submit` — Submit for approval
+  - [ ] `timesheets.approve` — Approve/reject
+  - [ ] `timesheets.exportToInvoice` — Create invoice from approved entries
+- [ ] **5.2.2**: Create `apps/web/src/pages/Timesheets.tsx`:
+  - [ ] Weekly timesheet view (grid: days × projects)
+  - [ ] Inline time entry form
+  - [ ] Approval workflow UI
+- [ ] **5.2.3**: Wire routes: `/time/timesheets`
 
-### Task 5.2: Mobile Optimization
+---
 
-- [ ] **5.2.1**: Audit all billing pages for mobile responsiveness:
-  - Invoices list: card-based layout at sm breakpoint
-  - Invoice builder: stacked form, touch line items
-  - Customers list: card-based layout
-  - Customer detail: stacked cards
-  - Billing dashboard: single-column grid at sm
-  - Reports: vertical stacking of charts and tables
-- [ ] **5.2.2**: Bottom navigation context-switching fully functional
-- [ ] **5.2.3**: Touch targets minimum 44px on all interactive elements
-- [ ] **5.2.4**: Dialogs full-screen on mobile
+## Phase 6: Reports & Intelligence
 
-### Task 5.3: Testing
+### Task 6.1: Report Viewer Framework
+- [ ] **6.1.1**: Create report viewer infrastructure:
+  - [ ] Report viewer layout: category selector (left sidebar), report list (middle), report view (right)
+  - [ ] Date range picker (From/To)
+  - [ ] Filter bar (Entities, More Filters)
+  - [ ] Compare With dropdown (None, Previous Period, Previous Year)
+  - [ ] Customize Report Columns interface
+  - [ ] Empty state: "There were no [data] during the selected date range."
+  - [ ] Placeholder system for unimplemented reports
+- [ ] **6.1.2**: Create `api/lib/reports/` directory with one module per category:
+  - [ ] `sales.ts` — 7 sales reports
+  - [ ] `receivables.ts` — 7 receivable reports
+  - [ ] `acquisition.ts` — 5 acquisition insight reports
+  - [ ] `signups.ts` — 3 signup/activation reports
+  - [ ] `subscriptions.ts` — 8 subscription reports
+  - [ ] `revenue.ts` — 3 revenue reports
+  - [ ] `retention.ts` — 5 retention reports
+  - [ ] `mrr-arr.ts` — 3 MRR/ARR reports
+  - [ ] `churn.ts` — 6 churn reports
+  - [ ] `churn-insights.ts` — 5 churn insight reports
+  - [ ] `payments.ts` — 6 payment reports
+  - [ ] `expenses.ts` — 5 expense reports
+  - [ ] `taxes.ts` — 1 tax report
+  - [ ] `projects.ts` — 4 project/timesheet reports
+  - [ ] `activity.ts` — 5 activity reports
+- [ ] **6.1.3**: Build reports incrementally, starting with Sales + Receivables
+- [ ] **6.1.4**: All reports support CSV export
 
-- [ ] **5.3.1**: Unit tests for invoice calculation utilities:
-  - calculateSubtotal, calculateTax, calculateDiscount, calculateGrandTotal
-  - generateInvoiceNumber
-  - computeDueDate (net15, net30, net60, due_on_receipt)
-  - nextDateByFrequency (weekly, monthly, quarterly, annually)
-  - isOverdue, formatCurrency
-- [ ] **5.3.2**: Integration tests for customer CRUD:
-  - Create customer → list includes customer → getById returns correct data
-  - Update customer → getById returns updated data
-  - Delete customer with invoices → blocked
-  - Delete customer without invoices → soft deleted
-- [ ] **5.3.3**: Integration tests for invoice lifecycle:
-  - Create draft invoice → status is 'draft'
-  - Add line items → totals calculated correctly
-  - Send invoice → status is 'sent'
-  - Record partial payment → status is 'partial', balance updated
-  - Record full payment → status is 'paid', balance is 0
-  - Void unpaid invoice → status is 'void'
-  - Void partially paid invoice → status is 'void' (with credit note)
-- [ ] **5.3.4**: Integration tests for recurring invoice engine:
-  - Create template → list shows active
-  - Trigger now → invoice created, nextDueDate advanced
-  - Skip next → nextDueDate advanced without invoice
-  - Daily cron generates for due templates only
-- [ ] **5.3.5**: Integration tests for payment → journal entries:
-  - Record payment → journal entry created with Dr = Cr
-  - Cash payment → Debit cash account, Credit revenue account
-  - M-PESA payment → Debit mpesa account, Credit revenue account
-- [ ] **5.3.6**: E2E test: Create customer → Create invoice → Send → Record payment → Verify report data
+### Task 6.2: Dashboard
+- [ ] **6.2.1**: Create `api/routers/dashboard-router.ts`:
+  - [ ] `dashboard.summary` — KPIs (revenue, outstanding, overdue, MRR)
+  - [ ] `dashboard.recentInvoices` — Last 10 invoices
+  - [ ] `dashboard.upcomingSubscriptions` — Next renewals
+  - [ ] `dashboard.agingSummary` — Aging buckets
+  - [ ] `dashboard.monthlyTrend` — 12-month revenue trend
+- [ ] **6.2.2**: Create `apps/web/src/pages/Dashboard.tsx`:
+  - [ ] Bento-grid layout
+  - [ ] KPI cards with trend indicators
+  - [ ] Revenue trend chart
+  - [ ] Recent activity list
+  - [ ] Aging summary cards
+- [ ] **6.2.3**: Wire route: `/`
+
+---
+
+## Phase 7: Integration & Polish
+
+### Task 7.1: FinaFlow Integration (FinaBill Side)
+- [ ] **7.1.1**: Create `api/routers/integration-router.ts`:
+  - [ ] `integration.connect` — Connect to FinaFlow with API key
+  - [ ] `integration.disconnect` — Disconnect
+  - [ ] `integration.status` — Connection status + last sync
+  - [ ] `integration.matchCustomers` — Scan for email matches
+  - [ ] `integration.syncCustomers` — Push matched customers
+  - [ ] `integration.syncPayments` — Push payments to FinaFlow journal
+- [ ] **7.1.2**: Create `api/lib/integrations/finaflow-client.ts`:
+  - [ ] HTTP client with API key auth
+  - [ ] `syncPaymentToFinaFlow(payment)` — Push payment journal entry
+  - [ ] `syncCustomerToFinaFlow(customer)` — Push customer profile
+  - [ ] `fetchAccounts()` — Pull COA from FinaFlow
+  - [ ] `fetchExpenses()` — Pull expenses from FinaFlow
+  - [ ] `verifyConnection()` — Test API connectivity
+- [ ] **7.1.3**: Create `api/lib/integrations/customer-matcher.ts`:
+  - [ ] `findMatchingCustomers(finaflowApiKey, businessId)` — Email matching
+  - [ ] `linkCustomer(customerId, finaflowEntityId)` — Create link
+- [ ] **7.1.4**: Create `apps/web/src/pages/Integrations.tsx`:
+  - [ ] Integration page with Connect/Disconnect buttons
+  - [ ] Smart customer matching UI (list of matches with Connect buttons)
+  - [ ] Sync status indicators
+  - [ ] "Try FinaFlow" button when not connected + no matches
+- [ ] **7.1.5**: Wire route: `/integrations`
+
+### Task 7.2: FinaFlow Integration (FinaFlow Side)
+- [ ] **7.2.1**: In FinaFlow, create integration endpoints for FinaBill:
+  - [ ] `POST /api/integration/finabill/sync-payment` — Receive payment journal entry
+  - [ ] `POST /api/integration/finabill/sync-customer` — Receive customer sync
+  - [ ] `GET /api/integration/finabill/accounts` — Return COA
+  - [ ] `GET /api/integration/finabill/verify` — Verify API key
+  - [ ] `POST /api/integration/finabill/reconcile` — Batch reconciliation
+- [ ] **7.2.2**: In FinaFlow, create `apps/web/src/pages/Integrations.tsx`:
+  - [ ] "Connect to FinaBill" button
+  - [ ] Smart customer/supplier matching (email-based)
+  - [ ] "Try FinaBill" button when no match
+
+### Task 7.3: Documents & Email
+- [ ] **7.3.1**: Create `api/routers/documents-router.ts`:
+  - [ ] `documents.upload` — Upload file
+  - [ ] `documents.list` — List by entity
+  - [ ] `documents.download` — Download file
+  - [ ] `documents.delete` — Delete file
+- [ ] **7.3.2**: Create `api/lib/email.ts`:
+  - [ ] Configure email transport (Resend/SendGrid)
+  - [ ] `sendInvoiceEmail(invoiceId)` — Invoice + PDF
+  - [ ] `sendQuoteEmail(quoteId)` — Quote + PDF
+  - [ ] `sendPaymentReceipt(paymentId)` — Receipt
+  - [ ] `sendSubscriptionInvoice(invoiceId)` — Subscription invoice
+  - [ ] `sendPaymentReminder(invoiceId, type)` — Overdue reminder
+  - [ ] `sendDunningEmail(subscriptionId, attempt)` — Failed payment
+- [ ] **7.3.3**: Create `api/cron/payment-reminders.ts`:
+  - [ ] Daily check for overdue invoices
+  - [ ] First reminder at 7 days, second at 14, final at 30+
+  - [ ] Prevent duplicate reminders
+- [ ] **7.3.4**: Create documents UI + email log UI
+
+### Task 7.4: Settings & Branding
+- [ ] **7.4.1**: Create `api/routers/settings-router.ts`:
+  - [ ] `settings.getBusinessProfile` — Get branding config
+  - [ ] `settings.updateBusinessProfile` — Update logo, colors, defaults
+  - [ ] `settings.getInvoiceDefaults` — Prefix, terms, tax rate
+  - [ ] `settings.updateInvoiceDefaults` — Update defaults
+  - [ ] `settings.getEmailSettings` — Sender, signature
+  - [ ] `settings.updateEmailSettings` — Update email config
+- [ ] **7.4.2**: Create `apps/web/src/pages/Settings.tsx`:
+  - [ ] Business Profile tab (logo, name, address, tax reg)
+  - [ ] Invoice Settings tab (prefix, default terms, tax rate, numbering)
+  - [ ] Email Settings tab (sender name, email, signature)
+  - [ ] Users & Roles tab (team management)
+- [ ] **7.4.3**: Wire route: `/settings`
+
+### Task 7.5: Events & Activity Log
+- [ ] **7.5.1**: Create `events` table in `db/schema.ts` (actionType, entityType, entityId, actorId, details jsonb)
+- [ ] **7.5.2**: Create `api/routers/events-router.ts`:
+  - [ ] `events.list` — Paginated with date/actionType/entityType/actor filters
+  - [ ] `events.log` — Internal: log an event from any mutation
+- [ ] **7.5.3**: Wire events logging into all mutation endpoints (auto-log on create/update/delete)
+- [ ] **7.5.4**: Create `apps/web/src/pages/Events.tsx`:
+  - [ ] Activity log list view with timestamp, action type, actor, details
+  - [ ] Filter by date range, action type, entity type
+- [ ] **7.5.5**: Wire route: `/events`
+
+### Task 7.6: Calendar
+- [ ] **7.6.1**: Create calendar view showing invoice due dates, subscription renewals, project milestones
+- [ ] **7.6.2**: Wire route: `/calendar`
+
+### Task 7.7: Mobile Optimization
+- [ ] **7.7.1**: Audit all pages for mobile layout:
+  - [ ] Tables → card lists at sm breakpoint
+  - [ ] Inline forms → stacked at sm
+  - [ ] Charts → stacked at sm
+  - [ ] Dialogs → full-screen at sm
+- [ ] **7.7.2**: Touch targets ≥ 44px
+- [ ] **7.7.3**: Bottom navigation bar for mobile
+
+---
+
+## Phase 8: FinaGen Vision
+
+### Task 8.1: Architecture Planning
+- [ ] **8.1.1**: Design unified database schema
+- [ ] **8.1.2**: Plan module merger strategy (FinaFlow + FinaBill + Inventory)
+- [ ] **8.1.3**: Design unified dashboard
+
+### Task 8.2: Inventory & Warehouses
+- [ ] **8.2.1**: Inventory management module
+- [ ] **8.2.2**: Warehouse management
+- [ ] **8.2.3**: Stock tracking, adjustments, transfers
+- [ ] **8.2.4**: Low-stock alerts
+
+### Task 8.3: Order Management
+- [ ] **8.3.1**: Sales orders
+- [ ] **8.3.2**: Purchase orders
+- [ ] **8.3.3**: Order fulfillment workflow
+
+### Task 8.4: Unified Platform
+- [ ] **8.4.1**: Merge FinaFlow + FinaBill codebases
+- [ ] **8.4.2**: Unified dashboard
+- [ ] **8.4.3**: Unified reporting
+- [ ] **8.4.4**: Data migration from separate apps
+- [ ] **8.4.5**: Single sign-on across all modules
 
 ---
 
 ## Task Dependencies
 
-- **Phase 1 (Foundation)** is prerequisite for all other phases
-  - Task 1.1 (DB schema) must complete before any API work
-  - Task 1.2 (Context switching) must complete before billing UI work
-  - Task 1.3 (Permissions) can run in parallel with 1.1 and 1.2
-- **Phase 2 (Core Features)** depends on Phase 1:
-  - Task 2.1 (Customers) depends on 1.1
-  - Task 2.2 (Invoices) depends on 2.1 and 1.1
-  - Task 2.3 (PDF) depends on 2.2
-- **Phase 3 (Billing Operations)** depends on Phase 2:
-  - Task 3.1 (Payments) depends on 2.2
-  - Task 3.2 (Recurring) depends on 2.1 and 2.2
-  - Task 3.3 (Email) depends on 2.2
-  - Task 3.4 (Branding) can run in parallel with other Phase 3 tasks
-- **Phase 4 (Reports & Dashboard)** depends on Phase 3:
-  - Task 4.1 (Dashboard) depends on 3.1 and 2.2
-  - Task 4.2 (Reports) depends on 3.1
-  - Task 4.3 (Integration) depends on all Phase 3
-- **Phase 5 (Polish)** has no strict dependencies on Phase 4 — can run in parallel
+| Phase | Depends On | Description |
+|-------|-----------|-------------|
+| **Phase 1** | — | Foundation — no dependencies |
+| **Phase 2** | Phase 1 | Core CRM requires DB, auth, UI scaffold |
+| **Phase 3** | Phase 2 | Payments require invoices; expenses are standalone |
+| **Phase 4** | Phase 2 | Subscriptions require customers + items |
+| **Phase 5** | Phase 2 | Projects require customers; timesheets require projects |
+| **Phase 6** | Phases 2, 3, 4, 5 | Reports need data from all modules |
+| **Phase 7** | Phases 2, 3 | Integration needs customers, invoices, payments |
+| **Phase 8** | All | FinaGen is the final unification |
