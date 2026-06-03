@@ -56,6 +56,7 @@ type SeededContext = {
   location: { id: number };
   owner: { id: number; role: string; currentBusinessId: number };
   operationalAccount: { id: number };
+  operationalAccountNoBizId: { id: number };
   systemAccount: { id: number };
   journalEntry: { id: number };
   employee: { id: number };
@@ -106,7 +107,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     nextExpenseNumber: 27,
   } satisfies typeof locations.$inferInsert).returning());
 
-  // Create operational (user) account
+  // Create operational (user) account (with businessId set — CoA-linked account)
   const opAccount = await firstRow<typeof accounts.$inferSelect>(db.insert(accounts).values({
     businessId: business.id,
     locationId: location.id,
@@ -114,6 +115,18 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     type: "cash",
     currentBalance: "450.00",
     openingBalance: "100.00",
+    isActive: true,
+  } satisfies typeof accounts.$inferInsert).returning());
+
+  // Create realistic operational account WITHOUT businessId — simulates the production
+  // scenario where operational accounts only have locationId set, businessId is NULL
+  const operationalAccountNoBizId = await firstRow<typeof accounts.$inferSelect>(db.insert(accounts).values({
+    locationId: location.id,
+    businessId: null as unknown as undefined,
+    name: "M-PESA Till",
+    type: "bank_account",
+    currentBalance: "4599.00",
+    openingBalance: "1000.00",
     isActive: true,
   } satisfies typeof accounts.$inferInsert).returning());
 
@@ -252,9 +265,10 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
   } satisfies typeof billItems.$inferInsert);
 
   // Create M-PESA transaction (txnId limited to varchar(20))
+  const uniqueTag = `${seed}-${Math.random().toString(36).slice(2, 8)}`;
   await db.insert(mpesaTransactions).values({
     locationId: location.id,
-    txnId: `TXN-${seed}`.slice(0, 20),
+    txnId: `TXN-${uniqueTag}`.slice(0, 20),
     txnDate: "2026-05-16",
     txnType: "topup",
     amount: "500.00",
@@ -353,6 +367,7 @@ async function seedResetContext(seed: string): Promise<SeededContext> {
     location,
     owner: { id: owner.id, role: owner.role, currentBusinessId: business.id },
     operationalAccount: opAccount,
+    operationalAccountNoBizId,
     systemAccount: sysAccount,
     journalEntry: entry,
     employee,
@@ -427,6 +442,14 @@ async function cleanupResetContext(accountId: string) {
   // Delete expense_categories FIRST (FK references accounts.id via defaultAccountId)
   await db.delete(expenseCategories).where(eq(expenseCategories.businessId, business.id));
   await db.delete(accounts).where(eq(accounts.businessId, business.id));
+  // Also clean up accounts with only locationId (no businessId)
+  if (locIds.length > 0) {
+    const locIdSql = sql.join(locIds.map((id) => sql`${id}`), sql`, `);
+    await db.delete(accounts).where(and(
+      isNull(accounts.businessId),
+      sql`${accounts.locationId} IN (${locIdSql})`
+    ));
+  }
   await db.delete(suppliers).where(eq(suppliers.businessId, business.id));
   await db.delete(employees).where(sql`${employees.id} > 0`);
   await db.delete(locations).where(eq(locations.businessId, business.id));

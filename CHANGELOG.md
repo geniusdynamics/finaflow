@@ -5,6 +5,7 @@
 ### Fixed
 - **`openingBalance` not reset on accounts** — The reset function only reset `currentBalance` to `0.00` but left `openingBalance` untouched, causing bank account values and displayed balances to appear retained after reset. Now both `currentBalance` and `openingBalance` are reset to `0.00` for all accounts.
 - **Debt records not cleared on reset** — The `debts` table was completely absent from the reset function. Debt records were never soft-deleted or cancelled during a business reset. Added proper debt clearing with status set to `cancelled` and `deletedAt` timestamp.
+- **[CRITICAL] Operational accounts (Cash Drawer, M-PESA, Bank) not reset** — The root cause of bank account balances and ledger entries surviving the reset was that all account queries in the reset function filtered by `businessId` only. However, operational accounts (Cash Drawer, M-PESA Till, Bank Account) use `locationId` as their identifier and have `businessId = NULL` in the database. The reset completely missed these accounts, leaving their balances and transaction histories intact.
 
 ### Added
 - **Multi-level confirmation wizard** — Reset dialog now has a two-step flow:
@@ -14,7 +15,8 @@
   - Cancel and Back buttons available at both steps
 - **`debts` table to reset scope** — Debts are now soft-deleted with `status: "cancelled"` during reset. Added to short-circuit path, snapshot counting, and the main clearing logic (Step 7h).
 - **Enhanced audit logging** — Reset audit entries now include: `accountsResetToZero`, `accountsOpeningBalanceReset`, `suppliersResetToZero`, `debtsCleared`, `initiatedByUserId`, and `outcome: "success"`. Error logging now captures the actual error message for debugging.
-- **Debt clearing in integration tests** — Test seed context now creates a debt record, and tests verify it is soft-deleted with cancelled status after reset. Test cleanup also removes debt records.
+- **Operational account (locationId-only) coverage** — All three account queries now use `or(eq(businessId), inArray(locationId))` to ensure operational accounts are included in reset operations (balance reset, ledger entry deletion, snapshot counts).
+- **Test coverage for locationId-only accounts** — Integration tests now create an M-PESA Till account with `businessId = NULL` and `locationId` only (matching production data), and verify its `currentBalance` and `openingBalance` are reset to `0.00`. Test cleanup also handles locationId-only accounts.
 
 ### Changed
 - **`api/lib/business-reset.ts`** — Step 11 now resets `openingBalance: "0.00"` alongside `currentBalance: "0.00"` on all accounts. Added Step 7h for debts soft-deletion. Updated snapshot to count debts. Updated audit log to include detailed metrics.

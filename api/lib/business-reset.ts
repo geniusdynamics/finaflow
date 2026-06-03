@@ -158,7 +158,13 @@ export async function createResetSnapshot(input: {
   const accountRows = await input.db
     .select({ id: accounts.id })
     .from(accounts)
-    .where(and(eq(accounts.businessId, input.businessId), isNull(accounts.deletedAt)));
+    .where(and(
+      or(
+        eq(accounts.businessId, input.businessId),
+        locationIds.length > 0 ? inArray(accounts.locationId, locationIds) : eq(accounts.businessId, input.businessId)
+      ),
+      isNull(accounts.deletedAt)
+    ));
   const accountIds = accountRows.map((r: { id: number }) => r.id);
 
   const snapshot: Record<string, number> = {};
@@ -241,7 +247,13 @@ export async function resetBusinessTransactions(input: {
     const accountRows = await tx
       .select({ id: accounts.id })
       .from(accounts)
-      .where(and(eq(accounts.businessId, input.businessId), isNull(accounts.deletedAt)));
+      .where(and(
+        or(
+          eq(accounts.businessId, input.businessId),
+          locationIds.length > 0 ? inArray(accounts.locationId, locationIds) : eq(accounts.businessId, input.businessId)
+        ),
+        isNull(accounts.deletedAt)
+      ));
     const accountIds = accountRows.map((a: { id: number }) => a.id);
 
     const businessJournalEntries = await tx
@@ -642,7 +654,13 @@ export async function resetBusinessTransactions(input: {
     const resetAccounts = await tx
       .update(accounts)
       .set({ currentBalance: "0.00", openingBalance: "0.00", isActive: true })
-      .where(and(eq(accounts.businessId, input.businessId), isNull(accounts.deletedAt)))
+      .where(and(
+        or(
+          eq(accounts.businessId, input.businessId),
+          inArray(accounts.locationId, locationIds)
+        ),
+        isNull(accounts.deletedAt)
+      ))
       .returning({ id: accounts.id });
     results.accounts = { count: resetAccounts.length };
     // User accounts are preserved (not soft-deleted), just zero-balanced
