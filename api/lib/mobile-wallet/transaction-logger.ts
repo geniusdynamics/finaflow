@@ -65,6 +65,23 @@ export interface WalletStats {
 }
 
 export async function logWalletTransaction(params: LogTransactionParams): Promise<number> {
+  const safe = (val: string | number | undefined | null, fallback = ""): string => {
+    if (val === null || val === undefined) return fallback;
+    const s = String(val).trim();
+    return s.length > 0 ? s : fallback;
+  };
+
+  const safeNum = (val: string | number | undefined | null, fallback = "0.00"): string => {
+    if (val === null || val === undefined) return fallback;
+    const n = parseFloat(String(val));
+    return Number.isFinite(n) ? Math.abs(n).toFixed(2) : fallback;
+  };
+
+  const partyName = safe(params.partyName, "");
+  const partyIdentifier = safe(params.partyIdentifier, "");
+  const description = params.description
+    ?? (partyIdentifier ? `${partyName || "Unknown party"} (${partyIdentifier})` : (partyName || null));
+
   const [result] = await getDb()
     .insert(mobileWalletTransactions)
     .values({
@@ -73,19 +90,19 @@ export async function logWalletTransaction(params: LogTransactionParams): Promis
       providerTxnId: params.providerTxnId,
       providerRef: params.providerRef,
       txnDate: params.txnDate,
-      txnTime: params.txnTime,
-      txnType: params.txnType,
-      direction: params.direction,
-      amount: params.amount,
-      currency: params.currency,
-      partyName: params.partyName,
-      partyIdentifier: params.partyIdentifier,
-      txnFee: params.txnFee ?? "0.00",
-      balance: params.balance,
-      description: params.description,
-      rawText: params.rawText,
+      txnTime: params.txnTime ? safe(params.txnTime, "") : null,
+      txnType: safe(params.txnType, "transfer"),
+      direction: params.direction === "in" ? "in" : "out",
+      amount: safeNum(params.amount),
+      currency: safe(params.currency, "KES"),
+      partyName: partyName || null,
+      partyIdentifier: partyIdentifier || null,
+      txnFee: safeNum(params.txnFee, "0.00"),
+      balance: params.balance ? safe(params.balance, "") : null,
+      description,
+      rawText: params.rawText ? safe(params.rawText, "") : null,
       rawPayload: params.rawPayload as Record<string, unknown> | undefined,
-      status: params.status,
+      status: safe(params.status, "completed"),
       isReconciled: params.isReconciled ?? false,
       isLinked: params.isLinked ?? false,
       linkedExpenseId: params.linkedExpenseId,
@@ -94,8 +111,8 @@ export async function logWalletTransaction(params: LogTransactionParams): Promis
       sourceAccountId: params.sourceAccountId,
       destinationAccountId: params.destinationAccountId,
       importedBy: params.importedBy,
-      baseCurrency: params.baseCurrency,
-      baseAmount: params.baseAmount,
+      baseCurrency: params.baseCurrency ? safe(params.baseCurrency, "") : null,
+      baseAmount: params.baseAmount ? safeNum(params.baseAmount) : null,
       conversionRate: params.conversionRate,
     })
     .returning({ id: mobileWalletTransactions.id });

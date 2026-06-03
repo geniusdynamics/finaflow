@@ -6,7 +6,7 @@ import {
   getExpenseAccountSubType,
   getOperationalAccountLinkRequirements,
   getPaymentMethodAccountConfig,
-  isOperationalLinkSubTypeAllowed,
+  isManualCoaSubtypeAllowed,
 } from "../accounting-maps";
 import { buildSystemAccountKey } from "../accounting-accounts";
 
@@ -21,14 +21,17 @@ describe("accounting mapping foundations", () => {
     expect(getPaymentMethodAccountConfig("cash")).toEqual({
       operationalType: "cash",
       assetSubType: "cash",
+      coaSystemKey: "asset:cash",
     });
     expect(getPaymentMethodAccountConfig("wallet")).toEqual({
       operationalType: "wallet",
       assetSubType: "cash",
+      coaSystemKey: "asset:cash",
     });
     expect(getPaymentMethodAccountConfig("card")).toEqual({
       operationalType: "bank_account",
       assetSubType: "bank",
+      coaSystemKey: "asset:bank",
     });
   });
 
@@ -36,18 +39,24 @@ describe("accounting mapping foundations", () => {
     expect(getOperationalAccountLinkRequirements("cash")).toEqual({
       accountType: "asset",
       accountSubType: "cash",
+      coaSystemKey: "asset:cash",
+      coaName: "Cash Accounts",
     });
     expect(getOperationalAccountLinkRequirements("bank_account")).toEqual({
       accountType: "asset",
       accountSubType: "bank",
+      coaSystemKey: "asset:bank",
+      coaName: "Bank Accounts",
     });
   });
 
-  it("rejects liability-only sub-types in the operational accounts module", () => {
-    expect(isOperationalLinkSubTypeAllowed("cash", "cash")).toBe(true);
-    expect(isOperationalLinkSubTypeAllowed("bank_account", "bank")).toBe(true);
-    expect(isOperationalLinkSubTypeAllowed("cash", "accounts_payable")).toBe(false);
-    expect(isOperationalLinkSubTypeAllowed("wallet", "accounts_payable")).toBe(false);
+  it("validates manual CoA sub-type selections — allows only asset subtypes", () => {
+    expect(isManualCoaSubtypeAllowed("cash", "asset", "cash")).toBe(true);
+    expect(isManualCoaSubtypeAllowed("bank_account", "asset", "bank")).toBe(true);
+    expect(isManualCoaSubtypeAllowed("wallet", "asset", "prepaid_expense")).toBe(true);
+    expect(isManualCoaSubtypeAllowed("cash", "liability", "accounts_payable")).toBe(false);
+    expect(isManualCoaSubtypeAllowed("wallet", "equity", "capital")).toBe(false);
+    expect(isManualCoaSubtypeAllowed("bank_account", "expense", "operating_expense")).toBe(false);
   });
 });
 

@@ -1,0 +1,9 @@
+Total operational accounts: 8
+Operational accounts WITH coaId: 4
+Operational accounts WITHOUT coaId: 4
+
+=== Per operational type ===
+  mpesa: 0/4 have coaId
+  bank_account: 1/1 have coaId
+  cash: 3/3 have coaId
+Error: column "systemkey" does not exist

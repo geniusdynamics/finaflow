@@ -147,9 +147,9 @@ export function BusinessOverview() {
     id: number;
     name?: string;
     slug?: string;
-    address?: string;
-    phone?: string;
-    email?: string;
+    address?: string | null;
+    phone?: string | null;
+    email?: string | null;
     isActive: boolean;
     defaultMpesaAccountId?: number | null;
     defaultCashAccountId?: number | null;

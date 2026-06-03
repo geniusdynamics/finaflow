@@ -112,7 +112,7 @@ function createAuthedCaller(
       currentBusiness: business,
       businessIds: [business.id],
     },
-  } as CallerContext);
+  } as any);
 }
 
 describe("Subscription lifecycle", () => {

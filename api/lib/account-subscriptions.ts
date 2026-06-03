@@ -5,7 +5,10 @@ import { businesses, customerAccounts, users, userBusinesses } from "@db/schema"
 import type { getDb } from "../queries/connection";
 import { getPlanConfig } from "./subscriptions";
 
-export type DbClient = ReturnType<typeof getDb>;
+type DbInstance = ReturnType<typeof getDb>;
+type TxClient = Parameters<Parameters<DbInstance["transaction"]>[0]>[0];
+
+export type DbClient = DbInstance | TxClient;
 
 export type ResolvedAccountSubscription =
   | { source: "account"; account: typeof customerAccounts.$inferSelect }

@@ -22,6 +22,20 @@
       "when": 1780203000000,
       "tag": "0006_add_recurring_bills_fk_constraints",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780426500000,
+      "tag": "0009_wallet_data_quality_and_partial_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1780470000000,
+      "tag": "0011_coa_auto_link_and_wallet_support",
+      "breakpoints": true
     }
   ]
 }

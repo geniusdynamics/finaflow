@@ -120,7 +120,7 @@ export function Users() {
   const [form, setForm] = useState({
     username: "", password: "", name: "", email: "", phone: "", role: "viewer" as const, locationId: "",
   });
-  const [editForm, setEditForm] = useState({ name: "", email: "", phone: "", role: "viewer" as const, locationId: "", isActive: true });
+  const [editForm, setEditForm] = useState<{ name: string; email: string; phone: string; role: "owner" | "admin" | "manager" | "employee" | "viewer"; locationId: string; isActive: boolean }>({ name: "", email: "", phone: "", role: "viewer", locationId: "", isActive: true });
   const [passForm, setPassForm] = useState({ newPassword: "" });
 
   const resetForm = () => setForm({ username: "", password: "", name: "", email: "", phone: "", role: "viewer", locationId: "" });

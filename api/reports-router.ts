@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { createRouter, reportQuery, getCurrentBusinessLocationIds } from "./middleware";
+import { createRouter, reportQuery, budgetManage, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
-import { dailySales, expenses, bills, expenseCategories } from "@db/schema";
-import { eq, and, isNull, sql, inArray } from "drizzle-orm";
+import { dailySales, expenses, bills, expenseCategories, budgets } from "@db/schema";
+import { eq, and, isNull, sql, inArray, gt } from "drizzle-orm";
 import { d } from "./lib/decimal";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function resolveLocationFilter(ctx: any, inputLocationId?: number): Promise<number[]> {
@@ -153,6 +153,7 @@ export const reportsRouter = createRouter({
       const db = getDb();
       const locFilter = await resolveLocationFilter(ctx, input.locationId);
       const locIdSql = sql.join(locFilter.map(id => sql`${id}`), sql`, `);
+      const targetMonth = input.month ?? new Date().getMonth() + 1;
       const startDate = `${input.year}-01-01`;
       const endDate = input.month ? new Date(input.year, input.month, 0).toISOString().split("T")[0] : `${input.year}-12-31`;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -167,71 +168,127 @@ export const reportsRouter = createRouter({
         .select({
           categoryId: expenseCategories.id,
           categoryName: expenseCategories.name,
+          categoryColor: expenseCategories.color,
           actual: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`,
         })
         .from(expenses)
         .innerJoin(expenseCategories, eq(expenses.categoryId, expenseCategories.id))
         .where(and(...expenseCond))
-        .groupBy(expenseCategories.id, expenseCategories.name);
+        .groupBy(expenseCategories.id, expenseCategories.name, expenseCategories.color);
 
-      const categories = expenseData.map((c) => ({
-        categoryId: c.categoryId,
-        categoryName: c.categoryName,
-        budgeted: "0.00",
-        actual: c.actual,
-        variance: d(0).minus(d(c.actual)).toFixed(2),
-        variancePercent: "0.0",
-        isOverBudget: d(c.actual).gt(0),
-      }));
+      // Fetch budgeted amounts from the budgets table
+      const budgetRows = await db
+        .select()
+        .from(budgets)
+        .where(and(
+          eq(budgets.year, input.year),
+          eq(budgets.month, targetMonth),
+          sql`${budgets.locationId} IN (${locIdSql})`,
+          isNull(budgets.deletedAt),
+        ));
 
+      const budgetMap = new Map<number, string>();
+      for (const b of budgetRows) {
+        if (b.categoryId != null) {
+          budgetMap.set(b.categoryId, b.amount);
+        }
+      }
+
+      const categories = expenseData.map((c) => {
+        const budgeted = budgetMap.get(c.categoryId) || "0.00";
+        const actual = c.actual;
+        const actualDec = d(actual);
+        const budgetedDec = d(budgeted);
+        const variance = budgetedDec.minus(actualDec).toFixed(2);
+        const variancePercent = budgetedDec.gt(0)
+          ? actualDec.minus(budgetedDec).dividedBy(budgetedDec).times(100).toFixed(1)
+          : "0.0";
+        const isOverBudget = actualDec.gt(budgetedDec) && budgetedDec.gt(0);
+
+        return {
+          categoryId: c.categoryId,
+          categoryName: c.categoryName,
+          categoryColor: c.categoryColor,
+          budgeted,
+          actual,
+          variance,
+          variancePercent,
+          isOverBudget,
+        };
+      });
+
+      const totalBudgeted = categories.reduce((sum, c) => sum.plus(d(c.budgeted)), d(0));
       const totalActual = categories.reduce((sum, c) => sum.plus(d(c.actual)), d(0));
 
       return {
         categories,
-        totalBudgeted: "0.00",
+        totalBudgeted: totalBudgeted.toFixed(2),
         totalActual: totalActual.toFixed(2),
-        totalVariance: totalActual.negated().toFixed(2),
+        totalVariance: totalBudgeted.minus(totalActual).toFixed(2),
       };
     }),
 
   cashFlowForecast: reportQuery
     .input(z.object({ locationId: z.number().optional() }))
     .query(async ({ input, ctx }) => {
-      const db = getDb();
-      const locFilter = await resolveLocationFilter(ctx, input.locationId);
-      const locIdSql = sql.join(locFilter.map(id => sql`${id}`), sql`, `);
-      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      const today = new Date().toISOString().split("T")[0];
-      const next30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      try {
+        const db = getDb();
+        const locFilter = await resolveLocationFilter(ctx, input.locationId);
+        const locIdSql = sql.join(locFilter.map(id => sql`${id}`), sql`, `);
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+        const today = new Date().toISOString().split("T")[0];
+        const next30 = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const salesCond: any[] = [
-        sql`${dailySales.saleDate} >= ${thirtyDaysAgo}`,
-        sql`${dailySales.saleDate} <= ${today}`,
-        isNull(dailySales.deletedAt),
-        sql`${dailySales.locationId} IN (${locIdSql})`,
-      ];
-      const salesData = await db.select().from(dailySales).where(and(...salesCond));
-      const totalSales = salesData.reduce((sum, s) => sum.plus(d(s.netSales || "0")), d(0));
-      const avgDaily = totalSales.gt(0) ? totalSales.dividedBy(30) : d(0);
+        const salesCond: any[] = [
+          sql`${dailySales.saleDate} >= ${thirtyDaysAgo}`,
+          sql`${dailySales.saleDate} <= ${today}`,
+          isNull(dailySales.deletedAt),
+          sql`${dailySales.locationId} IN (${locIdSql})`,
+        ];
+        let salesData: Array<{ netSales: string | null }> = [];
+        try {
+          salesData = await db.select().from(dailySales).where(and(...salesCond));
+        } catch (salesErr) {
+          console.error("cashFlowForecast - sales query failed:", salesErr);
+        }
+        const totalSales = salesData.reduce((sum, s) => sum.plus(d(s.netSales || "0")), d(0));
+        const avgDaily = totalSales.gt(0) ? totalSales.dividedBy(30) : d(0);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const billCond: any[] = [
-        sql`${bills.dueDate} >= ${today}`,
-        sql`${bills.dueDate} <= ${next30}`,
-        sql`${bills.balanceDue} > 0`,
-        isNull(bills.deletedAt),
-        sql`${bills.locationId} IN (${locIdSql})`,
-      ];
-      const billData = await db.select().from(bills).where(and(...billCond));
-      const totalBills = billData.reduce((sum, b) => sum.plus(d(b.balanceDue || "0")), d(0));
+        const billCond: any[] = [
+          sql`${bills.dueDate} >= ${today}`,
+          sql`${bills.dueDate} <= ${next30}`,
+          sql`${bills.balanceDue} > ${'0'}`,
+          isNull(bills.deletedAt),
+          sql`${bills.locationId} IN (${locIdSql})`,
+        ];
+        let billData: Array<{ balanceDue: string | null }> = [];
+        try {
+          billData = await db.select().from(bills).where(and(...billCond));
+        } catch (billsErr) {
+          console.error("cashFlowForecast - bills query failed:", billsErr);
+        }
+        const totalBills = billData.reduce((sum, b) => sum.plus(d(b.balanceDue || "0")), d(0));
 
-      return {
-        period: `${thirtyDaysAgo} to ${next30}`,
-        projectedInflows: avgDaily.times(30).toFixed(2),
-        dailyAvgRevenue: avgDaily.toFixed(2),
-        billsDue: { total: totalBills.toFixed(2), count: billData.length },
-        recurringDue: { total: "0.00", count: 0 },
-        netProjected: avgDaily.times(30).minus(totalBills).toFixed(2),
-      };
+        return {
+          period: `${thirtyDaysAgo} to ${next30}`,
+          projectedInflows: avgDaily.times(30).toFixed(2),
+          dailyAvgRevenue: avgDaily.toFixed(2),
+          billsDue: { total: totalBills.toFixed(2), count: billData.length },
+          recurringDue: { total: "0.00", count: 0 },
+          netProjected: avgDaily.times(30).minus(totalBills).toFixed(2),
+        };
+      } catch (error) {
+        console.error("cashFlowForecast error:", error);
+        // Return safe defaults instead of throwing
+        return {
+          period: "N/A",
+          projectedInflows: "0.00",
+          dailyAvgRevenue: "0.00",
+          billsDue: { total: "0.00", count: 0 },
+          recurringDue: { total: "0.00", count: 0 },
+          netProjected: "0.00",
+        };
+      }
     }),
 
   cogsAnalysis: reportQuery
@@ -302,9 +359,128 @@ export const reportsRouter = createRouter({
       alertThresholdPercent: "38",
     })),
 
-  setBudget: reportQuery
-    .input(z.object({ year: z.number(), month: z.number(), budgetType: z.enum(["cogs", "sales"]), amount: z.string(), locationId: z.number() }))
-    .mutation(async () => ({ success: true })),
+  setBudget: budgetManage
+    .input(z.object({
+      year: z.number(),
+      month: z.number(),
+      categoryId: z.number(),
+      amount: z.string(),
+      locationId: z.number(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const { year, month, categoryId, amount, locationId } = input;
+
+      const existing = await db
+        .select()
+        .from(budgets)
+        .where(and(
+          eq(budgets.year, year),
+          eq(budgets.month, month),
+          eq(budgets.categoryId, categoryId),
+          eq(budgets.locationId, locationId),
+          isNull(budgets.deletedAt),
+        ))
+        .limit(1);
+
+      if (existing.length > 0) {
+        await db
+          .update(budgets)
+          .set({ amount, updatedAt: new Date() })
+          .where(eq(budgets.id, existing[0].id));
+      } else {
+        await db.insert(budgets).values({
+          year,
+          month,
+          categoryId,
+          amount,
+          locationId,
+        });
+      }
+
+      return { success: true };
+    }),
+
+  "budgets.batchSet": budgetManage
+    .input(z.object({
+      budgets: z.array(z.object({
+        year: z.number(),
+        month: z.number(),
+        categoryId: z.number(),
+        amount: z.string(),
+        locationId: z.number(),
+      })),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      let count = 0;
+      await db.transaction(async (tx) => {
+        for (const entry of input.budgets) {
+          const { year, month, categoryId, amount, locationId } = entry;
+          const existing = await tx
+            .select()
+            .from(budgets)
+            .where(and(
+              eq(budgets.year, year),
+              eq(budgets.month, month),
+              eq(budgets.categoryId, categoryId),
+              eq(budgets.locationId, locationId),
+              isNull(budgets.deletedAt),
+            ))
+            .limit(1);
+          if (existing.length > 0) {
+            await tx
+              .update(budgets)
+              .set({ amount, updatedAt: new Date() })
+              .where(eq(budgets.id, existing[0].id));
+          } else {
+            await tx.insert(budgets).values({
+              year,
+              month,
+              categoryId,
+              amount,
+              locationId,
+            });
+          }
+          count++;
+        }
+      });
+      return { success: true, count };
+    }),
+
+  budgetsList: reportQuery
+    .input(z.object({
+      year: z.number(),
+      month: z.number(),
+      locationId: z.number().optional(),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = getDb();
+      const locIds = input.locationId
+        ? await resolveLocationFilter(ctx, input.locationId)
+        : await resolveLocationFilter(ctx);
+      const locIdSql = sql.join(locIds.map(id => sql`${id}`), sql`, `);
+
+      const rows = await db
+        .select({
+          id: budgets.id,
+          categoryId: budgets.categoryId,
+          amount: budgets.amount,
+          month: budgets.month,
+          year: budgets.year,
+          locationId: budgets.locationId,
+          notes: budgets.notes,
+        })
+        .from(budgets)
+        .where(and(
+          eq(budgets.year, input.year),
+          eq(budgets.month, input.month),
+          sql`${budgets.locationId} IN (${locIdSql})`,
+          isNull(budgets.deletedAt),
+        ));
+
+      return rows;
+    }),
 
   setCogsTarget: reportQuery
     .input(z.object({ locationId: z.number(), cogsTarget: z.string() }))

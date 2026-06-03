@@ -74,14 +74,14 @@ describe("account subscription enforcement", () => {
         currentBusiness: { id: (existingBusiness.rows[0] as Row).id, accountId: "LIMITCO", accountRefId },
         businessIds: [(existingBusiness.rows[0] as Row).id],
       },
-    } as CallerContext);
+    } as any);
 
     await expect(caller.businesses.create({
       name: "Limit Two",
       slug: "limit-two",
       businessType: "retail",
       plan: "starter",
-    })).rejects.toMatchObject({
+    } as any)).rejects.toMatchObject({
       message: "Your current plan allows 1 business. Upgrade to Growth or Pro to add another business.",
       cause: expect.objectContaining({
         code: "SUBSCRIPTION_LIMIT_EXCEEDED",
@@ -135,7 +135,7 @@ describe("account subscription enforcement", () => {
         currentBusiness: { id: (business.rows[0] as Row).id, accountId: "BRANCHCO", accountRefId },
         businessIds: [(business.rows[0] as Row).id],
       },
-    } as CallerContext);
+    } as any);
 
     await expect(caller.locations.create({
       name: "Overflow Branch",

@@ -1,0 +1,49 @@
+=== accounts columns ===
+  id: integer
+  locationId: bigint
+  businessId: bigint
+  name: character varying
+  type: USER-DEFINED
+  accountCode: character varying
+  accountNumber: character varying
+  description: text
+  systemKey: character varying
+  accountType: USER-DEFINED
+  accountSubType: USER-DEFINED
+  openingBalance: numeric
+  currentBalance: numeric
+  currency: character varying
+  isPaymentMethod: boolean
+  isSystemGenerated: boolean
+  isContra: boolean
+  parentAccountId: bigint
+  externalId: character varying
+  externalSystem: character varying
+  lastSyncedAt: timestamp without time zone
+  isActive: boolean
+  createdAt: timestamp without time zone
+  updatedAt: timestamp without time zone
+  deletedAt: timestamp without time zone
+
+coa_subtypes exists: false
+coa_subtypes columns: 
+
+=== coa-related indexes ===
+
+=== applied migrations ===
+  0000_flawless_jack_murdock.sql @ 2026-05-16T12:45:56.949Z
+  0001_gifted_secret_warriors.sql @ 2026-05-17T11:41:22.665Z
+  0002_soft_flamingo.sql @ 2026-05-18T17:05:26.860Z
+  0000_outgoing_christian_walker.sql @ 2026-05-20T09:36:37.047Z
+  0001_misty_mulholland_black.sql @ 2026-05-20T09:36:37.068Z
+  0002_add_currency_columns.sql @ 2026-05-20T09:36:37.826Z
+  0003_ensure_wallet_currency_tables.sql @ 2026-05-20T09:36:37.870Z
+  0004_add_wallet_account_type.sql @ 2026-05-20T12:32:39.063Z
+  0005_add_wallet_to_paymentMethod2.sql @ 2026-05-30T21:19:22.405Z
+  0006_add_recurring_bills_fk_constraints.sql @ 2026-06-01T06:38:05.139Z
+  0007_backfill_bill_payments.sql @ 2026-06-01T06:39:28.113Z
+  0008_sync_business_limits_from_accounts.sql @ 2026-06-01T07:13:54.376Z
+  0009_wallet_data_quality_and_partial_unique.sql @ 2026-06-03T09:39:30.976Z
+  0010_debt_origination_and_accounting.sql @ 2026-06-03T09:39:31.026Z
+  0011_coa_auto_link_and_wallet_support.sql @ 2026-06-03T09:39:31.183Z
+  0012_notification_highlight_lifecycle.sql @ 2026-06-03T09:39:31.187Z

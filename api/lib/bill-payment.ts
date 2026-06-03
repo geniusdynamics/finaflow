@@ -128,12 +128,12 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
       }
 
       if (prepaymentAmount.gt(0)) {
-        const prepayAccountId = await ensureSystemAccount({
+        const prepayAccountId = (await ensureSystemAccount({
           businessId,
           accountType: "asset",
           accountSubType: "prepaid_expense",
           name: "Supplier Prepayments",
-        });
+        })).id;
         const [prepayAcct] = await tx.select().from(accounts).where(
           and(eq(accounts.id, prepayAccountId), isNull(accounts.deletedAt))
         ).limit(1);

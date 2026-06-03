@@ -3,6 +3,7 @@ import { createRouter, accountManage } from "./middleware";
 import { getDb } from "./queries/connection";
 import { journalEntries, journalLines } from "@db/schema";
 import { eq } from "drizzle-orm";
+import { logAudit } from "./lib/audit";
 import type { JournalLineInput } from "./lib/journal";
 import {
   createJournalEntry,
@@ -99,6 +100,22 @@ export const journalRouter = createRouter({
         postImmediately: input.postImmediately,
       });
 
+      // ABOUTME: Audit trail for manual journal entries — tracks user, CoA IDs, and account IDs
+      await logAudit({
+        userId: ctx.user.id,
+        businessId: input.businessId,
+        action: "CREATE",
+        resource: "journal_entries",
+        resourceId: entry.id,
+        details: {
+          description: input.description,
+          lineCount: lines.length,
+          accountIds: lines.map((l) => l.accountId),
+          postImmediately: input.postImmediately,
+          sourceType: input.sourceType || "manual",
+        },
+      });
+
       return entry;
     }),
 
@@ -123,7 +140,7 @@ export const journalRouter = createRouter({
           .optional(),
       })
     )
-    .mutation(async ({ input, _ctx }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
       
 

@@ -188,7 +188,7 @@ export const payrollRouter = createRouter({
             nssfDeducted: nssf.toFixed(2),
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any).returning();
-          entries.push({ id: result.id, employeeId: emp.id, netPay: netPay.toFixed(2) });
+          entries.push({ id: emp.id, employeeId: emp.id, netPay: netPay.toFixed(2) });
 
           for (const adv of advances) {
             const newBal = d(Math.max(0, d(adv.balanceRemaining).minus(netPay.mul(0.3)).toNumber()));

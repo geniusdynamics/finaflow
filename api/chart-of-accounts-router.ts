@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, accountQuery, accountManage } from "./middleware";
 import { getDb } from "./queries/connection";
-import { accounts } from "@db/schema";
+import { accounts, coaSubtypes } from "@db/schema";
 import { eq, and, isNull, desc } from "drizzle-orm";
 
 export const chartOfAccountsRouter = createRouter({
@@ -45,6 +45,16 @@ export const chartOfAccountsRouter = createRouter({
         .where(and(eq(accounts.businessId, input.businessId), eq(accounts.accountType, input.accountType), isNull(accounts.deletedAt)))
         .orderBy(accounts.accountCode);
     }),
+
+  /** Returns all CoA subtypes with wallet support info for the frontend. */
+  getSubtypes: accountQuery.query(async () => {
+    const db = getDb();
+    return db
+      .select()
+      .from(coaSubtypes)
+      .where(and(eq(coaSubtypes.isActive, true)))
+      .orderBy(coaSubtypes.accountType, coaSubtypes.subtypeKey);
+  }),
 
   create: accountManage
     .input(

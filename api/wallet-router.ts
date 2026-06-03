@@ -121,6 +121,10 @@ export const walletRouter = createRouter({
 
         if (input?.dateFrom && input?.dateTo) {
           conditions.push(sql`${mobileWalletTransactions.txnDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`);
+        } else if (input?.dateFrom) {
+          conditions.push(sql`${mobileWalletTransactions.txnDate} >= ${input.dateFrom}`);
+        } else if (input?.dateTo) {
+          conditions.push(sql`${mobileWalletTransactions.txnDate} <= ${input.dateTo}`);
         }
 
         if (input?.unlinkedOnly) conditions.push(eq(mobileWalletTransactions.isLinked, false));
@@ -163,6 +167,10 @@ export const walletRouter = createRouter({
         }
         if (input?.dateFrom && input?.dateTo) {
           conditions.push(sql`${mobileWalletTransactions.txnDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`);
+        } else if (input?.dateFrom) {
+          conditions.push(sql`${mobileWalletTransactions.txnDate} >= ${input.dateFrom}`);
+        } else if (input?.dateTo) {
+          conditions.push(sql`${mobileWalletTransactions.txnDate} <= ${input.dateTo}`);
         }
 
         const rows = await db.select({
@@ -209,12 +217,53 @@ export const walletRouter = createRouter({
 
         const parsed = await provider.parseSms(input.smsText);
 
+        const preImportCountRow = await db.select({ count: sql<number>`COUNT(*)` })
+          .from(mobileWalletTransactions)
+          .where(and(
+            eq(mobileWalletTransactions.locationId, input.locationId),
+            eq(mobileWalletTransactions.provider, input.provider),
+            isNull(mobileWalletTransactions.deletedAt),
+          ));
+        const preImportCount = Number(preImportCountRow[0]?.count ?? 0);
+
         let imported = 0, skipped = 0;
         const errors: string[] = [];
 
-        for (const txn of parsed) {
-          const existing = await db.select().from(mobileWalletTransactions).where(
-            and(eq(mobileWalletTransactions.provider, input.provider), eq(mobileWalletTransactions.providerTxnId, txn.providerTxnId))
+        const parsedAmount = (raw: string): number => {
+          const n = parseFloat(raw);
+          return Number.isFinite(n) ? Math.abs(n) : 0;
+        };
+
+        const sanitizeString = (val: unknown, fallback = ""): string => {
+          if (val === null || val === undefined) return fallback;
+          const s = String(val).trim();
+          return s.length > 0 ? s : fallback;
+        };
+
+        const buildDescription = (partyName?: string, partyIdentifier?: string): string => {
+          const safeName = sanitizeString(partyName, "Unknown party");
+          const safeId = sanitizeString(partyIdentifier, "");
+          return safeId ? `${safeName} (${safeId})` : safeName;
+        };
+
+        const validatedTxns = parsed
+          .map((txn) => {
+            const amt = parsedAmount(txn.amount);
+            if (!txn.providerTxnId || amt <= 0 || !txn.date) {
+              errors.push(`Skipped invalid row: ${txn.providerTxnId || "(no id)"} — amount=${txn.amount}, date=${txn.date}`);
+              return null;
+            }
+            return { ...txn, amount: amt.toFixed(2) };
+          })
+          .filter((t): t is NonNullable<typeof t> => t !== null);
+
+        for (const txn of validatedTxns) {
+          const existing = await db.select({ id: mobileWalletTransactions.id }).from(mobileWalletTransactions).where(
+            and(
+              eq(mobileWalletTransactions.provider, input.provider),
+              eq(mobileWalletTransactions.providerTxnId, txn.providerTxnId),
+              isNull(mobileWalletTransactions.deletedAt),
+            )
           ).limit(1);
           if (existing.length > 0) { skipped++; continue; }
 
@@ -224,30 +273,61 @@ export const walletRouter = createRouter({
               provider: input.provider,
               providerTxnId: txn.providerTxnId,
               txnDate: txn.date,
-              txnTime: txn.time,
-              txnType: txn.txnType,
-              direction: txn.direction,
-              partyName: txn.partyName,
-              partyIdentifier: txn.partyIdentifier,
-              amount: Math.abs(parseFloat(txn.amount)).toFixed(2),
-              currency: txn.currency,
-              txnFee: txn.txnFee ?? "0.00",
-              balance: txn.balance,
-              description: txn.partyIdentifier ? `${txn.partyName} (${txn.partyIdentifier})` : txn.partyName,
-              rawText: txn.rawText,
+              txnTime: sanitizeString(txn.time, "") || null,
+              txnType: sanitizeString(txn.txnType, "transfer"),
+              direction: txn.direction === "in" ? "in" : "out",
+              partyName: sanitizeString(txn.partyName, "") || null,
+              partyIdentifier: sanitizeString(txn.partyIdentifier, "") || null,
+              amount: txn.amount,
+              currency: sanitizeString(txn.currency, "KES"),
+              txnFee: sanitizeString(txn.txnFee, "0.00"),
+              balance: txn.balance ? sanitizeString(txn.balance, "") || null : null,
+              description: buildDescription(txn.partyName, txn.partyIdentifier),
+              rawText: sanitizeString(txn.rawText, ""),
               status: "completed",
               isLinked: false,
               importedBy,
-              baseCurrency: txn.currency,
-              baseAmount: Math.abs(parseFloat(txn.amount)).toFixed(2),
+              baseCurrency: sanitizeString(txn.currency, "KES"),
+              baseAmount: txn.amount,
             });
             imported++;
           } catch (e) {
-            errors.push(`${txn.providerTxnId}: ${(e as Error).message}`);
+            const msg = (e as Error).message;
+            if (msg.includes("idx_wallet_txn_provider_txn") || msg.includes("duplicate key")) {
+              skipped++;
+            } else {
+              errors.push(`${txn.providerTxnId}: ${msg}`);
+            }
           }
         }
 
-        return { imported, skipped, totalParsed: parsed.length, errors, success: true };
+        const postImportCountRow = await db.select({ count: sql<number>`COUNT(*)` })
+          .from(mobileWalletTransactions)
+          .where(and(
+            eq(mobileWalletTransactions.locationId, input.locationId),
+            eq(mobileWalletTransactions.provider, input.provider),
+            isNull(mobileWalletTransactions.deletedAt),
+          ));
+        const postImportCount = Number(postImportCountRow[0]?.count ?? 0);
+
+        const dataIntact = postImportCount >= preImportCount;
+        if (!dataIntact) {
+          errors.push(
+            `Critical safeguard triggered: transaction count decreased from ${preImportCount} to ${postImportCount}. ` +
+            `Your existing data has NOT been altered, but please report this incident.`,
+          );
+        }
+
+        return {
+          imported,
+          skipped,
+          totalParsed: parsed.length,
+          validParsed: validatedTxns.length,
+          preImportCount,
+          postImportCount,
+          errors,
+          success: dataIntact && (errors.length === 0 || imported > 0),
+        };
       }),
 
     previewSms: walletQuery
@@ -458,6 +538,10 @@ export const walletRouter = createRouter({
           }
           if (input?.dateFrom && input?.dateTo) {
             conditions.push(sql`${mobileWalletDailyLedger.ledgerDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`);
+          } else if (input?.dateFrom) {
+            conditions.push(sql`${mobileWalletDailyLedger.ledgerDate} >= ${input.dateFrom}`);
+          } else if (input?.dateTo) {
+            conditions.push(sql`${mobileWalletDailyLedger.ledgerDate} <= ${input.dateTo}`);
           }
 
           return db.select().from(mobileWalletDailyLedger).where(and(...conditions)).orderBy(desc(mobileWalletDailyLedger.ledgerDate));

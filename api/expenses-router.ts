@@ -117,12 +117,12 @@ export const expensesRouter = createRouter({
         }
       } else {
         const accountSubType = getExpenseAccountSubType(input.accountingClass);
-        defaultAccountId = await ensureSystemAccount({
+        defaultAccountId = (await ensureSystemAccount({
           businessId,
           accountType: "expense",
           accountSubType,
           name: input.name,
-        });
+        })).id;
       }
 
       const [result] = await db.insert(expenseCategories).values({
@@ -176,12 +176,12 @@ export const expensesRouter = createRouter({
       if (businessId && updates.defaultAccountId === undefined) {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const accountingClass = (updates.accountingClass ?? existing[0]?.accountingClass ?? "operating_expense") as any;
-        normalizedUpdates.defaultAccountId = await ensureSystemAccount({
+        normalizedUpdates.defaultAccountId = (await ensureSystemAccount({
           businessId,
           accountType: "expense",
           accountSubType: getExpenseAccountSubType(accountingClass),
           name: (updates.name ?? existing[0]?.name ?? "Operating Expense") as string,
-        });
+        })).id;
       } else if (updates.defaultAccountId !== undefined && businessId) {
         const account = await db.query.accounts.findFirst({
           where: and(

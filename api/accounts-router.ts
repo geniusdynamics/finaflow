@@ -29,27 +29,36 @@ async function syncOperationalToCoaBalance(
   const businessId = location.businessId;
   const balance = account.currentBalance || "0.00";
 
-  const typeToSystemKey: Record<string, string> = {
-    cash: "asset:cash",
-    wallet: "asset:cash",
-    bank_account: "asset:bank",
-  };
+  // Use coaId directly if available (new accounts), else fall back to systemKey lookup
+  let coaAccountId: number | null = null;
 
-  const systemKey = typeToSystemKey[account.type];
-  if (!systemKey) return;
+  if (account.coaId) {
+    coaAccountId = account.coaId;
+  } else {
+    const typeToSystemKey: Record<string, string> = {
+      cash: "asset:cash",
+      wallet: "asset:cash",
+      bank_account: "asset:bank",
+    };
 
-  const coaAccount = await tx.query.accounts.findFirst({
-    where: and(
-      eq(accounts.businessId, businessId),
-      eq(accounts.systemKey, systemKey),
-      isNull(accounts.deletedAt)
-    ),
-  });
+    const systemKey = typeToSystemKey[account.type];
+    if (!systemKey) return;
 
-  if (coaAccount) {
+    const coaAccount = await tx.query.accounts.findFirst({
+      where: and(
+        eq(accounts.businessId, businessId),
+        eq(accounts.systemKey, systemKey),
+        isNull(accounts.deletedAt)
+      ),
+    });
+
+    coaAccountId = coaAccount?.id ?? null;
+  }
+
+  if (coaAccountId) {
     await tx.update(accounts)
       .set({ currentBalance: balance })
-      .where(eq(accounts.id, coaAccount.id));
+      .where(eq(accounts.id, coaAccountId));
   }
 }
 
@@ -104,6 +113,44 @@ export const accountsRouter = createRouter({
       return db.select().from(accounts).where(and(eq(accounts.locationId, input.locationId), isNull(accounts.deletedAt)));
     }),
 
+  /** Returns all active accounts (operational + CoA) for journal entry line selection,
+   *  grouped hierarchically by accountType and accountSubType. */
+  listForJournal: accountQuery.query(async ({ ctx }) => {
+    const db = getDb();
+    const locIds = await getCurrentBusinessLocationIds(ctx);
+    if (locIds.length === 0) return { operational: [], coa: [] };
+
+    const operationalAccounts = await db.select().from(accounts).where(
+      and(
+        sql`${accounts.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`,
+        isNull(accounts.deletedAt),
+        isNull(accounts.accountType),
+        eq(accounts.isActive, true),
+      )
+    );
+
+    // Also fetch CoA entries for the business's locations
+    const firstLoc = await db.select({ businessId: locations.businessId })
+      .from(locations)
+      .where(and(sql`${locations.id} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`, isNull(locations.deletedAt)))
+      .limit(1);
+
+    const coaAccounts: typeof operationalAccounts = [];
+    if (firstLoc[0]?.businessId) {
+      const results = await db.select().from(accounts).where(
+        and(
+          eq(accounts.businessId, firstLoc[0].businessId),
+          isNull(accounts.deletedAt),
+          isNull(accounts.locationId),
+          eq(accounts.isActive, true),
+        )
+      );
+      coaAccounts.push(...results);
+    }
+
+    return { operational: operationalAccounts, coa: coaAccounts };
+  }),
+
   create: accountManage
     .input(z.object({
       locationId: z.number(),
@@ -139,13 +186,17 @@ export const accountsRouter = createRouter({
         throw new Error(`Account "${input.name}" of type ${input.type} already exists for this location`);
       }
 
+      // ABOUTME: Auto-determine CoA classification. If accountType/accountSubType are provided
+      // ABOUTME: (via "Show in Charts of Accounts" checkbox), validate them against allowed subtypes.
+      // ABOUTME: Otherwise use the default mapping based on operational account type.
       const classification = validateOperationalAccountClassification(
         input.type,
         input.accountType as AccountType | null,
         input.accountSubType,
       );
 
-      const systemAccountId = await ensureSystemAccount({
+      // ABOUTME: Auto-link to CoA entry. This runs for ALL accounts regardless of checkbox state.
+      const { coaId } = await ensureSystemAccount({
         businessId: location.businessId,
         accountType: classification.accountType,
         accountSubType: classification.accountSubType,
@@ -155,6 +206,7 @@ export const accountsRouter = createRouter({
             : input.type === "wallet"
               ? "Wallet Accounts"
               : "Cash Accounts",
+        operationalType: input.type,
       });
 
       const rows = await db.insert(accounts).values({
@@ -168,11 +220,12 @@ export const accountsRouter = createRouter({
         currentBalance: ob,
         isPaymentMethod: input.isPaymentMethod ?? false,
         isContra: false,
+        coaId,
       }).returning();
       const result = rows[0];
 
-      if (input.accountType && parseFloat(ob) !== 0) {
-        await db.update(accounts).set({ currentBalance: ob }).where(eq(accounts.id, systemAccountId));
+      if (parseFloat(ob) !== 0) {
+        await db.update(accounts).set({ currentBalance: ob }).where(eq(accounts.id, coaId));
       }
 
       await logAudit({
@@ -251,7 +304,7 @@ export const accountsRouter = createRouter({
           amount: diff.abs().toFixed(2),
           balanceAfter: input.newBalance,
           description: input.reason || `Balance adjustment from ${oldBal.toFixed(2)} to ${newBal.toFixed(2)}`,
-          entryDate: new Date(),
+          entryDate: new Date().toISOString().slice(0, 10),
           createdBy: userId,
         } as LedgerEntryInsert).returning();
         await tx.update(accounts).set({ currentBalance: input.newBalance }).where(eq(accounts.id, input.id));
@@ -288,7 +341,7 @@ export const accountsRouter = createRouter({
           amount: input.amount,
           balanceAfter: newBal.toFixed(2),
           description: input.description || "Owner drawing",
-          entryDate: new Date(input.date),
+          entryDate: new Date(input.date).toISOString().slice(0, 10),
           createdBy: userId,
         } as LedgerEntryInsert).returning();
         await tx.update(accounts).set({ currentBalance: newBal.toFixed(2) }).where(eq(accounts.id, input.accountId));
@@ -325,7 +378,7 @@ export const accountsRouter = createRouter({
           amount: input.amount,
           balanceAfter: newBal.toFixed(2),
           description: input.description || "Deposit",
-          entryDate: new Date(input.date),
+          entryDate: new Date(input.date).toISOString().slice(0, 10),
           createdBy: userId,
         } as LedgerEntryInsert).returning();
         await tx.update(accounts).set({ currentBalance: newBal.toFixed(2) }).where(eq(accounts.id, input.accountId));
@@ -364,7 +417,7 @@ export const accountsRouter = createRouter({
           amount: totalOut.toFixed(2),
           balanceAfter: fromNewBal.toFixed(2),
           description: `${input.description} (to ${input.toAccounts.length} account${input.toAccounts.length > 1 ? 's' : ''})`,
-          entryDate: new Date(input.date),
+          entryDate: new Date(input.date).toISOString().slice(0, 10),
           createdBy: userId,
         } as LedgerEntryInsert).returning();
         await tx.update(accounts).set({ currentBalance: fromNewBal.toFixed(2) }).where(eq(accounts.id, input.fromAccountId));
@@ -383,7 +436,7 @@ export const accountsRouter = createRouter({
             amount: to.amount,
             balanceAfter: toNewBal.toFixed(2),
             description: to.description || `${input.description} (from ${fromAcct.name})`,
-            entryDate: new Date(input.date),
+            entryDate: new Date(input.date).toISOString().slice(0, 10),
             createdBy: userId,
           } as LedgerEntryInsert).returning();
           await tx.update(accounts).set({ currentBalance: toNewBal.toFixed(2) }).where(eq(accounts.id, to.accountId));

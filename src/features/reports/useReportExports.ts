@@ -49,7 +49,7 @@ interface WalletTxn {
   partyName?: string | null;
   amount: string;
   txnFee?: string;
-  balance?: string;
+  balance?: string | null;
   currency?: string;
   direction?: string;
   walletTag?: string;

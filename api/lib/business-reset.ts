@@ -35,7 +35,8 @@
 //   - supplierPriceHistory, financialReports
 // ──────────────────────────────────────────────────────────────────────────────
 
-import { and, eq, inArray, isNull, or, sql, type SQL, type PgTable } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { type PgColumn, type PgTable } from "drizzle-orm/pg-core";
 
 import {
   accounts,
@@ -163,7 +164,7 @@ export async function createResetSnapshot(input: {
   if (locationIds.length > 0) {
     const locIdSql = sql.join(locationIds.map((id: number) => sql`${id}`), sql`, `);
 
-    const countTable = async (table: PgTable, idField: Parameters<typeof sql>[0], extraCondition?: SQL) => {
+    const countTable = async (table: PgTable, idField: PgColumn, extraCondition?: SQL) => {
       const conditions = [sql`${idField} IN (${locIdSql})`];
       if (extraCondition) conditions.push(extraCondition);
       const [row] = await input.db
@@ -275,24 +276,34 @@ export async function resetBusinessTransactions(input: {
 
     // ── Step 3: Helper for soft-deleting location-scoped records ───────────
 
-    const softDeleteLocationScoped = async (
+    const softDeleteLocationScoped = async <T extends {
+      id: { name: string };
+      locationId: { name: string };
+      deletedAt: { name: string };
+    }>(
       key: string,
-      table: PgTable,
+      table: T,
       extraSet: Record<string, unknown> = {},
     ) => {
       const updated = await tx
-        .update(table)
+        .update(table as any)
         .set({ deletedAt: now, ...extraSet })
-        .where(and(sql`${table.locationId} IN (${locIdSql})`, isNull(table.deletedAt)))
-        .returning({ id: table.id });
+        .where(and(sql`${(table as any).locationId} IN (${locIdSql})`, isNull((table as any).deletedAt)))
+        .returning({ id: (table as any).id });
       results[key] = { count: updated.length };
     };
 
-    const deleteLocationScoped = async (key: string, table: PgTable) => {
+    const deleteLocationScoped = async <T extends {
+      id: { name: string };
+      locationId: { name: string };
+    }>(
+      key: string,
+      table: T,
+    ) => {
       const deleted = await tx
-        .delete(table)
-        .where(sql`${table.locationId} IN (${locIdSql})`)
-        .returning({ id: table.id });
+        .delete(table as any)
+        .where(sql`${(table as any).locationId} IN (${locIdSql})`)
+        .returning({ id: (table as any).id });
       results[key] = { count: deleted.length };
     };
 

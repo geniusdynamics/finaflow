@@ -38,7 +38,7 @@ export async function provisionBusiness(input: ProvisionBusinessInput): Promise<
     ? resolved.account.maxUsers
     : (resolved.business.maxUsers ?? 1);
   const maxBranches = resolved.source === "account"
-    ? resolved.account.maxBranches
+    ? 1
     : (resolved.business.maxBranches ?? 1);
 
   const [businessRow] = await tx.insert(businesses).values({
@@ -56,9 +56,9 @@ export async function provisionBusiness(input: ProvisionBusinessInput): Promise<
     referralCode,
     referredByBusinessId: referredByBusinessId ?? null,
     referredByUserId: referredByUserId ?? null,
-    firstMonthDiscountApplied: firstMonthDiscountApplied ?? null,
+    firstMonthDiscountApplied: firstMonthDiscountApplied ?? undefined,
     subscriptionStatus: subscriptionStatus ?? null,
-    subscriptionExpiry: subscriptionExpiry ?? null,
+    subscriptionExpiry: subscriptionExpiry ? subscriptionExpiry.toISOString().slice(0, 10) : null,
     phone: phone ?? null,
   } satisfies typeof businesses.$inferInsert).returning();
   const businessId = businessRow.id;

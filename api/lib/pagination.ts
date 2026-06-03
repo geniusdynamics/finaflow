@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { sql, type PgSelect, type PgTable } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+import { type PgSelect, type PgTable } from "drizzle-orm/pg-core";
 import type { DbClient } from "./account-subscriptions";
 
 export const paginationInput = z.object({
