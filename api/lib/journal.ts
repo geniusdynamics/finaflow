@@ -1,6 +1,6 @@
 import { getDb } from "../queries/connection";
 import { journalEntries, journalLines, accounts, ledgerEntries } from "@db/schema";
-import { eq, and, isNull, sql, desc } from "drizzle-orm";
+import { eq, and, isNull, sql, desc, inArray } from "drizzle-orm";
 import Decimal from "decimal.js";
 import { d } from "./decimal";
 import type { DbClient } from "./account-subscriptions";
@@ -39,6 +39,56 @@ export async function createJournalEntry(input: CreateJournalEntryInput) {
   if (!totalDebits.eq(totalCredits)) {
     throw new Error(
       `Journal entry must be balanced. Debits: ${totalDebits.toFixed(2)}, Credits: ${totalCredits.toFixed(2)}`
+    );
+  }
+
+  // ABOUTME: Manual journal entries post only against authoritative Chart-of-Accounts
+  // entries. Operational accounts (cash/wallet/bank) belong to the transfer module
+  // and are not valid targets for free-form journal lines. Reject the entry if any
+  // line targets a non-CoA account.
+  const accountIds = Array.from(new Set(input.lines.map((l) => l.accountId)));
+  const coaRows = await db
+    .select({
+      id: accounts.id,
+      accountType: accounts.accountType,
+      isActive: accounts.isActive,
+      deletedAt: accounts.deletedAt,
+      businessId: accounts.businessId,
+    })
+    .from(accounts)
+    .where(inArray(accounts.id, accountIds));
+
+  const coaById = new Map(coaRows.map((r) => [r.id, r]));
+  const invalidIds: number[] = [];
+  const crossBusinessIds: number[] = [];
+  const inactiveIds: number[] = [];
+  for (const aid of accountIds) {
+    const row = coaById.get(aid);
+    if (!row || !row.accountType) {
+      invalidIds.push(aid);
+      continue;
+    }
+    if (row.businessId !== input.businessId) {
+      crossBusinessIds.push(aid);
+      continue;
+    }
+    if (!row.isActive || row.deletedAt) {
+      inactiveIds.push(aid);
+    }
+  }
+  if (invalidIds.length > 0) {
+    throw new Error(
+      `Journal entry lines must reference active Chart-of-Accounts accounts (not operational accounts). Invalid ids: ${invalidIds.join(", ")}`,
+    );
+  }
+  if (crossBusinessIds.length > 0) {
+    throw new Error(
+      `Journal entry lines must reference accounts within the current business. Cross-business ids: ${crossBusinessIds.join(", ")}`,
+    );
+  }
+  if (inactiveIds.length > 0) {
+    throw new Error(
+      `Journal entry lines must reference active accounts. Inactive ids: ${inactiveIds.join(", ")}`,
     );
   }
 
