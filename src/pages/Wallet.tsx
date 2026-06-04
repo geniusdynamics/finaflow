@@ -131,13 +131,13 @@ export function Wallet() {
 
   const providerColors: Record<string, string> = {
     mpesa: "bg-green-600",
-    airtel: "bg-red-600",
+    airtel_money: "bg-[#E30613]",
     sasapay: "bg-blue-600",
   };
 
   const providerIcons: Record<string, string> = {
     mpesa: "M-PESA",
-    airtel: "Airtel",
+    airtel_money: "Airtel",
     sasapay: "Sasapay",
   };
 
