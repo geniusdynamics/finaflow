@@ -1,5 +1,164 @@
 # Changelog
 
+## [Unreleased] — Hero Headline Rotation: 3× Slower
+
+### Changed
+- **Hero headline + subtitle rotation interval tripled** — The `rotationMs` default in [RotatingHeadline.tsx](file:///d:\DevCenter\abuilds\fina\finaflow\src\components\landing\RotatingHeadline.tsx) bumped from `5500` to `16500` (5.5s → 16.5s, exactly 3× as requested). The same five A/B variations now stay on screen long enough to actually be read, with the crossfade animation duration unchanged at 0.55s. The total cycle through all five variations is now ~82s (was ~27.5s), giving each headline a real chance to land instead of flickering past. The 0.55s enter/exit blur-and-slide motion stays — only the dwell time between variations changed.
+
+### Files
+- `src/components/landing/RotatingHeadline.tsx` — `rotationMs` default `5500` → `16500`
+
+## [Unreleased] — Hero Headline: Simplified Wording + Industry Variations
+
+### Changed
+- **Hero headlines restructured to single-line** — The 4 two-line variations (line1 + line2 with a gradient accent) were the root cause of the "headline bleeding into subtitle" overlap. Swapped to a single-line structure with a single `headline` field, so the headline always renders as one wrapped line on mobile or one straight line on desktop. Gradient direction flipped from `bg-gradient-to-br` (diagonal) to `bg-gradient-to-r` (horizontal) which reads more naturally on a single line. Font size retuned from `text-[2.5rem] md:text-[3.5rem]` to `text-[1.75rem] md:text-[2.75rem]` — slightly smaller so the longer variations don't dominate the hero. Headline container `min-h` bumped to `min-h-[6.5rem] md:min-h-[3.75rem]` to accommodate the longest variation on mobile without layout shift.
+- **Headline text rewritten for directness** — Old "Your Business Finances, / Finally Made Simple" → new "Business Finances finally made simple". Old "Losing Track of Your / Bills and Expenses?" → new "Losing track of bills and expenses". Old "See Every Shilling. / In Real Time." → new "See every coin in real time". The conversational lowercase ("finally", "every", "in") and tighter phrasing cut the hero message in half — punchier, less corporate, fewer syllables before the value prop lands.
+
+### Added
+- **`construction` headline variation** — "Construction Expenses, finally at your fingertips" with a project-level subtitle ("Track every shilling across materials, labor, and subcontractors — with project-level visibility. No more guessing where the budget went, no more end-of-month pile of receipts to reconcile."). Targets the construction / contractor segment where job-costing and project visibility are the primary pain.
+- **`budget` headline variation** — "Budgeted Expenses, finally Aligned." with a budget-discipline subtitle ("Plan it, track it, stay on it. Finaflow keeps every department aligned to the same budget in real time — with variance alerts before you blow past the line, not after."). Targets finance leads who care about plan-vs-actual.
+- The hero now rotates through **5 A/B variations** total (pain-point, aspirational, clarity, construction, budget) on a 5.5s cycle, so the same visitor sees five different value propositions in one session.
+
+### Files
+- `src/components/landing/RotatingHeadline.tsx` — switched from `{ line1, line2 }` to `{ headline }`, added construction + budget variations, horizontal gradient, smaller font, bigger mobile min-h
+- `src/components/landing/__tests__/RotatingHeadline.test.tsx` — updated to assert 5 variations and the new IDs; length threshold relaxed to 60 chars
+
+## [Unreleased] — Hero Headline Overlap + Premium Color Pass
+
+### Fixed
+- **Hero headline second line was overlapping with the subtitle** — The `min-h-[7.5rem]` on the headline container was just barely enough for two lines at desktop (`text-[3.5rem]` × `leading-[1.05]` = ~118px), but with `flex flex-col` + `absolute inset-0` the content rendered flush to the top with no breathing room, and the `relief` variation's "Without the Headache" line bled into the "Built for African SMEs…" subtitle below. Bumped the headline container to `min-h-[6.5rem] md:min-h-[9rem]` and the subtitle to `min-h-[6rem]`, plus widened the parent gap from `space-y-4` to `space-y-6` so both elements always have their own breathing room regardless of which variation is showing.
+
+### Changed
+- **Headline gradient now reads premium, not flat** — Switched from a symmetric 3-stop `bg-gradient-to-r from-[#C73E1D] via-[#D4A854] to-[#C73E1D]` to a diagonal `bg-gradient-to-br from-[#A02E1A] via-[#D4A854] to-[#E8A04A]`. The deeper `#A02E1A` (a richer, more saturated terracotta) starts the run, the warm amber `#E8A04A` ends it, and the diagonal direction adds a subtle highlight that catches the eye instead of the previous mirrored wash. A `drop-shadow(0 1px 1px rgba(160, 46, 26, 0.12))` sits behind the gradient text for depth.
+- **Headline base color deepened** — `#2D2A26` → `#1a1815` and added `tracking-tight` so the first line reads as confident ink, not soft gray.
+- **Subtitle ink upgraded from `#8D8A87` to `#4A4742`** — still warm and editorial, but the contrast is now AA-compliant for body text on the cream background, so the subtitle doesn't look like a placeholder.
+- **Hero background now has three drifting orbs** instead of two — the original terracotta + gold pair is joined by a centered warm amber orb (`#E8A04A/10`) that pulses on a 12s loop. The base gradient switched from `to-white` to `to-[#F2E8DD]` (a slightly deeper warm cream) so the hero doesn't fall off into flat white. The two original orbs bumped from `/15` to `/20` opacity and from `#C73E1D` to `#A02E1A` for the terracotta — more saturated, more presence.
+
+### Files
+- `src/components/landing/RotatingHeadline.tsx` — bigger `min-h` containers, premium gradient, darker base text, richer subtitle ink, subtle drop shadow on the gradient line
+- `src/components/landing/__tests__/RotatingHeadline.test.tsx` — assertion updated from `bg-gradient-to-r` → `bg-gradient-to-br` to match the diagonal
+- `src/pages/Home.tsx` — hero background gradient + third amber orb
+
+## [Unreleased] — Homepage Conversion Overhaul: A/B Headline, Motion, Counter, Mobile
+
+### Added
+- **`RotatingHeadline` component** (`src/components/landing/RotatingHeadline.tsx`) — Hero headline that A/B-tests four angles in one session: **aspirational** ("Your Business Finances, Finally Made Simple"), **pain-point** ("Losing Track of Your Bills and Expenses?"), **clarity** ("See Every Shilling. In Real Time."), and **relief** ("Run Your Books Without the Headache."). Crossfades every 5.5s with a synced subtitle so the same visitor sees multiple value propositions. Both line1 and line2 use the Finaflow gradient treatment; headline and subtitle are independently crossfaded with a blur-and-slide ease.
+- **`AnimatedCounter` component** (`src/components/landing/AnimatedCounter.tsx`) — Counts from zero to a target value when the element scrolls into view (`useInView`, `once: true`, `-40px` margin). Uses framer-motion's `animate()` with `easeOut` for a smooth fill. Supports `prefix`, `suffix`, `decimals`, and `className`. Uses `toLocaleString` for comma-grouped numbers (e.g., `2,000`).
+- **Homepage gradient-mesh hero** — Two large blurred radial gradients (terracotta and gold) drift slowly behind the hero section. Adds depth and warmth without using the overused purple-blue AI palette. Both orbs animate on an infinite scale + opacity loop.
+- **Hero dashboard animations** — The "Daily Overview" mockup now floats gently (`y: ±6px`, 5s loop), the "Live" indicator is a pulsing green dot (`scale: 1 → 1.4 → 1`, 2s loop), and the four stat values (KES 45,200, KES 12,800, KES 32,400, 3 bills) animate from zero to their target when the hero enters the viewport. The dashboard itself has a soft terracotta→gold blurred halo behind it.
+- **Magnetic hero CTAs** — The two primary hero buttons (`Get Started Free` and `Join as Partner`) lift 1px and scale to 1.03 on hover, and scale to 0.98 on tap, with a spring transition. The primary CTA also picks up a `shadow-lg shadow-[#C73E1D]/20` ring so it feels grounded in the brand color.
+- **Trust-stats animated counters** — The four stats (500+ Businesses, KES 2B+ Transactions, 2,000+ Users, 99.9% Uptime) now use `AnimatedCounter` and stagger-reveal as a row when the section enters the viewport (100ms per stat). A soft gold blurred orb pulses in the background.
+- **Scroll-triggered reveal vocabulary** — Every section now uses a consistent motion grammar: `whileInView` with `once: true`, 50–80px margin, 0.5–0.7s duration, spring `bounce: 0.25`, and 24–40px translate. Applied to: section headers (Showcase, How it Works, Features), showcase items, feature cards, step cards, partner CTA headline/body/CTAs.
+- **Showcase hover lift** — Each showcase screenshot now lifts 4px on hover with a stronger terracotta shadow; the inner image scales to 1.03 (was 1.02) and the transition is 700ms (was 500ms) for a slower, more cinematic feel.
+- **Features grid micro-interactions** — Each feature card lifts on hover, the icon scales to 1.1 and rotates 5° with a spring bounce, the icon background darkens, and the title shifts to the brand red. Cards stagger-reveal (80ms per column index) and respect the brand's gold-tinted shadow on hover.
+- **How-it-works step animations** — Each step card lifts on hover, the step number deepens from `/20` to `/40` opacity, and the icon scales and counter-rotates. The three steps stagger-reveal with a 120ms delay between them.
+- **Partner CTA dark section** — The Partner section now has a dark gradient background (`#2D2A26` → `#1a1815` → `#2D2A26`) with two drifting gold + terracotta blurred orbs, white headline/body, gold accent icon ring, and the same shadow + lift on the "Join as Partner" button. A clear contrast pivot that draws the eye to the partner funnel without breaking the editorial flow.
+
+### Changed
+- **`src/pages/Home.tsx`** — `stats` array restructured to support animated counters (numeric `value`, `prefix`, `suffix`, `decimals` instead of pre-formatted strings). Removed unused `Clock` import (replaced by the animated live pulse). Subtitle now lives in the `RotatingHeadline` component, so the hero markup is leaner.
+- **`src/components/landing/AnimatedCounter.tsx`** — Uses `toLocaleString("en-US", …)` instead of `toFixed` so comma-grouped values (2,000 → `2,000`) render correctly with the `en-US` locale.
+
+### Mobile friendliness
+- Hero dashboard stacks below the headline on `< md` as before, with all animations working on touch devices (the floating motion, the live pulse, the counter fill all trigger on first viewport).
+- Every section's `whileInView` margin is tuned for mobile (40–50px) so animations trigger as the user scrolls naturally, not late.
+- All hover effects use `whileHover` from framer-motion which is touch-friendly by design (taps register as taps, not hover-then-tap).
+- The rotating headline is fully responsive — the `min-h-[5.5rem] md:min-h-[7.5rem]` container prevents layout shift across the two-line variations on small screens.
+
+### Tests
+- **`RotatingHeadline` test file** (`src/components/landing/__tests__/RotatingHeadline.test.tsx`) — 5 cases covering the first-variation default render, the gradient treatment on line2, the subtitle render, the four-variation A/B set, and the variation-shape contract.
+- **`AnimatedCounter` test file** (`src/components/landing/__tests__/AnimatedCounter.test.tsx`) — 5 cases covering the zero-default viewport wait, the `startOnView={false}` shortcut, the prefix/suffix rendering, the `decimals` prop, and the `className` passthrough.
+- All 10 new tests pass under `npm test`. Combined with the existing pricing tests, the landing + pricing suite is **38/38 passing across 7 files**.
+
+### Files
+- `src/components/landing/RotatingHeadline.tsx` — new A/B-tested headline
+- `src/components/landing/AnimatedCounter.tsx` — new viewport-triggered counter
+- `src/components/landing/__tests__/RotatingHeadline.test.tsx` — new test file
+- `src/components/landing/__tests__/AnimatedCounter.test.tsx` — new test file
+- `src/pages/Home.tsx` — hero, stats, showcase, how-it-works, features, partner CTA rewrites with the new motion vocabulary
+
+## [Unreleased] — Desktop Pricing: Pro Monthly Price Wraps to Two Lines
+
+### Fixed
+- **Pro monthly price (`KES 3,000`) was wrapping at the space between `KES` and `3,000`** — The price span had no `white-space` rule, so when the price string was longer than the available content area (Pro is the rightmost card in the 4-col grid and inherits the tightest slot), the browser broke the line and pushed `3,000` down onto a second line, overlapping the `EVERYTHING IN GROWTH, PLUS:` label below. The yearly version (`KES 2,500`) is the same character count but rendered in a different font-metrics context, so it appeared to fit on one line — the user reported the inconsistency. Two `whitespace-nowrap` classes on the price span and the `/mo` span in [PricingCard.tsx](file:///d:\DevCenter\abuilds\fina\finaflow\src\components\pricing\PricingCard.tsx#L109-L111) keep the entire price string on one line for both cycles, so monthly and yearly now occupy the same vertical space.
+
+### Tests
+- **Regression test added** in `src/components/pricing/__tests__/PricingCard.test.tsx` that asserts the Pro monthly price span carries `whitespace-nowrap`. Any future change that drops the class will fail the test.
+
+### Files
+- `src/components/pricing/PricingCard.tsx` — added `whitespace-nowrap` to the price span and the `/mo` span
+- `src/components/pricing/__tests__/PricingCard.test.tsx` — added Pro monthly `whitespace-nowrap` regression test
+
+## [Unreleased] — Desktop Pricing: Pro Monthly Price Clipped
+
+### Fixed
+- **Pro plan's monthly amount was invisible on the desktop / tablet grid** — The price slot used `overflow-hidden` with a ±24px `y` enter/exit offset, so the Pro card (which carries the longest stagger delay of `index * 0.08 = 240ms`) frequently rendered with the price caught mid-clip at `y: -24` — outside the `h-12` container, hidden by the `overflow-hidden`. On most cards the enter animation finished fast enough to mask it, but the Pro card's later stagger exposed the race. Yearly worked because the user had already triggered an AnimatePresence key change by that point, so the enter animation ran fresh. Three changes in [PricingCard.tsx](file:///d:\DevCenter\abuilds\fina\finaflow\src\components\pricing\PricingCard.tsx) close the race:
+  1. **Dropped `overflow-hidden`** from the price slot. The price is now always visible — even if a frame lands at the offset — so there's no clipping path.
+  2. **Reduced the y offset from ±24 to ±10** and the blur from `6px` to `4px`. Smaller motion = less risk of overlapping the description above and less visual "smash" on the morph.
+  3. **Loosened the `whileInView` margin from `-80px` to `-20px`** on the card wrapper. The `-80px` shrink meant the rightmost card (Pro) sometimes failed to register as "in view" on common viewport widths, so its `whileInView` enter animation never fired and the price stayed at its initial invisible state.
+
+### Tests
+- **Two regression tests added** to `src/components/pricing/__tests__/PricingCard.test.tsx` covering the Pro plan at `index={3}` (the last card in the desktop 4-col grid) for both `monthly` and `yearly` cycles. They assert the amount string and the CTA are present, so any future regression that re-introduces clipping will fail the test.
+
+### Files
+- `src/components/pricing/PricingCard.tsx` — removed `overflow-hidden`, reduced y offset and blur, loosened `whileInView` margin
+- `src/components/pricing/__tests__/PricingCard.test.tsx` — added Pro @ `index={3}` regression tests (2 cases)
+
+## [Unreleased] — Desktop Pricing: Yearly Toggle + Micro-Interactions
+
+### Added
+- **`BillingCycleToggle` component** (`src/components/pricing/BillingCycleToggle.tsx`) — Section-level Monthly/Yearly switcher styled as a pill with a sliding dark indicator. The active side animates with a spring (`bounce: 0.35`), the inactive side uses the brand ink color, and a small green "−17%" badge sits inside the Yearly option. Exposes `value`, `onChange`, custom labels, and a `className` for placement. ARIA: `role="group"`, `aria-label="Billing cycle"`, `aria-pressed` on each option, and the animated indicator is `aria-hidden`.
+- **`PricingCard` component** (`src/components/pricing/PricingCard.tsx`) — Animated pricing card for the tablet and desktop grids. Brings the same blur-and-slide price morph used on mobile up to the bigger layouts, plus a stack of micro-interactions: viewport-triggered stagger entrance, hover lift (`y: -6`), featured-card pulsing border glow on the highlighted plan, badge pop-in with a spring bounce, feature-by-feature reveal, and a CTA that scales 1.02 on hover / 0.98 on tap. Accepts a `billingCycle` prop, a `ctaHref` (defaults to `/login?type=standard`), and a `maxFeatures` cap.
+- **Unit tests for the two new components** (`src/components/pricing/__tests__/BillingCycleToggle.test.tsx` and `PricingCard.test.tsx`) — 5 + 8 = 13 new cases. All 13 pass under `npm test`.
+
+### Changed
+- **`src/pages/Home.tsx` — Pricing section now shares one billing-cycle state** — The component holds `useState<"monthly" | "yearly">("monthly")` and passes the value down to both `PricingCard` instances in the tablet (2-col) and desktop (4-col) grids, so toggling once updates every card on the page. The mobile accordion keeps its own internal toggle (its own visual context — never on the same breakpoint as the section toggle), so the two are intentionally independent.
+- **`src/pages/Home.tsx` — Section header now hosts the toggle on `md+`** — A new `<BillingCycleToggle value={...} onChange={...} />` sits centered under the heading/subtitle, hidden on `< md` (mobile keeps the inline toggle inside the accordion). When the user switches to Yearly, a green "Save ~17% on yearly — that's 2 months free on every paid plan." callout slides in via `AnimatePresence` (opacity + y + height), reinforcing the discount without taking over the layout.
+- **`src/pages/Home.tsx` — Tablet 2-col and desktop 4-col grids are now `PricingCard`** — Both layouts share the same component, so the desktop finally has the same motion vocabulary the mobile accordion has had since the previous changelog: hover lift, featured glow, blur price morph, feature reveal, CTA scale. Desktop grid gap also bumped from `gap-4` to `gap-5` to give the lifted hover state room to breathe.
+- **`src/components/pricing/ChangeablePricingSection.tsx`** — `BillingCycle` is now re-exported as a named type (used by both `BillingCycleToggle` and `PricingCard`). The mobile accordion's existing public API is unchanged.
+
+### Micro-interactions summary (desktop / tablet grids)
+- **Entrance** — Each card fades up by 24px with a stagger of 80ms per index, spring-bounce landing. The viewport observer (`once: true, margin: "-80px"`) prevents re-triggering on scroll.
+- **Hover** — The whole card lifts up 6px; the shadow grows from `shadow-md` → `shadow-xl` on the featured card and `shadow-sm` → `shadow-md` on the rest. Featured card also gets a faint terracotta tint at the top (`from-[#FFF7F4]`).
+- **Featured card glow** — The Growth plan has an absolutely-positioned div that pulses a 4px terracotta box-shadow at 2.8s intervals (`infinite`, `easeInOut`). `aria-hidden` so screen readers don't see it.
+- **Price transition** — The `/mo` price slot is wrapped in `AnimatePresence mode="popLayout"`. Switching the toggle key-remounts the inner motion.div, which slides in/out 24px with a 6px blur. Same vocabulary as the mobile accordion.
+- **Badge** — The "Popular" badge starts at `scale: 0.6, opacity: 0` and springs to `1, 1` with `bounce: 0.55` after a 350ms delay.
+- **Features** — Each `<li>` reveals with an 8px leftward slide and opacity fade. Stagger of 50ms per feature, plus 80ms per card index.
+- **CTA** — The `<Button>` is wrapped in a `motion.div` with `whileHover={{ scale: 1.02 }}` and `whileTap={{ scale: 0.98 }}` for tactile feedback. Both transitions are springs (bounce 0.4, 300ms).
+
+### Files
+- `src/components/pricing/BillingCycleToggle.tsx` — new section-level toggle
+- `src/components/pricing/PricingCard.tsx` — new animated desktop/tablet card
+- `src/components/pricing/__tests__/BillingCycleToggle.test.tsx` — new test file (5 cases)
+- `src/components/pricing/__tests__/PricingCard.test.tsx` — new test file (8 cases)
+- `src/pages/Home.tsx` — added `billingCycle` state, section-level toggle, yearly discount callout, and switched the md/lg grids to `<PricingCard />`
+- `src/components/pricing/ChangeablePricingSection.tsx` — re-exported the `BillingCycle` type (no behavior change)
+
+## [Unreleased] — Mobile Pricing: Fluid Accordion + Responsive Grid
+
+### Added
+- **New `ChangeablePricingSection` component** (`src/components/pricing/ChangeablePricingSection.tsx`) — Mobile-first accordion pricing UI adapted from the watermelon `changeable-pricing-section` reference. Renders a single-column list of plans, each collapsed by default to (name, description, price) and tap-to-expand for the full feature list. Includes a spring-animated Monthly/Yearly billing toggle, smooth price morph between cycles, and `framer-motion` layout transitions as the user changes selection. Built on the project's existing shadcn-style theme tokens (`bg-muted`, `bg-background`, `ring-border`, etc.) and the Finaflow brand red (`#C73E1D`) for selected/CTA states.
+- **`framer-motion` dependency** (`^12.40.0`) — added to `package.json` as the animation engine for the new pricing section. Required by the accordion's spring layouts, AnimatePresence-driven price morphs, and the selected-card ring pulse.
+- **Unit tests for the new component** (`src/components/pricing/__tests__/ChangeablePricingSection.test.tsx`) — 9 cases covering plan names, descriptions, badges, billing-cycle visibility of the yearly discount note, the Monthly/Yearly toggle, footer/button text, the `ctaHref` anchor, and the "features-only-for-selected-plan" invariant. All 9 pass under `npm test`.
+- **Single source of truth for pricing data** (`pricingPlans` in `src/pages/Home.tsx`) — Replaces the old `tiers` array. Each plan now carries monthly + yearly price strings, a description, an optional badge, an optional `featuresLabel` ("Everything in X, plus:"), and a feature list. The same array drives the mobile accordion, the tablet 2-column grid, and the desktop 4-column grid, so price changes only need to happen in one place.
+
+### Changed
+- **`src/pages/Home.tsx` — Pricing section (#pricing) is now responsive across three breakpoints**:
+  - `< md` (phones): Renders the new `ChangeablePricingSection` accordion. Default selected plan is `growth`, the billing toggle defaults to `monthly`, and a green "Save ~17% when you pay yearly — that's 2 months free." note appears under the toggle when the user switches to Yearly. The CTA anchors to `/login?type=standard`.
+  - `md` (tablets, 768–1023px): 2-column grid using the same `pricingPlans` data. Shows the monthly price, description, optional badge, and feature list. The CTA button is per-card, linking to `/login?type=standard`.
+  - `lg+` (desktop, 1024px+): 4-column grid, same as before but powered by `pricingPlans` instead of the old `tiers` array. The strikethrough-price / KES 0 /mo marketing trick is gone — cards now show the real monthly price directly (Free → KES 0, Starter → KES 500, Growth → KES 1,500, Pro → KES 3,000) per the design call to "show real prices".
+  - The legacy 6-row stat table (businesses / branches / users / transactions / payroll / support) is replaced by a cleaner description + feature list on every card. The same information is still conveyed, just in a more scannable form.
+
+### Accessibility
+- **Plans are now real `<button>` elements** (not clickable `<div>`s) with `aria-pressed` reflecting the selected state and `aria-label="Select <Plan> plan"` for screen readers. The original reference used `motion.div` with `onClick`; the Finaflow adaptation upgrades to semantic buttons while preserving the `motion.div layout` for the spring animation.
+- **The Monthly/Yearly toggle is a `role="group"`** with `aria-label="Billing cycle"` and each option sets `aria-pressed`. The animated pill behind the toggle carries `aria-hidden`.
+- **Focus visibility** — every interactive element (plan buttons, toggle buttons, CTA) carries `focus-visible:ring-2 focus-visible:ring-[#C73E1D]/40` so keyboard users see a clear focus ring without affecting mouse users.
+
+### Files
+- `src/components/pricing/ChangeablePricingSection.tsx` — new component (reused from watermelon `changeable-pricing-section` with Finaflow brand tokens + a11y upgrades)
+- `src/components/pricing/__tests__/ChangeablePricingSection.test.tsx` — new test file (9 cases)
+- `src/pages/Home.tsx` — replaced the 4-card `tiers` data + section with `pricingPlans` data and three responsive layouts (mobile accordion, tablet 2-col, desktop 4-col)
+- `package.json` — added `"framer-motion": "^12.40.0"` to `dependencies`
+
 ## [Unreleased] — Wallet Provider Brand Colors
 
 ### Fixed
