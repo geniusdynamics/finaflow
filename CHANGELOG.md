@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased] — Wallet Provider Brand Colors
+
+### Fixed
+- **AirtelMoney wallet was rendering as gray in the Wallets page** — `src/pages/Wallet.tsx` had its `providerColors` / `providerIcons` maps keyed on `airtel`, but the seeded provider code in `api/lib/seed-wallet-providers.ts` is `airtel_money`. The lookup missed and the spans fell back to `bg-gray-600` instead of red. Renamed the key to `airtel_money` and switched to the exact brand red (`bg-[#E30613]`) used in Settings, so the AirtelMoney pill on the Wallets page now matches the one in Settings → Wallets.
+
+### Changed
+- **`src/pages/Settings.tsx`** — The `PROVIDER_COLORS` map now paints SasaPay blue (`bg-[#1A73E8]`) instead of green (`bg-[#00A651]`). The blue is the same hex already used for the active CoA picker row, keeping the design system tight. M-PESA stays green and Airtel Money stays red so the three providers are still visually distinct.
+- **`src/pages/Wallet.tsx`** — `providerColors` and `providerIcons` keys renamed from `airtel` to `airtel_money` to match the provider `code` returned by the API. The AirtelMoney entry now uses `bg-[#E30613]` (the same red as Settings) instead of the generic `bg-red-600`, and the label text stays as "Airtel".
+
+### Files
+- `src/pages/Settings.tsx` — SasaPay color changed from `#00A651` to `#1A73E8`
+- `src/pages/Wallet.tsx` — `airtel` key renamed to `airtel_money` (in both `providerColors` and `providerIcons`); AirtelMoney color switched to `bg-[#E30613]` to match Settings
+
 ## [Unreleased] — Version 0.9.9
 
 ### Changed
