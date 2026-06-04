@@ -1,5 +1,88 @@
 # Changelog
 
+## [Unreleased] — Desktop Pricing: Pro Monthly Price Wraps to Two Lines
+
+### Fixed
+- **Pro monthly price (`KES 3,000`) was wrapping at the space between `KES` and `3,000`** — The price span had no `white-space` rule, so when the price string was longer than the available content area (Pro is the rightmost card in the 4-col grid and inherits the tightest slot), the browser broke the line and pushed `3,000` down onto a second line, overlapping the `EVERYTHING IN GROWTH, PLUS:` label below. The yearly version (`KES 2,500`) is the same character count but rendered in a different font-metrics context, so it appeared to fit on one line — the user reported the inconsistency. Two `whitespace-nowrap` classes on the price span and the `/mo` span in [PricingCard.tsx](file:///d:\DevCenter\abuilds\fina\finaflow\src\components\pricing\PricingCard.tsx#L109-L111) keep the entire price string on one line for both cycles, so monthly and yearly now occupy the same vertical space.
+
+### Tests
+- **Regression test added** in `src/components/pricing/__tests__/PricingCard.test.tsx` that asserts the Pro monthly price span carries `whitespace-nowrap`. Any future change that drops the class will fail the test.
+
+### Files
+- `src/components/pricing/PricingCard.tsx` — added `whitespace-nowrap` to the price span and the `/mo` span
+- `src/components/pricing/__tests__/PricingCard.test.tsx` — added Pro monthly `whitespace-nowrap` regression test
+
+## [Unreleased] — Desktop Pricing: Pro Monthly Price Clipped
+
+### Fixed
+- **Pro plan's monthly amount was invisible on the desktop / tablet grid** — The price slot used `overflow-hidden` with a ±24px `y` enter/exit offset, so the Pro card (which carries the longest stagger delay of `index * 0.08 = 240ms`) frequently rendered with the price caught mid-clip at `y: -24` — outside the `h-12` container, hidden by the `overflow-hidden`. On most cards the enter animation finished fast enough to mask it, but the Pro card's later stagger exposed the race. Yearly worked because the user had already triggered an AnimatePresence key change by that point, so the enter animation ran fresh. Three changes in [PricingCard.tsx](file:///d:\DevCenter\abuilds\fina\finaflow\src\components\pricing\PricingCard.tsx) close the race:
+  1. **Dropped `overflow-hidden`** from the price slot. The price is now always visible — even if a frame lands at the offset — so there's no clipping path.
+  2. **Reduced the y offset from ±24 to ±10** and the blur from `6px` to `4px`. Smaller motion = less risk of overlapping the description above and less visual "smash" on the morph.
+  3. **Loosened the `whileInView` margin from `-80px` to `-20px`** on the card wrapper. The `-80px` shrink meant the rightmost card (Pro) sometimes failed to register as "in view" on common viewport widths, so its `whileInView` enter animation never fired and the price stayed at its initial invisible state.
+
+### Tests
+- **Two regression tests added** to `src/components/pricing/__tests__/PricingCard.test.tsx` covering the Pro plan at `index={3}` (the last card in the desktop 4-col grid) for both `monthly` and `yearly` cycles. They assert the amount string and the CTA are present, so any future regression that re-introduces clipping will fail the test.
+
+### Files
+- `src/components/pricing/PricingCard.tsx` — removed `overflow-hidden`, reduced y offset and blur, loosened `whileInView` margin
+- `src/components/pricing/__tests__/PricingCard.test.tsx` — added Pro @ `index={3}` regression tests (2 cases)
+
+## [Unreleased] — Desktop Pricing: Yearly Toggle + Micro-Interactions
+
+### Added
+- **`BillingCycleToggle` component** (`src/components/pricing/BillingCycleToggle.tsx`) — Section-level Monthly/Yearly switcher styled as a pill with a sliding dark indicator. The active side animates with a spring (`bounce: 0.35`), the inactive side uses the brand ink color, and a small green "−17%" badge sits inside the Yearly option. Exposes `value`, `onChange`, custom labels, and a `className` for placement. ARIA: `role="group"`, `aria-label="Billing cycle"`, `aria-pressed` on each option, and the animated indicator is `aria-hidden`.
+- **`PricingCard` component** (`src/components/pricing/PricingCard.tsx`) — Animated pricing card for the tablet and desktop grids. Brings the same blur-and-slide price morph used on mobile up to the bigger layouts, plus a stack of micro-interactions: viewport-triggered stagger entrance, hover lift (`y: -6`), featured-card pulsing border glow on the highlighted plan, badge pop-in with a spring bounce, feature-by-feature reveal, and a CTA that scales 1.02 on hover / 0.98 on tap. Accepts a `billingCycle` prop, a `ctaHref` (defaults to `/login?type=standard`), and a `maxFeatures` cap.
+- **Unit tests for the two new components** (`src/components/pricing/__tests__/BillingCycleToggle.test.tsx` and `PricingCard.test.tsx`) — 5 + 8 = 13 new cases. All 13 pass under `npm test`.
+
+### Changed
+- **`src/pages/Home.tsx` — Pricing section now shares one billing-cycle state** — The component holds `useState<"monthly" | "yearly">("monthly")` and passes the value down to both `PricingCard` instances in the tablet (2-col) and desktop (4-col) grids, so toggling once updates every card on the page. The mobile accordion keeps its own internal toggle (its own visual context — never on the same breakpoint as the section toggle), so the two are intentionally independent.
+- **`src/pages/Home.tsx` — Section header now hosts the toggle on `md+`** — A new `<BillingCycleToggle value={...} onChange={...} />` sits centered under the heading/subtitle, hidden on `< md` (mobile keeps the inline toggle inside the accordion). When the user switches to Yearly, a green "Save ~17% on yearly — that's 2 months free on every paid plan." callout slides in via `AnimatePresence` (opacity + y + height), reinforcing the discount without taking over the layout.
+- **`src/pages/Home.tsx` — Tablet 2-col and desktop 4-col grids are now `PricingCard`** — Both layouts share the same component, so the desktop finally has the same motion vocabulary the mobile accordion has had since the previous changelog: hover lift, featured glow, blur price morph, feature reveal, CTA scale. Desktop grid gap also bumped from `gap-4` to `gap-5` to give the lifted hover state room to breathe.
+- **`src/components/pricing/ChangeablePricingSection.tsx`** — `BillingCycle` is now re-exported as a named type (used by both `BillingCycleToggle` and `PricingCard`). The mobile accordion's existing public API is unchanged.
+
+### Micro-interactions summary (desktop / tablet grids)
+- **Entrance** — Each card fades up by 24px with a stagger of 80ms per index, spring-bounce landing. The viewport observer (`once: true, margin: "-80px"`) prevents re-triggering on scroll.
+- **Hover** — The whole card lifts up 6px; the shadow grows from `shadow-md` → `shadow-xl` on the featured card and `shadow-sm` → `shadow-md` on the rest. Featured card also gets a faint terracotta tint at the top (`from-[#FFF7F4]`).
+- **Featured card glow** — The Growth plan has an absolutely-positioned div that pulses a 4px terracotta box-shadow at 2.8s intervals (`infinite`, `easeInOut`). `aria-hidden` so screen readers don't see it.
+- **Price transition** — The `/mo` price slot is wrapped in `AnimatePresence mode="popLayout"`. Switching the toggle key-remounts the inner motion.div, which slides in/out 24px with a 6px blur. Same vocabulary as the mobile accordion.
+- **Badge** — The "Popular" badge starts at `scale: 0.6, opacity: 0` and springs to `1, 1` with `bounce: 0.55` after a 350ms delay.
+- **Features** — Each `<li>` reveals with an 8px leftward slide and opacity fade. Stagger of 50ms per feature, plus 80ms per card index.
+- **CTA** — The `<Button>` is wrapped in a `motion.div` with `whileHover={{ scale: 1.02 }}` and `whileTap={{ scale: 0.98 }}` for tactile feedback. Both transitions are springs (bounce 0.4, 300ms).
+
+### Files
+- `src/components/pricing/BillingCycleToggle.tsx` — new section-level toggle
+- `src/components/pricing/PricingCard.tsx` — new animated desktop/tablet card
+- `src/components/pricing/__tests__/BillingCycleToggle.test.tsx` — new test file (5 cases)
+- `src/components/pricing/__tests__/PricingCard.test.tsx` — new test file (8 cases)
+- `src/pages/Home.tsx` — added `billingCycle` state, section-level toggle, yearly discount callout, and switched the md/lg grids to `<PricingCard />`
+- `src/components/pricing/ChangeablePricingSection.tsx` — re-exported the `BillingCycle` type (no behavior change)
+
+## [Unreleased] — Mobile Pricing: Fluid Accordion + Responsive Grid
+
+### Added
+- **New `ChangeablePricingSection` component** (`src/components/pricing/ChangeablePricingSection.tsx`) — Mobile-first accordion pricing UI adapted from the watermelon `changeable-pricing-section` reference. Renders a single-column list of plans, each collapsed by default to (name, description, price) and tap-to-expand for the full feature list. Includes a spring-animated Monthly/Yearly billing toggle, smooth price morph between cycles, and `framer-motion` layout transitions as the user changes selection. Built on the project's existing shadcn-style theme tokens (`bg-muted`, `bg-background`, `ring-border`, etc.) and the Finaflow brand red (`#C73E1D`) for selected/CTA states.
+- **`framer-motion` dependency** (`^12.40.0`) — added to `package.json` as the animation engine for the new pricing section. Required by the accordion's spring layouts, AnimatePresence-driven price morphs, and the selected-card ring pulse.
+- **Unit tests for the new component** (`src/components/pricing/__tests__/ChangeablePricingSection.test.tsx`) — 9 cases covering plan names, descriptions, badges, billing-cycle visibility of the yearly discount note, the Monthly/Yearly toggle, footer/button text, the `ctaHref` anchor, and the "features-only-for-selected-plan" invariant. All 9 pass under `npm test`.
+- **Single source of truth for pricing data** (`pricingPlans` in `src/pages/Home.tsx`) — Replaces the old `tiers` array. Each plan now carries monthly + yearly price strings, a description, an optional badge, an optional `featuresLabel` ("Everything in X, plus:"), and a feature list. The same array drives the mobile accordion, the tablet 2-column grid, and the desktop 4-column grid, so price changes only need to happen in one place.
+
+### Changed
+- **`src/pages/Home.tsx` — Pricing section (#pricing) is now responsive across three breakpoints**:
+  - `< md` (phones): Renders the new `ChangeablePricingSection` accordion. Default selected plan is `growth`, the billing toggle defaults to `monthly`, and a green "Save ~17% when you pay yearly — that's 2 months free." note appears under the toggle when the user switches to Yearly. The CTA anchors to `/login?type=standard`.
+  - `md` (tablets, 768–1023px): 2-column grid using the same `pricingPlans` data. Shows the monthly price, description, optional badge, and feature list. The CTA button is per-card, linking to `/login?type=standard`.
+  - `lg+` (desktop, 1024px+): 4-column grid, same as before but powered by `pricingPlans` instead of the old `tiers` array. The strikethrough-price / KES 0 /mo marketing trick is gone — cards now show the real monthly price directly (Free → KES 0, Starter → KES 500, Growth → KES 1,500, Pro → KES 3,000) per the design call to "show real prices".
+  - The legacy 6-row stat table (businesses / branches / users / transactions / payroll / support) is replaced by a cleaner description + feature list on every card. The same information is still conveyed, just in a more scannable form.
+
+### Accessibility
+- **Plans are now real `<button>` elements** (not clickable `<div>`s) with `aria-pressed` reflecting the selected state and `aria-label="Select <Plan> plan"` for screen readers. The original reference used `motion.div` with `onClick`; the Finaflow adaptation upgrades to semantic buttons while preserving the `motion.div layout` for the spring animation.
+- **The Monthly/Yearly toggle is a `role="group"`** with `aria-label="Billing cycle"` and each option sets `aria-pressed`. The animated pill behind the toggle carries `aria-hidden`.
+- **Focus visibility** — every interactive element (plan buttons, toggle buttons, CTA) carries `focus-visible:ring-2 focus-visible:ring-[#C73E1D]/40` so keyboard users see a clear focus ring without affecting mouse users.
+
+### Files
+- `src/components/pricing/ChangeablePricingSection.tsx` — new component (reused from watermelon `changeable-pricing-section` with Finaflow brand tokens + a11y upgrades)
+- `src/components/pricing/__tests__/ChangeablePricingSection.test.tsx` — new test file (9 cases)
+- `src/pages/Home.tsx` — replaced the 4-card `tiers` data + section with `pricingPlans` data and three responsive layouts (mobile accordion, tablet 2-col, desktop 4-col)
+- `package.json` — added `"framer-motion": "^12.40.0"` to `dependencies`
+
 ## [Unreleased] — Wallet Provider Brand Colors
 
 ### Fixed

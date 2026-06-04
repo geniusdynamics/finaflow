@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { Helmet } from "react-helmet-async";
+import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -18,6 +19,12 @@ import billsImg from "/resources/bills.png";
 import expensesImg from "/resources/expenses.png";
 import reportsImg from "/resources/reports.png";
 import budgetImg from "/resources/budget.png";
+import ChangeablePricingSection, {
+  type BillingCycle,
+  type PricingPlan,
+} from "@/components/pricing/ChangeablePricingSection";
+import BillingCycleToggle from "@/components/pricing/BillingCycleToggle";
+import PricingCard from "@/components/pricing/PricingCard";
 
 interface ShowcaseItem {
   title: string;
@@ -119,11 +126,70 @@ const features = [
   { icon: Building2, title: "Partner & Reseller Program", desc: "Earn 20% revenue share from every business client you onboard." },
 ];
 
-const tiers = [
-  { name: "Free", price: "0", businesses: 1, branches: 1, users: 1, transactions: "100 / month", payroll: "No", support: "Community", features: ["1 business", "1 branch", "1 user", "100 transactions/mo", "Basic sales & expenses", "M-PESA import"], cta: "Get Started", highlight: false },
-  { name: "Starter", price: "500", businesses: 1, branches: 1, users: 3, transactions: "5,000 / month", payroll: "No", support: "Email", features: ["1 business", "1 branch", "3 users", "Unlimited transactions", "Recurring bills", "Email support"], cta: "Start Trial", highlight: false },
-  { name: "Growth", price: "1,500", businesses: 3, branches: 5, users: 5, transactions: "20,000 / month", payroll: "Yes", support: "Priority", features: ["3 businesses", "5 branches", "5 users", "Unlimited transactions", "Full payroll", "Priority support"], cta: "Start Trial", highlight: true },
-  { name: "Pro", price: "3,000", businesses: 10, branches: "∞", users: "∞", transactions: "Unlimited", payroll: "Yes", support: "Dedicated", features: ["10 businesses", "Unlimited branches", "Unlimited users", "API access", "Webhooks", "White-label option"], cta: "Contact Sales", highlight: false },
+const pricingPlans: PricingPlan[] = [
+  {
+    id: "free",
+    name: "Free",
+    description: "For solo founders trying Finaflow for the first time.",
+    priceMonthly: "KES 0",
+    priceYearly: "KES 0",
+    features: [
+      { text: "1 business · 1 branch · 1 user" },
+      { text: "100 transactions per month" },
+      { text: "Basic sales & expense tracking" },
+      { text: "M-PESA SMS import" },
+      { text: "Community support" },
+    ],
+    cta: "Get Started",
+    highlight: false,
+  },
+  {
+    id: "starter",
+    name: "Starter",
+    description: "For small shops ready to track every shilling in one place.",
+    priceMonthly: "KES 500",
+    priceYearly: "KES 417",
+    featuresLabel: "Everything in Free, plus:",
+    features: [
+      { text: "3 users · unlimited transactions" },
+      { text: "Recurring bills & suppliers" },
+      { text: "Email support" },
+    ],
+    cta: "Start Trial",
+    highlight: false,
+  },
+  {
+    id: "growth",
+    name: "Growth",
+    description: "For multi-branch teams that need payroll & priority help.",
+    priceMonthly: "KES 1,500",
+    priceYearly: "KES 1,250",
+    badge: "Popular",
+    featuresLabel: "Everything in Starter, plus:",
+    features: [
+      { text: "3 businesses · 5 branches · 5 users" },
+      { text: "Full payroll (PAYE, NHIF, NSSF)" },
+      { text: "Priority support" },
+    ],
+    cta: "Start Trial",
+    highlight: true,
+  },
+  {
+    id: "pro",
+    name: "Pro",
+    description: "For chains, franchises, and agencies scaling across regions.",
+    priceMonthly: "KES 3,000",
+    priceYearly: "KES 2,500",
+    featuresLabel: "Everything in Growth, plus:",
+    features: [
+      { text: "10 businesses · unlimited branches & users" },
+      { text: "API access & webhooks" },
+      { text: "White-label option" },
+      { text: "Dedicated success manager" },
+    ],
+    cta: "Contact Sales",
+    highlight: false,
+  },
 ];
 
 const stats = [
@@ -135,6 +201,7 @@ const stats = [
 
 export default function Home() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
 
   return (
     <>
@@ -456,60 +523,58 @@ export default function Home() {
         {/* Pricing */}
         <section id="pricing" className="py-20">
           <div className="mx-auto max-w-6xl px-4">
-            <div className="mb-12 text-center">
+            <div className="mb-10 text-center">
               <h2 className="font-serif text-4xl font-bold text-[#2D2A26]">Simple, transparent pricing</h2>
               <p className="mt-2 text-sm text-[#8D8A87]">Start free. Upgrade as you grow. All prices in KES.</p>
+              <div className="mt-6 hidden md:flex md:justify-center">
+                <BillingCycleToggle
+                  value={billingCycle}
+                  onChange={setBillingCycle}
+                />
+              </div>
+              <AnimatePresence initial={false}>
+                {billingCycle === "yearly" && (
+                  <motion.p
+                    key="yearly-note"
+                    initial={{ opacity: 0, y: -4, height: 0 }}
+                    animate={{ opacity: 1, y: 0, height: "auto" }}
+                    exit={{ opacity: 0, y: -4, height: 0 }}
+                    transition={{ duration: 0.25, ease: "easeOut" }}
+                    className="mt-3 overflow-hidden text-xs text-[#2E7D32] font-medium"
+                  >
+                    Save ~17% on yearly — that's 2 months free on every paid plan.
+                  </motion.p>
+                )}
+              </AnimatePresence>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              {tiers.map((t, i) => (
-                <Card key={i} className={`border ${t.highlight ? "border-[#C73E1D] ring-1 ring-[#C73E1D]" : "border-[#E8E0D8]"}`}>
-                  <CardContent className="p-4">
-                    <h3 className="text-sm font-semibold text-[#2D2A26]">{t.name}</h3>
-                    <div className="mt-2">
-                      <div className="flex flex-wrap items-end gap-2" aria-label={`${t.name} plan price reduced to zero`}>
-                        <span className="font-serif text-2xl font-bold text-[#8D8A87] line-through decoration-2">{t.price}</span>
-                        <span className="font-serif text-3xl font-bold text-[#2D2A26]">0</span>
-                        <span className="text-xs text-[#8D8A87]">/mo</span>
-                      </div>
-                    </div>
-                    <div className="mt-3 space-y-1.5 border-t border-[#E8E0D8] pt-3">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-[#8D8A87]">Businesses</span>
-                        <span className="font-semibold text-[#2D2A26]">{t.businesses === 99 ? "∞" : t.businesses}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-[#8D8A87]">Branches</span>
-                        <span className="font-semibold text-[#2D2A26]">{t.branches === 99 ? "∞" : t.branches}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-[#8D8A87]">Users</span>
-                        <span className="font-semibold text-[#2D2A26]">{t.users === 99 ? "∞" : t.users}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-[#8D8A87]">Transactions</span>
-                        <span className="font-semibold text-[#2D2A26]">{t.transactions}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-[#8D8A87]">Payroll</span>
-                        <span className="font-semibold text-[#2D2A26]">{t.payroll}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-[#8D8A87]">Support</span>
-                        <span className="font-semibold text-[#2D2A26]">{t.support}</span>
-                      </div>
-                    </div>
-                    <ul className="mt-3 space-y-1.5 border-t border-[#E8E0D8] pt-3">
-                      {t.features.map((f, j) => (
-                        <li key={j} className="flex items-center gap-1.5 text-xs text-[#2D2A26]">
-                          <CheckCircle className="h-3 w-3 shrink-0 text-[#2E7D32]" />{f}
-                        </li>
-                      ))}
-                    </ul>
-                    <Link to="/login?type=standard" className="mt-4 block">
-                      <Button className={`w-full ${t.highlight ? "bg-[#C73E1D]" : "bg-[#2D2A26]"}`} size="sm">{t.cta}</Button>
-                    </Link>
-                  </CardContent>
-                </Card>
+            <div className="md:hidden">
+              <ChangeablePricingSection
+                plans={pricingPlans}
+                defaultPlanId="growth"
+                yearlyDiscountNote="Save ~17% when you pay yearly — that's 2 months free."
+                footerText="No credit card. No long-term contract. Cancel anytime."
+                buttonText="Get Started"
+                ctaHref="/login?type=standard"
+              />
+            </div>
+            <div className="hidden md:grid md:gap-4 md:grid-cols-2 lg:hidden">
+              {pricingPlans.map((plan, idx) => (
+                <PricingCard
+                  key={plan.id}
+                  plan={plan}
+                  billingCycle={billingCycle}
+                  index={idx}
+                />
+              ))}
+            </div>
+            <div className="hidden lg:grid lg:gap-5 lg:grid-cols-4">
+              {pricingPlans.map((plan, idx) => (
+                <PricingCard
+                  key={plan.id}
+                  plan={plan}
+                  billingCycle={billingCycle}
+                  index={idx}
+                />
               ))}
             </div>
           </div>
