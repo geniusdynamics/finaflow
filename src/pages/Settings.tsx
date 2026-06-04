@@ -177,7 +177,7 @@ export function Settings() {
   const PROVIDER_COLORS: Record<string, string> = {
     mpesa: "bg-[#25B266]",
     airtel_money: "bg-[#E30613]",
-    sasapay: "bg-[#00A651]",
+    sasapay: "bg-[#1A73E8]",
   };
 
   const PROVIDER_ICONS: Record<string, React.ReactNode> = {

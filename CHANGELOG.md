@@ -1,5 +1,75 @@
 # Changelog
 
+## [Unreleased] — Wallet Provider Brand Colors
+
+### Fixed
+- **AirtelMoney wallet was rendering as gray in the Wallets page** — `src/pages/Wallet.tsx` had its `providerColors` / `providerIcons` maps keyed on `airtel`, but the seeded provider code in `api/lib/seed-wallet-providers.ts` is `airtel_money`. The lookup missed and the spans fell back to `bg-gray-600` instead of red. Renamed the key to `airtel_money` and switched to the exact brand red (`bg-[#E30613]`) used in Settings, so the AirtelMoney pill on the Wallets page now matches the one in Settings → Wallets.
+
+### Changed
+- **`src/pages/Settings.tsx`** — The `PROVIDER_COLORS` map now paints SasaPay blue (`bg-[#1A73E8]`) instead of green (`bg-[#00A651]`). The blue is the same hex already used for the active CoA picker row, keeping the design system tight. M-PESA stays green and Airtel Money stays red so the three providers are still visually distinct.
+- **`src/pages/Wallet.tsx`** — `providerColors` and `providerIcons` keys renamed from `airtel` to `airtel_money` to match the provider `code` returned by the API. The AirtelMoney entry now uses `bg-[#E30613]` (the same red as Settings) instead of the generic `bg-red-600`, and the label text stays as "Airtel".
+
+### Files
+- `src/pages/Settings.tsx` — SasaPay color changed from `#00A651` to `#1A73E8`
+- `src/pages/Wallet.tsx` — `airtel` key renamed to `airtel_money` (in both `providerColors` and `providerIcons`); AirtelMoney color switched to `bg-[#E30613]` to match Settings
+
+## [Unreleased] — Version 0.9.9
+
+### Changed
+- **App version bumped to `0.9.9`** — The centralized version constant in `src/lib/version.ts` was incremented from `0.9.8` to `0.9.9`, and the `version` field in `package.json` was updated to match. The derived `APP_VERSION_DISPLAY` (`V:0.9.9`) and `APP_VERSION_FULL` (`Version: 0.9.9`) automatically reflect the bump in the desktop sidebar, mobile header, and Settings page footer.
+
+### Files
+- `src/lib/version.ts` — `APP_VERSION` constant updated from `"0.9.8"` to `"0.9.9"`
+- `package.json` — top-level `version` field updated from `0.9.8` to `0.9.9`
+
+## [Unreleased] — Journal Picker Dropdown Scrolling
+
+### Fixed
+- **Account selector dropdown did not scroll** — The `PopoverContent` had no max-height, so the dropdown tried to render all 51+ Chart-of-Accounts rows in a single panel that overflowed the viewport; the inner `CommandList` had `max-h-[320px]` and `overflow-y-auto` but those rules were inert because the parent didn't constrain the popover height. Fixed by chaining the constraints top-down: the `PopoverContent` now caps itself at `var(--radix-popover-content-available-height)` (Radix injects the available viewport space below the trigger) and clips with `overflow-hidden`; the `Command` flex column takes the full remaining height with `h-full max-h-full`; the search-bar row is `shrink-0` so it stays pinned at the top; the `CommandList` is `flex-1 overflow-y-auto overscroll-contain` with a defensive `max-h-[min(320px,var(--radix-popover-content-available-height)-56px)]` so it never tries to be taller than (popover - search row). Result: the dropdown respects the viewport, the search bar stays visible, and the list scrolls cleanly.
+
+### Files
+- `src/components/CoAJournalAccountPicker.tsx` — added max-height + overflow chain to PopoverContent/Command/CommandList so the inner list actually scrolls inside the viewport
+
+## [Unreleased] — Journal Picker Layout Alignment & Sourced-From-CoA
+
+### Fixed
+- **Missing `isNotNull` import in `api/journal-router.ts`** — The `fetchCoaRows` helper used `isNotNull(accounts.accountType)` to identify CoA rows but the import on line 5 was still the old `import { and, asc, eq, isNull } from "drizzle-orm"`. Without `isNotNull` the function would throw `ReferenceError: isNotNull is not defined` at runtime, causing the resolver to fail for the primary candidate and silently fall through to other businesses (which sometimes only had liability accounts — the original "only liability is shown" symptom). Added `isNotNull` to the import list so the canonical CoA filter runs as written.
+- **Journal entry line misalignment** — The picker button was rendered with `min-h-[2.25rem]` (36px) while the DEBIT/CREDIT/Memo inputs were 34px and stacked under uppercase labels; the Memo and Delete columns had no label at all. The grid was `items-start` so the picker and inputs floated to the top of their cells with visibly different baselines. Fixed by:
+  - Adding a small "ACCOUNT" uppercase label above the picker and a "MEMO" label above the description input to match the DEBIT/CREDIT structure.
+  - Hard-pinning the picker button to `h-[34px]` (matching the other inputs).
+  - Pinning all DEBIT and CREDIT inputs to `h-[34px]`.
+  - Switching the row grid from `items-start` to `items-end` so all five controls (picker, debit, credit, memo, delete) align on the same bottom baseline.
+  - Adding a `className` prop to `CoAJournalAccountPicker` so the call site can override the button height when it embeds the picker in a row with fixed-height peers.
+
+### Changed
+- **`src/components/CoAJournalAccountPicker.tsx`** — Each dropdown row now shows only the account code (monospace) and the account name. The right-aligned sub-type label was removed for visual quietness, and the search placeholder was tightened to "Search by name or code…". The previously-invisible Check icon (which always occupied a ~14px column even when nothing was selected) is now only rendered for the active item, eliminating the large empty space that appeared before the account code on every row. A `className` prop was added so the host page can pin the trigger button height to match sibling controls.
+- **`src/pages/JournalEntries.tsx`** — Each journal line now starts with an "ACCOUNT" label above the picker, the picker/inputs/memo/delete controls all share a `h-[34px]` baseline, and the row uses `items-end` so the bottom of every control lines up across the row. The total grid is still `grid-cols-12` (6 / 2 / 2 / 1 / 1) but reads as one aligned strip instead of a top-floating picker next to bottom-floating inputs.
+
+### Files
+- `api/journal-router.ts` — added `isNotNull` to drizzle-orm import so `fetchCoaRows` runs the CoA-only filter
+- `src/components/CoAJournalAccountPicker.tsx` — removed sub-type display, conditionally render Check icon, hard-pin button to `h-[34px]`, accept `className` prop, tighten search placeholder
+- `src/pages/JournalEntries.tsx` — added "ACCOUNT" and "MEMO" labels, fixed `h-[34px]` on all controls, switched row grid to `items-end`
+
+## [Unreleased] — Journal Picker: CoA-Only Resolver with Multi-Business Fallback
+
+### Fixed
+- **Empty "No Chart-of-Accounts accounts are set up yet" message on the journal entry picker** — The new `journal.listForJournalEntries` resolver only checked the user's `currentBusinessId`. When that business was empty (or newly created and not yet populated) the picker had nothing to show. The resolver now builds an ordered list of candidate business ids from (1) the explicit `businessId` argument, (2) `ctx.user.currentBusinessId`, (3) the rows in `userBusinesses` for the user, and (4) the first authorized location's business. It then tries the primary candidate first; if that business has zero active CoA entries, it walks the remaining candidates and returns the first one that does. The result is returned as `{ accounts, businessId }` so the frontend always sees a populated list when *any* authorized business has CoA entries.
+
+### Added
+- **`journal.listForJournalEntries` endpoint** on `api/journal-router.ts` — Returns all active, non-deleted Chart-of-Accounts entries for the resolved business, ordered by `accountCode` then `name`. CoA-only (filters out operational cash/wallet/bank accounts that belong to the transfer module). Resolves the business via the multi-source fallback described above.
+- **`fetchCoaRows` helper** in `api/journal-router.ts` — Single-source query used by the resolver so the filtering rules are defined once.
+- **Server-side CoA validation in `createJournalEntry`** in `api/lib/journal.ts` — Before the entry is persisted, every line's `accountId` is checked: must exist, must have `accountType` set (i.e. be a CoA entry, not an operational account), must belong to the same `businessId`, and must be `isActive` with no `deletedAt`. Rejects with a clear error otherwise. Prevents hand-crafted API calls from bypassing the UI restriction.
+- **`CoAJournalAccountPicker` component** in `src/components/CoAJournalAccountPicker.tsx` — A purpose-built combobox for the manual journal entry form. Sourced from `journal.listForJournalEntries`, grouped by `accountType` (Asset / Liability / Equity / Revenue / Expense) in that order, with each row showing the account code (monospace) plus the account name plus the sub-type on the right. Mirrors the visual style of the reference image: search box at top with a clear-button, bold group headings, items with a check indicator on the left and the code as a small chip. Excludes already-selected account ids from the dropdown so the same CoA entry can't be picked twice in one entry.
+
+### Changed
+- **`src/pages/JournalEntries.tsx`** — The journal entry form now uses `CoAJournalAccountPicker` (CoA-only) instead of `AccountCombobox` (which mixed operational and CoA accounts). The form's helper text under "Journal Lines" now reads: "Pick accounts from the Chart of Accounts. Cash, wallet, and bank movements belong in the Transfer module." This makes the separation of concerns explicit for advanced users.
+
+### Files
+- `api/journal-router.ts` — new endpoint + `fetchCoaRows` helper
+- `api/lib/journal.ts` — CoA / business / active validation in `createJournalEntry`
+- `src/components/CoAJournalAccountPicker.tsx` — new component
+- `src/pages/JournalEntries.tsx` — switched to CoA-only picker, updated helper copy
+
 ## [Unreleased] — Comprehensive Versioning & Changelog Management
 
 ### Added

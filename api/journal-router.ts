@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { createRouter, accountManage } from "./middleware";
+import { createRouter, accountManage, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
-import { journalEntries, journalLines } from "@db/schema";
-import { eq } from "drizzle-orm";
+import { journalEntries, journalLines, accounts, locations, userBusinesses } from "@db/schema";
+import { and, asc, eq, isNull, isNotNull } from "drizzle-orm";
 import { logAudit } from "./lib/audit";
 import type { JournalLineInput } from "./lib/journal";
 import {
@@ -13,6 +13,32 @@ import {
   reverseJournalEntry,
   unpostJournalEntry,
 } from "./lib/journal";
+
+type Db = ReturnType<typeof getDb>;
+
+async function fetchCoaRows(db: Db, businessId: number) {
+  return db
+    .select({
+      id: accounts.id,
+      name: accounts.name,
+      accountCode: accounts.accountCode,
+      accountType: accounts.accountType,
+      accountSubType: accounts.accountSubType,
+      description: accounts.description,
+      isContra: accounts.isContra,
+      isActive: accounts.isActive,
+    })
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.businessId, businessId),
+        isNull(accounts.deletedAt),
+        eq(accounts.isActive, true),
+        isNotNull(accounts.accountType),
+      ),
+    )
+    .orderBy(asc(accounts.accountCode), asc(accounts.name));
+}
 
 export const journalRouter = createRouter({
   list: accountManage
@@ -240,6 +266,78 @@ export const journalRouter = createRouter({
       });
 
       return entries;
+    }),
+
+  /**
+   * Returns all active Chart-of-Accounts entries for the current user's business.
+   * Excludes operational accounts (cash/wallet/bank), which are managed by the
+   * transfer module. Used by the manual journal entry form's account selector.
+   *
+   * Resolves the target business by, in order:
+   *   1. The `businessId` argument if supplied
+   *   2. `ctx.user.currentBusinessId`
+   *   3. The first business the user is a member of (userBusinesses)
+   *   4. The first business a non-deleted location belongs to
+   * If the resolved business has no CoA entries yet, falls back to the first
+   * business the user is authorized for that does have entries — so an admin
+   * whose default business was just created can still see the existing CoA.
+   */
+  listForJournalEntries: accountManage
+    .input(z.object({ businessId: z.number().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = getDb();
+      const userId = ctx.user?.id;
+
+      // Build the ordered list of candidate business ids for this user.
+      const candidates: number[] = [];
+      if (input?.businessId) candidates.push(input.businessId);
+      if (ctx.user?.currentBusinessId) candidates.push(ctx.user.currentBusinessId);
+      if (userId) {
+        const ubRows = await db
+          .select({ businessId: userBusinesses.businessId })
+          .from(userBusinesses)
+          .where(eq(userBusinesses.userId, userId));
+        for (const r of ubRows) if (typeof r.businessId === "number") candidates.push(r.businessId);
+      }
+      const locIds = await getCurrentBusinessLocationIds(ctx);
+      if (locIds.length > 0) {
+        const locRows = await db
+          .select({ businessId: locations.businessId })
+          .from(locations)
+          .where(eq(locations.id, locIds[0]));
+        for (const r of locRows) if (typeof r.businessId === "number") candidates.push(r.businessId);
+      }
+
+      // Dedupe candidate ids preserving order
+      const seen = new Set<number>();
+      const orderedCandidates: number[] = [];
+      for (const id of candidates) {
+        if (typeof id === "number" && !seen.has(id)) {
+          seen.add(id);
+          orderedCandidates.push(id);
+        }
+      }
+      if (orderedCandidates.length === 0) return { accounts: [], businessId: null };
+
+      // First, try the explicit input / current business
+      let businessId = orderedCandidates[0];
+      let rows = await fetchCoaRows(db, businessId);
+
+      // If the primary business has no CoA, try each remaining candidate
+      // until we find one with entries — this keeps the picker useful for
+      // admins whose default business is new and empty.
+      if (rows.length === 0 && orderedCandidates.length > 1) {
+        for (let i = 1; i < orderedCandidates.length; i++) {
+          const altRows = await fetchCoaRows(db, orderedCandidates[i]);
+          if (altRows.length > 0) {
+            businessId = orderedCandidates[i];
+            rows = altRows;
+            break;
+          }
+        }
+      }
+
+      return { accounts: rows, businessId };
     }),
 });
 

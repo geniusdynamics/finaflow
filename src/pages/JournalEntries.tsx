@@ -1,5 +1,6 @@
 // ABOUTME: Journal Entries management page for double-entry bookkeeping
-// ABOUTME: Uses an AccountCombobox for line selection so CoA and operational accounts are searchable.
+// ABOUTME: Uses CoAJournalAccountPicker so the line selector is sourced from the authoritative
+// ABOUTME: Chart of Accounts (not the transfer module's operational-account subset).
 import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
@@ -11,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, BookOpen, CheckCircle, XCircle, RotateCcw, Trash2, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
-import { AccountCombobox } from "@/components/AccountCombobox";
+import { CoAJournalAccountPicker } from "@/components/CoAJournalAccountPicker";
 
 export function JournalEntries({ embedded }: { embedded?: boolean }) {
   const [page, setPage] = useState(1);
@@ -434,7 +435,7 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
           <div>
             <h4 className="font-semibold text-[#2D2A26]">Journal Lines</h4>
             <p className="text-[11px] text-[#8D8A87]">
-              Use the account picker to choose any Chart-of-Accounts entry or operational account.
+              Pick accounts from the Chart of Accounts. Cash, wallet, and bank movements belong in the Transfer module.
             </p>
           </div>
           <Button type="button" size="sm" variant="outline" onClick={addLine}>
@@ -446,15 +447,19 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
           {lines.map((line, idx) => (
             <div
               key={idx}
-              className="grid grid-cols-12 items-start gap-2 rounded-lg border border-[#E8E0D8] bg-white p-2"
+              className="grid grid-cols-12 items-end gap-2 rounded-lg border border-[#E8E0D8] bg-white p-2"
             >
               <div className="col-span-6">
-                <AccountCombobox
+                <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8D8A87]">
+                  Account
+                </label>
+                <CoAJournalAccountPicker
                   value={line.accountId}
                   onChange={(v) => updateLine(idx, "accountId", v)}
                   excludeIds={lines
                     .map((l, i) => (i !== idx && l.accountId ? parseInt(l.accountId) : null))
                     .filter((id): id is number => id !== null)}
+                  businessId={businessId}
                 />
               </div>
               <div className="col-span-2">
@@ -475,7 +480,7 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
                       if (e.target.value) updateLine(idx, "credit", "");
                     }}
                     placeholder="0.00"
-                    className="w-full rounded-md border border-[#E8E0D8] bg-white px-2 py-1.5 pl-9 text-right text-sm font-mono focus:border-[#C73E1D] focus:outline-none focus:ring-1 focus:ring-[#C73E1D]"
+                    className="h-[34px] w-full rounded-md border border-[#E8E0D8] bg-white px-2 pl-9 text-right text-sm font-mono focus:border-[#C73E1D] focus:outline-none focus:ring-1 focus:ring-[#C73E1D]"
                   />
                 </div>
               </div>
@@ -497,11 +502,14 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
                       if (e.target.value) updateLine(idx, "debit", "");
                     }}
                     placeholder="0.00"
-                    className="w-full rounded-md border border-[#E8E0D8] bg-white px-2 py-1.5 pl-9 text-right text-sm font-mono focus:border-[#C73E1D] focus:outline-none focus:ring-1 focus:ring-[#C73E1D]"
+                    className="h-[34px] w-full rounded-md border border-[#E8E0D8] bg-white px-2 pl-9 text-right text-sm font-mono focus:border-[#C73E1D] focus:outline-none focus:ring-1 focus:ring-[#C73E1D]"
                   />
                 </div>
               </div>
-              <div className="col-span-1 flex items-end">
+              <div className="col-span-1">
+                <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8D8A87]">
+                  Memo
+                </label>
                 <Input
                   value={line.description}
                   onChange={(e) => updateLine(idx, "description", e.target.value)}
@@ -509,7 +517,7 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
                   className="h-[34px] text-xs"
                 />
               </div>
-              <div className="col-span-1 flex items-end justify-end">
+              <div className="col-span-1 flex justify-end">
                 <Button
                   type="button"
                   size="sm"
