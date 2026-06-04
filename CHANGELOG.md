@@ -1,5 +1,81 @@
 # Changelog
 
+## [Unreleased] — Hero Headline Rotation: 3× Slower
+
+### Changed
+- **Hero headline + subtitle rotation interval tripled** — The `rotationMs` default in [RotatingHeadline.tsx](file:///d:\DevCenter\abuilds\fina\finaflow\src\components\landing\RotatingHeadline.tsx) bumped from `5500` to `16500` (5.5s → 16.5s, exactly 3× as requested). The same five A/B variations now stay on screen long enough to actually be read, with the crossfade animation duration unchanged at 0.55s. The total cycle through all five variations is now ~82s (was ~27.5s), giving each headline a real chance to land instead of flickering past. The 0.55s enter/exit blur-and-slide motion stays — only the dwell time between variations changed.
+
+### Files
+- `src/components/landing/RotatingHeadline.tsx` — `rotationMs` default `5500` → `16500`
+
+## [Unreleased] — Hero Headline: Simplified Wording + Industry Variations
+
+### Changed
+- **Hero headlines restructured to single-line** — The 4 two-line variations (line1 + line2 with a gradient accent) were the root cause of the "headline bleeding into subtitle" overlap. Swapped to a single-line structure with a single `headline` field, so the headline always renders as one wrapped line on mobile or one straight line on desktop. Gradient direction flipped from `bg-gradient-to-br` (diagonal) to `bg-gradient-to-r` (horizontal) which reads more naturally on a single line. Font size retuned from `text-[2.5rem] md:text-[3.5rem]` to `text-[1.75rem] md:text-[2.75rem]` — slightly smaller so the longer variations don't dominate the hero. Headline container `min-h` bumped to `min-h-[6.5rem] md:min-h-[3.75rem]` to accommodate the longest variation on mobile without layout shift.
+- **Headline text rewritten for directness** — Old "Your Business Finances, / Finally Made Simple" → new "Business Finances finally made simple". Old "Losing Track of Your / Bills and Expenses?" → new "Losing track of bills and expenses". Old "See Every Shilling. / In Real Time." → new "See every coin in real time". The conversational lowercase ("finally", "every", "in") and tighter phrasing cut the hero message in half — punchier, less corporate, fewer syllables before the value prop lands.
+
+### Added
+- **`construction` headline variation** — "Construction Expenses, finally at your fingertips" with a project-level subtitle ("Track every shilling across materials, labor, and subcontractors — with project-level visibility. No more guessing where the budget went, no more end-of-month pile of receipts to reconcile."). Targets the construction / contractor segment where job-costing and project visibility are the primary pain.
+- **`budget` headline variation** — "Budgeted Expenses, finally Aligned." with a budget-discipline subtitle ("Plan it, track it, stay on it. Finaflow keeps every department aligned to the same budget in real time — with variance alerts before you blow past the line, not after."). Targets finance leads who care about plan-vs-actual.
+- The hero now rotates through **5 A/B variations** total (pain-point, aspirational, clarity, construction, budget) on a 5.5s cycle, so the same visitor sees five different value propositions in one session.
+
+### Files
+- `src/components/landing/RotatingHeadline.tsx` — switched from `{ line1, line2 }` to `{ headline }`, added construction + budget variations, horizontal gradient, smaller font, bigger mobile min-h
+- `src/components/landing/__tests__/RotatingHeadline.test.tsx` — updated to assert 5 variations and the new IDs; length threshold relaxed to 60 chars
+
+## [Unreleased] — Hero Headline Overlap + Premium Color Pass
+
+### Fixed
+- **Hero headline second line was overlapping with the subtitle** — The `min-h-[7.5rem]` on the headline container was just barely enough for two lines at desktop (`text-[3.5rem]` × `leading-[1.05]` = ~118px), but with `flex flex-col` + `absolute inset-0` the content rendered flush to the top with no breathing room, and the `relief` variation's "Without the Headache" line bled into the "Built for African SMEs…" subtitle below. Bumped the headline container to `min-h-[6.5rem] md:min-h-[9rem]` and the subtitle to `min-h-[6rem]`, plus widened the parent gap from `space-y-4` to `space-y-6` so both elements always have their own breathing room regardless of which variation is showing.
+
+### Changed
+- **Headline gradient now reads premium, not flat** — Switched from a symmetric 3-stop `bg-gradient-to-r from-[#C73E1D] via-[#D4A854] to-[#C73E1D]` to a diagonal `bg-gradient-to-br from-[#A02E1A] via-[#D4A854] to-[#E8A04A]`. The deeper `#A02E1A` (a richer, more saturated terracotta) starts the run, the warm amber `#E8A04A` ends it, and the diagonal direction adds a subtle highlight that catches the eye instead of the previous mirrored wash. A `drop-shadow(0 1px 1px rgba(160, 46, 26, 0.12))` sits behind the gradient text for depth.
+- **Headline base color deepened** — `#2D2A26` → `#1a1815` and added `tracking-tight` so the first line reads as confident ink, not soft gray.
+- **Subtitle ink upgraded from `#8D8A87` to `#4A4742`** — still warm and editorial, but the contrast is now AA-compliant for body text on the cream background, so the subtitle doesn't look like a placeholder.
+- **Hero background now has three drifting orbs** instead of two — the original terracotta + gold pair is joined by a centered warm amber orb (`#E8A04A/10`) that pulses on a 12s loop. The base gradient switched from `to-white` to `to-[#F2E8DD]` (a slightly deeper warm cream) so the hero doesn't fall off into flat white. The two original orbs bumped from `/15` to `/20` opacity and from `#C73E1D` to `#A02E1A` for the terracotta — more saturated, more presence.
+
+### Files
+- `src/components/landing/RotatingHeadline.tsx` — bigger `min-h` containers, premium gradient, darker base text, richer subtitle ink, subtle drop shadow on the gradient line
+- `src/components/landing/__tests__/RotatingHeadline.test.tsx` — assertion updated from `bg-gradient-to-r` → `bg-gradient-to-br` to match the diagonal
+- `src/pages/Home.tsx` — hero background gradient + third amber orb
+
+## [Unreleased] — Homepage Conversion Overhaul: A/B Headline, Motion, Counter, Mobile
+
+### Added
+- **`RotatingHeadline` component** (`src/components/landing/RotatingHeadline.tsx`) — Hero headline that A/B-tests four angles in one session: **aspirational** ("Your Business Finances, Finally Made Simple"), **pain-point** ("Losing Track of Your Bills and Expenses?"), **clarity** ("See Every Shilling. In Real Time."), and **relief** ("Run Your Books Without the Headache."). Crossfades every 5.5s with a synced subtitle so the same visitor sees multiple value propositions. Both line1 and line2 use the Finaflow gradient treatment; headline and subtitle are independently crossfaded with a blur-and-slide ease.
+- **`AnimatedCounter` component** (`src/components/landing/AnimatedCounter.tsx`) — Counts from zero to a target value when the element scrolls into view (`useInView`, `once: true`, `-40px` margin). Uses framer-motion's `animate()` with `easeOut` for a smooth fill. Supports `prefix`, `suffix`, `decimals`, and `className`. Uses `toLocaleString` for comma-grouped numbers (e.g., `2,000`).
+- **Homepage gradient-mesh hero** — Two large blurred radial gradients (terracotta and gold) drift slowly behind the hero section. Adds depth and warmth without using the overused purple-blue AI palette. Both orbs animate on an infinite scale + opacity loop.
+- **Hero dashboard animations** — The "Daily Overview" mockup now floats gently (`y: ±6px`, 5s loop), the "Live" indicator is a pulsing green dot (`scale: 1 → 1.4 → 1`, 2s loop), and the four stat values (KES 45,200, KES 12,800, KES 32,400, 3 bills) animate from zero to their target when the hero enters the viewport. The dashboard itself has a soft terracotta→gold blurred halo behind it.
+- **Magnetic hero CTAs** — The two primary hero buttons (`Get Started Free` and `Join as Partner`) lift 1px and scale to 1.03 on hover, and scale to 0.98 on tap, with a spring transition. The primary CTA also picks up a `shadow-lg shadow-[#C73E1D]/20` ring so it feels grounded in the brand color.
+- **Trust-stats animated counters** — The four stats (500+ Businesses, KES 2B+ Transactions, 2,000+ Users, 99.9% Uptime) now use `AnimatedCounter` and stagger-reveal as a row when the section enters the viewport (100ms per stat). A soft gold blurred orb pulses in the background.
+- **Scroll-triggered reveal vocabulary** — Every section now uses a consistent motion grammar: `whileInView` with `once: true`, 50–80px margin, 0.5–0.7s duration, spring `bounce: 0.25`, and 24–40px translate. Applied to: section headers (Showcase, How it Works, Features), showcase items, feature cards, step cards, partner CTA headline/body/CTAs.
+- **Showcase hover lift** — Each showcase screenshot now lifts 4px on hover with a stronger terracotta shadow; the inner image scales to 1.03 (was 1.02) and the transition is 700ms (was 500ms) for a slower, more cinematic feel.
+- **Features grid micro-interactions** — Each feature card lifts on hover, the icon scales to 1.1 and rotates 5° with a spring bounce, the icon background darkens, and the title shifts to the brand red. Cards stagger-reveal (80ms per column index) and respect the brand's gold-tinted shadow on hover.
+- **How-it-works step animations** — Each step card lifts on hover, the step number deepens from `/20` to `/40` opacity, and the icon scales and counter-rotates. The three steps stagger-reveal with a 120ms delay between them.
+- **Partner CTA dark section** — The Partner section now has a dark gradient background (`#2D2A26` → `#1a1815` → `#2D2A26`) with two drifting gold + terracotta blurred orbs, white headline/body, gold accent icon ring, and the same shadow + lift on the "Join as Partner" button. A clear contrast pivot that draws the eye to the partner funnel without breaking the editorial flow.
+
+### Changed
+- **`src/pages/Home.tsx`** — `stats` array restructured to support animated counters (numeric `value`, `prefix`, `suffix`, `decimals` instead of pre-formatted strings). Removed unused `Clock` import (replaced by the animated live pulse). Subtitle now lives in the `RotatingHeadline` component, so the hero markup is leaner.
+- **`src/components/landing/AnimatedCounter.tsx`** — Uses `toLocaleString("en-US", …)` instead of `toFixed` so comma-grouped values (2,000 → `2,000`) render correctly with the `en-US` locale.
+
+### Mobile friendliness
+- Hero dashboard stacks below the headline on `< md` as before, with all animations working on touch devices (the floating motion, the live pulse, the counter fill all trigger on first viewport).
+- Every section's `whileInView` margin is tuned for mobile (40–50px) so animations trigger as the user scrolls naturally, not late.
+- All hover effects use `whileHover` from framer-motion which is touch-friendly by design (taps register as taps, not hover-then-tap).
+- The rotating headline is fully responsive — the `min-h-[5.5rem] md:min-h-[7.5rem]` container prevents layout shift across the two-line variations on small screens.
+
+### Tests
+- **`RotatingHeadline` test file** (`src/components/landing/__tests__/RotatingHeadline.test.tsx`) — 5 cases covering the first-variation default render, the gradient treatment on line2, the subtitle render, the four-variation A/B set, and the variation-shape contract.
+- **`AnimatedCounter` test file** (`src/components/landing/__tests__/AnimatedCounter.test.tsx`) — 5 cases covering the zero-default viewport wait, the `startOnView={false}` shortcut, the prefix/suffix rendering, the `decimals` prop, and the `className` passthrough.
+- All 10 new tests pass under `npm test`. Combined with the existing pricing tests, the landing + pricing suite is **38/38 passing across 7 files**.
+
+### Files
+- `src/components/landing/RotatingHeadline.tsx` — new A/B-tested headline
+- `src/components/landing/AnimatedCounter.tsx` — new viewport-triggered counter
+- `src/components/landing/__tests__/RotatingHeadline.test.tsx` — new test file
+- `src/components/landing/__tests__/AnimatedCounter.test.tsx` — new test file
+- `src/pages/Home.tsx` — hero, stats, showcase, how-it-works, features, partner CTA rewrites with the new motion vocabulary
+
 ## [Unreleased] — Desktop Pricing: Pro Monthly Price Wraps to Two Lines
 
 ### Fixed

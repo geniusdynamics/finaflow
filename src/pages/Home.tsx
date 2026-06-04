@@ -8,7 +8,7 @@ import {
   Landmark, TrendingUp, Users, ShieldCheck, Zap,
   CheckCircle, ArrowRight, Store, FileSpreadsheet, CreditCard, Bell,
   Menu, X, BarChart3, Wallet, Receipt, PiggyBank,
-  ChevronRight, Globe, Lock, Clock,
+  ChevronRight, Globe, Lock,
   RefreshCw, Building2, Percent, HeartHandshake,
   Github, Star, Plus, Sparkles, HelpCircle, BookOpen,
 } from "lucide-react";
@@ -25,6 +25,8 @@ import ChangeablePricingSection, {
 } from "@/components/pricing/ChangeablePricingSection";
 import BillingCycleToggle from "@/components/pricing/BillingCycleToggle";
 import PricingCard from "@/components/pricing/PricingCard";
+import RotatingHeadline from "@/components/landing/RotatingHeadline";
+import AnimatedCounter from "@/components/landing/AnimatedCounter";
 
 interface ShowcaseItem {
   title: string;
@@ -192,11 +194,17 @@ const pricingPlans: PricingPlan[] = [
   },
 ];
 
-const stats = [
-  { label: "Businesses Onboarded", value: "500+" },
-  { label: "Transactions Processed", value: "KES 2B+" },
-  { label: "Active Users", value: "2,000+" },
-  { label: "Uptime", value: "99.9%" },
+const stats: {
+  label: string;
+  value: number;
+  prefix?: string;
+  suffix?: string;
+  decimals?: number;
+}[] = [
+  { label: "Businesses Onboarded", value: 500, suffix: "+" },
+  { label: "Transactions Processed", value: 2, prefix: "KES ", suffix: "B+" },
+  { label: "Active Users", value: 2000, suffix: "+" },
+  { label: "Uptime", value: 99.9, suffix: "%", decimals: 1 },
 ];
 
 export default function Home() {
@@ -286,88 +294,173 @@ export default function Home() {
 
         {/* Hero Section */}
         <section className="relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-b from-[#F5EDE6] to-white" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#F5EDE6] via-[#FAF4ED] to-[#F2E8DD]" aria-hidden />
+          <motion.div
+            aria-hidden
+            className="absolute -top-32 -right-32 h-[28rem] w-[28rem] rounded-full bg-[#A02E1A]/20 blur-3xl"
+            animate={{ scale: [1, 1.08, 1], opacity: [0.55, 0.8, 0.55] }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            aria-hidden
+            className="absolute -bottom-40 -left-32 h-[32rem] w-[32rem] rounded-full bg-[#D4A854]/20 blur-3xl"
+            animate={{ scale: [1, 1.12, 1], opacity: [0.45, 0.7, 0.45] }}
+            transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 1.5 }}
+          />
+          <motion.div
+            aria-hidden
+            className="absolute top-1/3 left-1/2 h-[24rem] w-[24rem] -translate-x-1/2 rounded-full bg-[#E8A04A]/10 blur-3xl"
+            animate={{ scale: [1, 1.15, 1], opacity: [0.3, 0.55, 0.3] }}
+            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 3 }}
+          />
           <div className="relative mx-auto max-w-6xl px-4 py-16 md:py-28">
             <div className="grid items-center gap-12 md:grid-cols-2">
-              <div>
-                <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#C73E1D]/20 bg-[#C73E1D]/5 px-3 py-1 text-xs font-medium text-[#C73E1D]">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1, duration: 0.5 }}
+                  className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#C73E1D]/20 bg-[#C73E1D]/5 px-3 py-1 text-xs font-medium text-[#C73E1D]"
+                >
                   <Zap className="h-3 w-3" /> Now with Partner & Reseller Program
-                </div>
-                <h1 className="font-serif text-[2.5rem] leading-tight font-bold text-[#2D2A26] md:text-[3.5rem]">
-                  Your Business Finances,{" "}
-                  <span className="bg-gradient-to-r from-[#C73E1D] to-[#D4A854] bg-clip-text text-transparent">
-                    Finally Made Simple
-                  </span>
-                </h1>
-                <p className="mt-4 text-lg leading-relaxed text-[#8D8A87]">
-                  Track sales, manage expenses, run payroll, and reconcile M-PESA — all in one platform. 
-                  Built specifically for African SMEs who want real-time financial clarity without the complexity.
-                </p>
-                <div className="mt-8 flex flex-wrap gap-3">
-                  <Link to="/login?type=standard">
-                    <Button className="bg-[#C73E1D] px-8 py-6 text-base hover:bg-[#C73E1D]/90">
-                      Get Started Free
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Button>
-                  </Link>
-                  <Link to="/login?type=partner">
-                    <Button variant="outline" className="border-[#C73E1D] px-8 py-6 text-base text-[#C73E1D]">
-                      <HeartHandshake className="mr-2 h-4 w-4" />
-                      Join as Partner
-                    </Button>
-                  </Link>
-                </div>
-                <div className="mt-6 flex flex-wrap items-center gap-4 text-xs text-[#8D8A87]">
+                </motion.div>
+                <RotatingHeadline />
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.35, duration: 0.5 }}
+                  className="mt-8 flex flex-wrap gap-3"
+                >
+                  <motion.div
+                    whileHover={{ scale: 1.03, y: -1 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: "spring", bounce: 0.4, duration: 0.3 }}
+                  >
+                    <Link to="/login?type=standard">
+                      <Button className="bg-[#C73E1D] px-8 py-6 text-base shadow-lg shadow-[#C73E1D]/20 hover:bg-[#C73E1D]/90">
+                        Get Started Free
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </Link>
+                  </motion.div>
+                  <motion.div
+                    whileHover={{ scale: 1.03, y: -1 }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: "spring", bounce: 0.4, duration: 0.3 }}
+                  >
+                    <Link to="/login?type=partner">
+                      <Button variant="outline" className="border-[#C73E1D] bg-white/60 px-8 py-6 text-base text-[#C73E1D] backdrop-blur hover:bg-white">
+                        <HeartHandshake className="mr-2 h-4 w-4" />
+                        Join as Partner
+                      </Button>
+                    </Link>
+                  </motion.div>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.5, duration: 0.5 }}
+                  className="mt-6 flex flex-wrap items-center gap-4 text-xs text-[#8D8A87]"
+                >
                   <span className="flex items-center gap-1"><CheckCircle className="h-3 w-3 text-[#2E7D32]" />No credit card</span>
                   <span className="flex items-center gap-1"><CheckCircle className="h-3 w-3 text-[#2E7D32]" />Free forever plan</span>
                   <span className="flex items-center gap-1"><CheckCircle className="h-3 w-3 text-[#2E7D32]" />KRA-ready reports</span>
-                </div>
-              </div>
-              <div className="relative">
-                <div className="rounded-2xl border border-[#E8E0D8] bg-white p-5 shadow-xl shadow-[#C73E1D]/5">
-                  <div className="mb-4 flex items-center justify-between">
-                    <span className="flex items-center gap-2 text-sm font-semibold text-[#2D2A26]">
-                      <BarChart3 className="h-4 w-4 text-[#C73E1D]" />
-                      Daily Overview
-                    </span>
-                    <span className="flex items-center gap-1 text-xs text-[#8D8A87]">
-                      <Clock className="h-3 w-3" />
-                      Live
-                    </span>
+                </motion.div>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 30 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                className="relative"
+              >
+                <motion.div
+                  animate={{ y: [0, -6, 0] }}
+                  transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+                  className="relative"
+                >
+                  <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-[#C73E1D]/10 via-transparent to-[#D4A854]/10 blur-2xl" aria-hidden />
+                  <div className="relative rounded-2xl border border-[#E8E0D8] bg-white/90 p-5 shadow-2xl shadow-[#C73E1D]/10 backdrop-blur">
+                    <div className="mb-4 flex items-center justify-between">
+                      <span className="flex items-center gap-2 text-sm font-semibold text-[#2D2A26]">
+                        <BarChart3 className="h-4 w-4 text-[#C73E1D]" />
+                        Daily Overview
+                      </span>
+                      <span className="flex items-center gap-1.5 text-xs text-[#8D8A87]">
+                        <motion.span
+                          aria-hidden
+                          className="h-2 w-2 rounded-full bg-[#2E7D32]"
+                          animate={{ scale: [1, 1.4, 1], opacity: [1, 0.5, 1] }}
+                          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                        />
+                        Live
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-xl bg-gradient-to-br from-[#2E7D32]/5 to-[#2E7D32]/10 p-4">
+                        <p className="text-xs text-[#8D8A87]">Today's Sales</p>
+                        <p className="mt-1 font-mono text-xl font-bold text-[#2E7D32]">
+                          KES <AnimatedCounter value={45200} duration={2.2} />
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-gradient-to-br from-[#D32F2F]/5 to-[#D32F2F]/10 p-4">
+                        <p className="text-xs text-[#8D8A87]">Expenses</p>
+                        <p className="mt-1 font-mono text-xl font-bold text-[#D32F2F]">
+                          KES <AnimatedCounter value={12800} duration={2.2} />
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-gradient-to-br from-[#C73E1D]/5 to-[#C73E1D]/10 p-4">
+                        <p className="text-xs text-[#8D8A87]">Net Position</p>
+                        <p className="mt-1 font-mono text-xl font-bold text-[#C73E1D]">
+                          KES <AnimatedCounter value={32400} duration={2.2} />
+                        </p>
+                      </div>
+                      <div className="rounded-xl bg-gradient-to-br from-[#ED6C02]/5 to-[#ED6C02]/10 p-4">
+                        <p className="text-xs text-[#8D8A87]">Bills Due</p>
+                        <p className="mt-1 font-mono text-xl font-bold text-[#ED6C02]">
+                          <AnimatedCounter value={3} duration={1.5} />
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-xl bg-gradient-to-br from-[#2E7D32]/5 to-[#2E7D32]/10 p-4">
-                      <p className="text-xs text-[#8D8A87]">Today's Sales</p>
-                      <p className="mt-1 font-mono text-xl font-bold text-[#2E7D32]">KES 45,200</p>
-                    </div>
-                    <div className="rounded-xl bg-gradient-to-br from-[#D32F2F]/5 to-[#D32F2F]/10 p-4">
-                      <p className="text-xs text-[#8D8A87]">Expenses</p>
-                      <p className="mt-1 font-mono text-xl font-bold text-[#D32F2F]">KES 12,800</p>
-                    </div>
-                    <div className="rounded-xl bg-gradient-to-br from-[#C73E1D]/5 to-[#C73E1D]/10 p-4">
-                      <p className="text-xs text-[#8D8A87]">Net Position</p>
-                      <p className="mt-1 font-mono text-xl font-bold text-[#C73E1D]">KES 32,400</p>
-                    </div>
-                    <div className="rounded-xl bg-gradient-to-br from-[#ED6C02]/5 to-[#ED6C02]/10 p-4">
-                      <p className="text-xs text-[#8D8A87]">Bills Due</p>
-                      <p className="mt-1 font-mono text-xl font-bold text-[#ED6C02]">3</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
+                </motion.div>
+              </motion.div>
             </div>
           </div>
         </section>
 
         {/* Trust Stats */}
-        <section className="border-y border-[#E8E0D8] bg-[#F5EDE6]">
-          <div className="mx-auto max-w-6xl px-4 py-10">
+        <section className="relative overflow-hidden border-y border-[#E8E0D8] bg-[#F5EDE6]">
+          <motion.div
+            aria-hidden
+            className="absolute -top-20 left-1/3 h-64 w-64 rounded-full bg-[#D4A854]/10 blur-3xl"
+            animate={{ scale: [1, 1.1, 1], opacity: [0.4, 0.7, 0.4] }}
+            transition={{ duration: 12, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <div className="relative mx-auto max-w-6xl px-4 py-12">
             <div className="grid grid-cols-2 gap-8 md:grid-cols-4">
               {stats.map((s, i) => (
-                <div key={i} className="text-center">
-                  <p className="font-serif text-3xl font-bold text-[#C73E1D]">{s.value}</p>
+                <motion.div
+                  key={s.label}
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ delay: i * 0.1, duration: 0.5, type: "spring", bounce: 0.25 }}
+                  className="text-center"
+                >
+                  <p className="font-serif text-3xl font-bold text-[#C73E1D] md:text-4xl">
+                    <AnimatedCounter
+                      value={s.value}
+                      prefix={s.prefix}
+                      suffix={s.suffix}
+                      decimals={s.decimals}
+                    />
+                  </p>
                   <p className="mt-1 text-sm text-[#8D8A87]">{s.label}</p>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -376,19 +469,29 @@ export default function Home() {
         {/* Screenshot Showcase */}
         <section id="showcase" className="py-20 md:py-28">
           <div className="mx-auto max-w-6xl px-4">
-            <div className="mb-16 text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="mb-16 text-center"
+            >
               <h2 className="font-serif text-4xl font-bold text-[#2D2A26]">
                 See Finaflow in Action
               </h2>
               <p className="mx-auto mt-3 max-w-2xl text-[#8D8A87]">
-                Every screen is designed to give you instant clarity on your business finances. 
+                Every screen is designed to give you instant clarity on your business finances.
                 No clutter. No complexity. Just the numbers that matter.
               </p>
-            </div>
+            </motion.div>
             <div className="space-y-24">
               {showcaseItems.map((item, i) => (
-                <div
-                  key={i}
+                <motion.div
+                  key={item.title}
+                  initial={{ opacity: 0, y: 40 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-80px" }}
+                  transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
                   className={`grid items-center gap-10 md:grid-cols-2 md:gap-16 ${
                     item.reverse ? "md:direction-rtl" : ""
                   }`}
@@ -414,16 +517,20 @@ export default function Home() {
                     </div>
                   </div>
                   <div className={item.reverse ? "md:order-1" : ""}>
-                    <div className="group relative overflow-hidden rounded-2xl border border-[#E8E0D8] bg-white shadow-lg shadow-[#C73E1D]/5 transition-shadow duration-300 hover:shadow-xl hover:shadow-[#C73E1D]/10">
+                    <motion.div
+                      whileHover={{ y: -4 }}
+                      transition={{ type: "spring", bounce: 0.3, duration: 0.5 }}
+                      className="group relative overflow-hidden rounded-2xl border border-[#E8E0D8] bg-white shadow-lg shadow-[#C73E1D]/5 transition-shadow duration-300 hover:shadow-2xl hover:shadow-[#C73E1D]/15"
+                    >
                       <img
                         src={item.img}
                         alt={item.title}
-                        className="w-full object-contain transition-transform duration-500 group-hover:scale-[1.02]"
+                        className="w-full object-contain transition-transform duration-700 group-hover:scale-[1.03]"
                         loading={i === 0 ? "eager" : "lazy"}
                       />
-                    </div>
+                    </motion.div>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -432,7 +539,13 @@ export default function Home() {
         {/* How it Works */}
         <section id="how-it-works" className="py-20 md:py-28">
           <div className="mx-auto max-w-6xl px-4">
-            <div className="mb-12 text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="mb-12 text-center"
+            >
               <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[#C73E1D]/20 bg-[#C73E1D]/5 px-3 py-1 text-xs font-medium text-[#C73E1D]">
                 <Sparkles className="h-3 w-3" /> Live in minutes
               </div>
@@ -442,7 +555,7 @@ export default function Home() {
               <p className="mx-auto mt-3 max-w-xl text-sm text-[#8D8A87]">
                 No spreadsheets, no consultants, no setup fees. Just three simple steps.
               </p>
-            </div>
+            </motion.div>
             <div className="grid gap-6 md:grid-cols-3">
               {[
                 {
@@ -467,12 +580,26 @@ export default function Home() {
                   detail: "Insights from day one",
                 },
               ].map((s, i) => (
-                <div key={i} className="relative rounded-2xl border border-[#E8E0D8] bg-white p-6 transition-shadow hover:shadow-md">
+                <motion.div
+                  key={s.step}
+                  initial={{ opacity: 0, y: 24 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ delay: i * 0.12, duration: 0.55, type: "spring", bounce: 0.25 }}
+                  whileHover={{ y: -4 }}
+                  className="group relative rounded-2xl border border-[#E8E0D8] bg-white p-6 transition-shadow hover:shadow-lg hover:shadow-[#C73E1D]/10"
+                >
                   <div className="mb-4 flex items-center justify-between">
-                    <span className="font-mono text-3xl font-bold text-[#C73E1D]/20">{s.step}</span>
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C73E1D]/10">
+                    <span className="font-mono text-3xl font-bold text-[#C73E1D]/20 transition-colors group-hover:text-[#C73E1D]/40">
+                      {s.step}
+                    </span>
+                    <motion.div
+                      whileHover={{ scale: 1.1, rotate: -5 }}
+                      transition={{ type: "spring", bounce: 0.5, duration: 0.4 }}
+                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C73E1D]/10"
+                    >
                       <s.icon className="h-5 w-5 text-[#C73E1D]" />
-                    </div>
+                    </motion.div>
                   </div>
                   <h3 className="text-base font-semibold text-[#2D2A26]">{s.title}</h3>
                   <p className="mt-2 text-sm leading-relaxed text-[#8D8A87]">{s.desc}</p>
@@ -480,7 +607,7 @@ export default function Home() {
                     <CheckCircle className="h-3 w-3" />
                     {s.detail}
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
             <div className="mt-10 text-center">
@@ -496,25 +623,46 @@ export default function Home() {
         {/* Features Grid */}
         <section id="features" className="border-t border-[#E8E0D8] bg-[#F5EDE6] py-20">
           <div className="mx-auto max-w-6xl px-4">
-            <div className="mb-12 text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="mb-12 text-center"
+            >
               <h2 className="font-serif text-4xl font-bold text-[#2D2A26]">
                 Everything you need to run your finances
               </h2>
               <p className="mx-auto mt-3 max-w-xl text-sm text-[#8D8A87]">
                 From daily sales to statutory payroll — all in one platform built for African businesses
               </p>
-            </div>
+            </motion.div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {features.map((f, i) => (
-                <Card key={i} className="border-[#E8E0D8] bg-white transition-shadow hover:shadow-md">
-                  <CardContent className="p-5">
-                    <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#C73E1D]/10">
-                      <f.icon className="h-5 w-5 text-[#C73E1D]" />
-                    </div>
-                    <h3 className="text-sm font-semibold text-[#2D2A26]">{f.title}</h3>
-                    <p className="mt-1.5 text-xs leading-relaxed text-[#8D8A87]">{f.desc}</p>
-                  </CardContent>
-                </Card>
+                <motion.div
+                  key={f.title}
+                  initial={{ opacity: 0, y: 24 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ delay: (i % 3) * 0.08, duration: 0.5, type: "spring", bounce: 0.25 }}
+                  whileHover={{ y: -4 }}
+                >
+                  <Card className="group h-full cursor-default border-[#E8E0D8] bg-white transition-all duration-300 hover:border-[#C73E1D]/30 hover:shadow-lg hover:shadow-[#C73E1D]/10">
+                    <CardContent className="p-5">
+                      <motion.div
+                        whileHover={{ scale: 1.1, rotate: 5 }}
+                        transition={{ type: "spring", bounce: 0.5, duration: 0.4 }}
+                        className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-[#C73E1D]/10 transition-colors group-hover:bg-[#C73E1D]/20"
+                      >
+                        <f.icon className="h-5 w-5 text-[#C73E1D]" />
+                      </motion.div>
+                      <h3 className="text-sm font-semibold text-[#2D2A26] transition-colors group-hover:text-[#C73E1D]">
+                        {f.title}
+                      </h3>
+                      <p className="mt-1.5 text-xs leading-relaxed text-[#8D8A87]">{f.desc}</p>
+                    </CardContent>
+                  </Card>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -661,22 +809,71 @@ export default function Home() {
         </section>
 
         {/* Partner CTA */}
-        <section className="border-t border-[#E8E0D8] bg-[#F5EDE6] py-20">
-          <div className="mx-auto max-w-3xl px-4 text-center">
-            <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#D4A854]/20 to-[#D4A854]/30">
+        <section className="relative overflow-hidden border-t border-[#E8E0D8] py-20">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#2D2A26] via-[#1a1815] to-[#2D2A26]" aria-hidden />
+          <motion.div
+            aria-hidden
+            className="absolute -top-20 left-1/4 h-72 w-72 rounded-full bg-[#D4A854]/20 blur-3xl"
+            animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0.8, 0.5] }}
+            transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            aria-hidden
+            className="absolute -bottom-20 right-1/4 h-72 w-72 rounded-full bg-[#C73E1D]/15 blur-3xl"
+            animate={{ scale: [1, 1.12, 1], opacity: [0.4, 0.7, 0.4] }}
+            transition={{ duration: 11, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+          />
+          <div className="relative mx-auto max-w-3xl px-4 text-center">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.5, type: "spring", bounce: 0.4 }}
+              className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#D4A854]/30 to-[#D4A854]/50 ring-1 ring-[#D4A854]/30"
+            >
               <Percent className="h-7 w-7 text-[#D4A854]" />
-            </div>
-            <h2 className="font-serif text-3xl font-bold text-[#2D2A26]">Are you an accountant or consultant?</h2>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-[#8D8A87]">
-              Join our Partner Program and earn <strong className="text-[#D4A854]">20% revenue share</strong> from every business client you onboard. 
+            </motion.div>
+            <motion.h2
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+              className="font-serif text-3xl font-bold text-white md:text-4xl"
+            >
+              Are you an accountant or consultant?
+            </motion.h2>
+            <motion.p
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-white/70"
+            >
+              Join our Partner Program and earn <strong className="text-[#D4A854]">20% revenue share</strong> from every business client you onboard.
               No caps. No quotas. Just recurring income from the businesses you already serve.
-            </p>
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Link to="/login?type=partner"><Button className="bg-[#D4A854] px-8 text-white hover:bg-[#D4A854]/90">Join as Partner</Button></Link>
-              <a href="#pricing" className="inline-flex items-center gap-1 text-sm text-[#8D8A87] hover:text-[#2D2A26]">
+            </motion.p>
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="mt-8 flex flex-wrap justify-center gap-3"
+            >
+              <motion.div
+                whileHover={{ scale: 1.03, y: -1 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: "spring", bounce: 0.4, duration: 0.3 }}
+              >
+                <Link to="/login?type=partner">
+                  <Button className="bg-[#D4A854] px-8 text-white shadow-lg shadow-[#D4A854]/20 hover:bg-[#D4A854]/90">
+                    Join as Partner
+                  </Button>
+                </Link>
+              </motion.div>
+              <a href="#pricing" className="inline-flex items-center gap-1 self-center text-sm text-white/60 transition-colors hover:text-white">
                 View pricing <ChevronRight className="h-3 w-3" />
               </a>
-            </div>
+            </motion.div>
           </div>
         </section>
 
