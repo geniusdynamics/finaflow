@@ -65,9 +65,9 @@ describe("MpesaProvider", () => {
       expect(results[0].providerTxnId).toBeTruthy();
     });
 
-    it("detects payment type for person-to-person", async () => {
+    it("detects topup type for person-to-person received", async () => {
       const results = await provider.parseSms(sms);
-      expect(results[0].txnType).toBe("payment");
+      expect(results[0].txnType).toBe("topup");
     });
   });
 

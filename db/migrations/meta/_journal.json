@@ -36,6 +36,13 @@
       "when": 1780470000000,
       "tag": "0011_coa_auto_link_and_wallet_support",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781150000000,
+      "tag": "0013_user_locations",
+      "breakpoints": true
     }
   ]
 }

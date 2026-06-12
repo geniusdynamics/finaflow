@@ -740,6 +740,23 @@ export const userBusinesses = pgTable("user_businesses", {
 
 export type UserBusiness = typeof userBusinesses.$inferSelect;
 
+// User-Location junction (many-to-many) for multi-location assignment
+export const userLocations = pgTable("user_locations", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number" }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  isPrimary: boolean("isPrimary").default(false).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  assignedAt: timestamp("assignedAt").defaultNow().notNull(),
+  assignedBy: bigint("assignedBy", { mode: "number" }),
+}, (table) => ({
+  userIdIdx: index("idx_user_locations_userId").on(table.userId),
+  locationIdIdx: index("idx_user_locations_locationId").on(table.locationId),
+  uniqueUserLocation: uniqueIndex("idx_user_locations_unique").on(table.userId, table.locationId),
+}));
+
+export type UserLocation = typeof userLocations.$inferSelect;
+
 // One-time invite codes from owners that allow partners to claim allocated business access.
 export const allocationInvites = pgTable("allocation_invites", {
   id: serial("id").primaryKey(),

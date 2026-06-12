@@ -10,7 +10,7 @@ import {
   Menu, X, BarChart3, Wallet, Receipt, PiggyBank,
   ChevronRight, Globe, Lock,
   RefreshCw, Building2, Percent, HeartHandshake,
-  Github, Star, Plus, Sparkles, HelpCircle, BookOpen,
+  Github, Star, Plus, Sparkles, HelpCircle, BookOpen, LogIn, UserPlus,
 } from "lucide-react";
 
 import cashflowDashImg from "/resources/cashflow dash.png";
@@ -235,24 +235,19 @@ export default function Home() {
       <div className="min-h-screen bg-white">
         {/* Navigation */}
         <nav className="sticky top-0 z-50 border-b border-[#E8E0D8] bg-white/95 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
             <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#C73E1D]">
                 <Landmark className="h-4 w-4 text-white" />
               </div>
               <span className="font-serif text-xl font-bold text-[#2D2A26]">Finaflow</span>
             </Link>
-            <div className="hidden items-center gap-6 text-sm text-[#2D2A26] md:flex">
+            <div className="hidden items-center gap-5 text-sm text-[#2D2A26] lg:flex">
               <a href="#showcase" className="hover:text-[#C73E1D]">Product</a>
               <a href="#features" className="hover:text-[#C73E1D]">Features</a>
               <a href="#how-it-works" className="hover:text-[#C73E1D]">How it works</a>
               <a href="#pricing" className="hover:text-[#C73E1D]">Pricing</a>
-              <a
-                href="#faq"
-                className="hover:text-[#C73E1D]"
-              >
-                FAQ
-              </a>
+              <a href="#faq" className="hover:text-[#C73E1D]">FAQ</a>
               <a
                 href="https://github.com/geniusdynamics/finaflow"
                 target="_blank"
@@ -264,15 +259,64 @@ export default function Home() {
                 <Star className="h-3 w-3 transition-all group-hover:scale-110 group-hover:fill-yellow-400 group-hover:text-yellow-400" />
                 <span>Star</span>
               </a>
-              <Link to="/login" className="font-medium hover:text-[#C73E1D]">Sign In</Link>
-              <Link to="/login?type=standard"><Button className="bg-[#C73E1D] hover:bg-[#C73E1D]/90 text-sm">Get Started</Button></Link>
             </div>
-            <button className="md:hidden" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
+            <div className="flex items-center gap-2">
+              <div
+                role="tablist"
+                aria-label="Sign in or sign up"
+                className="flex rounded-lg border border-[#E8E0D8] bg-white p-1"
+                data-testid="header-auth-tabs"
+              >
+                <Link
+                  to="/login"
+                  role="tab"
+                  aria-selected="true"
+                  data-testid="header-tab-signin"
+                  className="flex items-center justify-center gap-1.5 rounded-md bg-[#C73E1D] px-3 py-1.5 text-xs font-medium text-white shadow-sm min-h-[40px] sm:min-h-[44px] sm:text-sm"
+                >
+                  <LogIn className="h-3.5 w-3.5" />
+                  <span>Sign In</span>
+                </Link>
+                <Link
+                  to="/login?type=standard"
+                  role="tab"
+                  aria-selected="false"
+                  data-testid="header-tab-signup"
+                  className="flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-[#8D8A87] transition-all hover:text-[#2D2A26] min-h-[40px] sm:min-h-[44px] sm:text-sm"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  <span>Sign Up</span>
+                </Link>
+              </div>
+              <Link
+                to="/login?type=partner"
+                data-testid="header-partner-cta"
+                className="hidden items-center gap-1.5 rounded-md border border-[#D4A854] bg-white px-3 py-2 text-xs font-medium text-[#D4A854] transition-colors hover:bg-[#D4A854]/10 min-h-[44px] sm:text-sm md:flex"
+              >
+                <HeartHandshake className="h-3.5 w-3.5" />
+                <span>Join as Partner</span>
+              </Link>
+              <Link
+                to="/login"
+                data-testid="header-mobile-signin"
+                aria-label="Sign in"
+                className="hidden items-center justify-center rounded-md bg-[#C73E1D] px-3 py-2 text-xs font-medium text-white shadow-sm transition-colors hover:bg-[#C73E1D]/90 min-h-[44px] sm:text-sm sm:flex lg:hidden"
+              >
+                <LogIn className="h-3.5 w-3.5" />
+                <span className="ml-1.5">Sign In</span>
+              </Link>
+              <button
+                className="flex items-center justify-center rounded-md p-2 text-[#2D2A26] hover:bg-[#F5EDE6] min-h-[44px] min-w-[44px] lg:hidden"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+                aria-expanded={mobileMenuOpen}
+              >
+                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
+            </div>
           </div>
           {mobileMenuOpen && (
-            <div className="border-t border-[#E8E0D8] px-4 py-3 md:hidden space-y-2 text-sm">
+            <div className="border-t border-[#E8E0D8] px-4 py-3 lg:hidden space-y-2 text-sm">
               <a href="#showcase" onClick={() => setMobileMenuOpen(false)} className="block py-1">Product</a>
               <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block py-1">Features</a>
               <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="block py-1">How it works</a>
@@ -286,8 +330,12 @@ export default function Home() {
               >
                 <Github className="h-3.5 w-3.5" /> Star us on GitHub
               </a>
-              <Link to="/login?type=standard" onClick={() => setMobileMenuOpen(false)} className="block py-1 font-medium">Sign In</Link>
-              <Link to="/login?type=standard" onClick={() => setMobileMenuOpen(false)} className="block py-1 font-medium text-[#C73E1D]">Get Started</Link>
+              <Link to="/login?type=standard" onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-center gap-2 rounded-md bg-[#C73E1D] py-3 font-medium text-white min-h-[48px]">
+                <UserPlus className="h-4 w-4" /> Get Started
+              </Link>
+              <Link to="/login?type=partner" onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-center gap-2 rounded-md border border-[#D4A854] py-3 font-medium text-[#D4A854] min-h-[48px]">
+                <HeartHandshake className="h-4 w-4" /> Join as Partner
+              </Link>
             </div>
           )}
         </nav>
@@ -359,6 +407,25 @@ export default function Home() {
                       </Button>
                     </Link>
                   </motion.div>
+                </motion.div>
+                {/* Prominent "already have an account" reminder so returning
+                    users can reach the sign-in flow without having to dig
+                    through the navigation. Full-width on mobile, comfortable
+                    touch target. */}
+                <motion.div
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.45, duration: 0.5 }}
+                  className="mt-4 w-full sm:w-auto sm:max-w-xs"
+                >
+                  <Link
+                    to="/login"
+                    data-testid="hero-account-cta"
+                    className="flex w-full items-center justify-center gap-2 rounded-md border border-[#E8E0D8] bg-white/80 py-3 text-sm font-medium text-[#2D2A26] backdrop-blur transition-colors hover:bg-white min-h-[48px]"
+                  >
+                    <LogIn className="h-4 w-4 text-[#C73E1D]" />
+                    Already have an account? <span className="text-[#C73E1D] underline">Sign In</span>
+                  </Link>
                 </motion.div>
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -873,6 +940,25 @@ export default function Home() {
               <a href="#pricing" className="inline-flex items-center gap-1 self-center text-sm text-white/60 transition-colors hover:text-white">
                 View pricing <ChevronRight className="h-3 w-3" />
               </a>
+            </motion.div>
+            {/* Prominent "already have an account" reminder — full-width on
+                mobile, visually distinct from the primary "Join as Partner"
+                call-to-action. */}
+            <motion.div
+              initial={{ opacity: 0, y: 4 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.5, delay: 0.4 }}
+              className="mt-4 w-full sm:w-auto"
+            >
+              <Link
+                to="/login"
+                data-testid="partner-account-cta"
+                className="flex w-full items-center justify-center gap-2 rounded-md border border-white/20 bg-white/10 py-3 text-sm font-medium text-white backdrop-blur transition-colors hover:bg-white/15 min-h-[48px] sm:w-auto sm:px-5"
+              >
+                <LogIn className="h-4 w-4 text-white" />
+                Already have an account? <span className="underline">Sign In</span>
+              </Link>
             </motion.div>
           </div>
         </section>

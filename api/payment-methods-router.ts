@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { createRouter, settingsManage, requireAuthorizedLocation } from "./middleware";
+import { createRouter, paymentMethodsView, paymentMethodsManage, requireAuthorizedLocation } from "./middleware";
 import { getDb } from "./queries/connection";
 import { paymentMethods, locationPaymentMethods, accounts } from "@db/schema";
 import { eq, and, isNull, asc, sql } from "drizzle-orm";
 import { logAudit } from "./lib/audit";
 
 export const paymentMethodsRouter = createRouter({
-  list: settingsManage.query(async ({ ctx }) => {
+  list: paymentMethodsView.query(async ({ ctx }) => {
     const db = getDb();
     const accountRefId = ctx.user?.accountRefId ?? ctx.user?.currentBusiness?.accountRefId ?? null;
     const currentBusinessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? null;
@@ -28,7 +28,7 @@ export const paymentMethodsRouter = createRouter({
       .orderBy(asc(paymentMethods.sortOrder));
   }),
 
-  create: settingsManage
+  create: paymentMethodsManage
     .input(z.object({
       name: z.string().min(1).max(100),
       code: z.string().min(1).max(50),
@@ -53,7 +53,7 @@ export const paymentMethodsRouter = createRouter({
       return { id: result.id, success: true };
     }),
 
-  update: settingsManage
+  update: paymentMethodsManage
     .input(z.object({
       id: z.number(),
       name: z.string().min(1).max(100).optional(),
@@ -70,7 +70,7 @@ export const paymentMethodsRouter = createRouter({
       return { success: true };
     }),
 
-  delete: settingsManage
+  delete: paymentMethodsManage
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -79,7 +79,7 @@ export const paymentMethodsRouter = createRouter({
     }),
 
   // For a given location, which payment methods are available with their linked accounts?
-  byLocation: settingsManage
+  byLocation: paymentMethodsView
     .input(z.object({ locationId: z.number() }))
     .query(async ({ input }) => {
       const db = getDb();
@@ -117,7 +117,7 @@ export const paymentMethodsRouter = createRouter({
     }),
 
   // Assign payment method to a location, optionally with linked account
-  assignToLocation: settingsManage
+  assignToLocation: paymentMethodsManage
     .input(z.object({
       locationId: z.number(),
       paymentMethodId: z.number(),
@@ -179,7 +179,7 @@ export const paymentMethodsRouter = createRouter({
     }),
 
   // Update the linked account for an existing location-payment-method assignment
-  updateLocationLink: settingsManage
+  updateLocationLink: paymentMethodsManage
     .input(z.object({
       locationId: z.number(),
       paymentMethodId: z.number(),
@@ -221,7 +221,7 @@ export const paymentMethodsRouter = createRouter({
       return { success: true };
     }),
 
-  removeFromLocation: settingsManage
+  removeFromLocation: paymentMethodsManage
     .input(z.object({ locationId: z.number(), paymentMethodId: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();

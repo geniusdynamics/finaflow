@@ -127,7 +127,7 @@ export function AddDebtDialog({ trigger = "button", open: controlledOpen, onOpen
             <Label>Location</Label>
             <LocationSelector
               locations={locations}
-              userLocationId={user?.locationId}
+              assignedLocationIds={user?.assignedLocationIds ?? []}
               value={form.locationId}
               onChange={v => setForm(p => ({ ...p, locationId: v }))}
               enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}

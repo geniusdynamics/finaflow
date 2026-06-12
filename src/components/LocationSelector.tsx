@@ -1,5 +1,6 @@
 // ABOUTME: Reusable smart location dropdown with auto-selection, unassigned-location warnings, and enforcement support.
-import { useEffect, useRef, useState } from "react";
+// ABOUTME: Supports both legacy single-location assignments and the newer multi-location assignedLocationIds array.
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Label } from "@/components/ui/label";
 import { AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
@@ -12,6 +13,7 @@ interface LocationItem {
 interface LocationSelectorProps {
   locations?: LocationItem[];
   userLocationId?: number | null;
+  assignedLocationIds?: number[];
   value: string;
   onChange: (value: string) => void;
   enforceAssigned?: boolean;
@@ -25,6 +27,7 @@ interface LocationSelectorProps {
 export function LocationSelector({
   locations = [],
   userLocationId,
+  assignedLocationIds,
   value,
   onChange,
   enforceAssigned = false,
@@ -37,6 +40,13 @@ export function LocationSelector({
   const hasAutoSelected = useRef(false);
   const [warnLocation, setWarnLocation] = useState<{ id: string; name: string } | null>(null);
 
+  const effectiveAssignedLocationIds = useMemo(
+    () => Array.isArray(assignedLocationIds)
+      ? assignedLocationIds
+      : (userLocationId != null ? [userLocationId] : []),
+    [assignedLocationIds, userLocationId],
+  );
+
   useEffect(() => {
     if (hasAutoSelected.current) return;
     if (!locations || locations.length === 0) return;
@@ -46,14 +56,16 @@ export function LocationSelector({
 
     if (locations.length === 1) {
       defaultId = locations[0].id.toString();
-    } else if (userLocationId != null) {
-      const assignedLoc = locations.find(l => l.id === userLocationId);
+    } else if (effectiveAssignedLocationIds.length > 0) {
+      const assignedLoc = effectiveAssignedLocationIds
+        .map((id) => locations.find((location) => location.id === id))
+        .find((location): location is LocationItem => Boolean(location));
       if (assignedLoc) {
         defaultId = assignedLoc.id.toString();
       }
     }
 
-    if (!defaultId && locations.length > 0) {
+    if (!defaultId && locations.length > 0 && !enforceAssigned) {
       defaultId = locations[0].id.toString();
     }
 
@@ -61,9 +73,9 @@ export function LocationSelector({
       hasAutoSelected.current = true;
       onChange(defaultId);
     }
-  }, [locations, userLocationId, value, onChange]);
+  }, [effectiveAssignedLocationIds, enforceAssigned, locations, onChange, value]);
 
-  const isUserAssigned = userLocationId != null;
+  const isUserAssigned = effectiveAssignedLocationIds.length > 0;
 
   const handleChange = (newValue: string) => {
     if (!newValue) {
@@ -71,10 +83,13 @@ export function LocationSelector({
       return;
     }
 
-    if (isUserAssigned && parseInt(newValue) !== userLocationId) {
+    const selectedId = parseInt(newValue, 10);
+    if (isUserAssigned && !effectiveAssignedLocationIds.includes(selectedId)) {
       if (enforceAssigned) {
-        toast.error("You can only record entries for your assigned location.");
-        const assignedLoc = locations.find(l => l.id === userLocationId);
+        toast.error("You can only record entries for your assigned location(s).");
+        const assignedLoc = effectiveAssignedLocationIds
+          .map((id) => locations.find((location) => location.id === id))
+          .find((location): location is LocationItem => Boolean(location));
         if (assignedLoc) {
           onChange(assignedLoc.id.toString());
         }
@@ -115,10 +130,10 @@ export function LocationSelector({
             <option key={l.id} value={l.id}>{l.name}</option>
           ))}
         </select>
-        {isUserAssigned && value && parseInt(value) !== userLocationId && (
+        {isUserAssigned && value && !effectiveAssignedLocationIds.includes(parseInt(value, 10)) && (
           <div className="mt-1 flex items-center gap-1 text-xs text-amber-600">
             <AlertTriangle className="h-3 w-3" />
-            <span>Not your assigned location</span>
+            <span>Not one of your assigned locations</span>
           </div>
         )}
       </div>

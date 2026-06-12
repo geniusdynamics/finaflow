@@ -4,11 +4,13 @@ import { getDb } from "./queries/connection";
 import {
   users,
   userBusinesses,
+  userLocations,
   businesses,
   customerAccounts,
   locations,
   accounts,
   refreshTokens,
+  appSettings,
   type InsertCustomerAccount,
   type InsertUser,
 } from "@db/schema";
@@ -103,19 +105,25 @@ async function findPrimaryBusinessForAccount(
 
 function setAuthCookies(ctx: AuthCookieContext, token: string, csrfToken: string): void {
   const host = ctx.req.headers.get("host") || "";
-  const isLocal = host.startsWith("localhost:") || host.startsWith("127.0.0.1:");
+  // Also treat .localhost (portless), .local domains as local
+  const isLocal = host.startsWith("localhost:") || host.startsWith("127.0.0.1:") ||
+    host.endsWith(".localhost") || host.includes(".localhost:") ||
+    host.endsWith(".local") || host.includes(".local:");
   const isSecure = !isLocal;
+  // sameSite "lax" allows the cookie to be sent on navigations after login.
+  // "strict" was too restrictive for flows where the login response sets the
+  // cookie and the app immediately navigates to a protected page.
   ctx.resHeaders.append("Set-Cookie", serialize("finaflow_token", token, {
     httpOnly: true,
     secure: isSecure,
-    sameSite: "strict",
+    sameSite: "lax",
     path: "/",
     maxAge: 30 * 24 * 60 * 60,
   }));
   ctx.resHeaders.append("Set-Cookie", serialize("csrf_token", csrfToken, {
     httpOnly: false,
     secure: isSecure,
-    sameSite: "strict",
+    sameSite: "lax",
     path: "/",
     maxAge: 30 * 24 * 60 * 60,
   }));
@@ -322,6 +330,29 @@ export const localAuthRouter = createRouter({
       }
     }
 
+    let assignedLocationIds: number[] = [];
+    try {
+      const assignedLocationRows = await db.select({ locationId: userLocations.locationId }).from(userLocations)
+        .where(and(eq(userLocations.userId, user.id), eq(userLocations.isActive, true)));
+      assignedLocationIds = assignedLocationRows.map((row) => row.locationId);
+    } catch (e) {
+      console.warn("[me] failed to load assigned locations, table may not exist yet:", (e as Error).message);
+      // Gracefully degrade — user_locations table may not exist if migration hasn't been applied
+    }
+
+    let enforceUserLocation = false;
+    if (currentBusiness) {
+      try {
+        const settingRows = await db.select({ value: appSettings.value }).from(appSettings)
+          .where(and(eq(appSettings.businessId, currentBusiness.id), eq(appSettings.key, "enforceLocationAssignment")))
+          .limit(1);
+        const raw = settingRows[0]?.value;
+        enforceUserLocation = raw === "true" || raw === "1" || raw === "yes";
+      } catch (e) {
+        console.warn("[me] failed to load enforceLocationAssignment setting:", (e as Error).message);
+      }
+    }
+
     return {
       id: user.id, name: user.name, username: user.username, role: user.role,
       email: user.email, phone: user.phone, locationId: user.locationId,
@@ -330,9 +361,11 @@ export const localAuthRouter = createRouter({
       currentBusinessId: effectiveCurrentBusinessId,
       currentBusiness,
       businessIds: bizIds,
-        accountId: currentBusiness?.accountId ?? user.accountId ?? null,
-        accountRefId: user.accountRefId ?? currentBusiness?.accountRefId ?? null,
+      accountId: currentBusiness?.accountId ?? user.accountId ?? null,
+      accountRefId: user.accountRefId ?? currentBusiness?.accountRefId ?? null,
       businessRole: junctions.find(j => j.businessId === effectiveCurrentBusinessId)?.role ?? user.role,
+      assignedLocationIds,
+      enforceUserLocation,
     };
   }),
 

@@ -28,6 +28,8 @@ export function Accounts() {
 
   const { user } = useAuth();
   const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.ACCOUNTS_MANAGE);
+  const canManagePM = hasPermission(user?.role ?? "viewer", PERMISSIONS.PAYMENT_METHODS_MANAGE);
+  const canViewPM = hasPermission(user?.role ?? "viewer", PERMISSIONS.PAYMENT_METHODS_VIEW);
   const { data: settings } = trpc.settings.list.useQuery();
   const [searchParams, setSearchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");
@@ -279,7 +281,7 @@ export function Accounts() {
                       <div className="space-y-2">
                         <LocationSelector
                         locations={locations}
-                        userLocationId={user?.locationId}
+                        assignedLocationIds={user?.assignedLocationIds ?? []}
                         value={form.locationId}
                         onChange={v => setForm(p => ({ ...p, locationId: v }))}
                         enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
@@ -349,7 +351,7 @@ export function Accounts() {
               </Dialog>
             </div>
           )}
-          {tab === "payment-methods" && canManage && (
+          {tab === "payment-methods" && canViewPM && (
             <div className="flex gap-2">
               <Dialog open={tagOpen} onOpenChange={setTagOpen}>
                 <DialogTrigger asChild>
@@ -796,8 +798,8 @@ export function Accounts() {
                         </div>
                       ) : (
                         <div className="flex gap-1">
-                          {canManage && <Button size="sm" variant="ghost" onClick={() => setPmEditId(m.id)}><Pencil className="h-3 w-3" /></Button>}
-                          {canManage && <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete?")) deletePM.mutate({ id: m.id }); }}><Trash2 className="h-3 w-3 text-[#D32F2F]" /></Button>}
+                          {canManagePM && <Button size="sm" variant="ghost" onClick={() => setPmEditId(m.id)}><Pencil className="h-3 w-3" /></Button>}
+                          {canManagePM && <Button size="sm" variant="ghost" onClick={() => { if (confirm("Delete?")) deletePM.mutate({ id: m.id }); }}><Trash2 className="h-3 w-3 text-[#D32F2F]" /></Button>}
                         </div>
                       )}
                     </CardContent>

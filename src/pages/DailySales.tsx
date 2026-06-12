@@ -217,7 +217,7 @@ export function DailySales() {
                   <div className="space-y-2">
                     <LocationSelector
                       locations={locations}
-                      userLocationId={user?.locationId}
+                      assignedLocationIds={user?.assignedLocationIds ?? []}
                       value={selectedLocation}
                       onChange={v => { setSelectedLocation(v); setPaymentAmounts({}); }}
                       enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
@@ -418,7 +418,7 @@ export function DailySales() {
         )}
 
         {/* Card View */}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {sales?.map((sale) => {
             const isExpanded = expandedSale === sale.id;
             const locationName = locations?.find(l => l.id === sale.locationId)?.name ?? "Unknown";
@@ -426,24 +426,24 @@ export function DailySales() {
             return (
               <Card key={sale.id} className="border-[#E8E0D8] bg-white">
                 <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="font-serif text-base text-[#2D2A26]">{formatDate(sale.saleDate)}</CardTitle>
-                      <p className="text-xs text-[#8D8A87]">{locationName}</p>
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <CardTitle className="truncate font-serif text-sm text-[#2D2A26] sm:text-base">{formatDate(sale.saleDate)}</CardTitle>
+                      <p className="truncate text-xs text-[#8D8A87]">{locationName}</p>
                     </div>
-                    <span className="font-mono text-sm font-semibold text-[#2E7D32]">{formatKES(sale.netSales)}</span>
+                    <span className="whitespace-nowrap text-right font-mono text-sm font-semibold text-[#2E7D32]">{formatKES(sale.netSales)}</span>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {/* Payment breakdown from child records */}
                   {sale.payments && sale.payments.length > 0 ? (
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                      {sale.payments.map((p: any) => {
+                    <div className="grid grid-cols-1 gap-x-4 gap-y-1 text-sm sm:grid-cols-2">
+                      {sale.payments.map((p: { id: number; paymentMethodId: number; amount: string }) => {
                         const pm = allPaymentMethods?.find(m => m.id === p.paymentMethodId);
                         return (
-                          <div key={p.id} className="flex justify-between">
-                            <span className="text-[#8D8A87]">{pm?.name ?? "Unknown"}</span>
-                            <span className="font-mono">{formatKES(p.amount)}</span>
+                          <div key={p.id} className="flex min-w-0 items-center justify-between gap-2">
+                            <span className="truncate text-[#8D8A87]">{pm?.name ?? "Unknown"}</span>
+                            <span className="shrink-0 font-mono">{formatKES(p.amount)}</span>
                           </div>
                         );
                       })}
@@ -451,8 +451,8 @@ export function DailySales() {
                   ) : (
                     <p className="text-xs text-[#8D8A87]">Legacy entry — no payment breakdown</p>
                   )}
-                  {hasUnpaid && <div className="rounded-md bg-[#D4A854]/10 px-2 py-1 text-xs text-[#D4A854]">Unpaid: {formatKES(sale.unpaidAmount)}</div>}
-                  {sale.notes && <p className="text-xs text-[#8D8A87] line-clamp-2">{sale.notes}</p>}
+                  {hasUnpaid && <div className="rounded-md bg-[#D4A854]/10 px-2 py-1 text-xs text-[#D4A854]"><span className="break-all">Unpaid: {formatKES(sale.unpaidAmount)}</span></div>}
+                  {sale.notes && <p className="break-words text-xs text-[#8D8A87] line-clamp-2">{sale.notes}</p>}
                   <button onClick={() => setExpandedSale(isExpanded ? null : sale.id)} className="flex w-full items-center justify-center gap-1 text-xs text-[#8D8A87] hover:text-[#C73E1D]">
                     {isExpanded ? <>Less <ChevronUp className="h-3 w-3" /></> : <>More <ChevronDown className="h-3 w-3" /></>}
                   </button>
