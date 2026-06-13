@@ -47,13 +47,21 @@ export function OperationsReportsPanel() {
   const plQuery = trpc.reports.plStatement.useQuery({ year, month, locationId: selectedLocationId });
   const plMonthlyQuery = trpc.reports.plMonthly.useQuery({ year, locationId: selectedLocationId });
   const comparativeQuery = trpc.reports.plComparative.useQuery({ locationId: selectedLocationId });
-  const bvaQuery = trpc.reports.budgetVsActual.useQuery({ year, month, locationId: selectedLocationId });
   const cashFlowQuery = trpc.reports.cashFlowForecast.useQuery({ locationId: selectedLocationId });
   const cogsQuery = trpc.reports.cogsAnalysis.useQuery({ year, month, locationId: selectedLocationId });
   const cogsTargetQuery = trpc.reports.getCogsTarget.useQuery({ locationId: selectedLocationId });
   const { data: categories } = trpc.expenses.categories.useQuery();
-  const budgetsQuery = trpc.reports.budgetsList.useQuery({ year, month, locationId: selectedLocationId });
   const { data: suppliers } = trpc.suppliers.list.useQuery();
+
+  // Budget queries only fire when Budgeting tab is active to keep Overview isolated
+  const bvaQuery = trpc.reports.budgetVsActual.useQuery(
+    { year, month, locationId: selectedLocationId },
+    { enabled: opsTab === "budgeting" },
+  );
+  const budgetsQuery = trpc.reports.budgetsList.useQuery(
+    { year, month, locationId: selectedLocationId },
+    { enabled: opsTab === "budgeting" },
+  );
 
   const { data: salesData } = trpc.dailySales.list.useQuery({
     dateFrom: `${year}-${String(month).padStart(2, "0")}-01`,
@@ -103,8 +111,8 @@ export function OperationsReportsPanel() {
     onSuccess: () => { toast.success("COGS target updated"); queryClient.invalidateQueries({ queryKey: ["reports.cogsAnalysis"] }); setCogsOpen(false); },
   });
 
-  const queriesLoading = plQuery.isLoading || bvaQuery.isLoading || cogsQuery.isLoading || cashFlowQuery.isLoading;
-  const queriesError = plQuery.error ?? bvaQuery.error ?? cogsQuery.error ?? cashFlowQuery.error;
+  const queriesLoading = plQuery.isLoading || cogsQuery.isLoading || cashFlowQuery.isLoading;
+  const queriesError = plQuery.error ?? cogsQuery.error ?? cashFlowQuery.error;
 
   useEffect(() => {
     if (cogsTarget) {

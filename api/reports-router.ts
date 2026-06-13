@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { createRouter, reportQuery, budgetManage, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
-import { dailySales, expenses, bills, expenseCategories, budgets } from "@db/schema";
+import { dailySales, expenses, bills, expenseCategories, budgets, budgetPlans, budgetPlanBuckets, budgetBucketLines } from "@db/schema";
 import { eq, and, isNull, sql, inArray, gt } from "drizzle-orm";
 import { d } from "./lib/decimal";
+import { getFiscalYearStart } from "@/lib/budgets/fiscal-year";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function resolveLocationFilter(ctx: any, inputLocationId?: number): Promise<number[]> {
   const locIds = await getCurrentBusinessLocationIds(ctx);
@@ -176,24 +177,43 @@ export const reportsRouter = createRouter({
         .where(and(...expenseCond))
         .groupBy(expenseCategories.id, expenseCategories.name, expenseCategories.color);
 
-      // Fetch budgeted amounts from the budgets table
-      const budgetRows = await db
+      // Fetch budgeted amounts from the new budget plan model
+      const fiscalStartMonth = getFiscalYearStart();
+      const planYearCandidates = [input.year];
+      if (fiscalStartMonth > 1 && targetMonth < fiscalStartMonth) {
+        planYearCandidates.push(input.year - 1);
+      }
+      const plans = await db
         .select()
-        .from(budgets)
+        .from(budgetPlans)
         .where(and(
-          eq(budgets.year, input.year),
-          eq(budgets.month, targetMonth),
-          sql`${budgets.locationId} IN (${locIdSql})`,
-          isNull(budgets.deletedAt),
+          inArray(budgetPlans.fiscalYearStart, planYearCandidates),
+          sql`${budgetPlans.locationId} IN (${locIdSql})`,
+          isNull(budgetPlans.deletedAt),
+          sql`${budgetPlans.status} IN ('active', 'locked')`,
         ));
-
       const budgetMap = new Map<number, string>();
-      for (const b of budgetRows) {
-        if (b.categoryId != null) {
-          budgetMap.set(b.categoryId, b.amount);
+      for (const plan of plans) {
+        const fiscalOffset = ((targetMonth - fiscalStartMonth + 12) % 12);
+        let targetBucketIndex;
+        switch (plan.period) {
+          case "monthly": targetBucketIndex = fiscalOffset; break;
+          case "quarterly": targetBucketIndex = Math.floor(fiscalOffset / 3); break;
+          case "half-yearly": targetBucketIndex = Math.floor(fiscalOffset / 6); break;
+          case "annual": targetBucketIndex = 0; break;
+          default: continue;
+        }
+        const matchingBuckets = await db.select().from(budgetPlanBuckets).where(and(eq(budgetPlanBuckets.planId, plan.id), eq(budgetPlanBuckets.bucketIndex, targetBucketIndex)));
+        for (const bucket of matchingBuckets) {
+          const bucketLines = await db.select().from(budgetBucketLines).where(eq(budgetBucketLines.bucketId, bucket.id));
+          const monthSpan = bucket.endMonth - bucket.startMonth + 1;
+          for (const bl of bucketLines) {
+            const monthlyAmount = monthSpan > 1 ? d(bl.amount).dividedBy(monthSpan).toFixed(2) : bl.amount;
+            const existing = budgetMap.get(bl.categoryId) || "0.00";
+            budgetMap.set(bl.categoryId, d(existing).plus(monthlyAmount).toFixed(2));
+          }
         }
       }
-
       const categories = expenseData.map((c) => {
         const budgeted = budgetMap.get(c.categoryId) || "0.00";
         const actual = c.actual;
