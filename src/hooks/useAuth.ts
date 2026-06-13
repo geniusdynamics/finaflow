@@ -1,4 +1,4 @@
-import { trpc, resetQueryClient, setCsrfToken } from "@/providers/trpc";
+import { trpc, resetQueryClient, setCsrfToken, setAuthToken } from "@/providers/trpc";
 
 export interface AuthUser {
   id: number;
@@ -8,6 +8,8 @@ export interface AuthUser {
   email: string | null;
   phone: string | null;
   locationId: number | null;
+  assignedLocationIds: number[];
+  enforceUserLocation: boolean;
   isActive: boolean;
   userType: string | null;
   currentBusinessId: number | null;
@@ -25,13 +27,12 @@ export function useAuth() {
   const { data: user, isLoading } = trpc.localAuth.me.useQuery(undefined, {
     retry: false,
     refetchOnWindowFocus: true,
-    staleTime: 0,
-    gcTime: 0,
   });
 
   const logout = () => {
     resetQueryClient();
     setCsrfFromResponse(null);
+    setAuthToken(null);
     window.location.href = "/login";
   };
 

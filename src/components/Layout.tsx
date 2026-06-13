@@ -213,7 +213,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      <div className="mb-3 flex items-center gap-3 rounded-lg bg-[#F5EDE6] px-3 py-2">
+      <Link to="/profile" className="mb-3 flex items-center gap-3 rounded-lg bg-[#F5EDE6] px-3 py-2 hover:bg-[#EDE0D6] transition-colors">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#D4A854]/20">
           <Users className="h-4 w-4 text-[#D4A854]" />
         </div>
@@ -223,7 +223,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             <p className="text-xs capitalize text-[#8D8A87]">{role}</p>
           </div>
         )}
-      </div>
+      </Link>
 
       <button onClick={logout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#8D8A87] hover:bg-[#F5EDE6] hover:text-[#2D2A26]">
         <LogOut className="h-4 w-4 shrink-0" />{!sidebarCollapsed && "Sign Out"}
@@ -402,7 +402,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             )}
 
             <div className="border-t border-[#E8E0D8] p-3">
-              <div className="mb-2 flex items-center gap-2 rounded-lg bg-[#F5EDE6] px-2.5 py-1.5">
+              <Link to="/profile" onClick={() => setMenuOpen(false)} className="mb-2 flex items-center gap-2 rounded-lg bg-[#F5EDE6] px-2.5 py-1.5 hover:bg-[#EDE0D6] transition-colors">
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#D4A854]/20">
                   <Users className="h-3.5 w-3.5 text-[#D4A854]" />
                 </div>
@@ -410,7 +410,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   <p className="truncate text-sm font-medium text-[#2D2A26]">{user?.name ?? "User"}</p>
                   <p className="text-[10px] capitalize text-[#8D8A87]">{role}</p>
                 </div>
-              </div>
+              </Link>
               <button onClick={() => { setMenuOpen(false); logout(); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[#8D8A87] hover:bg-[#F5EDE6]">
                 <LogOut className="h-3.5 w-3.5" />Sign Out
               </button>

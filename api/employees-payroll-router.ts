@@ -5,6 +5,53 @@ import { employees, payrollPeriods, payrollEntries, payrollAdvances, accounts, l
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { computePaye, computeNhif, computeNssf, computeHousingLevy } from "./lib/tax";
+import { users, userBusinesses } from "@db/schema";
+import { hashPassword } from "./lib/password";
+
+export async function buildEmployeeUsername(
+  fullName: string,
+  businessName: string,
+  isTaken: (candidate: string) => boolean | Promise<boolean>,
+): Promise<string> {
+  // Extract first name from fullName (first word, slugified)
+  const firstName = (fullName ?? "")
+    .split(" ")[0]
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+
+  const safeFirstName = firstName || "user";
+
+  // Business abbreviation: first 3 alphanumeric chars of business name
+  const bizAbbr = (businessName ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .slice(0, 3);
+
+  const safeBizAbbr = bizAbbr || "biz";
+
+  // Build candidate list: try firstName first, then {bizAbbr}_{firstName}, then numbered variants
+  const candidates: string[] = [safeFirstName];
+
+  if (bizAbbr) {
+    candidates.push(`${safeBizAbbr}_${safeFirstName}`);
+    for (let i = 1; i <= 5; i++) {
+      candidates.push(`${safeBizAbbr}_${safeFirstName}_${i}`);
+    }
+  } else {
+    for (let i = 1; i <= 5; i++) {
+      candidates.push(`${safeFirstName}_${i}`);
+    }
+  }
+
+  // Return first non-taken candidate
+  for (const candidate of candidates) {
+    if (!(await isTaken(candidate))) return candidate;
+  }
+
+  // Last resort — append timestamp (extremely unlikely to reach here)
+  return `${safeFirstName}_${Date.now()}`;
+}
 
 export const employeesRouter = createRouter({
   list: payrollQuery
@@ -44,11 +91,65 @@ export const employeesRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       await requireAuthorizedLocation(ctx, input.locationId);
-      const [result] = await db.insert(employees).values({
-        ...input, employmentDate: new Date(input.employmentDate),
+
+      const accountId = ctx.user?.currentBusiness?.accountId || ctx.user?.accountId;
+      const currentBusinessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? null;
+      if (!accountId) throw new Error("Account context required to create employee user");
+
+      // Generate username using first-name + business-abbr strategy
+      const businessName = ctx.user?.currentBusiness?.name ?? "";
+      const isTaken = async (candidate: string): Promise<boolean> => {
+        const existing = await db.query.users.findFirst({
+          where: (u, { eq, and, isNull }) => and(
+            eq(u.username, candidate),
+            eq(u.accountId, accountId),
+            isNull(u.deletedAt),
+          ),
+          columns: { id: true },
+        });
+        return !!existing;
+      };
+      const username = await buildEmployeeUsername(input.fullName, businessName, isTaken);
+      const initialPassword = "emp@" + Math.random().toString(36).slice(2, 8).toUpperCase();
+      const passwordHash = await hashPassword(initialPassword);
+
+      const [result] = await db.transaction(async (tx) => {
+        // Create user account with employee role
+        const [createdUser] = await tx.insert(users).values({
+          username,
+          passwordHash,
+          name: input.fullName,
+          phone: input.phone,
+          role: "employee",
+          accountId,
+          currentBusinessId,
+          isActive: true,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any).returning();
-      return { id: result.id, success: true };
+        } as any).returning();
+
+        // Link user to business
+        if (currentBusinessId) {
+          await tx.insert(userBusinesses).values({
+            userId: createdUser.id,
+            businessId: currentBusinessId,
+            role: "employee",
+            isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any);
+        }
+
+        // Create the employee record
+        const [createdEmp] = await tx.insert(employees).values({
+          ...input,
+          userId: createdUser.id,
+          employmentDate: new Date(input.employmentDate),
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any).returning();
+
+        return [createdEmp, username, initialPassword];
+      });
+
+      return { id: result[0].id, success: true, username: result[1], initialPassword: result[2] };
     }),
 
   update: payrollProcess
@@ -59,6 +160,7 @@ export const employeesRouter = createRouter({
       bankAccount: z.string().optional(), bankCode: z.string().optional(),
       idNumber: z.string().optional(), kraPin: z.string().optional(),
       nssfNumber: z.string().optional(), nhifNumber: z.string().optional(),
+      userId: z.number().optional().nullable(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();

@@ -141,11 +141,9 @@ export class MpesaProvider extends BaseWalletProvider {
   }
 
   private detectTxnType(lowerText: string): ParsedWalletSms["txnType"] {
+    // Any incoming money to the wallet is a "topup" — whether from bank, person, or other source
     if (lowerText.includes("you have received") || lowerText.includes("received from")) {
-      if (lowerText.includes("kcb") || lowerText.includes("co-op") || lowerText.includes("equity") || lowerText.includes("bank")) {
-        return "topup";
-      }
-      return "payment";
+      return "topup";
     }
     if (lowerText.includes("airtime")) return "airtime";
     if (lowerText.includes("utility") || lowerText.includes("till no") || lowerText.includes("till")) return "utility";
@@ -154,11 +152,9 @@ export class MpesaProvider extends BaseWalletProvider {
     if (lowerText.includes("paid to")) return "payment";
     if (lowerText.includes("sent to")) return "transfer";
     if (lowerText.includes("transferred to")) return "transfer";
+    // Money sent to the wallet (from bank/person) is a topup
     if (lowerText.includes("sent from") || lowerText.includes("deposited")) {
-      if (lowerText.includes("kcb") || lowerText.includes("co-op") || lowerText.includes("equity") || lowerText.includes("bank")) {
-        return "topup";
-      }
-      return "payment";
+      return "topup";
     }
     return "transfer";
   }
@@ -173,8 +169,10 @@ export class MpesaProvider extends BaseWalletProvider {
 
   private extractPartyName(lowerText: string, txnType: string, originalText: string): string | null {
     if (txnType === "topup") {
+      // Try bank topup format first: "sent from [Bank] to M-PESA"
       const bankMatch = originalText.match(/sent from\s+([A-Za-z\s]+?)(?:\s+to|\s+on\s+|$)/i);
-      return bankMatch?.[1]?.trim() ?? null;
+      if (bankMatch) return bankMatch[1].trim();
+      // Fall through to the "received from" pattern for person-to-person topups
     }
     const receivedMatch = originalText.match(/ksh[\d,.\s]+\s+from\s+(.+?)(?:\s+on\s+|\s+at\s+|\d{1,2}\/\d{1,2}|\s*$)/i);
     if (receivedMatch) return receivedMatch[1].trim();

@@ -492,9 +492,9 @@ export function OperationsReportsPanel() {
                   </Button>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <Select value={branchFilter} onValueChange={setBranchFilter}>
-                  <SelectTrigger className="w-44">
+                  <SelectTrigger className="w-full sm:w-44">
                     <SelectValue placeholder="All Branches" />
                   </SelectTrigger>
                   <SelectContent>

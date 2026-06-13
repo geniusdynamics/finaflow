@@ -1,3 +1,5 @@
+// ABOUTME: Sign-in / sign-up page with persistent tabbed intent switcher, mobile-friendly 48px touch targets, and prominent "already have an account" CTA.
+// ABOUTME: Form state is preserved when users toggle between Sign In and Sign Up so they never have to retype already-entered data.
 import { useState, useCallback } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -8,29 +10,51 @@ import { toast } from "sonner";
 import { Link, useSearchParams, useNavigate } from "react-router";
 import { Landmark, LogIn, Store, Eye, EyeOff, Briefcase, CheckCircle, Gift, Building, Globe, Loader2, Check, X, ArrowRight, ArrowLeft, ChevronLeft, UserPlus, Handshake } from "lucide-react";
 import { setCsrfFromResponse } from "@/hooks/useAuth";
+import { setAuthToken } from "@/providers/trpc";
 
-function goToSignup(
-  setMode: (m: "accountLookup" | "credentials" | "signup") => void,
-  setSignupForm: React.Dispatch<React.SetStateAction<{
-    name: string; username: string; email: string; password: string; confirmPassword: string;
-    accountName: string; phone: string; businessName: string; createDemo: boolean; userType: "standard" | "partner";
-    referralCode: string;
-  }>>,
-  userType: "standard" | "partner",
+
+type Intent = "login" | "signup";
+type LoginStep = "accountLookup" | "credentials";
+type UserType = "standard" | "partner";
+
+const TABS: { id: Intent; label: string }[] = [
+  { id: "login", label: "Sign In" },
+  { id: "signup", label: "Sign Up" },
+];
+
+function switchIntent(
+  next: Intent,
+  current: LoginStep | "signup",
+  setMode: (m: LoginStep | "signup") => void,
 ) {
-  setSignupForm(prev => ({ ...prev, userType }));
-  setMode("signup");
+  if (next === "login") {
+    // Always land on the account lookup step when returning to sign-in so
+    // users can change accounts or retry without re-typing the previous one.
+    setMode("accountLookup");
+    return;
+  }
+  // Only switch to signup if we are not already there. This preserves any
+  // partially-typed signup form data and avoids unnecessary re-renders.
+  if (current !== "signup") {
+    setMode("signup");
+  }
 }
 
 export default function Login() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const preselectedType = searchParams.get("type");
+  const initialIntent: Intent =
+    preselectedType === "partner" || preselectedType === "standard" ? "signup" : "login";
+  const initialUserType: UserType = preselectedType === "partner" ? "partner" : "standard";
 
-  const [mode, setMode] = useState<"accountLookup" | "credentials" | "signup">(
-    preselectedType === "partner" || preselectedType === "standard" ? "signup" : "accountLookup"
+  const [intent, setIntent] = useState<Intent>(initialIntent);
+  const [mode, setMode] = useState<LoginStep | "signup">(
+    initialIntent === "signup" ? "signup" : "accountLookup",
   );
   const [showPassword, setShowPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [accountId, setAccountId] = useState("");
   const [foundBusiness, setFoundBusiness] = useState<Record<string, unknown> | null>(null);
@@ -38,13 +62,14 @@ export default function Login() {
   const [signupForm, setSignupForm] = useState({
     name: "", username: "", email: "", password: "", confirmPassword: "",
     accountName: "", phone: "", businessName: "", createDemo: false,
-    userType: (preselectedType === "partner" ? "partner" : "standard") as "standard" | "partner",
+    userType: initialUserType,
     referralCode: "",
   });
   const [accountNameStatus, setAccountNameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
   const [accountNameMessage, setAccountNameMessage] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const utils = trpc.useUtils();
 
@@ -52,14 +77,12 @@ export default function Login() {
 
   const lookupMutation = trpc.localAuth.lookupAccount.useMutation({
     onSuccess: (data: Record<string, unknown>) => {
-      console.log("[Login] lookupAccount SUCCESS", data);
       setFoundBusiness(data.business as Record<string, unknown> | null);
       setMode("credentials");
       setLookupLoading(false);
       setLookupError(null);
     },
-    onError: (err: { message?: string }, _, __) => {
-      console.error("[Login] lookupAccount ERROR:", err);
+    onError: (err: { message?: string }) => {
       setLookupLoading(false);
       setLookupError(err.message || "Account not found");
     },
@@ -67,27 +90,45 @@ export default function Login() {
 
   const loginMutation = trpc.localAuth.login.useMutation({
     onSuccess: (data: Record<string, unknown>) => {
-      console.log("[Login] login SUCCESS", data);
       setCsrfFromResponse((data.csrfToken as string) || null);
+      // Store JWT as Bearer token fallback for reliable auth
+      if (data.token) setAuthToken(data.token as string);
       toast.success("Welcome back, " + ((data.user as Record<string, string>)?.name || (data.user as Record<string, string>)?.username) + "!");
-      utils.invalidate();
+      // Reset (remove from cache) the me query before navigating so
+      // ProtectedRoute starts with a cache miss, shows its loading
+      // spinner, and fetches the me query fresh with the auth cookie.
+      // This avoids the race where ProtectedRoute finds stale null
+      // data in cache (isLoading=false) and redirects back to /login.
+      utils.localAuth.me.reset();
       navigate("/dashboard");
     },
     onError: (err: { message?: string }) => {
-      console.error("[Login] login ERROR:", err);
-      toast.error(err.message || "Login failed");
+      const message = err.message || "Login failed. Check your username and password.";
+      setLoginError(message);
+      toast.error(message);
     },
   });
 
   const registerMutation = trpc.localAuth.register.useMutation({
     onSuccess: (data: Record<string, unknown>) => {
       setCsrfFromResponse((data.csrfToken as string) || null);
+      // Store JWT as Bearer token fallback for reliable auth
+      if (data.token) setAuthToken(data.token as string);
       toast.success("Welcome, " + (data.user as Record<string, string>)?.name + "! Your account is ready.");
-      utils.invalidate();
+      utils.localAuth.me.reset();
       navigate("/dashboard");
     },
     onError: (err: { message?: string }) => toast.error(err.message || "Registration failed"),
   });
+
+  const handleIntentChange = (next: Intent) => {
+    if (next === intent) return;
+    setIntent(next);
+    // Clear any stale error surfaces so the new tab starts fresh.
+    setLoginError(null);
+    setLookupError(null);
+    switchIntent(next, mode, setMode);
+  };
 
   const checkAvailability = useCallback(async (name: string) => {
     const cleaned = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -117,18 +158,20 @@ export default function Login() {
   const handleLookup = (e: React.FormEvent) => {
     e.preventDefault();
     if (!accountId.trim()) { toast.error("Enter your Account ID"); return; }
-    console.log("[Login] handleLookup calling lookupAccount with:", accountId.trim());
+    setLoginError(null);
     lookupMutation.mutate({ accountId: accountId.trim() });
   };
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginForm.username || !loginForm.password) {
-      toast.error("Please enter username and password");
+      const message = "Please enter your username and password.";
+      setLoginError(message);
+      toast.error(message);
       return;
     }
+    setLoginError(null);
     const loginAccountId = (foundBusiness?.accountId as string) || accountId;
-    console.log("[Login] handleLogin calling login with:", { accountId: loginAccountId, username: loginForm.username });
     loginMutation.mutate({
       accountId: loginAccountId,
       username: loginForm.username,
@@ -169,6 +212,8 @@ export default function Login() {
   };
 
   const businessName = foundBusiness?.name as string | undefined;
+  const isLoginActive = intent === "login";
+  const isSignupActive = intent === "signup";
 
   return (
     <div className="flex min-h-screen flex-col bg-[#F5EDE6]">
@@ -217,26 +262,57 @@ export default function Login() {
                "Set up your account and start tracking"}
             </p>
           </div>
-          {mode === "accountLookup" || mode === "credentials" ? (
-            <div className="mb-4 flex rounded-lg border border-[#E8E0D8] bg-white p-1">
-              <button onClick={() => setMode("accountLookup")} className="flex-1 rounded-md py-2 text-xs font-medium transition-all bg-[#C73E1D] text-white">Sign In</button>
-              <button onClick={() => goToSignup(setMode, setSignupForm, signupForm.userType)} className="flex-1 rounded-md py-2 text-xs font-medium transition-all text-[#8D8A87] hover:text-[#2D2A26]">Sign Up</button>
-            </div>
-          ) : null}
+          {/* Persistent intent tabs — always visible on both desktop and mobile,
+              48px tall on touch viewports so they remain comfortably tappable. */}
+          <div
+            role="tablist"
+            aria-label="Authentication mode"
+            className="mb-4 flex rounded-lg border border-[#E8E0D8] bg-white p-1"
+          >
+            {TABS.map((tab) => {
+              const active = (tab.id === "login" && isLoginActive) || (tab.id === "signup" && isSignupActive);
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  aria-controls="auth-panel"
+                  data-testid={`auth-tab-${tab.id}`}
+                  onClick={() => handleIntentChange(tab.id)}
+                  className={`flex-1 rounded-md py-2.5 text-sm font-medium transition-all min-h-[44px] sm:min-h-[48px] ${
+                    active
+                      ? "bg-[#C73E1D] text-white shadow-sm"
+                      : "text-[#8D8A87] hover:text-[#2D2A26]"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
           <Card className="border-[#E8E0D8]">
-            <CardContent className="p-5">
+            <CardContent className="p-5" id="auth-panel" role="tabpanel">
               {mode === "accountLookup" && (
-                <form onSubmit={handleLookup} className="space-y-4">
+                <form onSubmit={handleLookup} className="space-y-4" noValidate>
                   <div>
-                    <Label className="text-xs text-[#8D8A87]">Account ID</Label>
+                    <Label htmlFor="accountId" className="text-xs text-[#8D8A87]">Account ID</Label>
                     <div className="relative">
                       <Globe className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8D8A87]" />
-                      <Input 
-                        value={accountId} 
-                        onChange={e => setAccountId(e.target.value.toUpperCase())} 
-                        placeholder="e.g. GENIUS" 
-                        className="font-mono uppercase pl-9" 
-                        required 
+                      <Input
+                        id="accountId"
+                        name="accountId"
+                        autoComplete="username"
+                        spellCheck={false}
+                        autoCapitalize="characters"
+                        value={accountId}
+                        onChange={e => {
+                          setAccountId(e.target.value.toUpperCase());
+                          if (lookupError) setLookupError(null);
+                        }}
+                        placeholder="e.g. GENIUS"
+                        className="font-mono uppercase pl-9"
+                        required
                       />
                       {lookupLoading && (
                         <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -250,7 +326,7 @@ export default function Login() {
                       )}
                     </div>
                     {lookupError && (
-                      <p className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+                      <p role="alert" className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
                         <X className="h-3 w-3" /> {lookupError}
                       </p>
                     )}
@@ -261,7 +337,13 @@ export default function Login() {
                       </p>
                     )}
                   </div>
-                  <Button type="submit" className="w-full bg-[#C73E1D]" disabled={lookupMutation.isPending}>
+                  {/* 48px minimum touch target on mobile; full-width CTA so the
+                      primary action is obvious and unambiguous. */}
+                  <Button
+                    type="submit"
+                    className="w-full bg-[#C73E1D] hover:bg-[#C73E1D]/90 min-h-[48px] text-base"
+                    disabled={lookupMutation.isPending}
+                  >
                     {lookupMutation.isPending ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -274,48 +356,110 @@ export default function Login() {
                       </>
                     )}
                   </Button>
-                  <p className="text-center text-xs text-[#8D8A87]">
-                    New here? <button type="button" onClick={() => goToSignup(setMode, setSignupForm, "standard")} className="font-medium text-[#C73E1D] underline">Create a new account</button>
-                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleIntentChange("signup")}
+                    className="flex w-full items-center justify-center gap-1 rounded-md border border-[#E8E0D8] bg-white py-3 text-sm font-medium text-[#2D2A26] transition-colors hover:bg-[#F5EDE6] min-h-[48px]"
+                    data-testid="account-cta-signup"
+                  >
+                    New here? <span className="text-[#C73E1D] underline">Create a new account</span>
+                  </button>
                 </form>
               )}
               {mode === "credentials" && (
-                <form onSubmit={handleLogin} className="space-y-4">
+                <form onSubmit={handleLogin} className="space-y-4" noValidate>
                   <div className="mb-2 flex items-center gap-2 rounded-lg bg-[#F5EDE6] px-3 py-2">
                     <Building className="h-4 w-4 text-[#C73E1D]" />
                     <span className="text-sm font-medium text-[#2D2A26]">{businessName}</span>
                     <span className="ml-auto font-mono text-xs text-[#8D8A87]">{foundBusiness?.accountId as string}</span>
                   </div>
                   <div>
-                    <Label className="text-xs text-[#8D8A87]">Username</Label>
-                    <Input value={loginForm.username} onChange={e => setLoginForm(p => ({ ...p, username: e.target.value }))} placeholder="Enter username" required />
+                    <Label htmlFor="login-username" className="text-xs text-[#8D8A87]">Username</Label>
+                    <Input
+                      id="login-username"
+                      name="username"
+                      autoComplete="username"
+                      value={loginForm.username}
+                      onChange={e => {
+                        setLoginForm(p => ({ ...p, username: e.target.value }));
+                        if (loginError) setLoginError(null);
+                      }}
+                      placeholder="Enter username"
+                      required
+                    />
                   </div>
                   <div>
-                    <Label className="text-xs text-[#8D8A87]">Password</Label>
+                    <Label htmlFor="login-password" className="text-xs text-[#8D8A87]">Password</Label>
                     <div className="relative">
-                      <Input type={showPassword ? "text" : "password"} value={loginForm.password} onChange={e => setLoginForm(p => ({ ...p, password: e.target.value }))} placeholder="Enter password" required />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D8A87]">
+                      <Input
+                        id="login-password"
+                        name="password"
+                        autoComplete="current-password"
+                        type={showPassword ? "text" : "password"}
+                        value={loginForm.password}
+                        onChange={e => {
+                          setLoginForm(p => ({ ...p, password: e.target.value }));
+                          if (loginError) setLoginError(null);
+                        }}
+                        placeholder="Enter password"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        aria-label={showPassword ? "Hide password" : "Show password"}
+                        aria-pressed={showPassword}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8D8A87] hover:text-[#2D2A26] min-h-[44px] min-w-[44px] flex items-center justify-center"
+                      >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
+                    {loginError && (
+                      <p role="alert" className="mt-1.5 text-sm text-red-600 flex items-center gap-1">
+                        <X className="h-3 w-3" /> {loginError}
+                      </p>
+                    )}
                   </div>
-                  <Button type="submit" className="w-full bg-[#C73E1D]" disabled={loginMutation.isPending}>
-                    <LogIn className="mr-2 h-4 w-4" />{loginMutation.isPending ? "Signing in..." : "Sign In"}
+                  <Button
+                    type="submit"
+                    className="w-full bg-[#C73E1D] hover:bg-[#C73E1D]/90 min-h-[48px] text-base"
+                    disabled={loginMutation.isPending}
+                  >
+                    <LogIn className="mr-2 h-4 w-4" />
+                    {loginMutation.isPending ? "Signing in..." : "Sign In"}
                   </Button>
-                  <div className="flex justify-between">
-                    <button type="button" onClick={() => setMode("accountLookup")} className="text-xs text-[#8D8A87] hover:text-[#2D2A26] flex items-center gap-1">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMode("accountLookup");
+                        setLoginError(null);
+                      }}
+                      className="text-xs text-[#8D8A87] hover:text-[#2D2A26] flex items-center justify-center gap-1 min-h-[44px]"
+                    >
                       <ArrowLeft className="h-3 w-3" /> Different account
                     </button>
-                    <button type="button" onClick={() => goToSignup(setMode, setSignupForm, "standard")} className="text-xs font-medium text-[#C73E1D] underline">Create account</button>
+                    <button
+                      type="button"
+                      onClick={() => handleIntentChange("signup")}
+                      className="text-xs font-medium text-[#C73E1D] underline min-h-[44px] flex items-center justify-center"
+                    >
+                      Create account
+                    </button>
                   </div>
                 </form>
               )}
               {mode === "signup" && (
-                <form onSubmit={handleSignup} className="space-y-4">
+                <form onSubmit={handleSignup} className="space-y-4" noValidate>
                   <div>
-                    <Label className="text-xs text-[#8D8A87]">Account Type</Label>
+                    <Label htmlFor="signup-userType" className="text-xs text-[#8D8A87]">Account Type</Label>
                     <div className="relative">
-                      <select value={signupForm.userType} onChange={e => setSignupForm(p => ({ ...p, userType: e.target.value as "standard" | "partner" }))} className="w-full rounded border px-3 py-2 text-sm appearance-none bg-white pr-8">
+                      <select
+                        id="signup-userType"
+                        value={signupForm.userType}
+                        onChange={e => setSignupForm(p => ({ ...p, userType: e.target.value as UserType }))}
+                        className="w-full rounded border px-3 py-2 text-sm appearance-none bg-white pr-8 min-h-[48px]"
+                      >
                         <option value="standard">Business Owner</option>
                         <option value="partner">Partner / Accountant / Consultant</option>
                       </select>
@@ -327,12 +471,16 @@ export default function Login() {
                     </div>
                   </div>
                   <div>
-                    <Label className="text-xs text-[#8D8A87]">
+                    <Label htmlFor="signup-accountName" className="text-xs text-[#8D8A87]">
                       Account Name <span className="font-normal">(your unique identifier -- used for login URL)</span>
                     </Label>
                     <div className="relative">
                       <Globe className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8D8A87]" />
                       <Input
+                        id="signup-accountName"
+                        name="accountName"
+                        autoComplete="off"
+                        spellCheck={false}
                         value={signupForm.accountName}
                         onChange={e => {
                           const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -359,34 +507,170 @@ export default function Login() {
                       </p>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><Label className="text-xs text-[#8D8A87]">Full Name</Label><Input value={signupForm.name} onChange={e => setSignupForm(p => ({ ...p, name: e.target.value }))} placeholder="Your name" required /></div>
-                    <div><Label className="text-xs text-[#8D8A87]">Username</Label><Input value={signupForm.username} onChange={e => setSignupForm(p => ({ ...p, username: e.target.value }))} placeholder="Choose username" required /></div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label htmlFor="signup-name" className="text-xs text-[#8D8A87]">Full Name</Label>
+                      <Input
+                        id="signup-name"
+                        name="name"
+                        autoComplete="name"
+                        value={signupForm.name}
+                        onChange={e => setSignupForm(p => ({ ...p, name: e.target.value }))}
+                        placeholder="Your name"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="signup-username" className="text-xs text-[#8D8A87]">Username</Label>
+                      <Input
+                        id="signup-username"
+                        name="username"
+                        autoComplete="username"
+                        value={signupForm.username}
+                        onChange={e => setSignupForm(p => ({ ...p, username: e.target.value }))}
+                        placeholder="Choose username"
+                        required
+                      />
+                    </div>
                   </div>
-                  <div><Label className="text-xs text-[#8D8A87]">Email</Label><Input type="email" value={signupForm.email} onChange={e => setSignupForm(p => ({ ...p, email: e.target.value }))} placeholder="you@business.com" required /></div>
-                  <div><Label className="text-xs text-[#8D8A87]">Phone <span className="font-normal">(optional)</span></Label><Input type="tel" value={signupForm.phone} onChange={e => setSignupForm(p => ({ ...p, phone: e.target.value }))} placeholder="+254 7XX XXX XXX" /></div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><Label className="text-xs text-[#8D8A87]">Password</Label><Input type="password" value={signupForm.password} onChange={e => setSignupForm(p => ({ ...p, password: e.target.value }))} placeholder="Min 6 chars" required /></div>
-                    <div><Label className="text-xs text-[#8D8A87]">Confirm</Label><Input type="password" value={signupForm.confirmPassword} onChange={e => setSignupForm(p => ({ ...p, confirmPassword: e.target.value }))} placeholder="Repeat password" required /></div>
+                  <div>
+                    <Label htmlFor="signup-email" className="text-xs text-[#8D8A87]">Email</Label>
+                    <Input
+                      id="signup-email"
+                      name="email"
+                      type="email"
+                      autoComplete="email"
+                      inputMode="email"
+                      value={signupForm.email}
+                      onChange={e => setSignupForm(p => ({ ...p, email: e.target.value }))}
+                      placeholder="you@business.com"
+                      required
+                    />
                   </div>
-                  <div><Label className="text-xs text-[#8D8A87]">Business / Firm Name <span className="font-normal">(optional)</span></Label><Input value={signupForm.businessName} onChange={e => setSignupForm(p => ({ ...p, businessName: e.target.value }))} placeholder={signupForm.userType === "partner" ? "e.g. ABC Accounting" : "e.g. Karafuu Business"} /></div>
+                  <div>
+                    <Label htmlFor="signup-phone" className="text-xs text-[#8D8A87]">Phone <span className="font-normal">(optional)</span></Label>
+                    <Input
+                      id="signup-phone"
+                      name="phone"
+                      type="tel"
+                      autoComplete="tel"
+                      inputMode="tel"
+                      value={signupForm.phone}
+                      onChange={e => setSignupForm(p => ({ ...p, phone: e.target.value }))}
+                      placeholder="+254 7XX XXX XXX"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label htmlFor="signup-password" className="text-xs text-[#8D8A87]">Password</Label>
+                      <div className="relative">
+                        <Input
+                          id="signup-password"
+                          name="new-password"
+                          autoComplete="new-password"
+                          type={showSignupPassword ? "text" : "password"}
+                          value={signupForm.password}
+                          onChange={e => setSignupForm(p => ({ ...p, password: e.target.value }))}
+                          placeholder="Min 6 chars"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowSignupPassword(!showSignupPassword)}
+                          aria-label={showSignupPassword ? "Hide password" : "Show password"}
+                          aria-pressed={showSignupPassword}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8D8A87] hover:text-[#2D2A26] min-h-[44px] min-w-[44px] flex items-center justify-center"
+                        >
+                          {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="signup-confirm" className="text-xs text-[#8D8A87]">Confirm</Label>
+                      <div className="relative">
+                        <Input
+                          id="signup-confirm"
+                          name="confirm-password"
+                          autoComplete="new-password"
+                          type={showConfirmPassword ? "text" : "password"}
+                          value={signupForm.confirmPassword}
+                          onChange={e => setSignupForm(p => ({ ...p, confirmPassword: e.target.value }))}
+                          placeholder="Repeat password"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
+                          aria-pressed={showConfirmPassword}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8D8A87] hover:text-[#2D2A26] min-h-[44px] min-w-[44px] flex items-center justify-center"
+                        >
+                          {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <Label htmlFor="signup-businessName" className="text-xs text-[#8D8A87]">Business / Firm Name <span className="font-normal">(optional)</span></Label>
+                    <Input
+                      id="signup-businessName"
+                      name="organization"
+                      autoComplete="organization"
+                      value={signupForm.businessName}
+                      onChange={e => setSignupForm(p => ({ ...p, businessName: e.target.value }))}
+                      placeholder={signupForm.userType === "partner" ? "e.g. ABC Accounting" : "e.g. Karafuu Business"}
+                    />
+                  </div>
                   <div className="flex items-center gap-2 rounded-lg bg-[#F5EDE6] p-3">
-                    <input id="demo" type="checkbox" checked={signupForm.createDemo} onChange={e => setSignupForm(p => ({ ...p, createDemo: e.target.checked }))} className="h-4 w-4 rounded border-[#8D8A87]" />
+                    <input
+                      id="demo"
+                      name="createDemo"
+                      type="checkbox"
+                      checked={signupForm.createDemo}
+                      onChange={e => setSignupForm(p => ({ ...p, createDemo: e.target.checked }))}
+                      className="h-5 w-5 rounded border-[#8D8A87]"
+                    />
                     <label htmlFor="demo" className="text-xs text-[#2D2A26]">Start with <strong>Demo Mode</strong> -- preloaded with sample data</label>
                   </div>
                   <div>
-                    <Label className="text-xs text-[#8D8A87] flex items-center gap-1">
+                    <Label htmlFor="signup-referral" className="text-xs text-[#8D8A87] flex items-center gap-1">
                       <Gift className="h-3 w-3 text-[#D4A854]" />Referral Code (optional)
                     </Label>
-                    <Input value={signupForm.referralCode} onChange={e => setSignupForm(p => ({ ...p, referralCode: e.target.value.toUpperCase() }))} placeholder="e.g. FINAABC123" className="font-mono uppercase" />
+                    <Input
+                      id="signup-referral"
+                      name="referralCode"
+                      autoComplete="off"
+                      spellCheck={false}
+                      value={signupForm.referralCode}
+                      onChange={e => setSignupForm(p => ({ ...p, referralCode: e.target.value.toUpperCase() }))}
+                      placeholder="e.g. FINAABC123"
+                      className="font-mono uppercase"
+                    />
                   </div>
-                  <Button type="submit" className="w-full bg-[#C73E1D]" disabled={registerMutation.isPending || accountNameStatus === "checking"}>
+                  {/* Primary CTA: 48px+ touch target, full-width, clear visual
+                      hierarchy. Avoids accidental overlap with surrounding form
+                      fields via vertical spacing rather than side-by-side layout. */}
+                  <Button
+                    type="submit"
+                    className="w-full bg-[#C73E1D] hover:bg-[#C73E1D]/90 min-h-[52px] text-base"
+                    disabled={registerMutation.isPending || accountNameStatus === "checking"}
+                    data-testid="signup-submit"
+                  >
                     {signupForm.userType === "partner" ? <Briefcase className="mr-2 h-4 w-4" /> : <Store className="mr-2 h-4 w-4" />}
                     {registerMutation.isPending ? "Creating..." : signupForm.userType === "partner" ? "Join as Partner" : "Create Account"}
                   </Button>
-                  <p className="text-center text-xs text-[#8D8A87]">
-                    Already have an account? <button type="button" onClick={() => setMode("accountLookup")} className="font-medium text-[#C73E1D] underline">Sign in</button>
-                  </p>
+                  {/* Prominent "already have an account" CTA — full-width, visually
+                      distinct from the primary action, large enough to be tapped
+                      confidently on mobile. */}
+                  <button
+                    type="button"
+                    onClick={() => handleIntentChange("login")}
+                    data-testid="account-cta-signin"
+                    className="flex w-full items-center justify-center gap-2 rounded-md border border-[#E8E0D8] bg-white py-3 text-sm font-medium text-[#2D2A26] transition-colors hover:bg-[#F5EDE6] min-h-[48px]"
+                  >
+                    <LogIn className="h-4 w-4 text-[#C73E1D]" />
+                    Already have an account? <span className="text-[#C73E1D] underline">Sign In</span>
+                  </button>
                 </form>
               )}
             </CardContent>

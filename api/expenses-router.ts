@@ -303,9 +303,12 @@ export const expensesRouter = createRouter({
             );
             const totalBillDebt = supplierBills.reduce((sum, b) => sum.plus(d(b.balanceDue)), d(0));
             if (supplierBills.length > 0 && d(sup[0].currentBalance).lte(totalBillDebt)) {
+              const billList = supplierBills.map(b => b.billNumber ?? `BILL-${String(b.id).padStart(4, "0")}`).join(", ");
               throw new Error(
-                `This supplier has Ksh${totalBillDebt.toFixed(2)} in outstanding bills. ` +
-                `Please go to Bills and clear the bill first before recording a direct expense.`
+                `SUPPLIER_HAS_OUTSTANDING_BILLS|` +
+                `This supplier has Ksh${totalBillDebt.toFixed(2)} in outstanding bills (${billList}). ` +
+                `Kindly either: (1) Create a bill for this supplier's expenses first, or (2) Go to Bills and select a bill to pay against. ` +
+                `This ensures proper payment tracking and prevents duplicate entries.`
               );
             }
           }

@@ -386,7 +386,7 @@ export function Suppliers() {
               <div className="grid grid-cols-2 gap-3"><div>
                 <LocationSelector
                   locations={locations}
-                  userLocationId={user?.locationId}
+                  assignedLocationIds={user?.assignedLocationIds ?? []}
                   value={billForm.locationId}
                   onChange={v => setBillForm(p => ({...p, locationId: v}))}
                   enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
