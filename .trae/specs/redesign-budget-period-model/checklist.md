@@ -1,0 +1,20 @@
+- [ ] Budget plans, tracked buckets, and bucket lines are defined in schema and migration artifacts
+- [ ] Existing grouped budgets migrate in place into the new plan/bucket structure without disappearing from the budgets hub
+- [ ] Migration is idempotent (safe to re-run) and can repair an already-existing partial budget_plans table
+- [ ] `half-yearly` is supported consistently in schema, helpers, router validation, and UI period selection
+- [ ] Budget helper logic distinguishes tracked buckets from analytical monthly breakdown rows
+- [ ] Annual budgets store one tracked annual bucket and show an evenly divided monthly analytical breakdown
+- [ ] Main budgets view shows working status filters for `All`, `Draft`, `Active`, `Locked`, and `Archived`
+- [ ] Monthly budgets support copying one source month into multiple selected target months
+- [ ] Copy validation blocks invalid selections such as no targets or the source month being included as a target
+- [ ] Editing one monthly bucket updates only that selected month
+- [ ] Editing one quarterly or half-yearly bucket updates only that selected bucket
+- [ ] Saving edited bucket lines preserves the current budget status unless a lifecycle action explicitly changes it
+- [ ] Annual budget detail labels the monthly breakdown as analytical and non-editable
+- [ ] Router tests cover isolated edits, monthly copy, `half-yearly`, annual analytical breakdown, and status preservation
+- [ ] Component tests cover status filters, bucket selection, month copy workflow, and annual analytical labeling
+- [ ] Operations Reports Panel only loads budget queries when Budgeting tab is active
+- [ ] `npm run lint` completes cleanly for changed files
+- [ ] `npm run check` completes cleanly
+- [ ] `npm test` completes cleanly
+- [ ] End-to-end test covers create monthly budget, copy to selected months, edit one month only, and verify unrelated months remain unchanged

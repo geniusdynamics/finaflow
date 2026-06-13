@@ -18,6 +18,7 @@ import { settingsRouter } from "./settings-router";
 import { feedbackRouter } from "./feedback-router";
 import { inquiryRouter } from "./inquiry-router";
 import { paymentMethodsRouter } from "./payment-methods-router";
+import { budgetsRouter } from "./budgets-router";
 import { reportsRouter } from "./reports-router";
 import { alertsRouter } from "./alerts-router";
 import { payrollSettingsRouter } from "./payroll-settings-router";
@@ -73,6 +74,7 @@ export const appRouter = createRouter({
   wallet: walletRouter,
   walletManagement: walletManagementRouter,
   debts: debtsRouter,
+  budgets: budgetsRouter,
 });
 
 export type AppRouter = typeof appRouter;
