@@ -1,5 +1,5 @@
 // ABOUTME: Generates tracked period buckets, analytical month rows, and human-readable labels for budget plans.
-// ABOUTME: Supports monthly, quarterly, half-yearly, and annual period types with fiscal-year-aware indexing.
+// ABOUTME: Month 1 = January through Month 12 = December — standard calendar alignment.
 
 import type { Period } from "./fiscal-year";
 
@@ -29,68 +29,51 @@ const MONTH_NAMES = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-function calendarMonth(fiscalYearStart: number, fiscalOffset: number): number {
-  return ((fiscalYearStart - 1 + fiscalOffset) % 12) + 1;
+/** Standard calendar alignment: offset 0 = January (month 1), offset 11 = December (month 12). */
+function calendarMonth(offset: number): number {
+  return offset + 1;
 }
 
 export function generateTrackedBuckets(
   period: Period,
-  fiscalYearStart: number,
+  _fiscalYearStart?: number,
 ): TrackedBucket[] {
   switch (period) {
     case "monthly": {
       const buckets: TrackedBucket[] = [];
       for (let i = 0; i < 12; i++) {
-        const m = calendarMonth(fiscalYearStart, i);
+        const m = calendarMonth(i);
         buckets.push({
           bucketType: "month",
           bucketIndex: i,
           startMonth: m,
           endMonth: m,
-          label: bucketLabel(period, i),
+          label: MONTH_NAMES[i],
         });
       }
       return buckets;
     }
     case "quarterly": {
-      const buckets: TrackedBucket[] = [];
-      for (let i = 0; i < 4; i++) {
-        const start = calendarMonth(fiscalYearStart, i * 3);
-        const end = calendarMonth(fiscalYearStart, i * 3 + 2);
-        buckets.push({
-          bucketType: "quarter",
-          bucketIndex: i,
-          startMonth: start,
-          endMonth: end,
-          label: bucketLabel(period, i),
-        });
-      }
-      return buckets;
+      return [
+        { bucketType: "quarter", bucketIndex: 0, startMonth: 1,  endMonth: 3,  label: "Q1" },
+        { bucketType: "quarter", bucketIndex: 1, startMonth: 4,  endMonth: 6,  label: "Q2" },
+        { bucketType: "quarter", bucketIndex: 2, startMonth: 7,  endMonth: 9,  label: "Q3" },
+        { bucketType: "quarter", bucketIndex: 3, startMonth: 10, endMonth: 12, label: "Q4" },
+      ];
     }
     case "half-yearly": {
-      const buckets: TrackedBucket[] = [];
-      for (let i = 0; i < 2; i++) {
-        const start = calendarMonth(fiscalYearStart, i * 6);
-        const end = calendarMonth(fiscalYearStart, i * 6 + 5);
-        buckets.push({
-          bucketType: "half",
-          bucketIndex: i,
-          startMonth: start,
-          endMonth: end,
-          label: bucketLabel(period, i),
-        });
-      }
-      return buckets;
+      return [
+        { bucketType: "half", bucketIndex: 0, startMonth: 1, endMonth: 6,  label: "H1" },
+        { bucketType: "half", bucketIndex: 1, startMonth: 7, endMonth: 12, label: "H2" },
+      ];
     }
     case "annual": {
-      const start = calendarMonth(fiscalYearStart, 0);
-      const end = calendarMonth(fiscalYearStart, 11);
       return [{
         bucketType: "annual",
         bucketIndex: 0,
-        startMonth: start,
-        endMonth: end,
-        label: bucketLabel(period, 0),
+        startMonth: 1,
+        endMonth: 12,
+        label: "Annual",
       }];
     }
   }
@@ -98,13 +81,13 @@ export function generateTrackedBuckets(
 
 export function generateAnalyticalMonths(
   period: Period,
-  fiscalYearStart: number,
+  _fiscalYearStart?: number,
 ): AnalyticalMonth[] {
   const months: AnalyticalMonth[] = [];
   for (let i = 0; i < 12; i++) {
-    const m = calendarMonth(fiscalYearStart, i);
+    const m = calendarMonth(i);
     months.push({
-      name: MONTH_NAMES[m - 1],
+      name: MONTH_NAMES[i],
       calendarMonth: m,
       fiscalMonthIndex: i,
       tracked: period === "monthly",
@@ -115,20 +98,19 @@ export function generateAnalyticalMonths(
 
 export function bucketLabel(period: Period, index: number): string {
   switch (period) {
-    case "monthly": return `Month ${index + 1}`;
+    case "monthly": return MONTH_NAMES[index];
     case "quarterly": return `Q${index + 1}`;
     case "half-yearly": return `H${index + 1}`;
     case "annual": return "Annual";
   }
 }
 
-export function fiscalMonths(fiscalYearStart: number): FiscalMonth[] {
+export function fiscalMonths(): FiscalMonth[] {
   const months: FiscalMonth[] = [];
   for (let i = 0; i < 12; i++) {
-    const m = calendarMonth(fiscalYearStart, i);
     months.push({
-      name: MONTH_NAMES[m - 1],
-      index: m,
+      name: MONTH_NAMES[i],
+      index: i + 1,
       fiscalMonthIndex: i,
     });
   }

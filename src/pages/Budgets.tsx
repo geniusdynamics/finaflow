@@ -1,6 +1,7 @@
 // ABOUTME: Main budgets page with year selection, status filters, budget list, detail view, and creation wizard.
-// ABOUTME: Manages list vs detail view state and exposes a "Create Budget" dialog. No Layout wrapper -- router provides it.
+// ABOUTME: Supports pagination via expandable year range for multi-year data.
 import { useState, useCallback } from "react";
+import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { BudgetList } from "@/components/budgets/BudgetList";
 import { BudgetDetail } from "@/components/budgets/BudgetDetail";
-import { NewBudgetWizard } from "@/components/budgets/NewBudgetWizard";
+import { BudgetFormDialog } from "@/components/budgets/BudgetFormDialog";
 import { budgetStatusConfig } from "@/components/budgets/shared";
 import {
   Plus,
@@ -28,6 +29,10 @@ export default function BudgetsPage() {
   const now = new Date();
   const currentYear = now.getFullYear();
 
+  // Location state
+  const [selectedLocationId, setSelectedLocationId] = useState<number | undefined>(undefined);
+  const { data: locations } = trpc.locations.list.useQuery();
+
   // Year selection
   const [year, setYear] = useState(currentYear);
 
@@ -40,13 +45,17 @@ export default function BudgetsPage() {
   // Create wizard dialog
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
+  // Pagination: expandable year range
+  const [yearRangeExtension, setYearRangeExtension] = useState(0);
+  const yearRangeSize = 5 + yearRangeExtension;
+
   // Fetch budgets
   const { data: plans, isLoading, isError, error, refetch } = trpc.budgets.listByYear.useQuery(
-    { year, statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined },
+    { year, statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined, locationId: selectedLocationId },
   );
 
-  // Build year options: current year +/- 5
-  const yearOptions = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
+  // Build year options: current year +/- range
+  const yearOptions = Array.from({ length: 11 + yearRangeExtension * 2 }, (_, i) => currentYear - yearRangeSize + i);
 
   const handleSelectPlan = useCallback((planId: number) => {
     setSelectedPlanId(planId);
@@ -61,28 +70,37 @@ export default function BudgetsPage() {
     refetch();
   }, [refetch]);
 
+  const handleLoadMore = useCallback(() => {
+    setYearRangeExtension((prev) => prev + 3);
+  }, []);
+
+  const hasMoreYears = currentYear - yearRangeSize > currentYear - 20; // Max 20 years back
+
   // Detail view
   if (selectedPlanId !== null) {
     return (
-      <div className="space-y-6">
-        {/* Back button */}
-        <button
-          type="button"
-          onClick={handleBackToList}
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-[#C73E1D] hover:text-[#A83215] transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Budget Plans
-        </button>
+      <Layout>
+        <div className="space-y-6">
+          {/* Back button */}
+          <button
+            type="button"
+            onClick={handleBackToList}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-[#C73E1D] hover:text-[#A83215] transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Budget Plans
+          </button>
 
-        <BudgetDetail planId={selectedPlanId} />
-      </div>
+          <BudgetDetail planId={selectedPlanId} />
+        </div>
+      </Layout>
     );
   }
 
   // List view
   return (
-    <div className="space-y-6">
+    <Layout>
+      <div className="space-y-6">
       {/* Page header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
@@ -93,6 +111,18 @@ export default function BudgetsPage() {
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          {/* Location selector */}
+          <select
+            value={selectedLocationId ?? ""}
+            onChange={(e) => setSelectedLocationId(e.target.value ? +e.target.value : undefined)}
+            className="w-full sm:w-auto rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26] focus:outline-none focus:ring-2 focus:ring-[#C73E1D]/30"
+          >
+            <option value="">All Branches</option>
+            {(locations ?? []).map((loc) => (
+              <option key={loc.id} value={loc.id}>{loc.name}</option>
+            ))}
+          </select>
+
           {/* Year selector */}
           <select
             value={year}
@@ -155,6 +185,8 @@ export default function BudgetsPage() {
           onSelectPlan={handleSelectPlan}
           activeStatuses={selectedStatuses}
           onStatusFilterChange={setSelectedStatuses}
+          hasMore={hasMoreYears}
+          onLoadMore={handleLoadMore}
         />
       )}
 
@@ -169,9 +201,15 @@ export default function BudgetsPage() {
               Set up a new budget plan with categories, amounts, and period allocation.
             </DialogDescription>
           </DialogHeader>
-          <NewBudgetWizard onCreated={handleCreateSuccess} onClose={() => setCreateDialogOpen(false)} />
+          <BudgetFormDialog
+            onCreated={handleCreateSuccess}
+            onClose={() => setCreateDialogOpen(false)}
+            locations={locations ?? []}
+            selectedLocationId={selectedLocationId}
+          />
         </DialogContent>
       </Dialog>
     </div>
+    </Layout>
   );
 }

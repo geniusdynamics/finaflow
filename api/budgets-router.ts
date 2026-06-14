@@ -1,9 +1,9 @@
 // ABOUTME: Budget Plan router -- period-aware budget CRUD with monthly/quarterly/half-yearly/annual support.
 // ABOUTME: All procedures require budget:manage permission and are scoped to the active business locations.
 import { z } from "zod";
-import { createRouter, budgetManage, getCurrentBusinessLocationIds } from "./middleware";
+import { createRouter, budgetManage, authedQuery, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
-import { budgetPlans, budgetPlanBuckets, budgetBucketLines, expenseCategories, type InsertBudgetPlan } from "@db/schema";
+import { budgetPlans, budgetPlanBuckets, budgetBucketLines, expenseCategories, businesses, type InsertBudgetPlan } from "@db/schema";
 import { eq, and, isNull, sql, inArray } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { generateTrackedBuckets } from "@/lib/budgets/period";
@@ -34,7 +34,8 @@ async function requirePlanAccess(ctx: object, planId: number) {
 export const budgetsRouter = createRouter({
   create: budgetManage
     .input(z.object({
-      locationId: z.number(),
+      locationId: z.number().optional(),
+      locationIds: z.array(z.number()).optional(),
       fiscalYearStart: z.number().int(),
       period: z.string(),
       name: z.string().optional(),
@@ -44,39 +45,54 @@ export const budgetsRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const locIds = await resolveLocationFilter(ctx, input.locationId);
+      const targetLocIds = input.locationIds ?? (input.locationId ? [input.locationId] : []);
+      if (targetLocIds.length === 0) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "At least one locationId or locationIds is required" });
+      }
+      const validatedLocIds: number[] = [];
+      for (const lid of targetLocIds) {
+        const resolved = await resolveLocationFilter(ctx, lid);
+        validatedLocIds.push(...resolved);
+      }
+      const uniqueLocIds = [...new Set(validatedLocIds)];
       validatePeriod(input.period);
       validateBudgetLines(input.lines);
       const fiscalStartMonth = getFiscalYearStart();
       const buckets = generateTrackedBuckets(input.period as Period, fiscalStartMonth);
       return await db.transaction(async (tx) => {
-        const [plan] = await tx.insert(budgetPlans).values({
-          locationId: locIds[0],
-          fiscalYearStart: input.fiscalYearStart,
-          period: input.period as Period,
-          name: input.name ?? null,
-          notes: input.notes ?? null,
-          status: input.saveAs === "active" ? "active" : "draft",
-          createdById: (ctx as { user?: { id: number } }).user?.id ?? null,
-        } satisfies InsertBudgetPlan).returning();
-        for (const bucket of buckets) {
-          const [insertedBucket] = await tx.insert(budgetPlanBuckets).values({
-            planId: plan.id, bucketType: bucket.bucketType, bucketIndex: bucket.bucketIndex,
-            startMonth: bucket.startMonth, endMonth: bucket.endMonth, label: bucket.label,
-          }).returning();
-          for (const line of input.lines) {
-            await tx.insert(budgetBucketLines).values({ bucketId: insertedBucket.id, categoryId: line.categoryId, amount: line.amount });
+        const planIds: number[] = [];
+        for (const lid of uniqueLocIds) {
+          const [plan] = await tx.insert(budgetPlans).values({
+            locationId: lid,
+            fiscalYearStart: input.fiscalYearStart,
+            period: input.period as Period,
+            name: input.name ?? null,
+            notes: input.notes ?? null,
+            status: input.saveAs === "active" ? "active" : "draft",
+            createdById: (ctx as { user?: { id: number } }).user?.id ?? null,
+          } satisfies InsertBudgetPlan).returning();
+          planIds.push(plan.id);
+          for (const bucket of buckets) {
+            const [insertedBucket] = await tx.insert(budgetPlanBuckets).values({
+              planId: plan.id, bucketType: bucket.bucketType, bucketIndex: bucket.bucketIndex,
+              startMonth: bucket.startMonth, endMonth: bucket.endMonth, label: bucket.label,
+            }).returning();
+            for (const line of input.lines) {
+              await tx.insert(budgetBucketLines).values({ bucketId: insertedBucket.id, categoryId: line.categoryId, amount: line.amount });
+            }
           }
         }
-        return { planId: plan.id };
+        return { planId: planIds[0], bucketIds: planIds };
       });
     }),
 
   listByYear: budgetManage
-    .input(z.object({ year: z.number().int(), statuses: z.array(z.string()).optional() }))
+    .input(z.object({ year: z.number().int(), statuses: z.array(z.string()).optional(), locationId: z.number().optional() }))
     .query(async ({ input, ctx }) => {
       const db = getDb();
-      const locIds = await getCurrentBusinessLocationIds(ctx);
+      const locIds = input.locationId
+        ? await resolveLocationFilter(ctx, input.locationId)
+        : await getCurrentBusinessLocationIds(ctx);
       if (locIds.length === 0) return [];
       const locIdSql = sql.join(locIds.map((id) => sql`${id}`), sql`, `);
       const conditions = [eq(budgetPlans.fiscalYearStart, input.year), sql`${budgetPlans.locationId} IN (${locIdSql})`, isNull(budgetPlans.deletedAt)];
@@ -90,9 +106,18 @@ export const budgetsRouter = createRouter({
         id: budgetPlans.id, locationId: budgetPlans.locationId, fiscalYearStart: budgetPlans.fiscalYearStart,
         period: budgetPlans.period, name: budgetPlans.name, notes: budgetPlans.notes,
         status: budgetPlans.status, createdAt: budgetPlans.createdAt, updatedAt: budgetPlans.updatedAt,
-        bucketCount: sql<number>`(SELECT COUNT(*)::int FROM ${budgetPlanBuckets} WHERE ${budgetPlanBuckets.planId} = ${budgetPlans.id})`,
       }).from(budgetPlans).where(and(...conditions)).orderBy(budgetPlans.createdAt);
-      return plans;
+
+      if (plans.length === 0) return [];
+
+      const planIds = plans.map((p) => p.id);
+      const counts = await db.select({
+        planId: budgetPlanBuckets.planId,
+        count: sql<number>`COUNT(*)::int`.as("count"),
+      }).from(budgetPlanBuckets).where(inArray(budgetPlanBuckets.planId, planIds)).groupBy(budgetPlanBuckets.planId);
+
+      const countMap = new Map(counts.map((c) => [c.planId, c.count]));
+      return plans.map((p) => ({ ...p, bucketCount: countMap.get(p.id) ?? 0 }));
     }),
 
   get: budgetManage
@@ -176,4 +201,34 @@ export const budgetsRouter = createRouter({
     await db.update(budgetPlans).set({ status: "archived", archivedAt: new Date(), archivedById: userId, updatedAt: new Date() }).where(eq(budgetPlans.id, plan.id));
     return { success: true };
   }),
+
+  // ── Fiscal Year Configuration ──────────────────────────────────────
+
+  getFiscalYearConfig: authedQuery.query(async ({ ctx }) => {
+    const db = getDb();
+    const businessId = (ctx as { user?: { currentBusiness?: { id: number } | null } }).user?.currentBusiness?.id
+      ?? (ctx as { user?: { currentBusinessId?: number | null } }).user?.currentBusinessId;
+    if (!businessId) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "No active business selected" });
+    }
+    const [biz] = await db.select({ fiscalYearStartMonth: businesses.fiscalYearStartMonth }).from(businesses)
+      .where(eq(businesses.id, businessId)).limit(1);
+    return {
+      fiscalYearStartMonth: biz?.fiscalYearStartMonth ?? 4,
+      businessId,
+    };
+  }),
+
+  updateFiscalYearStart: budgetManage
+    .input(z.object({ month: z.number().int().min(1).max(12) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const businessId = (ctx as { user?: { currentBusiness?: { id: number } | null } }).user?.currentBusiness?.id
+        ?? (ctx as { user?: { currentBusinessId?: number | null } }).user?.currentBusinessId;
+      if (!businessId) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "No active business selected" });
+      }
+      await db.update(businesses).set({ fiscalYearStartMonth: input.month, updatedAt: new Date() }).where(eq(businesses.id, businessId));
+      return { success: true, fiscalYearStartMonth: input.month };
+    }),
 });

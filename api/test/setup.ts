@@ -211,6 +211,7 @@ async function ensureTestDatabase(): Promise<void> {
       "0012_notification_highlight_lifecycle.sql",
       "0013_user_locations.sql",
       "0014_budget_plan_bucket_model.sql",
+      "0015_fiscal_year_start_month.sql",
     ]) {
       const p = path.resolve(import.meta.dirname, `../../db/migrations/${file}`);
       if (fs.existsSync(p)) {

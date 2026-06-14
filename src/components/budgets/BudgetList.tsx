@@ -5,8 +5,9 @@ import { budgetStatusConfig, PERIOD_LABELS } from "./shared";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CalendarDays, FolderOpen } from "lucide-react";
-import { fiscalYearLabel, getFiscalYearStart } from "@/lib/budgets/fiscal-year";
+import { CalendarDays, FolderOpen, Loader2 } from "lucide-react";
+import { fiscalYearLabel, getFiscalYearStart, fiscalYearMonthNames } from "@/lib/budgets/fiscal-year";
+import { trpc } from "@/providers/trpc";
 
 export interface PlanSummary {
   id: number;
@@ -27,6 +28,9 @@ interface BudgetListProps {
   onSelectPlan: (planId: number) => void;
   activeStatuses: string[];
   onStatusFilterChange: (statuses: string[]) => void;
+  hasMore?: boolean;
+  onLoadMore?: () => void;
+  isLoadingMore?: boolean;
 }
 
 const STATUS_OPTIONS: { label: string; value: string | null }[] = [
@@ -48,7 +52,14 @@ export function BudgetList({
   onSelectPlan,
   activeStatuses,
   onStatusFilterChange,
+  hasMore,
+  onLoadMore,
+  isLoadingMore,
 }: BudgetListProps) {
+  const { data: fyConfig } = trpc.budgets.getFiscalYearConfig.useQuery();
+  const fys = fyConfig?.fiscalYearStartMonth ?? getFiscalYearStart();
+  const fyMonthNames = fiscalYearMonthNames(fys);
+
   const toggleStatus = (status: string | null) => {
     if (status === null) {
       onStatusFilterChange([]);
@@ -62,8 +73,6 @@ export function BudgetList({
     }
     onStatusFilterChange(Array.from(current));
   };
-
-  const fys = getFiscalYearStart();
 
   return (
     <div className="space-y-4">
@@ -95,8 +104,8 @@ export function BudgetList({
       {/* Plan cards */}
       <div className="space-y-3">
         {plans.length === 0 && (
-          <div className="rounded-xl border border-[#E8E0D8] bg-white p-12 text-center text-sm text-[#8D8A87]">
-            <FolderOpen className="mx-auto mb-3 h-12 w-12 opacity-20" />
+          <div className="rounded-xl border border-[#E8E0D8] bg-white p-8 sm:p-12 text-center text-sm text-[#8D8A87]">
+            <FolderOpen className="mx-auto mb-3 h-10 w-10 sm:h-12 sm:w-12 opacity-20" />
             <p>No budget plans found for this year.</p>
             <p className="mt-1 text-xs">Create a new budget plan to get started.</p>
           </div>
@@ -138,14 +147,18 @@ export function BudgetList({
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                <div className="flex items-center gap-4 text-xs text-[#8D8A87]">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs text-[#8D8A87]">
                   <span className="flex items-center gap-1">
-                    <CalendarDays className="h-3 w-3" />
+                    <CalendarDays className="h-3 w-3 shrink-0" />
                     {formatDate(plan.createdAt)}
                   </span>
+                  <span className="hidden sm:inline">&middot;</span>
                   <span>{plan.bucketCount} bucket{plan.bucketCount !== 1 ? "s" : ""}</span>
                   {plan.notes && (
-                    <span className="truncate max-w-[200px]">{plan.notes}</span>
+                    <>
+                      <span className="hidden sm:inline">&middot;</span>
+                      <span className="truncate max-w-[140px] sm:max-w-[200px]">{plan.notes}</span>
+                    </>
                   )}
                 </div>
               </CardContent>
@@ -153,6 +166,28 @@ export function BudgetList({
           );
         })}
       </div>
+
+      {/* Load more pagination */}
+      {hasMore && (
+        <div className="flex justify-center pt-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onLoadMore}
+            disabled={isLoadingMore}
+            className="text-xs"
+          >
+            {isLoadingMore ? (
+              <>
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                Loading...
+              </>
+            ) : (
+              "Load more plans"
+            )}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

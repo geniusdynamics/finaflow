@@ -676,6 +676,7 @@ export const businesses = pgTable("businesses", {
   features: json("features"),
   subscriptionStatus: varchar("subscriptionStatus", { length: 20 }).default("active"),
   subscriptionExpiry: date("subscriptionExpiry"),
+  fiscalYearStartMonth: integer("fiscalYearStartMonth").default(4).notNull(),
   isMultiLocation: boolean("isMultiLocation").default(true).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   isDemo: boolean("isDemo").default(false).notNull(),

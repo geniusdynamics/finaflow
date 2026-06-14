@@ -186,6 +186,7 @@ DO $$ DECLARE
   legacy_rec RECORD;
   plan_rec RECORD;
   bucket_rec RECORD;
+  group_rec RECORD;
   plan_id BIGINT;
   bucket_id BIGINT;
   group_min_id BIGINT;
@@ -227,8 +228,11 @@ BEGIN
       LIMIT 1;
 
       IF bucket_id IS NULL THEN
+        -- Map fiscal offset m (1-12) to calendar month name (fiscal year start = April by default)
         INSERT INTO "budget_plan_buckets" ("planId", "bucketType", "bucketIndex", "startMonth", "endMonth", "label", "createdAt", "updatedAt")
-        VALUES (plan_id, 'monthly', m, m, m, 'Month ' || m, NOW(), NOW())
+        VALUES (plan_id, 'monthly', m, m, m,
+          (ARRAY['April','May','June','July','August','September','October','November','December','January','February','March'])[m],
+          NOW(), NOW())
         RETURNING "id" INTO bucket_id;
       END IF;
 

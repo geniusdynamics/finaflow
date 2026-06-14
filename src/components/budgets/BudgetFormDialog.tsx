@@ -26,10 +26,13 @@ import {
   List,
   ClipboardList,
 } from "lucide-react";
+import type { Location } from "@db/schema";
 
-interface NewBudgetWizardProps {
+interface BudgetFormDialogProps {
   onClose: () => void;
   onCreated: (planId: number) => void;
+  locations?: Location[];
+  selectedLocationId?: number;
 }
 
 interface LineEntry {
@@ -47,7 +50,7 @@ const STEPS: { key: WizardStep; label: string; icon: typeof Tag }[] = [
   { key: "review", label: "Review & Save", icon: ClipboardList },
 ];
 
-export function NewBudgetWizard({ onClose, onCreated }: NewBudgetWizardProps) {
+export function BudgetFormDialog({ onClose, onCreated, locations = [], selectedLocationId }: BudgetFormDialogProps) {
   const [step, setStep] = useState<WizardStep>("name-period");
   const [name, setName] = useState("");
   const [period, setPeriod] = useState<Period>("monthly");
@@ -117,8 +120,16 @@ export function NewBudgetWizard({ onClose, onCreated }: NewBudgetWizardProps) {
         amount: l.amount,
       }));
 
+      // If a specific location is selected, create for that location only.
+      // Otherwise create for all available locations (combined mode).
+      const locationIds = selectedLocationId
+        ? [selectedLocationId]
+        : locations.length > 0
+          ? locations.map((l: { id: number }) => l.id)
+          : undefined;
+
       const result = await createMutation.mutateAsync({
-        locationId: 0, // The API will resolve the actual location from context
+        locationIds,
         fiscalYearStart: new Date().getFullYear(),
         period,
         name: name.trim() || undefined,
@@ -289,31 +300,31 @@ export function NewBudgetWizard({ onClose, onCreated }: NewBudgetWizardProps) {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-[#E8E0D8] bg-[#F5EDE6]/50">
-                        <th className="px-3 py-2 text-left text-xs font-medium text-[#8D8A87] uppercase tracking-wider">
+                        <th className="px-2 sm:px-3 py-2 text-left text-xs font-medium text-[#8D8A87] uppercase tracking-wider">
                           Category
                         </th>
-                        <th className="px-3 py-2 text-right text-xs font-medium text-[#8D8A87] uppercase tracking-wider">
-                          Amount per Bucket
+                        <th className="px-2 sm:px-3 py-2 text-right text-xs font-medium text-[#8D8A87] uppercase tracking-wider">
+                          Amount
                         </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E8E0D8]">
                       {lines.map((line) => (
                         <tr key={line.categoryId} className="hover:bg-[#FAF7F4] transition-colors">
-                          <td className="px-3 py-2.5">
+                          <td className="px-2 sm:px-3 py-2.5">
                             <div className="flex items-center gap-2">
                               <span
                                 className="h-2.5 w-2.5 shrink-0 rounded-full"
                                 style={{ backgroundColor: line.categoryColor ?? "#C73E1D" }}
                               />
-                              <span className="text-sm text-[#2D2A26]">
+                              <span className="text-xs sm:text-sm text-[#2D2A26] truncate max-w-[120px] sm:max-w-none">
                                 {line.categoryName}
                               </span>
                             </div>
                           </td>
-                          <td className="px-3 py-2.5">
+                          <td className="px-2 sm:px-3 py-2.5">
                             <div className="flex items-center justify-end gap-1">
-                              <span className="text-xs text-[#B0ABA7]">KES</span>
+                              <span className="text-xs text-[#B0ABA7] shrink-0">KES</span>
                               <Input
                                 type="number"
                                 min="0"
@@ -323,7 +334,7 @@ export function NewBudgetWizard({ onClose, onCreated }: NewBudgetWizardProps) {
                                 onChange={(e) =>
                                   handleAmountChange(line.categoryId, e.target.value)
                                 }
-                                className="w-36 border-[#E8E0D8] text-right text-sm focus-visible:ring-[#C73E1D]"
+                                className="w-24 sm:w-36 border-[#E8E0D8] text-right text-xs sm:text-sm focus-visible:ring-[#C73E1D]"
                               />
                             </div>
                           </td>

@@ -1,5 +1,5 @@
 // ABOUTME: Unit tests for period.ts — tracked bucket generation, analytical months, labels, fiscal months.
-// ABOUTME: Covers monthly, quarterly, half-yearly, and annual periods with fiscal-year start at April (default).
+// ABOUTME: Month 1 = January through Month 12 = December — standard calendar alignment.
 
 import { describe, it, expect } from "vitest";
 import {
@@ -8,14 +8,10 @@ import {
   bucketLabel,
   fiscalMonths,
 } from "../period";
-import { getFiscalYearStart } from "../fiscal-year";
-
-const APRIL = 4;
-const JANUARY = 1;
 
 describe("generateTrackedBuckets", () => {
   describe("monthly", () => {
-    const buckets = generateTrackedBuckets("monthly", APRIL);
+    const buckets = generateTrackedBuckets("monthly");
 
     it("generates 12 buckets", () => {
       expect(buckets).toHaveLength(12);
@@ -27,31 +23,36 @@ describe("generateTrackedBuckets", () => {
       }
     });
 
-    it("has correct startMonth/endMonth for each bucket (April start)", () => {
-      // FY starts April: index 0=Apr, 1=May, ..., 11=Mar
-      const expectedMonths = [4, 5, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3];
+    it("has correct startMonth/endMonth for each bucket (calendar alignment)", () => {
+      // Standard calendar: index 0 = January (1), index 11 = December (12)
       for (let i = 0; i < 12; i++) {
-        expect(buckets[i].startMonth).toBe(expectedMonths[i]);
-        expect(buckets[i].endMonth).toBe(expectedMonths[i]);
+        expect(buckets[i].startMonth).toBe(i + 1);
+        expect(buckets[i].endMonth).toBe(i + 1);
       }
     });
 
-    it("labels buckets 'Month 1' through 'Month 12'", () => {
+    it("labels buckets with actual month names (January through December)", () => {
+      const expectedLabels = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+      ];
       for (let i = 0; i < 12; i++) {
-        expect(buckets[i].label).toBe(`Month ${i + 1}`);
+        expect(buckets[i].label).toBe(expectedLabels[i]);
       }
     });
 
-    it("generates correct buckets for January fiscal year start", () => {
-      const janBuckets = generateTrackedBuckets("monthly", JANUARY);
-      expect(janBuckets).toHaveLength(12);
-      expect(janBuckets[0].startMonth).toBe(1);
-      expect(janBuckets[11].startMonth).toBe(12);
+    it("ignores fiscalYearStart parameter — always calendar order", () => {
+      const aprilBuckets = generateTrackedBuckets("monthly", 4);
+      const janBuckets = generateTrackedBuckets("monthly", 1);
+      for (let i = 0; i < 12; i++) {
+        expect(aprilBuckets[i].label).toBe(janBuckets[i].label);
+        expect(aprilBuckets[i].startMonth).toBe(janBuckets[i].startMonth);
+      }
     });
   });
 
   describe("quarterly", () => {
-    const buckets = generateTrackedBuckets("quarterly", APRIL);
+    const buckets = generateTrackedBuckets("quarterly");
 
     it("generates 4 buckets", () => {
       expect(buckets).toHaveLength(4);
@@ -63,13 +64,12 @@ describe("generateTrackedBuckets", () => {
       }
     });
 
-    it("defines correct month ranges", () => {
-      // Q1: Apr-Jun (4-6), Q2: Jul-Sep (7-9), Q3: Oct-Dec (10-12), Q4: Jan-Mar (1-3)
+    it("defines correct month ranges (Jan–Mar, Apr–Jun, Jul–Sep, Oct–Dec)", () => {
       const expected = [
+        { start: 1, end: 3 },
         { start: 4, end: 6 },
         { start: 7, end: 9 },
         { start: 10, end: 12 },
-        { start: 1, end: 3 },
       ];
       for (let i = 0; i < 4; i++) {
         expect(buckets[i].startMonth).toBe(expected[i].start);
@@ -86,7 +86,7 @@ describe("generateTrackedBuckets", () => {
   });
 
   describe("half-yearly", () => {
-    const buckets = generateTrackedBuckets("half-yearly", APRIL);
+    const buckets = generateTrackedBuckets("half-yearly");
 
     it("generates 2 buckets", () => {
       expect(buckets).toHaveLength(2);
@@ -98,12 +98,11 @@ describe("generateTrackedBuckets", () => {
       }
     });
 
-    it("defines correct month ranges", () => {
-      // H1: Apr-Sep (4-9), H2: Oct-Mar (10-3)
-      expect(buckets[0].startMonth).toBe(4);
-      expect(buckets[0].endMonth).toBe(9);
-      expect(buckets[1].startMonth).toBe(10);
-      expect(buckets[1].endMonth).toBe(3);
+    it("defines correct month ranges (Jan–Jun, Jul–Dec)", () => {
+      expect(buckets[0].startMonth).toBe(1);
+      expect(buckets[0].endMonth).toBe(6);
+      expect(buckets[1].startMonth).toBe(7);
+      expect(buckets[1].endMonth).toBe(12);
     });
 
     it("labels buckets H1 and H2", () => {
@@ -113,7 +112,7 @@ describe("generateTrackedBuckets", () => {
   });
 
   describe("annual", () => {
-    const buckets = generateTrackedBuckets("annual", APRIL);
+    const buckets = generateTrackedBuckets("annual");
 
     it("generates 1 bucket", () => {
       expect(buckets).toHaveLength(1);
@@ -123,9 +122,9 @@ describe("generateTrackedBuckets", () => {
       expect(buckets[0].bucketType).toBe("annual");
     });
 
-    it("covers the full fiscal year (Apr–Mar)", () => {
-      expect(buckets[0].startMonth).toBe(4);
-      expect(buckets[0].endMonth).toBe(3);
+    it("covers January through December", () => {
+      expect(buckets[0].startMonth).toBe(1);
+      expect(buckets[0].endMonth).toBe(12);
     });
 
     it("labels bucket 'Annual'", () => {
@@ -135,32 +134,27 @@ describe("generateTrackedBuckets", () => {
 });
 
 describe("generateAnalyticalMonths", () => {
-  const APRIL = 4;
-
-  it("returns 12 months for monthly period, all tracked=true", () => {
-    const months = generateAnalyticalMonths("monthly", APRIL);
+  it("returns 12 months in calendar order for monthly period, all tracked=true", () => {
+    const months = generateAnalyticalMonths("monthly");
     expect(months).toHaveLength(12);
 
-    // First month should be April (index 4) with fiscalMonthIndex 0
-    expect(months[0].name).toBe("April");
-    expect(months[0].calendarMonth).toBe(4);
+    expect(months[0].name).toBe("January");
+    expect(months[0].calendarMonth).toBe(1);
     expect(months[0].fiscalMonthIndex).toBe(0);
     expect(months[0].tracked).toBe(true);
 
-    // Last month should be March with fiscalMonthIndex 11
-    expect(months[11].name).toBe("March");
-    expect(months[11].calendarMonth).toBe(3);
+    expect(months[11].name).toBe("December");
+    expect(months[11].calendarMonth).toBe(12);
     expect(months[11].fiscalMonthIndex).toBe(11);
     expect(months[11].tracked).toBe(true);
 
-    // All 12 tracked=true
     for (const m of months) {
       expect(m.tracked).toBe(true);
     }
   });
 
   it("returns 12 months for quarterly period, all tracked=false", () => {
-    const months = generateAnalyticalMonths("quarterly", APRIL);
+    const months = generateAnalyticalMonths("quarterly");
     expect(months).toHaveLength(12);
     for (const m of months) {
       expect(m.tracked).toBe(false);
@@ -168,7 +162,7 @@ describe("generateAnalyticalMonths", () => {
   });
 
   it("returns 12 months for half-yearly period, all tracked=false", () => {
-    const months = generateAnalyticalMonths("half-yearly", APRIL);
+    const months = generateAnalyticalMonths("half-yearly");
     expect(months).toHaveLength(12);
     for (const m of months) {
       expect(m.tracked).toBe(false);
@@ -176,26 +170,18 @@ describe("generateAnalyticalMonths", () => {
   });
 
   it("returns 12 months for annual period, all tracked=false", () => {
-    const months = generateAnalyticalMonths("annual", APRIL);
+    const months = generateAnalyticalMonths("annual");
     expect(months).toHaveLength(12);
     for (const m of months) {
       expect(m.tracked).toBe(false);
     }
   });
-
-  it("orders months correctly for January fiscal year start", () => {
-    const months = generateAnalyticalMonths("monthly", JANUARY);
-    expect(months[0].name).toBe("January");
-    expect(months[0].calendarMonth).toBe(1);
-    expect(months[11].name).toBe("December");
-    expect(months[11].calendarMonth).toBe(12);
-  });
 });
 
 describe("bucketLabel", () => {
-  it("returns 'Month N' for monthly period", () => {
-    expect(bucketLabel("monthly", 0)).toBe("Month 1");
-    expect(bucketLabel("monthly", 11)).toBe("Month 12");
+  it("returns month name for monthly period", () => {
+    expect(bucketLabel("monthly", 0)).toBe("January");
+    expect(bucketLabel("monthly", 11)).toBe("December");
   });
 
   it("returns 'QN' for quarterly period", () => {
@@ -214,34 +200,25 @@ describe("bucketLabel", () => {
 });
 
 describe("fiscalMonths", () => {
-  it("returns 12 months ordered from fiscal year start (April)", () => {
-    const months = fiscalMonths(APRIL);
+  it("returns 12 months in calendar order (January through December)", () => {
+    const months = fiscalMonths();
     expect(months).toHaveLength(12);
 
-    // First entry is April (calendar month 4, fiscal offset 0)
-    expect(months[0].name).toBe("April");
-    expect(months[0].index).toBe(4);
+    expect(months[0].name).toBe("January");
+    expect(months[0].index).toBe(1);
     expect(months[0].fiscalMonthIndex).toBe(0);
 
-    // Last entry is March (calendar month 3, fiscal offset 11)
-    expect(months[11].name).toBe("March");
-    expect(months[11].index).toBe(3);
+    expect(months[11].name).toBe("December");
+    expect(months[11].index).toBe(12);
     expect(months[11].fiscalMonthIndex).toBe(11);
 
-    // Verify sequential months
     const expectedNames = [
-      "April", "May", "June", "July", "August", "September",
-      "October", "November", "December", "January", "February", "March",
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December",
     ];
     for (let i = 0; i < 12; i++) {
       expect(months[i].name).toBe(expectedNames[i]);
       expect(months[i].fiscalMonthIndex).toBe(i);
     }
-  });
-
-  it("returns 12 months in calendar order for January fiscal start", () => {
-    const months = fiscalMonths(JANUARY);
-    expect(months[0].name).toBe("January");
-    expect(months[11].name).toBe("December");
   });
 });

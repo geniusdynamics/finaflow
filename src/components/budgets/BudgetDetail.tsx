@@ -1,6 +1,6 @@
 // ABOUTME: Budget detail view with bucket selector, editable lines, lifecycle actions, and monthly copy dialog.
 // ABOUTME: Supports monthly/quarterly/half-yearly tracked buckets and annual analytical breakdowns.
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { formatKES } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -36,16 +36,20 @@ import {
   PlayCircle,
   Lock,
   Archive,
+  Settings,
+  ArrowRight,
 } from "lucide-react";
 import type { Period } from "@/lib/budgets/fiscal-year";
 import { fiscalMonths } from "@/lib/budgets/period";
 import { getFiscalYearStart, fiscalYearLabel } from "@/lib/budgets/fiscal-year";
+import { useNavigate } from "react-router";
 
 interface BudgetDetailProps {
   planId: number;
 }
 
 export function BudgetDetail({ planId }: BudgetDetailProps) {
+  const navigate = useNavigate();
   const { data: plan, isLoading, isError, error, refetch } = trpc.budgets.get.useQuery({ planId });
   const utils = trpc.useUtils();
 
@@ -90,10 +94,17 @@ export function BudgetDetail({ planId }: BudgetDetailProps) {
   });
 
   const period = plan?.period as Period | undefined;
-  const fsMonths = fiscalMonths(getFiscalYearStart());
+  const fsMonths = fiscalMonths();
   const periodBuckets = plan?.buckets ?? [];
 
-  // Select first bucket by default
+  // Auto-select the first bucket once buckets are loaded and nothing is selected yet
+  useEffect(() => {
+    if (periodBuckets.length > 0 && selectedBucketId === null) {
+      setSelectedBucketId(periodBuckets[0].id);
+    }
+  }, [periodBuckets, selectedBucketId]);
+
+  // Select first bucket by default (fallback for the chain before useEffect runs)
   const currentBucketId = selectedBucketId ?? periodBuckets[0]?.id ?? null;
   const currentBucket = periodBuckets.find((b) => b.id === currentBucketId);
 
@@ -104,6 +115,18 @@ export function BudgetDetail({ planId }: BudgetDetailProps) {
 
   const statusCfg = plan ? budgetStatusConfig(plan.status) : null;
   const statusConfig = useMemo(() => statusCfg, [plan, statusCfg]);
+
+  // Compute fiscal year label for the header
+  const { data: fyConfig } = trpc.budgets.getFiscalYearConfig.useQuery();
+  const fys = fyConfig?.fiscalYearStartMonth ?? getFiscalYearStart();
+  const fyRange = plan ? fiscalYearLabel(plan.fiscalYearStart, fys) : "";
+  const fyStartMonth = fys;
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  const fyStartLabel = monthNames[fyStartMonth - 1] ?? "April";
+  const fyEndLabel = monthNames[(fyStartMonth + 10) % 12] ?? "March";
 
   function handleStartEdit() {
     if (!currentBucket) return;
@@ -164,19 +187,48 @@ export function BudgetDetail({ planId }: BudgetDetailProps) {
     );
   }
 
+  // Default FY alert
+  const showFyAlert = fys === 4;
+
+  // Check if plan has no buckets or lines
+  const isEmptyPlan =
+    plan &&
+    (periodBuckets.length === 0 ||
+      periodBuckets.every((b) => b.lines.length === 0));
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
+      {/* Admin alert — using default fiscal year */}
+      {showFyAlert && !isLoading && (
+        <div className="flex items-start gap-2 rounded-lg border border-[#D4A854]/30 bg-[#D4A854]/5 p-3">
+          <Settings className="mt-0.5 h-4 w-4 shrink-0 text-[#D4A854]" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs sm:text-sm text-[#2D2A26]">
+              Using default fiscal year ({fyStartLabel}).{" "}
+              <button
+                type="button"
+                onClick={() => navigate("/settings?tab=account")}
+                className="text-[#C73E1D] underline hover:text-[#A83215]"
+              >
+                Change in settings
+              </button>
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div>
-          <h2 className="text-xl font-serif font-semibold text-[#2D2A26]">{plan.name ?? `Budget #${plan.id}`}</h2>
-          <p className="text-sm text-[#8D8A87]">
+      <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg sm:text-xl font-serif font-semibold text-[#2D2A26] truncate">{plan.name ?? `Budget #${plan.id}`}</h2>
+          <p className="text-xs sm:text-sm text-[#8D8A87]">
             {PERIOD_LABELS[plan.period as Period] ?? plan.period} &middot;{" "}
-            {fiscalYearLabel(plan.fiscalYearStart, getFiscalYearStart())}
+            {fyRange} &middot;{" "}
+            <span className="font-medium">{fyStartLabel}&ndash;{fyEndLabel}</span>
           </p>
         </div>
         {statusConfig && (
-          <Badge className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full ${statusConfig.className}`}>
+          <Badge className={`inline-flex items-center gap-1 self-start px-2 py-1 text-xs font-medium rounded-full ${statusConfig.className}`}>
             {statusConfig.icon}
             {statusConfig.label}
           </Badge>
@@ -187,47 +239,69 @@ export function BudgetDetail({ planId }: BudgetDetailProps) {
         <p className="text-sm text-[#8D8A87]">{plan.notes}</p>
       )}
 
-      {/* Bucket Selector */}
-      <div className="flex flex-wrap items-center gap-2">
-        <CalendarDays className="h-4 w-4 text-[#8D8A87]" />
-        {periodBuckets.map((bucket) => (
-          <button
-            key={bucket.id}
-            type="button"
-            onClick={() => { setSelectedBucketId(bucket.id); setIsEditing(false); }}
-            className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
-              currentBucketId === bucket.id
-                ? "border-[#C73E1D] bg-[#C73E1D]/10 text-[#C73E1D] font-medium"
-                : "border-[#E8E0D8] text-[#8D8A87] hover:border-[#C73E1D]/50"
-            }`}
-          >
-            {bucket.label}
-          </button>
-        ))}
+      {/* Bucket Selector — always visible, shows skeleton while loading */}
+      <div className="flex items-center gap-2">
+        <CalendarDays className="h-4 w-4 shrink-0 text-[#8D8A87]" />
+        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin -mb-1">
+          {periodBuckets.length > 0 ? (
+            periodBuckets.map((bucket) => (
+              <button
+                key={bucket.id}
+                type="button"
+                onClick={() => { setSelectedBucketId(bucket.id); setIsEditing(false); }}
+                className={`shrink-0 px-2.5 sm:px-3 py-1.5 text-xs sm:text-sm rounded-full border transition-colors whitespace-nowrap ${
+                  currentBucketId === bucket.id
+                    ? "border-[#C73E1D] bg-[#C73E1D]/10 text-[#C73E1D] font-medium"
+                    : "border-[#E8E0D8] text-[#8D8A87] hover:border-[#C73E1D]/50"
+                }`}
+              >
+                {bucket.label}
+              </button>
+            ))
+          ) : (
+            <div className="flex items-center gap-2 py-1.5">
+              <Loader2 className="h-4 w-4 animate-spin text-[#C73E1D]" />
+              <span className="text-xs text-[#8D8A87]">Loading buckets...</span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Lines Table */}
-      {currentBucket && (
+      {/* Empty state when plan exists but has no content */}
+      {isEmptyPlan && (
         <Card className="border-[#E8E0D8]">
-          <CardHeader className="pb-3 flex flex-row items-center justify-between">
-            <CardTitle className="font-serif text-base">{currentBucket.label} &mdash; Category Budget</CardTitle>
-            <div className="flex items-center gap-2">
+          <CardContent className="p-8 text-center">
+            <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-[#8D8A87] opacity-30" />
+            <p className="text-sm font-medium text-[#2D2A26]">No budget data</p>
+            <p className="mt-1 text-xs text-[#8D8A87]">
+              This budget plan has no buckets or lines configured yet.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Lines Table */}
+      {currentBucket && !isEmptyPlan && (
+        <Card className="border-[#E8E0D8]">
+          <CardHeader className="pb-3 flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <CardTitle className="font-serif text-sm sm:text-base">{currentBucket.label} &mdash; Category Budget</CardTitle>
+            <div className="flex items-center gap-2 sm:ml-auto w-full sm:w-auto">
               {plan.period === "monthly" && !isEditing && (
-                <Button variant="outline" size="sm" onClick={() => setCopyDialogOpen(true)}>
-                  <Copy className="h-3.5 w-3.5 mr-1" /> Copy to months
+                <Button variant="outline" size="sm" onClick={() => setCopyDialogOpen(true)} className="text-xs sm:text-sm">
+                  <Copy className="h-3.5 w-3.5 mr-1" /> Copy
                 </Button>
               )}
               {canEditStatus(plan.status) && (
                 isEditing ? (
                   <>
-                    <Button size="sm" variant="ghost" onClick={handleCancelEdit}><X className="h-3.5 w-3.5 mr-1" /> Cancel</Button>
-                    <Button size="sm" onClick={handleSaveEdit} disabled={updateMutation.isPending}>
+                    <Button size="sm" variant="ghost" onClick={handleCancelEdit} className="text-xs sm:text-sm"><X className="h-3.5 w-3.5 mr-1" /> Cancel</Button>
+                    <Button size="sm" onClick={handleSaveEdit} disabled={updateMutation.isPending} className="text-xs sm:text-sm">
                       {updateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <Save className="h-3.5 w-3.5 mr-1" />}
                       Save
                     </Button>
                   </>
                 ) : (
-                  <Button size="sm" variant="outline" onClick={handleStartEdit}><Pencil className="h-3.5 w-3.5 mr-1" /> Edit</Button>
+                  <Button size="sm" variant="outline" onClick={handleStartEdit} className="text-xs sm:text-sm"><Pencil className="h-3.5 w-3.5 mr-1" /> Edit</Button>
                 )
               )}
             </div>
@@ -242,30 +316,38 @@ export function BudgetDetail({ planId }: BudgetDetailProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {currentBucket.lines.map((line) => (
-                    <tr key={line.categoryId} className="border-b border-[#E8E0D8]/50">
-                      <td className="py-2 flex items-center gap-2">
-                        {line.categoryColor && (
-                          <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: line.categoryColor }} />
-                        )}
-                        {line.categoryName ?? `Category #${line.categoryId}`}
-                      </td>
-                      <td className="py-2 text-right">
-                        {isEditing ? (
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={editLines[line.categoryId] ?? line.amount}
-                            onChange={(e) => setEditLines((p) => ({ ...p, [line.categoryId]: e.target.value }))}
-                            className="w-28 ml-auto text-right text-sm"
-                          />
-                        ) : (
-                          <span className="font-mono">{formatKES(line.amount)}</span>
-                        )}
+                  {currentBucket.lines.length > 0 ? (
+                    currentBucket.lines.map((line) => (
+                      <tr key={line.categoryId} className="border-b border-[#E8E0D8]/50">
+                        <td className="py-2 flex items-center gap-2">
+                          {line.categoryColor && (
+                            <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: line.categoryColor }} />
+                          )}
+                          {line.categoryName ?? `Category #${line.categoryId}`}
+                        </td>
+                        <td className="py-2 text-right">
+                          {isEditing ? (
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={editLines[line.categoryId] ?? line.amount}
+                              onChange={(e) => setEditLines((p) => ({ ...p, [line.categoryId]: e.target.value }))}
+                              className="w-24 sm:w-28 ml-auto text-right text-xs sm:text-sm"
+                            />
+                          ) : (
+                            <span className="font-mono text-xs sm:text-sm">{formatKES(line.amount)}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={2} className="py-6 text-center text-xs text-[#8D8A87]">
+                        No categories in this bucket. Click Edit to add amounts.
                       </td>
                     </tr>
-                  ))}
+                  )}
                 </tbody>
               </table>
             </div>
@@ -274,7 +356,7 @@ export function BudgetDetail({ planId }: BudgetDetailProps) {
       )}
 
       {/* Annual information notice */}
-      {period === "annual" && (
+      {period === "annual" && !isEmptyPlan && (
         <p className="text-xs text-[#8D8A87] flex items-center gap-1">
           <AlertTriangle className="h-3 w-3" />
           Annual budgets show a monthly breakdown for analysis only. Edit the annual total above.
