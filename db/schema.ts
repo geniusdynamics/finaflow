@@ -308,7 +308,7 @@ export const expenseCategories = pgTable("expense_categories", {
   description: text("description"),
   color: varchar("color", { length: 20 }).default("#C73E1D"),
   accountingClass: accountingClassEnum("accountingClass").default("operating_expense"),
-  defaultAccountId: bigint("defaultAccountId", { mode: "number" }).notNull().references(() => accounts.id, { onDelete: "no action" }),
+  defaultAccountId: bigint("defaultAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   externalAccountCode: varchar("externalAccountCode", { length: 50 }),
   externalSystem: varchar("externalSystem", { length: 50 }),
   isActive: boolean("isActive").default(true).notNull(),

@@ -35,7 +35,7 @@ describe("Business owner user management flow", () => {
       hasAnyRecords: true,
     });
 
-    expect(message).toContain("disable");
+    expect(message).toContain("Disable");
     expect(message).toContain("Sales (2)");
     expect(message).toContain("Expenses (1)");
   });

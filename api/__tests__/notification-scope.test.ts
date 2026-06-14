@@ -86,7 +86,7 @@ describe("Notification Business Isolation", () => {
       } as any)
       .returning();
 
-    [locA] = await db
+    await db
       .insert(locations)
       .values({
         businessId: bizA.id,

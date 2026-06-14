@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { createRouter, reportQuery, budgetManage, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
-import { dailySales, expenses, bills, expenseCategories, budgets, budgetPlans, budgetPlanBuckets, budgetBucketLines } from "@db/schema";
-import { eq, and, isNull, sql, inArray, gt } from "drizzle-orm";
+import { dailySales, expenses, bills, expenseCategories, budgetPlans, budgetPlanBuckets, budgetBucketLines } from "@db/schema";
+import { eq, and, isNull, sql, inArray } from "drizzle-orm";
 import { d } from "./lib/decimal";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function resolveLocationFilter(ctx: any, inputLocationId?: number): Promise<number[]> {

@@ -104,7 +104,7 @@ export const journalRouter = createRouter({
         postImmediately: z.boolean().default(false),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       
 
       const lines: JournalLineInput[] = input.lines.map((line) => ({
@@ -166,7 +166,7 @@ export const journalRouter = createRouter({
           .optional(),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const db = getDb();
       
 
@@ -217,7 +217,7 @@ export const journalRouter = createRouter({
         businessId: z.number(),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       
       await postJournalEntry(input.id, ctx.user.id);
       return { success: true };
@@ -230,7 +230,7 @@ export const journalRouter = createRouter({
         businessId: z.number(),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       
       await unpostJournalEntry(input.id, ctx.user.id);
       return { success: true };
@@ -243,7 +243,7 @@ export const journalRouter = createRouter({
         businessId: z.number(),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       
       const reversal = await reverseJournalEntry(input.id, ctx.user.id);
       return reversal;
