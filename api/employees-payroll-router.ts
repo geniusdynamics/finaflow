@@ -97,7 +97,10 @@ export const employeesRouter = createRouter({
       if (!accountId) throw new Error("Account context required to create employee user");
 
       // Generate username using first-name + business-abbr strategy
-      const businessName = ctx.user?.currentBusiness?.name ?? "";
+      const businessRow = currentBusinessId
+        ? await db.select({ name: businesses.name }).from(businesses).where(eq(businesses.id, currentBusinessId)).limit(1)
+        : [];
+      const businessName = businessRow[0]?.name ?? "";
       const isTaken = async (candidate: string): Promise<boolean> => {
         const existing = await db.query.users.findFirst({
           where: (u, { eq, and, isNull }) => and(
@@ -149,7 +152,7 @@ export const employeesRouter = createRouter({
         return [createdEmp, username, initialPassword];
       });
 
-      return { id: result[0].id, success: true, username: result[1], initialPassword: result[2] };
+      return { id: result.id, success: true, username: result[1], initialPassword: result[2] };
     }),
 
   update: payrollProcess
@@ -181,6 +184,27 @@ export const employeesRouter = createRouter({
       await requireAuthorizedEntity(ctx, employees, input.id);
       await db.update(employees).set({ deletedAt: new Date() }).where(eq(employees.id, input.id));
       return { success: true };
+    }),
+
+  deleteWithUser: payrollProcess
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const emp = await requireAuthorizedEntity(ctx, employees, input.id);
+      const _currentUserId = ctx.user?.id;
+
+      await db.transaction(async (tx) => {
+        // Soft-delete the employee record
+        await tx.update(employees).set({ deletedAt: new Date(), isActive: false }).where(eq(employees.id, input.id));
+
+        // If the employee has a linked user, soft-delete that user too
+        if (emp.userId) {
+          await tx.update(users).set({ deletedAt: new Date(), isActive: false }).where(eq(users.id, emp.userId));
+          await tx.update(userBusinesses).set({ isActive: false }).where(eq(userBusinesses.userId, emp.userId));
+        }
+      });
+
+      return { success: true, deletedUserId: emp.userId ?? null };
     }),
 });
 
@@ -573,6 +597,13 @@ export const payrollRouter = createRouter({
       const emp = await requireAuthorizedEntity(ctx, employees, input.employeeId);
       
       if (emp.locationId !== period.locationId) throw new Error("Employee does not belong to this period's location");
+
+      // Validate employment date: employee must be hired on or before period's end date
+      const empDate = new Date(String(emp.employmentDate));
+      const periodEnd = new Date(String(period.endDate));
+      if (empDate > periodEnd) {
+        throw new Error(`Employee was hired after this payroll period ended. Employment date: ${empDate.toISOString().split("T")[0]}, Period ends: ${periodEnd.toISOString().split("T")[0]}`);
+      }
 
       const existing = await db.select().from(payrollEntries).where(
         and(eq(payrollEntries.periodId, input.periodId), eq(payrollEntries.employeeId, input.employeeId), isNull(payrollEntries.deletedAt))

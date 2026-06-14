@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Settings as SettingsIcon, Camera, Briefcase, Shield, Crown, Award, ArrowUpCircle, ArrowDownCircle, Users, MapPin, Gift, Clock, Key, Trash2, Plus, Copy, CheckCircle, Webhook, AlertCircle, Plug, MessageSquare, Eye, RefreshCw, DollarSign, Wallet, Smartphone, Activity, AlertCircle as AlertCircleIcon, CheckCircle2, ChevronRight } from "lucide-react";
+import { Settings as SettingsIcon, Camera, Briefcase, Shield, Crown, Award, ArrowUpCircle, ArrowDownCircle, Users, MapPin, Gift, Clock, Key, Trash2, Plus, Copy, CheckCircle, Webhook, AlertCircle, Plug, MessageSquare, Eye, RefreshCw, DollarSign, Wallet, Smartphone, Activity, AlertCircle as AlertCircleIcon, CheckCircle2, ChevronRight, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 
 const PLAN_DETAILS: Record<string, { label: string; price: string; businesses: number; branches: number; users: number; transactions: string; payroll: string; support: string; color: string; features: string[] }> = {
@@ -23,6 +23,37 @@ const PLAN_DETAILS: Record<string, { label: string; price: string; businesses: n
 };
 
 type PlanKey = "free" | "starter" | "growth" | "pro";
+
+function FiscalYearSetting() {
+  const { data: fyConfig, refetch } = trpc.budgets.getFiscalYearConfig.useQuery();
+  const updateFy = trpc.budgets.updateFiscalYearStart.useMutation({
+    onSuccess: () => { toast.success("Fiscal year updated"); refetch(); },
+    onError: (err) => toast.error(err.message),
+  });
+  const fyMonth = fyConfig?.fiscalYearStartMonth ?? 4;
+  const monthNames = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-[#E8E0D8] px-4 py-3">
+      <div>
+        <Label className="text-sm font-medium">Fiscal Year Start Month</Label>
+        <p className="text-xs text-[#8D8A87]">Currently: {monthNames[fyMonth - 1]} ({fyMonth})</p>
+      </div>
+      <select
+        value={fyMonth}
+        onChange={(e) => updateFy.mutate({ month: +e.target.value })}
+        disabled={updateFy.isPending}
+        className="rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26] focus:outline-none focus:ring-2 focus:ring-[#C73E1D]/30"
+      >
+        {monthNames.map((name, idx) => (
+          <option key={idx + 1} value={idx + 1}>{name}</option>
+        ))}
+      </select>
+    </div>
+  );
+}
 
 export function Settings() {
   const navigate = useNavigate();
@@ -543,6 +574,21 @@ export function Settings() {
                     );
                   })}
                 </div>
+              </CardContent>
+            </Card>
+            {/* Fiscal Year Configuration */}
+            <Card className="border-[#E8E0D8]">
+              <CardHeader className="pb-3">
+                <CardTitle className="flex items-center gap-2 font-serif text-lg">
+                  <CalendarDays className="h-5 w-5 text-[#2D2A26]" />
+                  Fiscal Year
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-[#8D8A87]">
+                  Set the month when your fiscal year starts. This affects how budget plans are displayed and organized.
+                </p>
+                <FiscalYearSetting />
               </CardContent>
             </Card>
           </>

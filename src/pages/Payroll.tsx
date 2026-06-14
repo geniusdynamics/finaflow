@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Users, DollarSign, CreditCard, CheckCircle, Clock, Eye, Play, Banknote, Pencil, UserCircle, UserPlus, UserMinus, Calculator, Landmark, Shield } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Plus, Users, DollarSign, CreditCard, CheckCircle, Clock, Eye, Play, Banknote, Pencil, UserCircle, UserPlus, UserMinus, Calculator, Landmark, Shield, Trash2 } from "lucide-react";
 import { LocationSelector } from "@/components/LocationSelector";
 import { toast } from "sonner";
 
@@ -75,6 +76,10 @@ export function Payroll() {
     onSuccess: () => { toast.success("Employee removed from period"); utils.payroll.entries.invalidate(); utils.payroll.periods.invalidate(); },
     onError: (err) => toast.error(err.message),
   });
+  const deleteEmployee = trpc.employees.deleteWithUser.useMutation({
+    onSuccess: (_data) => { toast.success("Employee and linked user account deleted"); setDeleteConfirm(null); setEmpViewOpen(null); utils.employees.list.invalidate(); },
+    onError: (err) => toast.error(err.message),
+  });
 
   const [periodForm, setPeriodForm] = useState({ locationId: "", periodName: "", startDate: "", endDate: "", paymentDate: "" });
   const [empForm, setEmpForm] = useState({ locationId: "", fullName: "", phone: "", idNumber: "", kraPin: "", nssfNumber: "", nhifNumber: "", salaryType: "monthly" as const, basicSalary: "", bankName: "", bankAccount: "", bankCode: "", employmentDate: "" });
@@ -83,6 +88,7 @@ export function Payroll() {
   const [assignEmpId, setAssignEmpId] = useState("");
   const [deductOpen, setDeductOpen] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [deductForm, setDeductForm] = useState({ grossPay: "", insurancePremium: "" });
   const [settingsForm, setSettingsForm] = useState({
     nhifRate: "2.75", nssfTier1Employee: "420", nssfTier2Employee: "1740",
@@ -266,8 +272,43 @@ export function Payroll() {
                                 <div><Label className="text-xs">Bank Code</Label><p>{employeeDetail.bankCode || "-"}</p></div>
                                 <div><Label className="text-xs">Basic Salary</Label><p className="font-mono font-semibold">{formatKES(employeeDetail.basicSalary)}</p></div>
                               </div>
+                              {canProcess && (
+                                <div className="border-t border-[#E8E0D8] pt-3">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-[#D32F2F] text-[#D32F2F] hover:bg-[#D32F2F]/10"
+                                    onClick={() => setDeleteConfirm(employeeDetail.id)}
+                                  >
+                                    <Trash2 className="mr-1 h-4 w-4" />Delete Employee
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           )}
+                          {/* Delete confirmation */}
+                          <AlertDialog open={deleteConfirm !== null} onOpenChange={(v) => { if (!v) setDeleteConfirm(null); }}>
+                            <AlertDialogContent className="bg-white">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Employee & User Account?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will permanently deactivate the employee record{employeeDetail?.userId ? " and the linked user account" : ""}. 
+                                  {employeeDetail?.userId ? " The user will no longer be able to log in." : ""}
+                                  This action can be undone by an administrator.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => setDeleteConfirm(null)}>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="bg-[#D32F2F] hover:bg-[#B71C1C]"
+                                  onClick={() => { if (deleteConfirm) deleteEmployee.mutate({ id: deleteConfirm }); }}
+                                  disabled={deleteEmployee.isPending}
+                                >
+                                  {deleteEmployee.isPending ? "Deleting..." : "Delete"}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </DialogContent>
                       </Dialog>
                       {/* Edit employee */}

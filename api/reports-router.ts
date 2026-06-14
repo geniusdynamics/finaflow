@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, reportQuery, budgetManage, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
-import { dailySales, expenses, bills, expenseCategories, budgets } from "@db/schema";
+import { dailySales, expenses, bills, expenseCategories, budgets, budgetPlans, budgetPlanBuckets, budgetBucketLines } from "@db/schema";
 import { eq, and, isNull, sql, inArray, gt } from "drizzle-orm";
 import { d } from "./lib/decimal";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -176,24 +176,38 @@ export const reportsRouter = createRouter({
         .where(and(...expenseCond))
         .groupBy(expenseCategories.id, expenseCategories.name, expenseCategories.color);
 
-      // Fetch budgeted amounts from the budgets table
-      const budgetRows = await db
+      // Fetch budgeted amounts from the new budget plan model
+      const plans = await db
         .select()
-        .from(budgets)
+        .from(budgetPlans)
         .where(and(
-          eq(budgets.year, input.year),
-          eq(budgets.month, targetMonth),
-          sql`${budgets.locationId} IN (${locIdSql})`,
-          isNull(budgets.deletedAt),
+          eq(budgetPlans.fiscalYearStart, input.year),
+          sql`${budgetPlans.locationId} IN (${locIdSql})`,
+          isNull(budgetPlans.deletedAt),
+          sql`${budgetPlans.status} IN ('active', 'locked')`,
         ));
-
       const budgetMap = new Map<number, string>();
-      for (const b of budgetRows) {
-        if (b.categoryId != null) {
-          budgetMap.set(b.categoryId, b.amount);
+      for (const plan of plans) {
+        // Standard calendar alignment: Month 1 = January, so targetBucketIndex = targetMonth - 1
+        let targetBucketIndex;
+        switch (plan.period) {
+          case "monthly": targetBucketIndex = targetMonth - 1; break;
+          case "quarterly": targetBucketIndex = Math.floor((targetMonth - 1) / 3); break;
+          case "half-yearly": targetBucketIndex = Math.floor((targetMonth - 1) / 6); break;
+          case "annual": targetBucketIndex = 0; break;
+          default: continue;
+        }
+        const matchingBuckets = await db.select().from(budgetPlanBuckets).where(and(eq(budgetPlanBuckets.planId, plan.id), eq(budgetPlanBuckets.bucketIndex, targetBucketIndex)));
+        for (const bucket of matchingBuckets) {
+          const bucketLines = await db.select().from(budgetBucketLines).where(eq(budgetBucketLines.bucketId, bucket.id));
+          const monthSpan = bucket.endMonth - bucket.startMonth + 1;
+          for (const bl of bucketLines) {
+            const monthlyAmount = monthSpan > 1 ? d(bl.amount).dividedBy(monthSpan).toFixed(2) : bl.amount;
+            const existing = budgetMap.get(bl.categoryId) || "0.00";
+            budgetMap.set(bl.categoryId, d(existing).plus(monthlyAmount).toFixed(2));
+          }
         }
       }
-
       const categories = expenseData.map((c) => {
         const budgeted = budgetMap.get(c.categoryId) || "0.00";
         const actual = c.actual;
@@ -371,31 +385,80 @@ export const reportsRouter = createRouter({
       const db = getDb();
       const { year, month, categoryId, amount, locationId } = input;
 
-      const existing = await db
-        .select()
-        .from(budgets)
+      // Find or create a monthly budget plan for this location + year
+      let [plan] = await db
+        .select({ id: budgetPlans.id })
+        .from(budgetPlans)
         .where(and(
-          eq(budgets.year, year),
-          eq(budgets.month, month),
-          eq(budgets.categoryId, categoryId),
-          eq(budgets.locationId, locationId),
-          isNull(budgets.deletedAt),
+          eq(budgetPlans.locationId, locationId),
+          eq(budgetPlans.fiscalYearStart, year),
+          eq(budgetPlans.period, "monthly"),
+          isNull(budgetPlans.deletedAt),
         ))
         .limit(1);
 
-      if (existing.length > 0) {
+      if (!plan) {
+        [plan] = await db
+          .insert(budgetPlans)
+          .values({
+            locationId,
+            fiscalYearStart: year,
+            period: "monthly",
+            name: `Budget FY ${year}`,
+            status: "active",
+          })
+          .returning({ id: budgetPlans.id });
+      }
+
+      // Find or create the bucket for this month (standard calendar: month 1 = January → bucketIndex 0)
+      const bucketIndex = month - 1;
+      let [bucket] = await db
+        .select({ id: budgetPlanBuckets.id })
+        .from(budgetPlanBuckets)
+        .where(and(
+          eq(budgetPlanBuckets.planId, plan.id),
+          eq(budgetPlanBuckets.bucketType, "month"),
+          eq(budgetPlanBuckets.bucketIndex, bucketIndex),
+        ))
+        .limit(1);
+
+      if (!bucket) {
+        const MONTH_NAMES = [
+          "January", "February", "March", "April", "May", "June",
+          "July", "August", "September", "October", "November", "December",
+        ];
+        [bucket] = await db
+          .insert(budgetPlanBuckets)
+          .values({
+            planId: plan.id,
+            bucketType: "month",
+            bucketIndex,
+            startMonth: month,
+            endMonth: month,
+            label: MONTH_NAMES[month - 1] ?? `Month ${month}`,
+          })
+          .returning({ id: budgetPlanBuckets.id });
+      }
+
+      // Upsert the bucket line for this category
+      const [existingLine] = await db
+        .select({ id: budgetBucketLines.id })
+        .from(budgetBucketLines)
+        .where(and(
+          eq(budgetBucketLines.bucketId, bucket.id),
+          eq(budgetBucketLines.categoryId, categoryId),
+        ))
+        .limit(1);
+
+      if (existingLine) {
         await db
-          .update(budgets)
-          .set({ amount, updatedAt: new Date() })
-          .where(eq(budgets.id, existing[0].id));
+          .update(budgetBucketLines)
+          .set({ amount })
+          .where(eq(budgetBucketLines.id, existingLine.id));
       } else {
-        await db.insert(budgets).values({
-          year,
-          month,
-          categoryId,
-          amount,
-          locationId,
-        });
+        await db
+          .insert(budgetBucketLines)
+          .values({ bucketId: bucket.id, categoryId, amount });
       }
 
       return { success: true };
@@ -413,38 +476,91 @@ export const reportsRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      const MONTH_NAMES = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+      ];
       let count = 0;
+
       await db.transaction(async (tx) => {
         for (const entry of input.budgets) {
           const { year, month, categoryId, amount, locationId } = entry;
-          const existing = await tx
-            .select()
-            .from(budgets)
+
+          // Find or create plan
+          let [plan] = await tx
+            .select({ id: budgetPlans.id })
+            .from(budgetPlans)
             .where(and(
-              eq(budgets.year, year),
-              eq(budgets.month, month),
-              eq(budgets.categoryId, categoryId),
-              eq(budgets.locationId, locationId),
-              isNull(budgets.deletedAt),
+              eq(budgetPlans.locationId, locationId),
+              eq(budgetPlans.fiscalYearStart, year),
+              eq(budgetPlans.period, "monthly"),
+              isNull(budgetPlans.deletedAt),
             ))
             .limit(1);
-          if (existing.length > 0) {
+
+          if (!plan) {
+            [plan] = await tx
+              .insert(budgetPlans)
+              .values({
+                locationId,
+                fiscalYearStart: year,
+                period: "monthly",
+                name: `Budget FY ${year}`,
+                status: "active",
+              })
+              .returning({ id: budgetPlans.id });
+          }
+
+          // Find or create bucket
+          const bucketIndex = month - 1;
+          let [bucket] = await tx
+            .select({ id: budgetPlanBuckets.id })
+            .from(budgetPlanBuckets)
+            .where(and(
+              eq(budgetPlanBuckets.planId, plan.id),
+              eq(budgetPlanBuckets.bucketType, "month"),
+              eq(budgetPlanBuckets.bucketIndex, bucketIndex),
+            ))
+            .limit(1);
+
+          if (!bucket) {
+            [bucket] = await tx
+              .insert(budgetPlanBuckets)
+              .values({
+                planId: plan.id,
+                bucketType: "month",
+                bucketIndex,
+                startMonth: month,
+                endMonth: month,
+                label: MONTH_NAMES[month - 1] ?? `Month ${month}`,
+              })
+              .returning({ id: budgetPlanBuckets.id });
+          }
+
+          // Upsert line
+          const [existingLine] = await tx
+            .select({ id: budgetBucketLines.id })
+            .from(budgetBucketLines)
+            .where(and(
+              eq(budgetBucketLines.bucketId, bucket.id),
+              eq(budgetBucketLines.categoryId, categoryId),
+            ))
+            .limit(1);
+
+          if (existingLine) {
             await tx
-              .update(budgets)
-              .set({ amount, updatedAt: new Date() })
-              .where(eq(budgets.id, existing[0].id));
+              .update(budgetBucketLines)
+              .set({ amount })
+              .where(eq(budgetBucketLines.id, existingLine.id));
           } else {
-            await tx.insert(budgets).values({
-              year,
-              month,
-              categoryId,
-              amount,
-              locationId,
-            });
+            await tx
+              .insert(budgetBucketLines)
+              .values({ bucketId: bucket.id, categoryId, amount });
           }
           count++;
         }
       });
+
       return { success: true, count };
     }),
 
@@ -461,25 +577,56 @@ export const reportsRouter = createRouter({
         : await resolveLocationFilter(ctx);
       const locIdSql = sql.join(locIds.map(id => sql`${id}`), sql`, `);
 
-      const rows = await db
-        .select({
-          id: budgets.id,
-          categoryId: budgets.categoryId,
-          amount: budgets.amount,
-          month: budgets.month,
-          year: budgets.year,
-          locationId: budgets.locationId,
-          notes: budgets.notes,
-        })
-        .from(budgets)
+      // Read from the new budget plan model
+      const plans = await db
+        .select({ id: budgetPlans.id, locationId: budgetPlans.locationId, fiscalYearStart: budgetPlans.fiscalYearStart })
+        .from(budgetPlans)
         .where(and(
-          eq(budgets.year, input.year),
-          eq(budgets.month, input.month),
-          sql`${budgets.locationId} IN (${locIdSql})`,
-          isNull(budgets.deletedAt),
+          eq(budgetPlans.fiscalYearStart, input.year),
+          eq(budgetPlans.period, "monthly"),
+          sql`${budgetPlans.locationId} IN (${locIdSql})`,
+          isNull(budgetPlans.deletedAt),
         ));
 
-      return rows;
+      if (plans.length === 0) return [];
+
+      const planIds = plans.map((p) => p.id);
+      const bucketIndex = input.month - 1;
+
+      const buckets = await db
+        .select({ id: budgetPlanBuckets.id, planId: budgetPlanBuckets.planId })
+        .from(budgetPlanBuckets)
+        .where(and(
+          inArray(budgetPlanBuckets.planId, planIds),
+          eq(budgetPlanBuckets.bucketType, "month"),
+          eq(budgetPlanBuckets.bucketIndex, bucketIndex),
+        ));
+
+      if (buckets.length === 0) return [];
+
+      const bucketIds = buckets.map((b) => b.id);
+      const planMap = new Map(buckets.map((b) => [b.id, b.planId]));
+      const locMap = new Map(plans.map((p) => [p.id, p.locationId]));
+
+      const lines = await db
+        .select({
+          id: budgetBucketLines.id,
+          bucketId: budgetBucketLines.bucketId,
+          categoryId: budgetBucketLines.categoryId,
+          amount: budgetBucketLines.amount,
+        })
+        .from(budgetBucketLines)
+        .where(inArray(budgetBucketLines.bucketId, bucketIds));
+
+      return lines.map((l) => ({
+        id: l.id,
+        categoryId: l.categoryId,
+        amount: l.amount,
+        month: input.month,
+        year: input.year,
+        locationId: locMap.get(planMap.get(l.bucketId)!) ?? 0,
+        notes: null,
+      }));
     }),
 
   setCogsTarget: reportQuery

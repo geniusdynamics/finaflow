@@ -30,6 +30,7 @@ const BusinessOverview = lazy(() => import("./pages/BusinessOverview").then(m =>
 const BusinessDetails = lazy(() => import("./pages/BusinessDetails").then(m => ({ default: m.BusinessDetails })));
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard").then(m => ({ default: m.PartnerDashboard })));
 const Profile = lazy(() => import("./pages/Profile").then(m => ({ default: m.Profile })));
+const Budgets = lazy(() => import("./pages/Budgets"));
 
 function SuspendedPage({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>;
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="/daily-payments" element={<Navigate to="/calendar?section=payments" replace />} />
         <Route path="/calendar" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="calendar:view"><Calendar /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/reports" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="reports:view"><Reports /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/budgets" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="budgets:view"><Budgets /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/journal-entries" element={<Navigate to="/accounts?section=journal-entries" replace />} />
         <Route path="/users" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="users:manage"><Users /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/settings" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><Settings /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
