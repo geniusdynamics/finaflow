@@ -7,7 +7,7 @@ import {
   accounts, businesses, expenseCategories, locations, userBusinesses, users,
   budgetPlans as bp, budgetPlanBuckets as bpb, budgetBucketLines as bbl,
 } from "@db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 function makeAuthedCaller(
   user: typeof users.$inferSelect,
@@ -337,9 +337,14 @@ describe("Budgets Router", () => {
   it("copyMonthlyBucket copies lines to target buckets", async () => {
     const caller = makeAuthedCaller(user, biz, [biz.id]);
     const plan = await caller.budgets.get({ planId: sharedPlanId });
+    expect(plan.buckets).toHaveLength(12);
     const sourceBucket = plan.buckets[0];
     const target1 = plan.buckets[5];
     const target2 = plan.buckets[10];
+
+    // Defensive: verify the bucket exists before operating on it
+    const [bucketCheck] = await db.select({ id: bpb.id }).from(bpb).where(and(eq(bpb.id, sourceBucket.id), eq(bpb.planId, sharedPlanId))).limit(1);
+    if (!bucketCheck) throw new Error(`Bucket ${sourceBucket.id} for plan ${sharedPlanId} not found in DB`);
 
     // Make source bucket have a distinct value
     await caller.budgets.updateLines({
@@ -380,6 +385,11 @@ describe("Budgets Router", () => {
   it("copyMonthlyBucket rejects source bucket in targets", async () => {
     const caller = makeAuthedCaller(user, biz, [biz.id]);
     const plan = await caller.budgets.get({ planId: sharedPlanId });
+    expect(plan.buckets).toHaveLength(12);
+
+    // Verify plan exists before proceeding
+    const [planCheck] = await db.select({ id: bp.id }).from(bp).where(eq(bp.id, sharedPlanId)).limit(1);
+    if (!planCheck) throw new Error(`Plan ${sharedPlanId} not found in DB`);
 
     await expect(
       caller.budgets.copyMonthlyBucket({

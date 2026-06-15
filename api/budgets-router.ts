@@ -58,7 +58,7 @@ export const budgetsRouter = createRouter({
       validateBudgetLines(input.lines);
       const fiscalStartMonth = getFiscalYearStart();
       const buckets = generateTrackedBuckets(input.period as Period, fiscalStartMonth);
-      return await db.transaction(async (tx) => {
+      const created = await db.transaction(async (tx) => {
         const planIds: number[] = [];
         for (const lid of uniqueLocIds) {
           const [plan] = await tx.insert(budgetPlans).values({
@@ -81,8 +81,13 @@ export const budgetsRouter = createRouter({
             }
           }
         }
+        if (planIds.length === 0) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "No plan created - unexpected" });
         return { planId: planIds[0], bucketIds: planIds };
       });
+      // Verify the plan was actually persisted before returning
+      const [verify] = await db.select({ id: budgetPlans.id }).from(budgetPlans).where(eq(budgetPlans.id, created.planId)).limit(1);
+      if (!verify) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Plan was not persisted after transaction" });
+      return created;
     }),
 
   listByYear: budgetManage

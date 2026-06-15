@@ -57,6 +57,13 @@
       "when": 1781441700000,
       "tag": "0015_fiscal_year_start_month",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781500000000,
+      "tag": "0016_make_default_account_id_nullable",
+      "breakpoints": true
     }
   ]
 }
