@@ -5,7 +5,6 @@ import { createRouter, budgetManage, authedQuery, getCurrentBusinessLocationIds 
 import { getDb } from "./queries/connection";
 import { budgetPlans, budgetPlanBuckets, budgetBucketLines, expenseCategories, businesses, type InsertBudgetPlan } from "@db/schema";
 import { eq, and, isNull, sql, inArray } from "drizzle-orm";
-import { d } from "./lib/decimal";
 import { generateTrackedBuckets } from "@/lib/budgets/period";
 import { validatePeriod, validateBudgetLines } from "@/lib/budgets/validation";
 import { getFiscalYearStart } from "@/lib/budgets/fiscal-year";

@@ -94,11 +94,6 @@ interface CallerUser {
   businessIds: number[];
 }
 
-interface CallerContext {
-  req: Request;
-  resHeaders: Headers;
-  user: CallerUser;
-}
 
 function createAuthedCaller(
   user: { id: number; role: string; currentBusinessId: number; accountId: string; accountRefId: number | null },

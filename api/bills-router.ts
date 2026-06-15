@@ -13,7 +13,6 @@ import { clearNotificationsForBill } from "./lib/notification-clearance";
 import type { DbClient } from "./lib/account-subscriptions";
 
 type Db = ReturnType<typeof getDb>;
-type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 type BillInsert = typeof bills.$inferInsert;
 type LedgerEntryInsert = typeof ledgerEntries.$inferInsert;
 type AttachmentInsert = typeof attachments.$inferInsert;
