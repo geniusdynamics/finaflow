@@ -28,6 +28,9 @@ import {
   userBusinesses,
   users,
   expenseCategories,
+  budgetBucketLines,
+  budgetPlanBuckets,
+  budgetPlans,
   employees,
   auditLog,
   budgets,
@@ -439,6 +442,15 @@ async function cleanupResetContext(accountId: string) {
   await db.delete(journalEntries).where(eq(journalEntries.businessId, business.id));
   await db.delete(expenses).where(eq(expenses.businessId, business.id));
   await db.delete(bills).where(eq(bills.businessId, business.id));
+  // Try to clean up budget bucket lines if the table exists (migration 0014+)
+  try {
+    await db.delete(budgetBucketLines).where(sql`${budgetBucketLines.id} > 0`);
+    await db.delete(budgetPlanBuckets).where(sql`${budgetPlanBuckets.id} > 0`);
+    await db.delete(budgetPlans).where(sql`${budgetPlans.id} > 0`);
+  } catch {
+    // budget plan tables don't exist yet (migration 0014 not applied)
+  }
+
   // Delete expense_categories FIRST (FK references accounts.id via defaultAccountId)
   await db.delete(expenseCategories).where(eq(expenseCategories.businessId, business.id));
   await db.delete(accounts).where(eq(accounts.businessId, business.id));

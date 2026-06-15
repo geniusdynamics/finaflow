@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import { createTRPCReact } from "@trpc/react-query";
 import { httpBatchLink } from "@trpc/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -11,14 +10,15 @@ export const trpc = createTRPCReact<AppRouter>();
 let queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 0,
-      gcTime: 0,
+      staleTime: 30_000,
+      gcTime: 300_000,
       refetchOnWindowFocus: true,
     },
   },
 });
 
 let csrfToken: string | null = null;
+let authToken: string | null = null; // Bearer JWT fallback
 
 export function setCsrfToken(token: string | null) {
   csrfToken = token;
@@ -26,6 +26,14 @@ export function setCsrfToken(token: string | null) {
 
 export function getCsrfToken(): string | null {
   return csrfToken;
+}
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
+export function getAuthToken(): string | null {
+  return authToken;
 }
 
 export function getCsrfTokenFromCookies(cookieHeader?: string | null): string | null {
@@ -49,12 +57,16 @@ const trpcClient = trpc.createClient({
       transformer: superjson,
       headers() {
         const headers: Record<string, string> = {};
-        const token = csrfToken ?? getCsrfTokenFromCookies();
-        if (!csrfToken && token) {
-          csrfToken = token;
+        const csrf = csrfToken ?? getCsrfTokenFromCookies();
+        if (!csrfToken && csrf) {
+          csrfToken = csrf;
         }
-        if (token) {
-          headers["x-csrf-token"] = token;
+        if (csrf) {
+          headers["x-csrf-token"] = csrf;
+        }
+        // Send JWT as Bearer token fallback if available (more reliable than cookie-only auth)
+        if (authToken) {
+          headers["authorization"] = `Bearer ${authToken}`;
         }
         return headers;
       },
@@ -82,8 +94,8 @@ export function resetQueryClient() {
   queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        staleTime: 0,
-        gcTime: 0,
+        staleTime: 30_000,
+        gcTime: 300_000,
         refetchOnWindowFocus: true,
       },
     },

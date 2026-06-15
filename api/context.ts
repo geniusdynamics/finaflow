@@ -4,7 +4,7 @@ import type { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 import type { User } from "@db/schema";
 import { verifyLocalToken } from "./local-auth-router";
 import { getDb } from "./queries/connection";
-import { users, businesses, userBusinesses, partnerAllocations } from "@db/schema";
+import { users, businesses, userBusinesses, userLocations, appSettings, partnerAllocations } from "@db/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import * as cookie from "cookie";
 import type { RightsProfile } from "./lib/partner-allocations";
@@ -15,6 +15,8 @@ export type TrpcContext = {
   user?: User & {
     currentBusiness?: typeof businesses.$inferSelect | null;
     businessIds?: number[];
+    assignedLocationIds?: number[];
+    enforceUserLocation?: boolean;
     allocationRightsProfile?: RightsProfile | null;
     accessSource?: "owned" | "allocated";
   };
@@ -49,6 +51,33 @@ async function resolveAllocationAccess(
   };
 }
 
+async function loadAssignedLocationIds(userId: number): Promise<number[]> {
+  try {
+    const db = getDb();
+    const rows = await db.select({ locationId: userLocations.locationId }).from(userLocations)
+      .where(and(eq(userLocations.userId, userId), eq(userLocations.isActive, true)));
+    return rows.map((row) => row.locationId);
+  } catch (e) {
+    console.warn("[context] loadAssignedLocationIds failed:", (e as Error).message);
+    return []; // Gracefully degrade — table or column may not exist
+  }
+}
+
+async function loadEnforceUserLocation(businessId: number | null | undefined): Promise<boolean> {
+  if (!businessId) return false;
+  try {
+    const db = getDb();
+    const rows = await db.select({ value: appSettings.value }).from(appSettings)
+      .where(and(eq(appSettings.businessId, businessId), eq(appSettings.key, "enforceLocationAssignment")))
+      .limit(1);
+    const raw = rows[0]?.value;
+    return raw === "true" || raw === "1" || raw === "yes";
+  } catch (e) {
+    console.warn("[context] loadEnforceUserLocation failed:", (e as Error).message);
+    return false; // Gracefully degrade
+  }
+}
+
 export async function createContext(
   opts: FetchCreateContextFnOptions,
 ): Promise<TrpcContext> {
@@ -79,7 +108,16 @@ export async function createContext(
             currentBusiness = biz[0] ?? null;
           }
           const allocationAccess = await resolveAllocationAccess(user.id, currentBusiness?.id ?? null);
-          ctx.user = { ...user, currentBusiness, businessIds: bizIds, ...allocationAccess };
+          const assignedLocationIds = await loadAssignedLocationIds(user.id);
+          const enforceUserLocation = await loadEnforceUserLocation(currentBusiness?.id ?? null);
+          ctx.user = {
+            ...user,
+            currentBusiness,
+            businessIds: bizIds,
+            assignedLocationIds,
+            enforceUserLocation,
+            ...allocationAccess,
+          };
           return ctx;
         }
       }
@@ -113,7 +151,16 @@ export async function createContext(
             currentBusiness = biz[0] ?? null;
           }
           const allocationAccess = await resolveAllocationAccess(user.id, currentBusiness?.id ?? null);
-          ctx.user = { ...user, currentBusiness, businessIds: bizIds, ...allocationAccess };
+          const assignedLocationIds = await loadAssignedLocationIds(user.id);
+          const enforceUserLocation = await loadEnforceUserLocation(currentBusiness?.id ?? null);
+          ctx.user = {
+            ...user,
+            currentBusiness,
+            businessIds: bizIds,
+            assignedLocationIds,
+            enforceUserLocation,
+            ...allocationAccess,
+          };
           return ctx;
         }
       }

@@ -114,7 +114,34 @@ export function Expenses() {
 
   const createExpense = trpc.expenses.create.useMutation({
     onSuccess: () => { toast.success("Expense added successfully"); setOpen(false); resetForm(); refetch(); },
-    onError: (err) => toast.error(err.message || "Failed to add expense"),
+    onError: (err) => {
+      const errorMessage = err.message || "Failed to add expense";
+
+      // Handle supplier outstanding bills error with enhanced visibility
+      if (errorMessage.includes("SUPPLIER_HAS_OUTSTANDING_BILLS")) {
+        const parts = errorMessage.split("|");
+        const message = parts[1] || errorMessage;
+
+        toast.error(
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 font-semibold text-amber-700">
+              <AlertCircle className="h-5 w-5" />
+              <span>Action Required: Outstanding Bills</span>
+            </div>
+            <p className="text-sm text-gray-700 leading-relaxed">{message}</p>
+            <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+              <strong>Options:</strong><br/>
+              1. Create a bill first, then pay against it<br/>
+              2. Go to Bills and select an existing bill to pay
+            </div>
+          </div>,
+          { duration: 10000 }
+        );
+        return;
+      }
+
+      toast.error(errorMessage);
+    },
   });
   const createCat = trpc.expenses.createCategory.useMutation({
     onSuccess: () => { toast.success("Category added"); setCatOpen(false); setCatForm({ name: "", description: "", color: "#C73E1D", accountingClass: "operating_expense", defaultAccountId: "", mode: "system" }); refetchCats(); },
@@ -408,7 +435,7 @@ export function Expenses() {
                   <div>
                     <LocationSelector
                       locations={locations}
-                      userLocationId={user?.locationId}
+                      assignedLocationIds={user?.assignedLocationIds ?? []}
                       value={form.locationId}
                       onChange={v => setForm(p => ({ ...p, locationId: v }))}
                       enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}

@@ -256,7 +256,7 @@ export function Bills() {
                     <div>
                       <LocationSelector
                          locations={locations}
-                         userLocationId={user?.locationId}
+                         assignedLocationIds={user?.assignedLocationIds ?? []}
                          value={recForm.locationId}
                          onChange={v => setRecForm(p => ({...p, locationId: v}))}
                          enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
@@ -278,7 +278,7 @@ export function Bills() {
                     <div className="grid grid-cols-2 gap-3"><div>
                       <LocationSelector
                         locations={locations}
-                        userLocationId={user?.locationId}
+                        assignedLocationIds={user?.assignedLocationIds ?? []}
                         value={form.locationId}
                         onChange={v => setForm(p => ({...p, locationId: v}))}
                         enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}

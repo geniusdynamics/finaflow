@@ -3,7 +3,7 @@
 // ABOUTME: state machine (highlighted → faded → re-highlighted) and automatic
 // ABOUTME: clearance on action completion (bill payment, manual clear-all, etc.).
 import { z } from "zod";
-import { createRouter, authedQuery } from "./middleware";
+import { createRouter, authedQuery, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
 import { notifications, bills } from "@db/schema";
 import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
@@ -275,6 +275,7 @@ export const notificationsRouter = createRouter({
     const today = new Date().toISOString().split("T")[0];
     const overdueBillIds = new Set<number>();
     if (billIds.length > 0) {
+      const locIds = await getCurrentBusinessLocationIds(ctx);
       const overdueBills = await db
         .select({ id: bills.id })
         .from(bills)
@@ -284,6 +285,9 @@ export const notificationsRouter = createRouter({
             sql`${bills.dueDate} < ${today}`,
             sql`${bills.balanceDue} > 0`,
             isNull(bills.deletedAt),
+            locIds.length > 0
+              ? sql`${bills.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`
+              : sql`1=0`,
           ),
         );
       for (const b of overdueBills) overdueBillIds.add(b.id);
@@ -369,6 +373,9 @@ export const notificationsRouter = createRouter({
     const userId = (ctx as any).user?.id;
     const today = new Date().toISOString().split("T")[0];
 
+    const locIds = await getCurrentBusinessLocationIds(ctx);
+    if (locIds.length === 0) return { created: 0, reHighlighted: 0 };
+
     const overdueBills = await db
       .select()
       .from(bills)
@@ -377,6 +384,7 @@ export const notificationsRouter = createRouter({
           sql`${bills.dueDate} < ${today}`,
           sql`${bills.balanceDue} > 0`,
           isNull(bills.deletedAt),
+          sql`${bills.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`,
         ),
       )
       .orderBy(desc(bills.dueDate))

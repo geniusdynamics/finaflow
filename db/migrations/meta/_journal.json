@@ -36,6 +36,34 @@
       "when": 1780470000000,
       "tag": "0011_coa_auto_link_and_wallet_support",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781150000000,
+      "tag": "0013_user_locations",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781322000000,
+      "tag": "0014_budget_plan_bucket_model",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781441700000,
+      "tag": "0015_fiscal_year_start_month",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781500000000,
+      "tag": "0016_make_default_account_id_nullable",
+      "breakpoints": true
     }
   ]
 }

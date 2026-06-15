@@ -177,7 +177,7 @@ export function Wallet() {
       <div className="space-y-2">
         <LocationSelector
         locations={locations}
-        userLocationId={user?.locationId}
+        assignedLocationIds={user?.assignedLocationIds ?? []}
         value={selectedLocation}
         onChange={(e) => setSelectedLocation(e)}
           enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
@@ -550,7 +550,7 @@ export function Wallet() {
                                       <div className="space-y-2">
                                         <LocationSelector
                                         locations={locations}
-                                        userLocationId={user?.locationId}
+                                        assignedLocationIds={user?.assignedLocationIds ?? []}
                                         value={expenseForm.locationId}
                                         onChange={v => setExpenseForm(p => ({ ...p, locationId: v }))}
                                         enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
@@ -624,7 +624,7 @@ export function Wallet() {
                       <div className="space-y-2">
                         <LocationSelector
                         locations={locations}
-                        userLocationId={user?.locationId}
+                        assignedLocationIds={user?.assignedLocationIds ?? []}
                         value={ledgerForm.locationId}
                         onChange={v => setLedgerForm(p => ({ ...p, locationId: v }))}
                         enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}

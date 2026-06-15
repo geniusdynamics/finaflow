@@ -45,6 +45,13 @@ export const allocationRightsEnum = pgEnum("allocation_rights", ["view_only", "c
 export const allocationInviteStatusEnum = pgEnum("allocation_invite_status", ["active", "consumed", "revoked", "expired"]);
 export const partnerAllocationStatusEnum = pgEnum("partner_allocation_status", ["active", "revoked"]);
 
+// Budget model enums
+export const budgetPeriodEnum = pgEnum("budget_period", ["monthly", "quarterly", "half-yearly", "annual"]);
+export const budgetPlanStatusEnum = pgEnum("budget_plan_status", ["draft", "active", "locked", "archived"]);
+
+export type BudgetPeriod = typeof budgetPeriodEnum.enumValues[number];
+export type BudgetPlanStatus = typeof budgetPlanStatusEnum.enumValues[number];
+
 // Accounting enums for Chart of Accounts and Financial Reporting
 export const accountTypeEnum = pgEnum("accountType", [
   "asset", "liability", "equity", "revenue", "expense"
@@ -301,7 +308,7 @@ export const expenseCategories = pgTable("expense_categories", {
   description: text("description"),
   color: varchar("color", { length: 20 }).default("#C73E1D"),
   accountingClass: accountingClassEnum("accountingClass").default("operating_expense"),
-  defaultAccountId: bigint("defaultAccountId", { mode: "number" }).notNull().references(() => accounts.id, { onDelete: "no action" }),
+  defaultAccountId: bigint("defaultAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
   externalAccountCode: varchar("externalAccountCode", { length: 50 }),
   externalSystem: varchar("externalSystem", { length: 50 }),
   isActive: boolean("isActive").default(true).notNull(),
@@ -669,6 +676,7 @@ export const businesses = pgTable("businesses", {
   features: json("features"),
   subscriptionStatus: varchar("subscriptionStatus", { length: 20 }).default("active"),
   subscriptionExpiry: date("subscriptionExpiry"),
+  fiscalYearStartMonth: integer("fiscalYearStartMonth").default(4).notNull(),
   isMultiLocation: boolean("isMultiLocation").default(true).notNull(),
   isActive: boolean("isActive").default(true).notNull(),
   isDemo: boolean("isDemo").default(false).notNull(),
@@ -739,6 +747,23 @@ export const userBusinesses = pgTable("user_businesses", {
 });
 
 export type UserBusiness = typeof userBusinesses.$inferSelect;
+
+// User-Location junction (many-to-many) for multi-location assignment
+export const userLocations = pgTable("user_locations", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number" }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  isPrimary: boolean("isPrimary").default(false).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  assignedAt: timestamp("assignedAt").defaultNow().notNull(),
+  assignedBy: bigint("assignedBy", { mode: "number" }),
+}, (table) => ({
+  userIdIdx: index("idx_user_locations_userId").on(table.userId),
+  locationIdIdx: index("idx_user_locations_locationId").on(table.locationId),
+  uniqueUserLocation: uniqueIndex("idx_user_locations_unique").on(table.userId, table.locationId),
+}));
+
+export type UserLocation = typeof userLocations.$inferSelect;
 
 // One-time invite codes from owners that allow partners to claim allocated business access.
 export const allocationInvites = pgTable("allocation_invites", {
@@ -915,6 +940,71 @@ export const budgets = pgTable("budgets", {
 });
 
 export type Budget = typeof budgets.$inferSelect;
+
+// ── Budget Plan Model (period-aware, replaces legacy budgets table) ─────
+export const budgetPlans = pgTable("budget_plans", {
+  id: serial("id").primaryKey(),
+  locationId: bigint("locationId", { mode: "number" }),
+  fiscalYearStart: integer("fiscalYearStart").notNull(),
+  period: budgetPeriodEnum("period").default("monthly").notNull(),
+  name: varchar("name", { length: 255 }),
+  notes: text("notes"),
+  status: budgetPlanStatusEnum("status").default("draft").notNull(),
+  createdById: bigint("createdById", { mode: "number" }),
+  legacyGroupKey: varchar("legacyGroupKey", { length: 64 }),
+  lockedAt: timestamp("lockedAt"),
+  lockedById: bigint("lockedById", { mode: "number" }),
+  archivedAt: timestamp("archivedAt"),
+  archivedById: bigint("archivedById", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  planLocationIdx: index("idx_budget_plans_locationId").on(table.locationId),
+  planFiscalYearIdx: index("idx_budget_plans_fiscalYearStart").on(table.fiscalYearStart),
+  planPeriodIdx: index("idx_budget_plans_period").on(table.period),
+  planStatusIdx: index("idx_budget_plans_status").on(table.status),
+  planLegacyKeyIdx: index("idx_budget_plans_legacyGroupKey").on(table.legacyGroupKey),
+  planDeletedAtIdx: index("idx_budget_plans_deletedAt").on(table.deletedAt),
+}));
+
+export type BudgetPlan = typeof budgetPlans.$inferSelect;
+export type InsertBudgetPlan = typeof budgetPlans.$inferInsert;
+
+export const budgetPlanBuckets = pgTable("budget_plan_buckets", {
+  id: serial("id").primaryKey(),
+  planId: bigint("planId", { mode: "number" }).notNull().references(() => budgetPlans.id, { onDelete: "cascade" }),
+  bucketType: varchar("bucketType", { length: 16 }).notNull(),
+  bucketIndex: integer("bucketIndex").notNull(),
+  startMonth: integer("startMonth").notNull(),
+  endMonth: integer("endMonth").notNull(),
+  label: varchar("label", { length: 64 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+}, (table) => ({
+  bucketPlanIdx: index("idx_budget_plan_buckets_planId").on(table.planId),
+  bucketTypeIdx: index("idx_budget_plan_buckets_bucketType").on(table.bucketType),
+  bucketPlanIndexIdx: uniqueIndex("idx_budget_plan_buckets_plan_index").on(table.planId, table.bucketType, table.bucketIndex),
+}));
+
+export type BudgetPlanBucket = typeof budgetPlanBuckets.$inferSelect;
+export type InsertBudgetPlanBucket = typeof budgetPlanBuckets.$inferInsert;
+
+export const budgetBucketLines = pgTable("budget_bucket_lines", {
+  id: serial("id").primaryKey(),
+  bucketId: bigint("bucketId", { mode: "number" }).notNull().references(() => budgetPlanBuckets.id, { onDelete: "cascade" }),
+  categoryId: bigint("categoryId", { mode: "number" }).notNull().references(() => expenseCategories.id, { onDelete: "no action" }),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull().default("0.00"),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+}, (table) => ({
+  lineBucketIdx: index("idx_budget_bucket_lines_bucketId").on(table.bucketId),
+  lineCategoryIdx: index("idx_budget_bucket_lines_categoryId").on(table.categoryId),
+}));
+
+export type BudgetBucketLine = typeof budgetBucketLines.$inferSelect;
+export type InsertBudgetBucketLine = typeof budgetBucketLines.$inferInsert;
 
 // Debts tracking per location
 export const debts = pgTable("debts", {

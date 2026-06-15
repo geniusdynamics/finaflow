@@ -4,7 +4,7 @@ import { TRPCError, initTRPC } from "@trpc/server";
 import { ZodError } from "zod";
 import SuperJSON from "superjson";
 import { getDb } from "./queries/connection";
-import { businesses, locations, users, userBusinesses, rolePermissions, type Business } from "@db/schema";
+import { businesses, locations, users, userBusinesses, userLocations, appSettings, rolePermissions, type Business } from "@db/schema";
 import { eq, and, sql, isNull, type AnyColumn, type AnyTable } from "drizzle-orm";
 import type { RightsProfile } from "./lib/partner-allocations";
 
@@ -61,6 +61,9 @@ export const PERMISSIONS = {
   RESET_TRANSACTIONS: "transactions:reset",
   DEBTS_VIEW: "debts:view",
   DEBTS_MANAGE: "debts:manage",
+  PAYMENT_METHODS_VIEW: "payment_methods:view",
+  PAYMENT_METHODS_MANAGE: "payment_methods:manage",
+  EXPENSE_CATEGORIES_MANAGE: "expense_categories:manage",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -86,6 +89,8 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.CALENDAR_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.COGS_MANAGE,
     PERMISSIONS.ALERTS_CONFIG, PERMISSIONS.LEDGER_VIEW, PERMISSIONS.DASHBOARD_VIEW,
     PERMISSIONS.DEBTS_VIEW, PERMISSIONS.DEBTS_MANAGE,
+    PERMISSIONS.PAYMENT_METHODS_VIEW, PERMISSIONS.PAYMENT_METHODS_MANAGE,
+    PERMISSIONS.EXPENSE_CATEGORIES_MANAGE,
   ],
   manager: [
     PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE,
@@ -102,6 +107,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.CALENDAR_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.COGS_MANAGE,
     PERMISSIONS.ALERTS_CONFIG, PERMISSIONS.LEDGER_VIEW, PERMISSIONS.DASHBOARD_VIEW,
     PERMISSIONS.DEBTS_VIEW, PERMISSIONS.DEBTS_MANAGE,
+    PERMISSIONS.PAYMENT_METHODS_VIEW,
   ],
   employee: [
     PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE,
@@ -206,6 +212,8 @@ interface TrpcUser {
   currentBusinessId?: number | null;
   currentBusiness?: CurrentBusinessContext | null;
   businessIds?: number[];
+  assignedLocationIds?: number[];
+  enforceUserLocation?: boolean;
   accountId?: string | null;
   accountRefId?: number | null;
   allocationRightsProfile?: RightsProfile | null;
@@ -381,6 +389,9 @@ export const webhooksManage = t.procedure.use(requirePermission(PERMISSIONS.WEBH
 export const partnerView = t.procedure.use(requirePermission(PERMISSIONS.PARTNER_VIEW));
 export const debtsView = t.procedure.use(requirePermission(PERMISSIONS.DEBTS_VIEW));
 export const debtsManage = t.procedure.use(requirePermission(PERMISSIONS.DEBTS_MANAGE));
+export const paymentMethodsView = t.procedure.use(requirePermission(PERMISSIONS.PAYMENT_METHODS_VIEW));
+export const paymentMethodsManage = t.procedure.use(requirePermission(PERMISSIONS.PAYMENT_METHODS_MANAGE));
+export const expenseCategoriesManage = t.procedure.use(requirePermission(PERMISSIONS.EXPENSE_CATEGORIES_MANAGE));
 
 // Owner-only middleware
 const requireOwner = t.middleware(async (opts) => {
@@ -395,7 +406,20 @@ const requireOwner = t.middleware(async (opts) => {
 });
 export const ownerQuery = t.procedure.use(requireOwner);
 
-export async function getCurrentBusinessLocationIds(ctx: UserContextCarrier): Promise<number[]> {
+export async function getEnforceUserLocation(ctx: UserContextCarrier): Promise<boolean> {
+  const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
+  if (!businessId) return false;
+
+  const db = getDb();
+  const rows = await db.select({ value: appSettings.value }).from(appSettings)
+    .where(and(eq(appSettings.businessId, businessId), eq(appSettings.key, "enforceLocationAssignment")))
+    .limit(1);
+
+  const raw = rows[0]?.value;
+  return raw === "true" || raw === "1" || raw === "yes";
+}
+
+export async function getAuthorizedLocationIds(ctx: UserContextCarrier): Promise<number[]> {
   const db = getDb();
   const userId = ctx.user?.id;
   const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
@@ -413,7 +437,36 @@ export async function getCurrentBusinessLocationIds(ctx: UserContextCarrier): Pr
 
   const locs = await db.select({ id: locations.id }).from(locations)
     .where(and(eq(locations.businessId, businessId), isNull(locations.deletedAt)));
-  return locs.map(l => l.id);
+  const allLocationIds = locs.map((l) => l.id);
+
+  const role = ctx.user?.role ?? "viewer";
+  if (role === "owner" || role === "admin") {
+    return allLocationIds;
+  }
+
+  const enforce = ctx.user?.enforceUserLocation ?? await getEnforceUserLocation(ctx);
+  if (!enforce) {
+    return allLocationIds;
+  }
+
+  let assignedLocationIds = ctx.user?.assignedLocationIds;
+  if (!Array.isArray(assignedLocationIds)) {
+    try {
+      const assignedRows = await db.select({ locationId: userLocations.locationId }).from(userLocations)
+        .where(and(eq(userLocations.userId, userId), eq(userLocations.isActive, true)));
+      assignedLocationIds = assignedRows.map((row) => row.locationId);
+    } catch (e) {
+      console.warn("[middleware] getAuthorizedLocationIds failed:", (e as Error).message);
+      assignedLocationIds = [];
+    }
+  }
+
+  const assignedSet = new Set(assignedLocationIds);
+  return allLocationIds.filter((locationId) => assignedSet.has(locationId));
+}
+
+export async function getCurrentBusinessLocationIds(ctx: UserContextCarrier): Promise<number[]> {
+  return getAuthorizedLocationIds(ctx);
 }
 
 /** Get all businesses this user is assigned to */

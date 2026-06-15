@@ -32,6 +32,8 @@ export default defineConfig({
       "api/**/*.test.ts",
       "api/**/*.test.tsx",
       "api/**/__tests__/*.test.ts",
+      "e2e/**/*.test.ts",
+      "e2e/**/__tests__/*.test.ts",
       "src/**/*.test.ts",
       "src/**/*.test.tsx",
       "src/**/__tests__/*.test.ts",

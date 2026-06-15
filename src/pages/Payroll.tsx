@@ -9,7 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Users, DollarSign, CreditCard, CheckCircle, Clock, Eye, Play, Banknote, Pencil, UserCircle, UserPlus, UserMinus, Calculator, Landmark, Shield } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { Plus, Users, DollarSign, CreditCard, CheckCircle, Clock, Eye, Play, Banknote, Pencil, UserCircle, UserPlus, UserMinus, Calculator, Landmark, Shield, Trash2 } from "lucide-react";
 import { LocationSelector } from "@/components/LocationSelector";
 import { toast } from "sonner";
 
@@ -27,9 +28,11 @@ export function Payroll() {
   const [selectedPeriod, setSelectedPeriod] = useState<number | null>(null);
   const [payPeriod, setPayPeriod] = useState<number | null>(null);
   const [assignEmpOpen, setAssignEmpOpen] = useState(false);
+  const [createdEmployee, setCreatedEmployee] = useState<{ name: string; username: string; initialPassword: string } | null>(null);
 
   const { data: locations } = trpc.locations.list.useQuery();
   const { data: employees } = trpc.employees.list.useQuery();
+  const { data: allUsers } = trpc.permissions.listUsers.useQuery();
   const { data: periods } = trpc.payroll.periods.useQuery();
   const { data: periodEntries } = trpc.payroll.entries.useQuery(
     { periodId: selectedPeriod ?? 0 },
@@ -43,7 +46,18 @@ export function Payroll() {
 
   const utils = trpc.useUtils();
   const createPeriod = trpc.payroll.createPeriod.useMutation({ onSuccess: () => { setPeriodOpen(false); utils.payroll.periods.invalidate(); } });
-  const createEmployee = trpc.employees.create.useMutation({ onSuccess: () => { setEmpOpen(false); utils.employees.list.invalidate(); } });
+  const createEmployee = trpc.employees.create.useMutation({
+    onSuccess: (data) => {
+      setEmpOpen(false);
+      setCreatedEmployee({
+        name: empForm.fullName,
+        username: data.username,
+        initialPassword: data.initialPassword,
+      });
+      utils.employees.list.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
   const updateEmployee = trpc.employees.update.useMutation({ onSuccess: () => { setEmpEditOpen(null); utils.employees.list.invalidate(); } });
   const processPayroll = trpc.payroll.processPayroll.useMutation({
     onSuccess: (data) => { toast.success(`Payroll processed: ${data.entries.length} entries, ${formatKES(data.totalNetPay)}`); utils.payroll.periods.invalidate(); utils.payroll.entries.invalidate(); },
@@ -62,14 +76,19 @@ export function Payroll() {
     onSuccess: () => { toast.success("Employee removed from period"); utils.payroll.entries.invalidate(); utils.payroll.periods.invalidate(); },
     onError: (err) => toast.error(err.message),
   });
+  const deleteEmployee = trpc.employees.deleteWithUser.useMutation({
+    onSuccess: (_data) => { toast.success("Employee and linked user account deleted"); setDeleteConfirm(null); setEmpViewOpen(null); utils.employees.list.invalidate(); },
+    onError: (err) => toast.error(err.message),
+  });
 
   const [periodForm, setPeriodForm] = useState({ locationId: "", periodName: "", startDate: "", endDate: "", paymentDate: "" });
   const [empForm, setEmpForm] = useState({ locationId: "", fullName: "", phone: "", idNumber: "", kraPin: "", nssfNumber: "", nhifNumber: "", salaryType: "monthly" as const, basicSalary: "", bankName: "", bankAccount: "", bankCode: "", employmentDate: "" });
-  const [editEmpForm, setEditEmpForm] = useState({ fullName: "", phone: "", basicSalary: "", isActive: true, bankName: "", bankAccount: "", bankCode: "", idNumber: "", kraPin: "", nssfNumber: "", nhifNumber: "" });
+  const [editEmpForm, setEditEmpForm] = useState({ fullName: "", phone: "", basicSalary: "", isActive: true, bankName: "", bankAccount: "", bankCode: "", idNumber: "", kraPin: "", nssfNumber: "", nhifNumber: "", userId: "" });
   const [advanceForm, setAdvanceForm] = useState({ employeeId: "", amount: "", requestDate: getLocalDateString(), notes: "", payrollPeriodId: "" });
   const [assignEmpId, setAssignEmpId] = useState("");
   const [deductOpen, setDeductOpen] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
   const [deductForm, setDeductForm] = useState({ grossPay: "", insurancePremium: "" });
   const [settingsForm, setSettingsForm] = useState({
     nhifRate: "2.75", nssfTier1Employee: "420", nssfTier2Employee: "1740",
@@ -142,7 +161,7 @@ export function Payroll() {
                     <div>
                       <LocationSelector
                       locations={locations}
-                      userLocationId={user?.locationId}
+                      assignedLocationIds={user?.assignedLocationIds ?? []}
                       value={empForm.locationId}
                       onChange={v => setEmpForm(p => ({ ...p, locationId: v }))}
                       enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
@@ -159,6 +178,36 @@ export function Payroll() {
                   </form>
                 </DialogContent>
               </Dialog>
+              <Dialog open={createdEmployee !== null} onOpenChange={(openState) => {
+                if (!openState) {
+                  setCreatedEmployee(null);
+                  setEmpForm({ locationId: "", fullName: "", phone: "", idNumber: "", kraPin: "", nssfNumber: "", nhifNumber: "", salaryType: "monthly", basicSalary: "", bankName: "", bankAccount: "", bankCode: "", employmentDate: "" });
+                }
+              }}>
+                <DialogContent className="bg-white">
+                  <DialogHeader><DialogTitle className="font-serif text-xl">Employee Login Credentials</DialogTitle></DialogHeader>
+                  {createdEmployee && (
+                    <div className="space-y-4">
+                      <p className="text-sm text-[#8D8A87]">
+                        Save these credentials for <span className="font-medium text-[#2D2A26]">{createdEmployee.name}</span>. The password is shown only once.
+                      </p>
+                      <div className="rounded-lg border border-[#E8E0D8] bg-[#F5EDE6] p-4">
+                        <div className="space-y-1">
+                          <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Username</p>
+                          <p className="font-mono text-sm text-[#2D2A26]">{createdEmployee.username}</p>
+                        </div>
+                        <div className="mt-3 space-y-1">
+                          <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Temporary Password</p>
+                          <p className="font-mono text-sm text-[#2D2A26]">{createdEmployee.initialPassword}</p>
+                        </div>
+                      </div>
+                      <Button type="button" className="w-full bg-[#C73E1D]" onClick={() => setCreatedEmployee(null)}>
+                        Done
+                      </Button>
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
               <Dialog open={periodOpen} onOpenChange={setPeriodOpen}>
                 <DialogTrigger asChild><Button className="bg-[#C73E1D]"><Plus className="mr-2 h-4 w-4" /> Add Period</Button></DialogTrigger>
                 <DialogContent className="bg-white"><DialogHeader><DialogTitle className="font-serif text-xl">Add Pay Period</DialogTitle></DialogHeader>
@@ -166,7 +215,7 @@ export function Payroll() {
                     <div>
                       <LocationSelector
                       locations={locations}
-                      userLocationId={user?.locationId}
+                      assignedLocationIds={user?.assignedLocationIds ?? []}
                       value={periodForm.locationId}
                       onChange={v => setPeriodForm(p => ({ ...p, locationId: v }))}
                       enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
@@ -223,8 +272,43 @@ export function Payroll() {
                                 <div><Label className="text-xs">Bank Code</Label><p>{employeeDetail.bankCode || "-"}</p></div>
                                 <div><Label className="text-xs">Basic Salary</Label><p className="font-mono font-semibold">{formatKES(employeeDetail.basicSalary)}</p></div>
                               </div>
+                              {canProcess && (
+                                <div className="border-t border-[#E8E0D8] pt-3">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-[#D32F2F] text-[#D32F2F] hover:bg-[#D32F2F]/10"
+                                    onClick={() => setDeleteConfirm(employeeDetail.id)}
+                                  >
+                                    <Trash2 className="mr-1 h-4 w-4" />Delete Employee
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                           )}
+                          {/* Delete confirmation */}
+                          <AlertDialog open={deleteConfirm !== null} onOpenChange={(v) => { if (!v) setDeleteConfirm(null); }}>
+                            <AlertDialogContent className="bg-white">
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Employee & User Account?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This will permanently deactivate the employee record{employeeDetail?.userId ? " and the linked user account" : ""}. 
+                                  {employeeDetail?.userId ? " The user will no longer be able to log in." : ""}
+                                  This action can be undone by an administrator.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => setDeleteConfirm(null)}>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  className="bg-[#D32F2F] hover:bg-[#B71C1C]"
+                                  onClick={() => { if (deleteConfirm) deleteEmployee.mutate({ id: deleteConfirm }); }}
+                                  disabled={deleteEmployee.isPending}
+                                >
+                                  {deleteEmployee.isPending ? "Deleting..." : "Delete"}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </DialogContent>
                       </Dialog>
                       {/* Edit employee */}
@@ -235,15 +319,17 @@ export function Payroll() {
                               fullName: emp.fullName, phone: emp.phone, basicSalary: emp.basicSalary, isActive: emp.isActive,
                               bankName: emp.bankName ?? "", bankAccount: emp.bankAccount ?? "", bankCode: emp.bankCode ?? "",
                               idNumber: emp.idNumber ?? "", kraPin: emp.kraPin ?? "", nssfNumber: emp.nssfNumber ?? "", nhifNumber: emp.nhifNumber ?? "",
+                              userId: String(emp.userId ?? ""),
                             })}><Pencil className="h-3 w-3 text-[#8D8A87]" /></Button>
                           </DialogTrigger>
                           <DialogContent className="bg-white max-h-[90vh] overflow-y-auto">
                             <DialogHeader><DialogTitle className="font-serif text-xl">Edit Employee</DialogTitle></DialogHeader>
-                            <form onSubmit={e => { e.preventDefault(); updateEmployee.mutate({ id: emp.id, ...editEmpForm }); }} className="space-y-3">
+                            <form onSubmit={e => { e.preventDefault(); const userIdNum = editEmpForm.userId ? Number(editEmpForm.userId) : null; updateEmployee.mutate({ id: emp.id, ...editEmpForm, userId: userIdNum }); }} className="space-y-3">
                               <div className="grid grid-cols-2 gap-3"><div><Label>Full Name</Label><Input value={editEmpForm.fullName} onChange={e => setEditEmpForm(p => ({ ...p, fullName: e.target.value }))} required /></div><div><Label>Phone</Label><Input value={editEmpForm.phone} onChange={e => setEditEmpForm(p => ({ ...p, phone: e.target.value }))} required /></div></div>
                               <div className="grid grid-cols-2 gap-3"><div><Label>Basic Salary</Label><Input type="number" step="0.01" value={editEmpForm.basicSalary} onChange={e => setEditEmpForm(p => ({ ...p, basicSalary: e.target.value }))} required /></div><div><Label>ID Number</Label><Input value={editEmpForm.idNumber} onChange={e => setEditEmpForm(p => ({ ...p, idNumber: e.target.value }))} /></div></div>
                               <div className="grid grid-cols-3 gap-3"><div><Label>Bank</Label><Input value={editEmpForm.bankName} onChange={e => setEditEmpForm(p => ({ ...p, bankName: e.target.value }))} /></div><div><Label>Account</Label><Input value={editEmpForm.bankAccount} onChange={e => setEditEmpForm(p => ({ ...p, bankAccount: e.target.value }))} /></div><div><Label>Code</Label><Input value={editEmpForm.bankCode} onChange={e => setEditEmpForm(p => ({ ...p, bankCode: e.target.value }))} /></div></div>
                               <div className="grid grid-cols-2 gap-3"><div><Label>KRA PIN</Label><Input value={editEmpForm.kraPin} onChange={e => setEditEmpForm(p => ({ ...p, kraPin: e.target.value }))} /></div><div><Label>Status</Label><select value={editEmpForm.isActive ? "active" : "inactive"} onChange={e => setEditEmpForm(p => ({ ...p, isActive: e.target.value === "active" }))} className="w-full rounded border px-3 py-2 text-sm"><option value="active">Active</option><option value="inactive">Inactive</option></select></div></div>
+                              <div><Label>Linked User Account</Label><select value={editEmpForm.userId} onChange={e => setEditEmpForm(p => ({ ...p, userId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm"><option value="">-- No linked user --</option>{allUsers?.map(u => (<option key={u.id} value={String(u.id)}>{u.name} ({u.email})</option>))}</select></div>
                               <Button type="submit" className="w-full bg-[#C73E1D]" disabled={updateEmployee.isPending}>Save Changes</Button>
                             </form>
                           </DialogContent>

@@ -977,6 +977,16 @@ CREATE TABLE "user_businesses" (
 	"createdAt" timestamp DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
+CREATE TABLE "user_locations" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"userId" bigint NOT NULL,
+	"locationId" bigint NOT NULL,
+	"isPrimary" boolean DEFAULT false NOT NULL,
+	"isActive" boolean DEFAULT true NOT NULL,
+	"assignedAt" timestamp DEFAULT now() NOT NULL,
+	"assignedBy" bigint
+);
+--> statement-breakpoint
 CREATE TABLE "users" (
 	"id" serial PRIMARY KEY NOT NULL,
 	"unionId" varchar(255),
@@ -1097,3 +1107,7 @@ CREATE INDEX "idx_users_deletedAt" ON "users" USING btree ("deletedAt");--> stat
 CREATE INDEX "idx_users_isActive" ON "users" USING btree ("isActive");--> statement-breakpoint
 CREATE INDEX "idx_users_currentBusinessId" ON "users" USING btree ("currentBusinessId");--> statement-breakpoint
 CREATE UNIQUE INDEX "idx_users_username_accountId" ON "users" USING btree ("username","accountId");
+--> statement-breakpoint
+CREATE INDEX "idx_user_locations_userId" ON "user_locations" USING btree ("userId");--> statement-breakpoint
+CREATE INDEX "idx_user_locations_locationId" ON "user_locations" USING btree ("locationId");--> statement-breakpoint
+CREATE UNIQUE INDEX "idx_user_locations_unique" ON "user_locations" USING btree ("userId","locationId");

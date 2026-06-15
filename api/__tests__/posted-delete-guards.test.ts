@@ -36,11 +36,6 @@ interface CallerUser {
   businessIds: number[];
 }
 
-interface CallerContext {
-  req: Request;
-  resHeaders: Headers;
-  user: CallerUser;
-}
 
 async function seedDeleteContext(seed: string): Promise<SeededContext> {
   const db = getTestDb();

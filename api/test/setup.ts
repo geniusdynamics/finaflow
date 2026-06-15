@@ -192,6 +192,16 @@ async function ensureTestDatabase(): Promise<void> {
       await applyMigrationFile(testPool, baseSchemaPath);
     }
 
+    // Drop stale budget tables from previous implementation so 0014 recreates them fresh
+    const stalePool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+    try {
+      await stalePool.query(`DROP TABLE IF EXISTS "budget_bucket_lines" CASCADE`);
+      await stalePool.query(`DROP TABLE IF EXISTS "budget_plan_buckets" CASCADE`);
+      await stalePool.query(`DROP TABLE IF EXISTS "budget_plans" CASCADE`);
+    } finally {
+      await stalePool.end();
+    }
+
     for (const file of [
       "0001_misty_mulholland_black.sql",
       "0002_add_currency_columns.sql",
@@ -199,6 +209,10 @@ async function ensureTestDatabase(): Promise<void> {
       "0010_debt_origination_and_accounting.sql",
       "0011_coa_auto_link_and_wallet_support.sql",
       "0012_notification_highlight_lifecycle.sql",
+      "0013_user_locations.sql",
+      "0014_budget_plan_bucket_model.sql",
+      "0015_fiscal_year_start_month.sql",
+      "0016_make_default_account_id_nullable.sql",
     ]) {
       const p = path.resolve(import.meta.dirname, `../../db/migrations/${file}`);
       if (fs.existsSync(p)) {
@@ -225,3 +239,4 @@ beforeAll(async () => {
 // Pool is not explicitly closed here because this is a shared setup file loaded for every test suite.
 // Closing the singleton pool in afterAll while other suites are still running causes connection errors.
 // Connections are cleaned up when the Node process exits after all tests complete.
+

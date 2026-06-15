@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { alertsConfig, alertsLog, accounts, locations } from "@db/schema";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 
 type AlertsConfigInsert = typeof alertsConfig.$inferInsert;
 
