@@ -80,7 +80,15 @@ export async function syncUserLocationAssignments(
   locationIds: number[],
   assignedBy?: number | null,
 ) {
-  const uniqueLocationIds = Array.from(new Set(locationIds.filter((value): value is number => Number.isFinite(value))));
+  // Guard: If no valid location IDs provided, skip sync entirely to prevent
+  // accidental deletion of all existing user-location assignments.
+  const validIds = locationIds.filter((value): value is number => Number.isFinite(value));
+  if (validIds.length === 0) {
+    console.warn("[users] syncUserLocationAssignments: called with empty or invalid locationIds array — skipping sync");
+    return [];
+  }
+
+  const uniqueLocationIds = Array.from(new Set(validIds));
 
   try {
     await tx.delete(userLocations).where(eq(userLocations.userId, userId));
@@ -88,15 +96,13 @@ export async function syncUserLocationAssignments(
     // Table may not exist yet (migration not applied). Safe to skip.
   }
 
-  if (uniqueLocationIds.length > 0) {
-    await tx.insert(userLocations).values(uniqueLocationIds.map((locationId, index) => ({
-      userId,
-      locationId,
-      isPrimary: index === 0,
-      isActive: true,
-      assignedBy: assignedBy ?? null,
-    })));
-  }
+  await tx.insert(userLocations).values(uniqueLocationIds.map((locationId, index) => ({
+    userId,
+    locationId,
+    isPrimary: index === 0,
+    isActive: true,
+    assignedBy: assignedBy ?? null,
+  })));
 
   await tx.update(users).set({
     locationId: uniqueLocationIds[0] ?? null,
