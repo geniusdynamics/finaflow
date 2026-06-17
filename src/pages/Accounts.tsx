@@ -147,12 +147,14 @@ export function Accounts() {
   });
   const assignToLoc = trpc.paymentMethods.assignToLocation.useMutation({
     onSuccess: () => { utils.paymentMethods.byLocation.invalidate(); toast.success("Assigned"); },
+    onError: (err) => toast.error(err.message || "Failed to assign payment method to branch"),
   });
   const updateLocLink = trpc.paymentMethods.updateLocationLink.useMutation({
     onSuccess: () => { utils.paymentMethods.byLocation.invalidate(); toast.success("Account link updated"); },
   });
   const removeFromLoc = trpc.paymentMethods.removeFromLocation.useMutation({
     onSuccess: () => { utils.paymentMethods.byLocation.invalidate(); toast.success("Removed"); },
+    onError: (err) => toast.error(err.message || "Failed to remove payment method from branch"),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -364,7 +366,15 @@ export function Accounts() {
                       <Label>Select Branch</Label>
                       <select value={tagLocId} onChange={e => setTagLocId(e.target.value)} className="w-full rounded border px-3 py-2 text-sm">
                         <option value="">Select branch</option>
-                        {locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                        {locations
+                          ?.filter(l => {
+                            // Only show accessible branches when location enforcement is ON
+                            const enforce = settings?.["enforceLocationAssignment"] === "true";
+                            if (!enforce) return true;
+                            return user?.assignedLocationIds?.includes(l.id) ?? false;
+                          })
+                          .map(l => <option key={l.id} value={l.id}>{l.name}</option>)
+                        }
                       </select>
                     </div>
                     {tagLocId && paymentMethods && paymentMethods.length > 0 && (

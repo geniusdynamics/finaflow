@@ -2,7 +2,7 @@
 // ABOUTME: Includes safe deletion checks, disable/enable flows, and location assignment syncing.
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createRouter, authedQuery, userManage, requireAuthorizedLocation } from "./middleware";
+import { createRouter, authedQuery, userManage, requireAuthorizedLocation, getAuthorizedLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
 import { users, userBusinesses, userLocations } from "@db/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
@@ -80,7 +80,15 @@ export async function syncUserLocationAssignments(
   locationIds: number[],
   assignedBy?: number | null,
 ) {
-  const uniqueLocationIds = Array.from(new Set(locationIds.filter((value): value is number => Number.isFinite(value))));
+  // Guard: If no valid location IDs provided, skip sync entirely to prevent
+  // accidental deletion of all existing user-location assignments.
+  const validIds = locationIds.filter((value): value is number => Number.isFinite(value));
+  if (validIds.length === 0) {
+    console.warn("[users] syncUserLocationAssignments: called with empty or invalid locationIds array — skipping sync");
+    return [];
+  }
+
+  const uniqueLocationIds = Array.from(new Set(validIds));
 
   try {
     await tx.delete(userLocations).where(eq(userLocations.userId, userId));
@@ -88,15 +96,13 @@ export async function syncUserLocationAssignments(
     // Table may not exist yet (migration not applied). Safe to skip.
   }
 
-  if (uniqueLocationIds.length > 0) {
-    await tx.insert(userLocations).values(uniqueLocationIds.map((locationId, index) => ({
-      userId,
-      locationId,
-      isPrimary: index === 0,
-      isActive: true,
-      assignedBy: assignedBy ?? null,
-    })));
-  }
+  await tx.insert(userLocations).values(uniqueLocationIds.map((locationId, index) => ({
+    userId,
+    locationId,
+    isPrimary: index === 0,
+    isActive: true,
+    assignedBy: assignedBy ?? null,
+  })));
 
   await tx.update(users).set({
     locationId: uniqueLocationIds[0] ?? null,
@@ -330,8 +336,14 @@ export const usersRouter = createRouter({
         throw new Error("User not found in this account");
       }
 
-      for (const locationId of input.locationIds) {
-        await requireAuthorizedLocation(ctx, locationId);
+      // Batch-check authorization for all locations at once
+      const authorizedIds = await getAuthorizedLocationIds(ctx);
+      const unauthorized = input.locationIds.filter(id => !authorizedIds.includes(id));
+      if (unauthorized.length > 0) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `Unauthorized location(s): ${unauthorized.join(", ")}`,
+        });
       }
 
       await db.transaction(async (tx) => {

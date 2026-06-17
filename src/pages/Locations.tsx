@@ -32,6 +32,10 @@ export function Locations() {
     onSuccess: () => { utils.settings.list.invalidate(); toast.success("Setting updated"); },
     onError: (err) => toast.error(err.message),
   });
+  const assignOwnerToAll = trpc.locations.assignCurrentOwnerToAll.useMutation({
+    onSuccess: (data) => { toast.success(`Owner assigned to all ${data.locationCount} branches`); utils.locations.list.invalidate(); },
+    onError: (err) => toast.error(err.message),
+  });
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,6 +90,27 @@ export function Locations() {
               onCheckedChange={(checked) => setSetting.mutate({ key: "enforceLocationAssignment", value: checked ? "true" : "false" })}
               disabled={setSetting.isPending}
             />
+          </CardContent>
+        </Card>
+
+        <Card className="border-[#2E7D32] bg-white">
+          <CardContent className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-3">
+              <MapPin className="h-5 w-5 text-[#2E7D32]" />
+              <div>
+                <p className="text-sm font-medium text-[#2D2A26]">Assign Owner to All Branches</p>
+                <p className="text-xs text-[#8D8A87]">Automatically grant the business owner access to every branch location</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-[#2E7D32] text-[#2E7D32]"
+              onClick={() => assignOwnerToAll.mutate({})}
+              disabled={assignOwnerToAll.isPending}
+            >
+              <Shield className="mr-1 h-3 w-3" /> {assignOwnerToAll.isPending ? "Assigning..." : "Assign to All"}
+            </Button>
           </CardContent>
         </Card>
 
