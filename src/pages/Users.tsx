@@ -231,9 +231,9 @@ export function Users() {
       : [...current, locationId]
   );
 
-  const openLocationsDialog = (userId: number, locationIds: number[]) => {
+  const openLocationsDialog = (userId: number, locationIds: number[], legacyLocationId?: number | null) => {
     setLocationsOpen(userId);
-    setDraftLocationIds(locationIds);
+    setDraftLocationIds(locationIds.length > 0 ? locationIds : (legacyLocationId ? [legacyLocationId] : []));
   };
 
   const saveLocationsDialog = () => {
@@ -444,7 +444,7 @@ export function Users() {
                                           <div className="space-y-2"><Label>Assigned Locations</Label>
                                             <div className="flex items-center justify-between gap-2 rounded border border-[#E8E0D8] px-3 py-2">
                                               <div className="min-w-0 flex-1">{renderLocationBadges(editForm.locationIds)}</div>
-                                              <Button type="button" size="sm" variant="outline" onClick={() => openLocationsDialog(u.id, editForm.locationIds)}>Manage</Button>
+                                              <Button type="button" size="sm" variant="outline" onClick={() => openLocationsDialog(u.id, editForm.locationIds, u.legacyLocationId)}>Manage</Button>
                                             </div>
                                           </div>
                                         </div>

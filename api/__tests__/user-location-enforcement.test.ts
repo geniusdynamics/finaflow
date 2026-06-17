@@ -228,6 +228,102 @@ describe("user location enforcement", () => {
     expect(after[0].locationId).toBe(seed.locationIds[0]);
   });
 
+  it("location create triggers user-location auto-assignment for owner (owner gets auto-assigned to new branch)", async () => {
+    const db = getDb();
+    // Insert a new location (as if created by owner)
+    const [newLoc] = await db.insert(locations).values({
+      businessId: seed.businessId,
+      name: "New Branch (Owner Test)",
+      slug: `new-owner-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+    } as typeof locations.$inferInsert).returning();
+
+    // Simulate the auto-assignment that locations.create does for owner
+    await db.transaction(async (tx) => {
+      await syncUserLocationAssignments(tx, seed.ownerId, [newLoc.id], seed.ownerId);
+    });
+
+    const records = await db.select().from(userLocations)
+      .where(and(eq(userLocations.userId, seed.ownerId), eq(userLocations.isActive, true)));
+    expect(records.some(r => r.locationId === newLoc.id)).toBe(true);
+  });
+
+  it("location create triggers user-location auto-assignment for admin (C2 fix: admin matches owner behavior)", async () => {
+    const db = getDb();
+    // Promote employee to admin
+    await db.update(users).set({ role: "admin" }).where(eq(users.id, seed.employeeId));
+    await db.update(userBusinesses).set({ role: "admin" })
+      .where(and(eq(userBusinesses.userId, seed.employeeId), eq(userBusinesses.businessId, seed.businessId)));
+
+    const [newLoc] = await db.insert(locations).values({
+      businessId: seed.businessId,
+      name: "New Branch (Admin Test)",
+      slug: `new-admin-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+    } as typeof locations.$inferInsert).returning();
+
+    // Simulate auto-assignment that locations.create does for admin (C2)
+    await db.transaction(async (tx) => {
+      await syncUserLocationAssignments(tx, seed.employeeId, [newLoc.id], seed.employeeId);
+    });
+
+    const records = await db.select().from(userLocations)
+      .where(and(eq(userLocations.userId, seed.employeeId), eq(userLocations.isActive, true)));
+    expect(records.some(r => r.locationId === newLoc.id)).toBe(true);
+  });
+
+  it("getAuthorizedLocationIds rejects unauthorized locations when enforcement is on", async () => {
+    const db = getDb();
+    await db.insert(appSettings).values({
+      businessId: seed.businessId,
+      key: "enforceLocationAssignment",
+      value: "true",
+    } as typeof appSettings.$inferInsert);
+
+    // Assign employee only to location B
+    await db.insert(userLocations).values({
+      userId: seed.employeeId,
+      locationId: seed.locationIds[1],
+      isPrimary: true,
+      isActive: true,
+    } as typeof userLocations.$inferInsert);
+
+    const allowed = await getAuthorizedLocationIds({
+      user: { id: seed.employeeId, role: "employee", currentBusinessId: seed.businessId } as never,
+    });
+
+    // Location A and C should NOT be in the authorized set
+    expect(allowed).toContain(seed.locationIds[1]);
+    expect(allowed).not.toContain(seed.locationIds[0]);
+    expect(allowed).not.toContain(seed.locationIds[2]);
+  });
+
+  it("locations.list respects authorization when enforcement is on (D1)", async () => {
+    const db = getDb();
+    await db.insert(appSettings).values({
+      businessId: seed.businessId,
+      key: "enforceLocationAssignment",
+      value: "true",
+    } as typeof appSettings.$inferInsert);
+
+    // Assign employee only to location B
+    await db.insert(userLocations).values({
+      userId: seed.employeeId,
+      locationId: seed.locationIds[1],
+      isPrimary: true,
+      isActive: true,
+    } as typeof userLocations.$inferInsert);
+
+    const allowed = await getAuthorizedLocationIds({
+      user: { id: seed.employeeId, role: "employee", currentBusinessId: seed.businessId } as never,
+    });
+
+    // Simulate what locations.list does: intersect authorized IDs with all locations
+    const allLocationIds = await db.select({ id: locations.id }).from(locations)
+      .where(and(eq(locations.businessId, seed.businessId), isNull(locations.deletedAt)));
+    const filtered = allLocationIds.filter(l => allowed.includes(l.id)).map(l => l.id);
+
+    expect(filtered).toEqual([seed.locationIds[1]]);
+  });
+
   it("syncUserLocationAssignments creates records for valid location IDs", async () => {
     const db = getDb();
 

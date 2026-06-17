@@ -1,11 +1,11 @@
 // ABOUTME: Exposes branch listing and maintenance mutations within the active business context.
 // ABOUTME: Applies shared subscription enforcement before new locations are added to a business.
-// ABOUTME: Auto-assigns the creating owner user to each new location for permission consistency.
+// ABOUTME: Auto-assigns the creating owner/admin user to each new location for permission consistency.
 import { z } from "zod";
-import { createRouter, authedQuery, settingsManage } from "./middleware";
+import { createRouter, authedQuery, settingsManage, getAuthorizedLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
 import { locations, users, userLocations } from "@db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import { assertCanCreateLocation } from "./lib/subscription-enforcement";
 import { syncUserLocationAssignments } from "./users-router";
 
@@ -14,8 +14,18 @@ export const locationsRouter = createRouter({
     const db = getDb();
     const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
     if (!businessId) return [];
+    // Scope by the caller's authorized location set so non-owner/admin users only
+    // see branches they are assigned to when location enforcement is enabled.
+    // (getAuthorizedLocationIds returns ALL locations for owner/admin or when
+    // enforcement is off, so this is transparent for those cases.)
+    const authorizedIds = await getAuthorizedLocationIds(ctx);
+    if (authorizedIds.length === 0) return [];
     return db.select().from(locations).where(
-      and(eq(locations.businessId, businessId), isNull(locations.deletedAt))
+      and(
+        eq(locations.businessId, businessId),
+        isNull(locations.deletedAt),
+        sql`${locations.id} IN (${sql.join(authorizedIds.map(id => sql`${id}`), sql`, `)})`
+      )
     ).orderBy(locations.name);
   }),
 
@@ -56,7 +66,9 @@ export const locationsRouter = createRouter({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
 
-        // Auto-assign the creating user (if owner or admin) to the new location
+        // Auto-assign the creating user (owner or admin) to the new location.
+        // getAuthorizedLocationIds treats both roles identically (returns all
+        // locations), so admins who create branches get the same auto-assignment.
         const userId = ctx.user?.id;
         if (userId && (ctx.user?.role === "owner" || ctx.user?.role === "admin")) {
           const existingAssignments = await tx.select({ locationId: userLocations.locationId })
@@ -106,17 +118,23 @@ export const locationsRouter = createRouter({
     }),
 
   /**
-   * Assign the current owner user to all business locations.
-   * This ensures the business owner has access to every branch.
+   * Assign the CURRENT owner/admin user to all business locations.
+   * Guarded by settingsManage at the middleware level (matching create/update/delete),
+   * with a defense-in-depth inline role check on top. Renamed from the ambiguous
+   * `assignOwnerToAll` to make clear it acts on the calling user, not all owners.
    */
-  assignCurrentOwnerToAll: settingsManage
+  assignCurrentOwnerToAllLocations: settingsManage
     .input(z.object({}))
     .mutation(async ({ ctx }) => {
       const db = getDb();
       const userId = ctx.user?.id;
       const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
       if (!userId || !businessId) throw new Error("User or business context required");
-      if (ctx.user?.role !== "owner") throw new Error("Only business owners can use this");
+      // Defense-in-depth: settingsManage already gates on settings:manage, but only
+      // owner/admin roles should bulk-assign themselves to every branch.
+      if (ctx.user?.role !== "owner" && ctx.user?.role !== "admin") {
+        throw new Error("Only business owners or admins can use this");
+      }
 
       const allLocations = await db.select({ id: locations.id }).from(locations)
         .where(and(eq(locations.businessId, businessId), isNull(locations.deletedAt)));

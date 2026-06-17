@@ -32,9 +32,9 @@ export function Locations() {
     onSuccess: () => { utils.settings.list.invalidate(); toast.success("Setting updated"); },
     onError: (err) => toast.error(err.message),
   });
-  const assignOwnerToAll = trpc.locations.assignCurrentOwnerToAll.useMutation({
-    onSuccess: (data) => { toast.success(`Owner assigned to all ${data.locationCount} branches`); utils.locations.list.invalidate(); },
-    onError: (err) => toast.error(err.message),
+  const assignOwnerToAll = trpc.locations.assignCurrentOwnerToAllLocations.useMutation({
+    onSuccess: (data) => { toast.success(`Assigned to all ${data.locationCount} branches`); utils.locations.list.invalidate(); },
+    onError: (err) => toast.error(err.message || "Failed to assign to all branches"),
   });
 
   const handleCreate = (e: React.FormEvent) => {
