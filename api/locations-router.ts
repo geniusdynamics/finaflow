@@ -56,9 +56,9 @@ export const locationsRouter = createRouter({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
 
-        // Auto-assign the creating user (if owner) to the new location
+        // Auto-assign the creating user (if owner or admin) to the new location
         const userId = ctx.user?.id;
-        if (userId && ctx.user?.role === "owner") {
+        if (userId && (ctx.user?.role === "owner" || ctx.user?.role === "admin")) {
           const existingAssignments = await tx.select({ locationId: userLocations.locationId })
             .from(userLocations)
             .where(eq(userLocations.userId, userId));
@@ -109,7 +109,7 @@ export const locationsRouter = createRouter({
    * Assign the current owner user to all business locations.
    * This ensures the business owner has access to every branch.
    */
-  assignOwnerToAll: authedQuery
+  assignCurrentOwnerToAll: settingsManage
     .input(z.object({}))
     .mutation(async ({ ctx }) => {
       const db = getDb();
@@ -127,6 +127,6 @@ export const locationsRouter = createRouter({
         await syncUserLocationAssignments(tx, userId, locationIds, userId);
       });
 
-      return { success: true, locationCount: locationIds.length };
+      return { success: true, locationCount: locationIds.length, assignedLocationIds: locationIds };
     }),
 });

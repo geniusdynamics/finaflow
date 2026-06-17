@@ -2,7 +2,7 @@
 // ABOUTME: Includes safe deletion checks, disable/enable flows, and location assignment syncing.
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createRouter, authedQuery, userManage, requireAuthorizedLocation } from "./middleware";
+import { createRouter, authedQuery, userManage, requireAuthorizedLocation, getAuthorizedLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
 import { users, userBusinesses, userLocations } from "@db/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
@@ -336,8 +336,14 @@ export const usersRouter = createRouter({
         throw new Error("User not found in this account");
       }
 
-      for (const locationId of input.locationIds) {
-        await requireAuthorizedLocation(ctx, locationId);
+      // Batch-check authorization for all locations at once
+      const authorizedIds = await getAuthorizedLocationIds(ctx);
+      const unauthorized = input.locationIds.filter(id => !authorizedIds.includes(id));
+      if (unauthorized.length > 0) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `Unauthorized location(s): ${unauthorized.join(", ")}`,
+        });
       }
 
       await db.transaction(async (tx) => {

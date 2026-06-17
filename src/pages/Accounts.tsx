@@ -154,6 +154,7 @@ export function Accounts() {
   });
   const removeFromLoc = trpc.paymentMethods.removeFromLocation.useMutation({
     onSuccess: () => { utils.paymentMethods.byLocation.invalidate(); toast.success("Removed"); },
+    onError: (err) => toast.error(err.message || "Failed to remove payment method from branch"),
   });
 
   const handleSubmit = (e: React.FormEvent) => {

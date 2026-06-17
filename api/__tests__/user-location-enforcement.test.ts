@@ -5,6 +5,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "../queries/connection";
 import { hashPassword } from "../lib/password";
 import { getAuthorizedLocationIds, getEnforceUserLocation } from "../middleware";
+import { syncUserLocationAssignments } from "../users-router";
 import {
   appSettings,
   businesses,
@@ -196,5 +197,61 @@ describe("user location enforcement", () => {
     });
 
     expect(allowed.sort()).toEqual([...seed.locationIds].sort());
+  });
+
+  it("syncUserLocationAssignments preserves existing records when called with empty array", async () => {
+    const db = getDb();
+    // Assign employee to one location
+    await db.insert(userLocations).values({
+      userId: seed.employeeId,
+      locationId: seed.locationIds[0],
+      isPrimary: true,
+      isActive: true,
+    } as typeof userLocations.$inferInsert);
+
+    // Verify the assignment exists
+    const before = await db.select().from(userLocations)
+      .where(eq(userLocations.userId, seed.employeeId));
+    expect(before.length).toBe(1);
+
+    // Attempt sync with empty array — should NOT delete existing records
+    const result = await db.transaction(async (tx) => {
+      return syncUserLocationAssignments(tx, seed.employeeId, [], seed.ownerId);
+    });
+
+    expect(result).toEqual([]);
+
+    // Original record should still exist
+    const after = await db.select().from(userLocations)
+      .where(eq(userLocations.userId, seed.employeeId));
+    expect(after.length).toBe(1);
+    expect(after[0].locationId).toBe(seed.locationIds[0]);
+  });
+
+  it("syncUserLocationAssignments creates records for valid location IDs", async () => {
+    const db = getDb();
+
+    const result = await db.transaction(async (tx) => {
+      return syncUserLocationAssignments(
+        tx,
+        seed.ownerId,
+        [seed.locationIds[0], seed.locationIds[2]],
+        seed.ownerId,
+      );
+    });
+
+    expect(result).toEqual([seed.locationIds[0], seed.locationIds[2]]);
+
+    const records = await db.select().from(userLocations)
+      .where(and(
+        eq(userLocations.userId, seed.ownerId),
+        eq(userLocations.isActive, true)
+      ))
+      .orderBy(userLocations.locationId);
+    expect(records.length).toBe(2);
+    expect(records[0].locationId).toBe(seed.locationIds[0]);
+    expect(records[0].isPrimary).toBe(true);
+    expect(records[1].locationId).toBe(seed.locationIds[2]);
+    expect(records[1].isPrimary).toBe(false);
   });
 });

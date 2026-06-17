@@ -81,8 +81,9 @@ export const paymentMethodsRouter = createRouter({
   // For a given location, which payment methods are available with their linked accounts?
   byLocation: paymentMethodsView
     .input(z.object({ locationId: z.number() }))
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
       const db = getDb();
+      const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
       // Get active junction records for this location
       const junctions = await db.select().from(locationPaymentMethods)
         .where(and(
@@ -91,18 +92,23 @@ export const paymentMethodsRouter = createRouter({
         ));
       if (junctions.length === 0) return [];
 
-      // Get all payment methods
+      // Get all payment methods scoped to this business
       const pmIds = junctions.map(j => j.paymentMethodId);
       const methods = await db.select().from(paymentMethods)
         .where(and(
           sql`${paymentMethods.id} IN (${sql.join(pmIds.map(id => sql`${id}`), sql`, `)})`,
           isNull(paymentMethods.deletedAt),
-          eq(paymentMethods.isActive, true)
+          eq(paymentMethods.isActive, true),
+          ...(businessId ? [eq(paymentMethods.businessId, businessId)] : []),
         ))
         .orderBy(asc(paymentMethods.sortOrder));
 
-      // Get all accounts for name resolution
-      const allAccounts = await db.select().from(accounts).where(isNull(accounts.deletedAt));
+      // Get accounts scoped to the location being queried
+      const allAccounts = await db.select().from(accounts)
+        .where(and(
+          isNull(accounts.deletedAt),
+          eq(accounts.locationId, input.locationId)
+        ));
 
       // Merge junction data (linkedAccountId) with payment method data
       return methods.map(m => {
