@@ -151,6 +151,7 @@ export function Accounts() {
   });
   const updateLocLink = trpc.paymentMethods.updateLocationLink.useMutation({
     onSuccess: () => { utils.paymentMethods.byLocation.invalidate(); toast.success("Account link updated"); },
+    onError: (err) => toast.error(err.message || "Failed to update linked account"),
   });
   const removeFromLoc = trpc.paymentMethods.removeFromLocation.useMutation({
     onSuccess: () => { utils.paymentMethods.byLocation.invalidate(); toast.success("Removed"); },

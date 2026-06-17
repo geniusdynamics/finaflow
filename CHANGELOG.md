@@ -1,5 +1,30 @@
 # Changelog
 
+## [Unreleased] — Payment-Method-Location-Permission Remediation
+
+### Added
+- **Batch authorization in `setUserLocations`** ([api/users-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\users-router.ts)) — replaced per-location `requireAuthorizedLocation` loop with a single batched check via `getAuthorizedLocationIds` (A3). Reduces N+1 auth queries to 1.
+- **`businessId` guard on `paymentMethods.update` / `delete`** ([api/payment-methods-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\payment-methods-router.ts)) — both mutations now scope their `where` clause to the current business, preventing cross-tenant modification (A4).
+- **Unconditional `businessId` filter in `paymentMethods.byLocation`** ([api/payment-methods-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\payment-methods-router.ts)) — returns empty early when no business context is available, instead of dropping the filter (A5).
+- **Pre-check default location in Manage Locations dialog** ([src/pages/Users.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Users.tsx)) — `openLocationsDialog` now accepts a `legacyLocationId` parameter; when `locationIds` is empty, the dialog pre-checks the legacy single-location value (B1).
+- **`onError` handler on `updateLocLink` mutation** ([src/pages/Accounts.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Accounts.tsx)) — added `onError` toast matching sibling pattern (D2).
+- **Test coverage for location enforcement** ([api/__tests__/user-location-enforcement.test.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\__tests__\user-location-enforcement.test.ts)) — 4 new tests covering owner/admin auto-assignment, unauthorized location rejection, and `locations.list` authorization filtering (Phase E).
+
+### Changed
+- **`assignOwnerToAll` renamed to `assignCurrentOwnerToAllLocations`** ([api/locations-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\locations-router.ts), [src/pages/Locations.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Locations.tsx)) — clearer name reflecting that it assigns the current owner to all locations (D5).
+- **`assignCurrentOwnerToAllLocations` guard upgraded to `settingsManage`** ([api/locations-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\locations-router.ts)) — aligns mutation guard with `locations.create/update/delete` (A1).
+- **Enriched `assignCurrentOwnerToAllLocations` response** ([api/locations-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\locations-router.ts)) — returns `assignedLocationIds` in the response payload (D4).
+- **`locations.create` auto-assigns admins** ([api/locations-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\locations-router.ts)) — admins are now auto-assigned to branches they create, matching owner behavior (C2).
+- **`locations.list` filtered by authorization** ([api/locations-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\locations-router.ts)) — results are now intersected with `getAuthorizedLocationIds`, transparent for owner/admin but narrowing for non-admin users with enforcement ON (D1).
+- **`permissions.updateUserRole` authorization** ([api/permissions-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\permissions-router.ts)) — validates all requested `locationIds` against `getAuthorizedLocationIds` before assignment; uses `syncUserLocationAssignments` instead of hand-rolled loop (A2).
+- **Removed synthetic `locationIds` fallback in `users.list` / `permissions.listUsers`** ([api/users-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\users-router.ts), [api/permissions-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\permissions-router.ts)) — returns only real `user_locations` rows; exposes legacy value as `legacyLocationId` (C1).
+
+### Documentation
+- **Junction re-validation decision documented** ([api/payment-methods-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\payment-methods-router.ts)) — comment explaining why re-validation inside the update is skipped (D3).
+
+### Files
+- **Modified** — `api/locations-router.ts`, `api/users-router.ts`, `api/permissions-router.ts`, `api/payment-methods-router.ts`, `src/pages/Users.tsx`, `src/pages/Accounts.tsx`, `src/pages/Locations.tsx`, `api/__tests__/user-location-enforcement.test.ts`
+
 ## [Unreleased] — Employee Username Improvement & User Profile Page
 
 ### Added

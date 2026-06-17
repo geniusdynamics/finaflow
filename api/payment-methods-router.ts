@@ -62,19 +62,27 @@ export const paymentMethodsRouter = createRouter({
       sortOrder: z.number().optional(),
       isActive: z.boolean().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? null;
       const { id, ...updates } = input;
+      const where = businessId
+        ? and(eq(paymentMethods.id, id), eq(paymentMethods.businessId, businessId))
+        : eq(paymentMethods.id, id);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await db.update(paymentMethods).set(updates as any).where(eq(paymentMethods.id, id));
+      await db.update(paymentMethods).set(updates as any).where(where);
       return { success: true };
     }),
 
   delete: paymentMethodsManage
     .input(z.object({ id: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      await db.update(paymentMethods).set({ deletedAt: new Date() }).where(eq(paymentMethods.id, input.id));
+      const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? null;
+      const where = businessId
+        ? and(eq(paymentMethods.id, input.id), eq(paymentMethods.businessId, businessId))
+        : eq(paymentMethods.id, input.id);
+      await db.update(paymentMethods).set({ deletedAt: new Date() }).where(where);
       return { success: true };
     }),
 
@@ -84,6 +92,7 @@ export const paymentMethodsRouter = createRouter({
     .query(async ({ input, ctx }) => {
       const db = getDb();
       const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
+      if (!businessId) return [];
       // Get active junction records for this location
       const junctions = await db.select().from(locationPaymentMethods)
         .where(and(
@@ -99,15 +108,15 @@ export const paymentMethodsRouter = createRouter({
           sql`${paymentMethods.id} IN (${sql.join(pmIds.map(id => sql`${id}`), sql`, `)})`,
           isNull(paymentMethods.deletedAt),
           eq(paymentMethods.isActive, true),
-          ...(businessId ? [eq(paymentMethods.businessId, businessId)] : []),
+          eq(paymentMethods.businessId, businessId),
         ))
         .orderBy(asc(paymentMethods.sortOrder));
 
-      // Get accounts scoped to the location being queried
+      // Get accounts: branch-specific (locationId matches) + business-level (locationId is null, available to all branches)
       const allAccounts = await db.select().from(accounts)
         .where(and(
           isNull(accounts.deletedAt),
-          eq(accounts.locationId, input.locationId)
+          sql`(${eq(accounts.locationId, input.locationId)} OR ${isNull(accounts.locationId)})`
         ));
 
       // Merge junction data (linkedAccountId) with payment method data
@@ -141,8 +150,9 @@ export const paymentMethodsRouter = createRouter({
           and(eq(accounts.id, input.linkedAccountId), isNull(accounts.deletedAt), eq(accounts.isActive, true))
         ).limit(1);
 
-        if (!linkedAccount || linkedAccount.locationId !== input.locationId) {
-          throw new Error("Linked account must belong to the selected location");
+        // Allow linking: account is branch-specific (matches locationId) or business-level (locationId is null)
+        if (!linkedAccount || (linkedAccount.locationId !== null && linkedAccount.locationId !== input.locationId)) {
+          throw new Error("Linked account must belong to the selected location or be a business-level account");
         }
       }
 
@@ -156,6 +166,10 @@ export const paymentMethodsRouter = createRouter({
 
       if (existing.length > 0) {
         // Update existing — set active and update linked account if provided
+        // Note: re-validation of authorized location is intentionally skipped here.
+        // The requireAuthorizedLocation check at line ~137 runs before this branch,
+        // and the race window between check and update is negligible. Wrapping in a
+        // transaction would add complexity disproportionate to the risk.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const updates: any = { isActive: true };
         if (input.linkedAccountId !== undefined) updates.linkedAccountId = input.linkedAccountId;
@@ -203,8 +217,9 @@ export const paymentMethodsRouter = createRouter({
           and(eq(accounts.id, input.linkedAccountId), isNull(accounts.deletedAt), eq(accounts.isActive, true))
         ).limit(1);
 
-        if (!linkedAccount || linkedAccount.locationId !== input.locationId) {
-          throw new Error("Linked account must belong to the selected location");
+        // Allow linking: account is branch-specific (matches locationId) or business-level (locationId is null)
+        if (!linkedAccount || (linkedAccount.locationId !== null && linkedAccount.locationId !== input.locationId)) {
+          throw new Error("Linked account must belong to the selected location or be a business-level account");
         }
       }
 

@@ -1,9 +1,11 @@
 import { z } from "zod";
-import { createRouter, authedQuery, userManage, PERMISSIONS, loadRolePermissionsFromDb, invalidateRolePermissionCache, type Permission } from "./middleware";
+import { createRouter, authedQuery, userManage, getAuthorizedLocationIds, PERMISSIONS, loadRolePermissionsFromDb, invalidateRolePermissionCache, type Permission } from "./middleware";
 import { getDb } from "./queries/connection";
 import { users, rolePermissions, userBusinesses, userLocations, businesses, auditLog } from "@db/schema";
 import { eq, and, isNull, sql, inArray, desc } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { logAudit, logCrossAccountAccess } from "./lib/audit";
+import { syncUserLocationAssignments } from "./users-router";
 
 const HARD_DEFAULTS: Record<string, string[]> = {
   owner: Object.values(PERMISSIONS),
@@ -124,7 +126,11 @@ export const permissionsRouter = createRouter({
       ...u,
       businessIds: userBizMap[u.id] || [],
       businessRoles: userBizRoleMap[u.id] || {},
-      locationIds: userLocationMap[u.id] || (u.locationId ? [u.locationId] : []),
+      // Only real user_locations rows; the legacy single-location value is
+      // exposed separately so the frontend can synthesize a pre-check without
+      // falsely implying junction rows exist.
+      locationIds: userLocationMap[u.id] || [],
+      legacyLocationId: u.locationId ?? null,
     }));
   }),
 
@@ -201,30 +207,38 @@ export const permissionsRouter = createRouter({
       
       // Handle multi-location assignment updates
       if (locationIds !== undefined) {
-        await db.transaction(async (tx) => {
-          // Deactivate all existing location assignments
-          await tx.update(userLocations)
-            .set({ isActive: false })
-            .where(eq(userLocations.userId, userId));
-          
-          // Insert new location assignments
-          if (locationIds.length > 0) {
-            for (let i = 0; i < locationIds.length; i++) {
-              await tx.insert(userLocations).values({
-                userId: userId,
-                locationId: locationIds[i],
-                isPrimary: i === 0, // First location is primary
-                isActive: true,
-                assignedBy: currentUserId,
-              } as any);
-            }
+        // Authorization: validate every supplied location is in the caller's
+        // authorized set. Without this, a users:manage holder could assign a
+        // user to branches outside their own access (matching setUserLocations).
+        const authorizedIds = await getAuthorizedLocationIds(ctx);
+        if (locationIds.length > 0) {
+          const authorizedSet = new Set(authorizedIds);
+          const unauthorized = locationIds.filter(id => !authorizedSet.has(id));
+          if (unauthorized.length > 0) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: `Unauthorized location(s): ${unauthorized.join(", ")}`,
+            });
           }
-          
-          // Update the legacy locationId field for backward compatibility
-          const primaryLocationId = locationIds.length > 0 ? locationIds[0] : null;
-          await tx.update(users)
-            .set({ locationId: primaryLocationId })
-            .where(eq(users.id, userId));
+        }
+
+        // syncUserLocationAssignments is the single source of truth: it deletes
+        // stale rows, inserts the new set, marks the first as primary, and
+        // updates the legacy users.locationId column. Its empty-array guard
+        // prevents wiping existing assignments when the caller sends `[]`.
+        await db.transaction(async (tx) => {
+          if (locationIds.length > 0) {
+            await syncUserLocationAssignments(tx, userId, locationIds, currentUserId);
+          } else {
+            // Empty array is an explicit request to clear assignments. The sync
+            // guard skips clearing, so handle it directly here.
+            await tx.update(userLocations)
+              .set({ isActive: false })
+              .where(eq(userLocations.userId, userId));
+            await tx.update(users)
+              .set({ locationId: null })
+              .where(eq(users.id, userId));
+          }
         });
       }
       

@@ -158,7 +158,11 @@ export const usersRouter = createRouter({
 
     return userRows.map((user) => ({
       ...user,
-      locationIds: byUser[user.id] ?? (user.locationId ? [user.locationId] : []),
+      // Only real user_locations rows; the legacy single-location value is
+      // exposed separately so the frontend can synthesize a pre-check without
+      // falsely implying junction rows exist.
+      locationIds: byUser[user.id] ?? [],
+      legacyLocationId: user.locationId ?? null,
     }));
   }),
 
@@ -336,14 +340,11 @@ export const usersRouter = createRouter({
         throw new Error("User not found in this account");
       }
 
-      // Batch-check authorization for all locations at once
+      // Batch-authorize all requested locations in a single query
       const authorizedIds = await getAuthorizedLocationIds(ctx);
       const unauthorized = input.locationIds.filter(id => !authorizedIds.includes(id));
       if (unauthorized.length > 0) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: `Unauthorized location(s): ${unauthorized.join(", ")}`,
-        });
+        throw new TRPCError({ code: "FORBIDDEN", message: `Unauthorized location(s): ${unauthorized.join(", ")}` });
       }
 
       await db.transaction(async (tx) => {
