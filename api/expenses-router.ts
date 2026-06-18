@@ -270,10 +270,18 @@ export const expensesRouter = createRouter({
       const userId = (ctx as any).user?.id ?? 1;
 
       await requireAuthorizedLocation(ctx, input.locationId);
-      
+
+      // ABOUTME: Cross-branch spending rules:
+      // ABOUTME: - Accounts with locationId = null (business-level) can be used from any branch
+      // ABOUTME: - Accounts whose locationId matches the expense location are valid
+      // ABOUTME: - Admins and owners can use any account across any branch
       if (input.accountId) {
         const acct = await requireAuthorizedEntity(ctx, accounts, input.accountId);
-        if (acct.locationId !== input.locationId) throw new Error("Account does not belong to the selected location");
+        const userRole = ctx.user?.role;
+        const canCrossBranch = userRole === "admin" || userRole === "owner";
+        if (acct.locationId !== null && acct.locationId !== input.locationId && !canCrossBranch) {
+          throw new Error("Account does not belong to the selected location");
+        }
       }
       
       if (input.supplierId) {
@@ -316,10 +324,16 @@ export const expensesRouter = createRouter({
 
         if (!accountId) {
           const typeMap: Record<string, string> = { cash: "cash", wallet: "cash", bank_transfer: "bank", card: "bank" };
-          const accts = await tx.select().from(accounts).where(
+          // Prefer branch-specific account, fall back to business-level account
+          let accts = await tx.select().from(accounts).where(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
             and(eq(accounts.locationId, input.locationId), eq(accounts.type, typeMap[input.paymentMethod] as any), isNull(accounts.deletedAt))
           ).limit(1);
+          if (!accts[0]) {
+            accts = await tx.select().from(accounts).where(
+              and(isNull(accounts.locationId), eq(accounts.type, typeMap[input.paymentMethod] as any), isNull(accounts.deletedAt))
+            ).limit(1);
+          }
           if (accts[0]) accountId = accts[0].id;
         }
 

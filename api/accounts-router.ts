@@ -98,7 +98,7 @@ export const accountsRouter = createRouter({
     if (locIds.length === 0) return [];
     return db.select().from(accounts).where(
       and(
-        sql`${accounts.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`,
+        sql`(${sql.join(locIds.map(id => sql`${accounts.locationId} = ${id}`), sql` OR `)} OR ${isNull(accounts.locationId)})`,
         isNull(accounts.deletedAt),
         isNull(accounts.accountType)
       )
@@ -110,7 +110,10 @@ export const accountsRouter = createRouter({
     .query(async ({ input, ctx }) => {
       const db = getDb();
       await requireAuthorizedLocation(ctx, input.locationId);
-      return db.select().from(accounts).where(and(eq(accounts.locationId, input.locationId), isNull(accounts.deletedAt)));
+      return db.select().from(accounts).where(and(
+        sql`(${eq(accounts.locationId, input.locationId)} OR ${isNull(accounts.locationId)})`,
+        isNull(accounts.deletedAt)
+      ));
     }),
 
   /** Returns all active accounts (operational + CoA) for journal entry line selection,
@@ -122,7 +125,7 @@ export const accountsRouter = createRouter({
 
     const operationalAccounts = await db.select().from(accounts).where(
       and(
-        sql`${accounts.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`,
+        sql`(${sql.join(locIds.map(id => sql`${accounts.locationId} = ${id}`), sql` OR `)} OR ${isNull(accounts.locationId)})`,
         isNull(accounts.deletedAt),
         isNull(accounts.accountType),
         eq(accounts.isActive, true),
@@ -143,6 +146,7 @@ export const accountsRouter = createRouter({
           isNull(accounts.deletedAt),
           isNull(accounts.locationId),
           eq(accounts.isActive, true),
+          eq(accounts.isPaymentMethod, false),
         )
       );
       coaAccounts.push(...results);
@@ -153,7 +157,7 @@ export const accountsRouter = createRouter({
 
   create: accountManage
     .input(z.object({
-      locationId: z.number(),
+      locationId: z.number().optional(),
       name: z.string().min(1).max(100),
       type: z.enum(["cash", "wallet", "bank_account"]),
       accountCode: z.string().max(20).optional(),
@@ -167,23 +171,37 @@ export const accountsRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const userId = ctx.user?.id ?? 1;
-      await requireAuthorizedLocation(ctx, input.locationId);
+      const currentBusinessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? null;
+      if (input.locationId) {
+        await requireAuthorizedLocation(ctx, input.locationId);
+      }
       const ob = input.openingBalance ?? "0.00";
-      const [location] = await db
-        .select()
-        .from(locations)
-        .where(and(eq(locations.id, input.locationId), isNull(locations.deletedAt)))
-        .limit(1);
 
-      if (!location?.businessId) {
-        throw new Error("Selected location is missing an active business context");
+      // Determine business context: either from the selected location or from current business
+      let businessId: number | null = null;
+      if (input.locationId) {
+        const [location] = await db
+          .select()
+          .from(locations)
+          .where(and(eq(locations.id, input.locationId), isNull(locations.deletedAt)))
+          .limit(1);
+        if (!location?.businessId) {
+          throw new Error("Selected location is missing an active business context");
+        }
+        businessId = location.businessId;
+      } else if (currentBusinessId) {
+        businessId = currentBusinessId;
+      } else {
+        throw new Error("Business context is required to create an account");
       }
 
-      const existing = await db.select().from(accounts).where(
-        and(eq(accounts.locationId, input.locationId), eq(accounts.name, input.name), eq(accounts.type, input.type), isNull(accounts.deletedAt))
-      ).limit(1);
-      if (existing.length > 0) {
-        throw new Error(`Account "${input.name}" of type ${input.type} already exists for this location`);
+      if (input.locationId) {
+        const existing = await db.select().from(accounts).where(
+          and(eq(accounts.locationId, input.locationId), eq(accounts.name, input.name), eq(accounts.type, input.type), isNull(accounts.deletedAt))
+        ).limit(1);
+        if (existing.length > 0) {
+          throw new Error(`Account "${input.name}" of type ${input.type} already exists for this location`);
+        }
       }
 
       // ABOUTME: Auto-determine CoA classification. If accountType/accountSubType are provided
@@ -197,7 +215,7 @@ export const accountsRouter = createRouter({
 
       // ABOUTME: Auto-link to CoA entry. This runs for ALL accounts regardless of checkbox state.
       const { coaId } = await ensureSystemAccount({
-        businessId: location.businessId,
+        businessId,
         accountType: classification.accountType,
         accountSubType: classification.accountSubType,
         name:
@@ -210,8 +228,8 @@ export const accountsRouter = createRouter({
       });
 
       const rows = await db.insert(accounts).values({
-        locationId: input.locationId,
-        businessId: location.businessId,
+        locationId: input.locationId ?? null,
+        businessId,
         name: input.name,
         type: input.type,
         accountCode: input.accountCode,
@@ -230,12 +248,12 @@ export const accountsRouter = createRouter({
 
       await logAudit({
         userId,
-        businessId: location.businessId,
+        businessId,
         action: "CREATE",
         resource: "accounts",
         resourceId: result.id,
         details: {
-          locationId: input.locationId,
+          locationId: input.locationId ?? null,
           type: input.type,
           isPaymentMethod: input.isPaymentMethod ?? false,
         },
@@ -500,10 +518,7 @@ export const accountsRouter = createRouter({
         .from(accounts)
         .where(
           and(
-            sql`${accounts.locationId} IN (${sql.join(
-              locIds.map((id) => sql`${id}`),
-              sql`, `
-            )})`,
+            sql`(${sql.join(locIds.map((id) => sql`${accounts.locationId} = ${id}`), sql` OR `)} OR ${isNull(accounts.locationId)})`,
             isNull(accounts.deletedAt),
             isNull(accounts.accountType)
           )

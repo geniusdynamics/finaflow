@@ -150,9 +150,9 @@ export const paymentMethodsRouter = createRouter({
           and(eq(accounts.id, input.linkedAccountId), isNull(accounts.deletedAt), eq(accounts.isActive, true))
         ).limit(1);
 
-        // Allow linking: account is branch-specific (matches locationId) or business-level (locationId is null)
+        // Allow linking: account is branch-specific (matches locationId) or business-level (locationId is null, available to all branches)
         if (!linkedAccount || (linkedAccount.locationId !== null && linkedAccount.locationId !== input.locationId)) {
-          throw new Error("Linked account must belong to the selected location or be a business-level account");
+          throw new Error("Linked account must be assigned to this branch or be a business-level account (available to all branches)");
         }
       }
 
@@ -217,9 +217,9 @@ export const paymentMethodsRouter = createRouter({
           and(eq(accounts.id, input.linkedAccountId), isNull(accounts.deletedAt), eq(accounts.isActive, true))
         ).limit(1);
 
-        // Allow linking: account is branch-specific (matches locationId) or business-level (locationId is null)
+        // Allow linking: account is branch-specific (matches locationId) or business-level (locationId is null, available to all branches)
         if (!linkedAccount || (linkedAccount.locationId !== null && linkedAccount.locationId !== input.locationId)) {
-          throw new Error("Linked account must belong to the selected location or be a business-level account");
+          throw new Error("Linked account must be assigned to this branch or be a business-level account (available to all branches)");
         }
       }
 
