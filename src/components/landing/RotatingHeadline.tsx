@@ -49,7 +49,7 @@ export interface RotatingHeadlineProps {
 }
 
 export default function RotatingHeadline({
-  rotationMs = 16500,
+  rotationMs = 8250,
   className,
   subtitleClassName,
 }: RotatingHeadlineProps) {

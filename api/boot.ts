@@ -1,5 +1,7 @@
 // ABOUTME: Hono server bootstrap that wires up CORS, security, rate limiting, CSRF, and tRPC request handling.
 // ABOUTME: Also schedules background jobs (trial lifecycle) and handles graceful shutdown.
+import "./instrument";
+import { Sentry } from "./instrument";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
@@ -59,6 +61,11 @@ app.get("/health", async (c) => {
     return c.json({ status: "unhealthy", error: String(e) }, 503);
   }
 });
+
+app.get("/debug-sentry", () => {
+  throw new Error("Sentry backend test error!");
+});
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function trpcRateLimiter(c: any, next: any) {
   if (c.req.method === "POST" && c.req.path.startsWith("/api/trpc")) {
@@ -110,6 +117,12 @@ app.use("/api/trpc*", async (c) => {
     return response;
   } catch (err) {
     console.error(`✗ ${method} ${path}`, err);
+    Sentry.withScope((scope) => {
+      scope.setExtra("method", method);
+      scope.setExtra("path", path);
+      scope.setExtra("status", 500);
+      Sentry.captureException(err);
+    });
     return c.json({ error: "Internal server error" }, 500);
   }
 });
@@ -129,6 +142,7 @@ async function runTrialLifecycleJob() {
     }
   } catch (error) {
     console.error("[subscriptions] trial lifecycle job failed", error);
+    Sentry.captureException(error);
   }
 }
 
@@ -175,12 +189,15 @@ if (process.env.EXCHANGE_RATE_PROVIDER && process.env.EXCHANGE_RATE_PROVIDER !==
 
 seedSupportedCurrencies().catch((err) => {
   console.error("[boot] Failed to seed supported currencies:", err);
+  Sentry.captureException(err);
 });
 seedWalletProviders().catch((err) => {
   console.error("[boot] Failed to seed wallet providers:", err);
+  Sentry.captureException(err);
 });
 seedDefaultExchangeRates().catch((err) => {
   console.error("[boot] Failed to seed exchange rates:", err);
+  Sentry.captureException(err);
 });
 
 const port = parseInt(process.env.PORT || "3000");
