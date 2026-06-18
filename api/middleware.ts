@@ -3,6 +3,7 @@
 import { TRPCError, initTRPC } from "@trpc/server";
 import { ZodError } from "zod";
 import SuperJSON from "superjson";
+import { Sentry } from "./instrument";
 import { getDb } from "./queries/connection";
 import { businesses, locations, users, userBusinesses, userLocations, appSettings, rolePermissions, type Business } from "@db/schema";
 import { eq, and, sql, isNull, type AnyColumn, type AnyTable } from "drizzle-orm";

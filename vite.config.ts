@@ -4,13 +4,36 @@ import devServer from "@hono/vite-dev-server"
 import path from "path"
 const __dirname = import.meta.dirname
 import react from "@vitejs/plugin-react"
+import { sentryVitePlugin } from "@sentry/vite-plugin"
 import { defineConfig } from "vite"
+
+const releaseName = process.env.npm_package_version
+  ? `finaflow@${process.env.npm_package_version}`
+  : undefined;
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
     devServer({ entry: "api/boot.ts", exclude: [/^\/(?!(api\/|health)).*$/] }),
-    react()],
+    react(),
+    ...(process.env.SENTRY_AUTH_TOKEN
+      ? [sentryVitePlugin({
+          org: process.env.SENTRY_ORG,
+          project: process.env.SENTRY_PROJECT,
+          authToken: process.env.SENTRY_AUTH_TOKEN,
+          release: {
+            name: releaseName,
+            inject: true,
+            create: true,
+            finalize: true,
+          },
+          sourcemaps: {
+            assets: "./dist/public/**",
+            filesToDeleteAfterUpload: ["./dist/public/**/*.map"],
+          },
+        })]
+      : []),
+  ],
   server: {
     port: Number.isFinite(Number(process.env.PORT)) ? Number(process.env.PORT) : 3000,
   },
@@ -23,6 +46,7 @@ export default defineConfig({
   },
   envDir: path.resolve(__dirname),
   build: {
+    sourcemap: "hidden",
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
   },

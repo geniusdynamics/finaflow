@@ -1,13 +1,11 @@
-import { Component, type ReactNode, type ErrorInfo } from "react";
+// ABOUTME: Sentry-powered error boundary that captures React component errors remotely.
+// ABOUTME: Re-exports Sentry.ErrorBoundary under the same name so all route references remain unchanged.
+import * as Sentry from "@sentry/react";
+import type { ReactNode, ReactElement } from "react";
 
 interface Props {
   children: ReactNode;
   fallback?: ReactNode;
-}
-
-interface State {
-  hasError: boolean;
-  error: Error | null;
 }
 
 function DefaultFallback({ error, reset }: { error: Error | null; reset: () => void }) {
@@ -29,26 +27,15 @@ function DefaultFallback({ error, reset }: { error: Error | null; reset: () => v
   );
 }
 
-export class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false, error: null };
-
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("ErrorBoundary caught:", error, info);
-  }
-
-  handleReset = () => {
-    this.setState({ hasError: false, error: null });
-  };
-
-  render() {
-    if (this.state.hasError) {
-      if (this.props.fallback) return this.props.fallback;
-      return <DefaultFallback error={this.state.error} reset={this.handleReset} />;
-    }
-    return this.props.children;
-  }
+export function ErrorBoundary({ children, fallback }: Props): ReactElement {
+  return (
+    <Sentry.ErrorBoundary
+      fallback={({ error, resetError }) => {
+        if (fallback) return <>{fallback}</>;
+        return <DefaultFallback error={error instanceof Error ? error : null} reset={resetError} />;
+      }}
+    >
+      {children}
+    </Sentry.ErrorBoundary>
+  );
 }
