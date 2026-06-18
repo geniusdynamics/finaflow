@@ -22,6 +22,7 @@ interface LocationSelectorProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  showAllBranches?: boolean;
 }
 
 export function LocationSelector({
@@ -36,6 +37,7 @@ export function LocationSelector({
   placeholder = "Select",
   className = "",
   disabled = false,
+  showAllBranches = false,
 }: LocationSelectorProps) {
   const hasAutoSelected = useRef(false);
   const [warnLocation, setWarnLocation] = useState<{ id: string; name: string } | null>(null);
@@ -125,7 +127,7 @@ export function LocationSelector({
           required={required}
           disabled={disabled}
         >
-          <option value="">{placeholder}</option>
+          {showAllBranches ? <option value="">All Branches</option> : <option value="">{placeholder}</option>}
           {locations?.map(l => (
             <option key={l.id} value={l.id}>{l.name}</option>
           ))}

@@ -165,7 +165,7 @@ export function Accounts() {
     // ABOUTME: When unchecked, accountType/accountSubType are omitted and backend uses defaults.
     // ABOUTME: When checked, the user's selection is sent for manual override.
     createAccount.mutate({
-      locationId: parseInt(form.locationId), name: form.name, type: form.type,
+      locationId: form.locationId ? parseInt(form.locationId) : undefined, name: form.name, type: form.type,
       accountCode: form.accountCode || undefined, accountNumber: form.accountNumber || undefined,
       openingBalance: form.openingBalance, isPaymentMethod: form.isPaymentMethod,
       accountType: form.linkToCoa ? (form.accountType || undefined) : undefined,
@@ -288,7 +288,7 @@ export function Accounts() {
                         value={form.locationId}
                         onChange={v => setForm(p => ({ ...p, locationId: v }))}
                         enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
-                          required
+                        showAllBranches
                          />
                       </div>
                       <div className="space-y-2"><Label>Type</Label>
