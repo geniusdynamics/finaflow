@@ -17,7 +17,7 @@ import { MobileBottomNavigation } from "@/components/MobileNavigation";
 
 const allNavItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, perms: [PERMISSIONS.DASHBOARD_VIEW] },
-  { path: "/daily-sales", label: "Daily Sales", icon: Receipt, perms: [PERMISSIONS.SALES_VIEW] },
+  { path: "/daily-sales", label: "Daily Sales", icon: Receipt, perms: [PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_VIEW_OWN] },
   { path: "/expenses", label: "Expenses", icon: TrendingDown, perms: [PERMISSIONS.EXPENSES_VIEW] },
   { path: "/suppliers", label: "Suppliers", icon: Users, perms: [PERMISSIONS.SUPPLIERS_VIEW] },
   { path: "/bills", label: "Bills", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW] },

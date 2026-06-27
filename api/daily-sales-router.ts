@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { createRouter, salesQuery, salesCreate, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity } from "./middleware";
+import { createRouter, salesQuery, salesViewOwn, salesCreate, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity } from "./middleware";
 import { getDb } from "./queries/connection";
 import { dailySales, accounts, ledgerEntries, attachments, dailySalePayments, locationPaymentMethods, locations } from "@db/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { d } from "./lib/decimal";
 
 export const dailySalesRouter = createRouter({
+  // ABOUTME: Full-view list — requires sales:view (sees all entries).
   list: salesQuery
     .input(z.object({
       locationId: z.number().optional(),
@@ -26,6 +27,51 @@ export const dailySalesRouter = createRouter({
       if (locationIds.length === 0) return [];
 
       const conditions = [inArray(dailySales.locationId, locationIds), isNull(dailySales.deletedAt)];
+      if (input.dateFrom) conditions.push(sql`${dailySales.saleDate} >= ${input.dateFrom}`);
+      if (input.dateTo) conditions.push(sql`${dailySales.saleDate} <= ${input.dateTo}`);
+
+      const offset = (input.page - 1) * input.pageSize;
+      const sales = await db.select().from(dailySales)
+        .where(and(...conditions))
+        .orderBy(desc(dailySales.saleDate), desc(dailySales.id))
+        .limit(input.pageSize)
+        .offset(offset);
+
+      const saleIds = sales.map((s) => s.id);
+      const allPayments = saleIds.length > 0
+        ? await db.select().from(dailySalePayments).where(inArray(dailySalePayments.dailySaleId, saleIds))
+        : [];
+      const paymentsBySaleId = new Map<number, typeof allPayments>();
+      for (const p of allPayments) {
+        const existing = paymentsBySaleId.get(p.dailySaleId) || [];
+        existing.push(p);
+        paymentsBySaleId.set(p.dailySaleId, existing);
+      }
+      return sales.map((sale) => ({ ...sale, payments: paymentsBySaleId.get(sale.id) || [] }));
+    }),
+
+  // ABOUTME: Owner-only list — requires sales:view_own (sees only entries the current user created).
+  listOwn: salesViewOwn
+    .input(z.object({
+      locationId: z.number().optional(),
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+      page: z.number().default(1),
+      pageSize: z.number().default(50),
+    }))
+    .query(async ({ input, ctx }) => {
+      const db = getDb();
+      let locationIds: number[];
+      if (input.locationId) {
+        await requireAuthorizedLocation(ctx, input.locationId);
+        locationIds = [input.locationId];
+      } else {
+        locationIds = await getCurrentBusinessLocationIds(ctx);
+      }
+      if (locationIds.length === 0) return [];
+
+      const userId = ctx.user?.id;
+      const conditions = [inArray(dailySales.locationId, locationIds), isNull(dailySales.deletedAt), eq(dailySales.enteredBy, userId)];
       if (input.dateFrom) conditions.push(sql`${dailySales.saleDate} >= ${input.dateFrom}`);
       if (input.dateTo) conditions.push(sql`${dailySales.saleDate} <= ${input.dateTo}`);
 

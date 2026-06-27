@@ -34,11 +34,33 @@ export const paymentMethodsRouter = createRouter({
       code: z.string().min(1).max(50),
       color: z.string().default("#C73E1D"),
       sortOrder: z.number().default(0),
+      // Optional: assign to a branch + link to an account at creation time
+      locationId: z.number().optional(),
+      linkedAccountId: z.number().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const currentBusinessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId ?? null;
       const accountRefId = ctx.user?.accountRefId ?? ctx.user?.currentBusiness?.accountRefId ?? null;
+
+      // If locationId is provided, validate it belongs to the business
+      if (input.locationId !== undefined) {
+        await requireAuthorizedLocation(ctx, input.locationId);
+      }
+
+      // If linkedAccountId is provided, validate it belongs to the location
+      if (input.linkedAccountId !== undefined) {
+        if (input.locationId === undefined) {
+          throw new Error("locationId is required when linking an account");
+        }
+        const [linkedAccount] = await db.select().from(accounts).where(
+          and(eq(accounts.id, input.linkedAccountId), isNull(accounts.deletedAt), eq(accounts.isActive, true))
+        ).limit(1);
+
+        if (!linkedAccount || (linkedAccount.locationId !== null && linkedAccount.locationId !== input.locationId)) {
+          throw new Error("Linked account must be assigned to this branch or be a business-level account (available to all branches)");
+        }
+      }
 
       const [result] = await db.insert(paymentMethods).values({
         businessId: currentBusinessId,
@@ -50,6 +72,18 @@ export const paymentMethodsRouter = createRouter({
         isActive: true,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
+
+      // If both locationId and linkedAccountId are provided, auto-create the junction record
+      if (input.locationId !== undefined && input.linkedAccountId !== undefined) {
+        await db.insert(locationPaymentMethods).values({
+          locationId: input.locationId,
+          paymentMethodId: result.id,
+          linkedAccountId: input.linkedAccountId,
+          isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any);
+      }
+
       return { id: result.id, success: true };
     }),
 

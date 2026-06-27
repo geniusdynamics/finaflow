@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased] — Role & Permission Audit & Enhancement
+
+### Added
+- **Granular permission framework** — introduced `SALES_VIEW_OWN` (`sales:view_own`) and `EXPENSES_VIEW_OWN` (`expenses:view_own`) permissions supporting owner-only view of self-created entries across the system ([api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts), [src/lib/permissions.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\lib\permissions.ts)).
+- **`requireAnyPermission` middleware** — backend middleware factory supporting OR-logic permission checks so procedures can be gated by multiple permission alternatives ([api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts)).
+- **`salesViewOwn` / `expenseViewOwn` procedure aliases** — pre-built tRPC procedure aliases for owner-only query endpoints ([api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts)).
+- **`dailySales.listOwn` endpoint** — owner-only list that filters by `enteredBy = currentUser.id`, accessible only to users with `SALES_VIEW_OWN` ([api/daily-sales-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\daily-sales-router.ts)).
+- **Permission-aware mobile navigation** — `MobileBottomNavigation` and `MobileHamburgerMenu` now filter visible items based on the user's role permissions, matching the desktop sidebar behavior ([src/components/MobileNavigation.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\MobileNavigation.tsx)).
+- **`ProtectedRoute` multi-permission support** — `requiredPermission` now accepts `Permission | Permission[]`; arrays use OR logic (any match grants access) ([src/components/ProtectedRoute.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\ProtectedRoute.tsx)).
+
+### Changed
+- **Employee role restricted** — reduced from 11 permissions to a single permission `SALES_CREATE`, blocking access to dashboards, bills, reports, expenses, suppliers, M-PESA, debts, calendar, and all other modules ([api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts), [src/lib/permissions.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\lib\permissions.ts)).
+- **`/daily-sales` route gated by OR logic** — now accessible to users with `SALES_VIEW`, `SALES_CREATE`, or `SALES_VIEW_OWN` ([src/App.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\App.tsx)).
+- **Daily Sales sidebar/mobile nav item** — shown when user has `SALES_VIEW`, `SALES_CREATE`, or `SALES_VIEW_OWN` ([src/components/Layout.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\Layout.tsx), [src/components/MobileNavigation.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\MobileNavigation.tsx)).
+- **DailySales page conditional rendering** — dynamically selects `dailySales.list` vs `dailySales.listOwn` based on permissions; hides the sales list, filters, and empty state when the user has only `SALES_CREATE` ([src/pages/DailySales.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\DailySales.tsx)).
+
 ## [Unreleased] — Payment-Method-Location-Permission Remediation
 
 ### Added

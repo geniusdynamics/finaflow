@@ -36,7 +36,7 @@ function SuspendedPage({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>;
 }
 
-function ProtectedPage({ children, requiredPermission }: { children: React.ReactNode; requiredPermission?: Permission }) {
+function ProtectedPage({ children, requiredPermission }: { children: React.ReactNode; requiredPermission?: Permission | Permission[] }) {
   return <ProtectedRoute requiredPermission={requiredPermission}>{children}</ProtectedRoute>;
 }
 
@@ -47,7 +47,7 @@ export default function App() {
         <Route path="/" element={<Suspense fallback={<PageSkeleton />}><Home /></Suspense>} />
         <Route path="/login" element={<Suspense fallback={<PageSkeleton />}><Login /></Suspense>} />
         <Route path="/dashboard" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="dashboard:view"><Dashboard /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/daily-sales" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="sales:view"><DailySales /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/daily-sales" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["sales:view", "sales:create", "sales:view_own"]}><DailySales /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/expenses" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="expenses:view"><Expenses /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/suppliers" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="suppliers:view"><Suppliers /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/bills" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="bills:view"><Bills /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
