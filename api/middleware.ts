@@ -24,9 +24,11 @@ export const ErrorMessages = {
 export const PERMISSIONS = {
   SALES_VIEW: "sales:view",
   SALES_CREATE: "sales:create",
+  SALES_VIEW_OWN: "sales:view_own",
   EXPENSES_VIEW: "expenses:view",
   EXPENSES_CREATE: "expenses:create",
   EXPENSES_MANAGE: "expenses:manage",
+  EXPENSES_VIEW_OWN: "expenses:view_own",
   BILLS_VIEW: "bills:view",
   BILLS_CREATE: "bills:create",
   BILLS_PAY: "bills:pay",
@@ -111,14 +113,8 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.PAYMENT_METHODS_VIEW,
   ],
   employee: [
-    PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE,
-    PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE,
-    PERMISSIONS.BILLS_VIEW,
-    PERMISSIONS.SUPPLIERS_VIEW,
-    PERMISSIONS.MPESA_VIEW,
-    PERMISSIONS.FEEDBACK_MANAGE,
-    PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.CALENDAR_VIEW,
-    PERMISSIONS.DEBTS_VIEW,
+    // Sole permission: can create new daily sales entries only
+    PERMISSIONS.SALES_CREATE,
   ],
   viewer: [
     PERMISSIONS.SALES_VIEW,
@@ -303,6 +299,32 @@ export function requirePermission(permission: Permission) {
   });
 }
 
+// Middleware factory that checks if user has ANY of the listed permissions (OR logic)
+export function requireAnyPermission(permissions: Permission[]) {
+  return t.middleware(async (opts) => {
+    const user = opts.ctx.user;
+    if (!user) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: ErrorMessages.authRequired,
+      });
+    }
+    await loadRolePermissionsFromDb();
+    const basePermissions = getRolePermissionsWithCache(user.role);
+    const effectivePermissions = user.accessSource === "allocated" && user.allocationRightsProfile
+      ? clampPermissionsForAllocation(basePermissions, user.allocationRightsProfile)
+      : basePermissions;
+    const hasAny = permissions.some((p) => effectivePermissions.includes(p));
+    if (!hasAny) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: ErrorMessages.insufficientRole,
+      });
+    }
+    return opts.next({ ctx: { ...opts.ctx, user } });
+  });
+}
+
 // Tier enforcement middleware
 export const requireTier = (feature: string) => t.middleware(async (opts) => {
   const user = opts.ctx.user;
@@ -353,8 +375,10 @@ export const authedQuery = t.procedure.use(requireAuth);
 
 // Permission-protected procedures
 export const salesQuery = t.procedure.use(requirePermission(PERMISSIONS.SALES_VIEW));
+export const salesViewOwn = t.procedure.use(requirePermission(PERMISSIONS.SALES_VIEW_OWN));
 export const salesCreate = t.procedure.use(requirePermission(PERMISSIONS.SALES_CREATE));
 export const expenseQuery = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_VIEW));
+export const expenseViewOwn = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_VIEW_OWN));
 export const expenseCreate = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_CREATE));
 export const expenseManage = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_MANAGE));
 export const billQuery = t.procedure.use(requirePermission(PERMISSIONS.BILLS_VIEW));

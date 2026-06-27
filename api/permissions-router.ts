@@ -5,7 +5,7 @@ import { users, rolePermissions, userBusinesses, userLocations, businesses, audi
 import { eq, and, isNull, sql, inArray, desc } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { logAudit, logCrossAccountAccess } from "./lib/audit";
-import { syncUserLocationAssignments } from "./users-router";
+import { applyUserLocationScope, computeScopeMode } from "./users-router";
 
 const HARD_DEFAULTS: Record<string, string[]> = {
   owner: Object.values(PERMISSIONS),
@@ -122,16 +122,21 @@ export const permissionsRouter = createRouter({
       userLocationMap[row.userId].push(row.locationId);
     }
 
-    return userRows.map(u => ({
-      ...u,
-      businessIds: userBizMap[u.id] || [],
-      businessRoles: userBizRoleMap[u.id] || {},
-      // Only real user_locations rows; the legacy single-location value is
-      // exposed separately so the frontend can synthesize a pre-check without
-      // falsely implying junction rows exist.
-      locationIds: userLocationMap[u.id] || [],
-      legacyLocationId: u.locationId ?? null,
-    }));
+    return userRows.map(u => {
+      const { scopeMode, effectiveLocationIds } = computeScopeMode(u.role, userLocationMap[u.id] || []);
+      return {
+        ...u,
+        businessIds: userBizMap[u.id] || [],
+        businessRoles: userBizRoleMap[u.id] || {},
+        // Only real user_locations rows; the legacy single-location value is
+        // exposed separately so the frontend can synthesize a pre-check without
+        // falsely implying junction rows exist.
+        locationIds: userLocationMap[u.id] || [],
+        legacyLocationId: u.locationId ?? null,
+        scopeMode,
+        effectiveLocationIds,
+      };
+    });
   }),
 
   updateUserRole: userManage
@@ -222,23 +227,13 @@ export const permissionsRouter = createRouter({
           }
         }
 
-        // syncUserLocationAssignments is the single source of truth: it deletes
-        // stale rows, inserts the new set, marks the first as primary, and
-        // updates the legacy users.locationId column. Its empty-array guard
-        // prevents wiping existing assignments when the caller sends `[]`.
         await db.transaction(async (tx) => {
-          if (locationIds.length > 0) {
-            await syncUserLocationAssignments(tx, userId, locationIds, currentUserId);
-          } else {
-            // Empty array is an explicit request to clear assignments. The sync
-            // guard skips clearing, so handle it directly here.
-            await tx.update(userLocations)
-              .set({ isActive: false })
-              .where(eq(userLocations.userId, userId));
-            await tx.update(users)
-              .set({ locationId: null })
-              .where(eq(users.id, userId));
-          }
+          await applyUserLocationScope(tx, {
+            userId,
+            operatorId: currentUserId,
+            mode: locationIds.length > 0 ? "replace" : "clear",
+            locationIds,
+          });
         });
       }
       

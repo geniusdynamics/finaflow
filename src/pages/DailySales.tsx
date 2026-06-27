@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Receipt, Camera, Trash2, ChevronDown, ChevronUp, Filter, X } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 import { LocationSelector } from "@/components/LocationSelector";
 import { toast } from "sonner";
 
@@ -36,6 +37,10 @@ export function DailySales() {
 
   const utils = trpc.useUtils();
   const { user } = useAuth();
+  const role = user?.role ?? "viewer";
+  const canViewAll = hasPermission(role, PERMISSIONS.SALES_VIEW);
+  const canViewOwn = hasPermission(role, PERMISSIONS.SALES_VIEW_OWN);
+  const canCreate = hasPermission(role, PERMISSIONS.SALES_CREATE);
   const { data: locations } = trpc.locations.list.useQuery();
   
   // Calculate date range based on period filter
@@ -81,11 +86,23 @@ export function DailySales() {
   
   const { dateFrom, dateTo } = getDateRange();
   
-  const { data: sales, refetch } = trpc.dailySales.list.useQuery({
-    locationId: filterBranch !== "all" ? parseInt(filterBranch) : undefined,
-    dateFrom: dateFrom || undefined,
-    dateTo: dateTo || undefined,
-  });
+  // Use the appropriate query based on the user's permissions
+  const canViewSales = canViewAll || canViewOwn;
+  const salesQuery = canViewAll
+    ? trpc.dailySales.list.useQuery({
+        locationId: filterBranch !== "all" ? parseInt(filterBranch) : undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+      })
+    : canViewOwn
+    ? trpc.dailySales.listOwn.useQuery({
+        locationId: filterBranch !== "all" ? parseInt(filterBranch) : undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+      })
+    : { data: undefined, refetch: async () => {} };
+  const sales = salesQuery.data;
+  const refetch = salesQuery.refetch;
   
   const { data: settings } = trpc.settings.list.useQuery();
   const { data: allPaymentMethods } = trpc.paymentMethods.list.useQuery();
@@ -197,15 +214,18 @@ export function DailySales() {
             <p className="mt-1 text-sm text-[#8D8A87]">Record sales with configurable payment methods per branch</p>
           </div>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              onClick={() => setShowFilters(!showFilters)}
-              className={hasActiveFilters ? "border-[#C73E1D] text-[#C73E1D]" : ""}
-            >
-              <Filter className="mr-2 h-4 w-4" /> 
-              {showFilters ? "Hide Filters" : "Show Filters"}
-              {hasActiveFilters && <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#C73E1D] text-xs text-white">!</span>}
-            </Button>
+            {canViewSales && (
+              <Button 
+                variant="outline" 
+                onClick={() => setShowFilters(!showFilters)}
+                className={hasActiveFilters ? "border-[#C73E1D] text-[#C73E1D]" : ""}
+              >
+                <Filter className="mr-2 h-4 w-4" /> 
+                {showFilters ? "Hide Filters" : "Show Filters"}
+                {hasActiveFilters && <span className="ml-2 flex h-5 w-5 items-center justify-center rounded-full bg-[#C73E1D] text-xs text-white">!</span>}
+              </Button>
+            )}
+            {canCreate && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button className="bg-[#C73E1D] hover:bg-[#C73E1D]/90"><Plus className="mr-2 h-4 w-4" /> Record Sales</Button>
@@ -299,11 +319,12 @@ export function DailySales() {
               </form>
             </DialogContent>
           </Dialog>
+            )}
           </div>
         </div>
 
         {/* Filter Panel */}
-        {showFilters && (
+        {canViewSales && showFilters && (
           <Card className="border-[#E8E0D8] bg-white">
             <CardContent className="pt-6">
               <div className="space-y-4">
@@ -418,6 +439,7 @@ export function DailySales() {
         )}
 
         {/* Card View */}
+        {canViewSales && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {sales?.map((sale) => {
             const isExpanded = expandedSale === sale.id;
@@ -468,8 +490,9 @@ export function DailySales() {
             );
           })}
         </div>
+        )}
 
-        {(!sales || sales.length === 0) && (
+        {canViewSales && (!sales || sales.length === 0) && (
           <Card className="border-[#E8E0D8] bg-white">
             <CardContent className="py-12 text-center"><Receipt className="mx-auto mb-2 h-8 w-8 text-[#8D8A87]/30" /><p className="text-sm text-[#8D8A87]">No sales yet. Click "Record Sales" to add your first entry.</p></CardContent>
           </Card>

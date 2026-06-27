@@ -19,38 +19,44 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
+import type { Permission } from "@/lib/permissions";
 import { resetQueryClient, trpc } from "@/providers/trpc";
 
-// Primary navigation items - always visible at bottom
-export const mobileBottomNavItems = [
-  { path: "/dashboard", label: "Dashboard", icon: () => <LayoutDashboard className="h-5 w-5" /> },
-  { path: "/daily-sales", label: "Sales", icon: () => <Receipt className="h-5 w-5" /> },
-  { path: "/expenses", label: "Expenses", icon: () => <TrendingDown className="h-5 w-5" /> },
-  { path: "/bills", label: "Bills", icon: () => <FileText className="h-5 w-5" /> },
-  { path: "/reports", label: "Reports", icon: () => <FileSpreadsheet className="h-5 w-5" /> },
+// ABOUTME: Mobile bottom navigation items with required permissions for role-based filtering.
+const primaryNavItems: { path: string; label: string; icon: () => React.ReactNode; perms: Permission[] }[] = [
+  { path: "/dashboard", label: "Dashboard", icon: () => <LayoutDashboard className="h-5 w-5" />, perms: [PERMISSIONS.DASHBOARD_VIEW] },
+  { path: "/daily-sales", label: "Sales", icon: () => <Receipt className="h-5 w-5" />, perms: [PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_VIEW_OWN] },
+  { path: "/expenses", label: "Expenses", icon: () => <TrendingDown className="h-5 w-5" />, perms: [PERMISSIONS.EXPENSES_VIEW] },
+  { path: "/bills", label: "Bills", icon: () => <FileText className="h-5 w-5" />, perms: [PERMISSIONS.BILLS_VIEW] },
+  { path: "/reports", label: "Reports", icon: () => <FileSpreadsheet className="h-5 w-5" />, perms: [PERMISSIONS.REPORTS_VIEW] },
 ];
 
-// Secondary navigation items - shown in hamburger menu
-export const mobileSecondaryNavItems = [
-  { path: "/suppliers", label: "Suppliers", icon: Building },
-  { path: "/bills", label: "Bills", icon: FileText },
-  { path: "/accounts", label: "Accounts", icon: CreditCard },
-  { path: "/payroll", label: "Payroll", icon: Users },
-  { path: "/wallet", label: "Wallet", icon: Wallet },
-  { path: "/calendar", label: "Calendar", icon: CalendarDays },
-  { path: "/reports", label: "Reports", icon: FileSpreadsheet },
-  { path: "/users", label: "Users & Roles", icon: ShieldCheck },
-  { path: "/settings", label: "Settings", icon: Settings },
-  { path: "/partner", label: "Partner", icon: Handshake },
+// ABOUTME: Secondary navigation items shown in hamburger menu with required permissions.
+const secondaryNavItems: { path: string; label: string; icon: React.ComponentType<{ className?: string }>; perms: Permission[] }[] = [
+  { path: "/suppliers", label: "Suppliers", icon: Building, perms: [PERMISSIONS.SUPPLIERS_VIEW] },
+  { path: "/bills", label: "Bills", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW] },
+  { path: "/accounts", label: "Accounts", icon: CreditCard, perms: [PERMISSIONS.ACCOUNTS_VIEW] },
+  { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW] },
+  { path: "/wallet", label: "Wallet", icon: Wallet, perms: [PERMISSIONS.WALLET_VIEW] },
+  { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
+  { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
+  { path: "/users", label: "Users & Roles", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },
+  { path: "/settings", label: "Settings", icon: Settings, perms: [PERMISSIONS.SETTINGS_MANAGE] },
+  { path: "/partner", label: "Partner", icon: Handshake, perms: [PERMISSIONS.PARTNER_VIEW] },
 ];
 
 export function MobileBottomNavigation() {
   const location = useLocation();
+  const { user } = useAuth();
+  const role = user?.role ?? "viewer";
+
+  const visibleItems = primaryNavItems.filter((item) => hasAnyPermission(role, item.perms));
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#E8E0D8] bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
       <div className="flex h-16 items-center justify-around px-2">
-        {mobileBottomNavItems.map((item) => {
+        {visibleItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link
@@ -81,6 +87,7 @@ export function MobileHamburgerMenu({
 }) {
   const location = useLocation();
   const { user } = useAuth();
+  const role = user?.role ?? "viewer";
   const { data: businesses } = trpc.businesses.list.useQuery();
   const switchBusiness = trpc.businesses.switch.useMutation({
     onSuccess: () => {
@@ -89,6 +96,8 @@ export function MobileHamburgerMenu({
     },
   });
   const [bizOpen, setBizOpen] = useState(false);
+
+  const visibleSecondaryItems = secondaryNavItems.filter((item) => hasAnyPermission(role, item.perms));
 
   return (
     <>
@@ -114,7 +123,7 @@ export function MobileHamburgerMenu({
 
         <nav className="flex-1 overflow-y-auto p-3">
           <ul className="space-y-0.5">
-            {mobileSecondaryNavItems.map((item) => {
+            {visibleSecondaryItems.map((item) => {
               const Icon = item.icon;
               const isActive = location.pathname === item.path;
               return (

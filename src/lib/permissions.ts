@@ -1,9 +1,11 @@
 export const PERMISSIONS = {
   SALES_VIEW: "sales:view",
   SALES_CREATE: "sales:create",
+  SALES_VIEW_OWN: "sales:view_own",
   EXPENSES_VIEW: "expenses:view",
   EXPENSES_CREATE: "expenses:create",
   EXPENSES_MANAGE: "expenses:manage",
+  EXPENSES_VIEW_OWN: "expenses:view_own",
   BILLS_VIEW: "bills:view",
   BILLS_CREATE: "bills:create",
   BILLS_PAY: "bills:pay",
@@ -90,15 +92,8 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.DEBTS_VIEW, PERMISSIONS.DEBTS_MANAGE,
   ],
   employee: [
-    PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE,
-    PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE,
-    PERMISSIONS.BILLS_VIEW,
-    PERMISSIONS.SUPPLIERS_VIEW,
-    PERMISSIONS.MPESA_VIEW,
-    PERMISSIONS.WALLET_VIEW,
-    PERMISSIONS.FEEDBACK_MANAGE,
-    PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.CALENDAR_VIEW, PERMISSIONS.BUDGETS_VIEW,
-    PERMISSIONS.DEBTS_VIEW,
+    // Sole permission: can create new daily sales entries only
+    PERMISSIONS.SALES_CREATE,
   ],
   viewer: [
     PERMISSIONS.SALES_VIEW,

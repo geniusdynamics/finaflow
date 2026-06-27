@@ -242,22 +242,29 @@ export function Users() {
     setLocationsOpen(null);
   };
 
-  const renderLocationBadges = (locationIds: number[]) => {
-    if (locationIds.length === 0) {
-      return <span className="rounded-full bg-[#E8E0D8] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#8D8A87]">HQ / All</span>;
+  const renderLocationBadges = (scopeMode: string, effectiveLocationIds: number[]) => {
+    switch (scopeMode) {
+      case "all":
+        return <span className="rounded-full bg-[#E8E0D8] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#8D8A87]">All locations</span>;
+      case "none":
+        return <span className="rounded-full bg-[#D32F2F]/10 px-2 py-0.5 text-[10px] font-semibold text-[#D32F2F]">No locations</span>;
+      default:
+        if (effectiveLocationIds.length === 0) {
+          return <span className="rounded-full bg-[#E8E0D8] px-2 py-0.5 text-[10px] font-semibold uppercase text-[#8D8A87]">All locations</span>;
+        }
+        return (
+          <div className="flex flex-wrap gap-1">
+            {effectiveLocationIds.map((locationId) => {
+              const location = locations?.find((item) => item.id === locationId);
+              return (
+                <span key={locationId} className="rounded-full bg-[#F5EDE6] px-2 py-0.5 text-[10px] font-semibold text-[#2D2A26]">
+                  {location?.name ?? `Location #${locationId}`}
+                </span>
+              );
+            })}
+          </div>
+        );
     }
-    return (
-      <div className="flex flex-wrap gap-1">
-        {locationIds.map((locationId) => {
-          const location = locations?.find((item) => item.id === locationId);
-          return (
-            <span key={locationId} className="rounded-full bg-[#F5EDE6] px-2 py-0.5 text-[10px] font-semibold text-[#2D2A26]">
-              {location?.name ?? `Location #${locationId}`}
-            </span>
-          );
-        })}
-      </div>
-    );
   };
 
   const getRoleColor = (role: string) => {
@@ -403,7 +410,7 @@ export function Users() {
                           </td>
                           <td className="py-3 text-sm text-[#2D2A26]">{u.username ?? "-"}</td>
                           <td className="py-3"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase ${getRoleColor(u.role)}`}>{u.role}</span></td>
-                          <td className="py-3 text-sm text-[#8D8A87]">{renderLocationBadges(u.locationIds ?? [])}</td>
+                          <td className="py-3 text-sm text-[#8D8A87]">{renderLocationBadges(u.scopeMode ?? "assigned", u.effectiveLocationIds ?? u.locationIds ?? [])}</td>
                           <td className="py-3"><span className={`rounded-full px-2 py-0.5 text-xs ${u.isActive ? "bg-[#2E7D32]/10 text-[#2E7D32]" : "bg-[#D32F2F]/10 text-[#D32F2F]"}`}>{u.isActive ? "Active" : "Inactive"}</span></td>
                           <td className="py-3 text-sm text-[#8D8A87]">{u.lastSignInAt ? formatDate(u.lastSignInAt) : "Never"}</td>
                           <td className="py-3 text-right">
@@ -443,7 +450,7 @@ export function Users() {
                                           </div>
                                           <div className="space-y-2"><Label>Assigned Locations</Label>
                                             <div className="flex items-center justify-between gap-2 rounded border border-[#E8E0D8] px-3 py-2">
-                                              <div className="min-w-0 flex-1">{renderLocationBadges(editForm.locationIds)}</div>
+                                              <div className="min-w-0 flex-1">{renderLocationBadges("assigned", editForm.locationIds)}</div>
                                               <Button type="button" size="sm" variant="outline" onClick={() => openLocationsDialog(u.id, editForm.locationIds, u.legacyLocationId)}>Manage</Button>
                                             </div>
                                           </div>
