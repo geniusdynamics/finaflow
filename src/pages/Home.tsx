@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { Link } from "react-router";
+import { Link, Navigate } from "react-router";
 import { Helmet } from "react-helmet-async";
+import { useAuth } from "@/hooks/useAuth";
+import { getDefaultLandingPage } from "@/lib/permissions";
 import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -208,8 +210,14 @@ const stats: {
 ];
 
 export default function Home() {
+  const { user, isLoading } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
+
+  if (!isLoading && user) {
+    const perms = user.permissions?.length > 0 ? user.permissions : user.role;
+    return <Navigate to={getDefaultLandingPage(perms)} replace />;
+  }
 
   return (
     <>

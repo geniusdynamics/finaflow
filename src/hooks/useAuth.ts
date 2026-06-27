@@ -17,6 +17,7 @@ export interface AuthUser {
   businessIds: number[];
   businessRole: string;
   accountId: string | null;
+  permissions: string[];
 }
 
 export function setCsrfFromResponse(token: string | null) {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, publicQuery, getRolePermissionsWithCache, loadRolePermissionsFromDb } from "./middleware";
 import { getDb } from "./queries/connection";
 import {
   users,
@@ -269,6 +269,10 @@ export const localAuthRouter = createRouter({
         ip: getClientIp(ctx),
       });
 
+      const effectiveRole = junctions.find(j => j.businessId === currentBusiness?.id)?.role ?? user.role;
+      await loadRolePermissionsFromDb();
+      const permissions = getRolePermissionsWithCache(effectiveRole);
+
       return {
         token,
         csrfToken,
@@ -277,6 +281,7 @@ export const localAuthRouter = createRouter({
           email: user.email, currentBusinessId: currentBusiness?.id ?? null,
           currentBusiness, businessIds: bizIds, accountId: currentBusiness?.accountId ?? user.accountId ?? accountId,
           accountRefId,
+          permissions,
         }
       };
     }),
@@ -340,6 +345,10 @@ export const localAuthRouter = createRouter({
       // Gracefully degrade — user_locations table may not exist if migration hasn't been applied
     }
 
+    const effectiveRole = junctions.find(j => j.businessId === effectiveCurrentBusinessId)?.role ?? user.role;
+    await loadRolePermissionsFromDb();
+    const permissions = getRolePermissionsWithCache(effectiveRole);
+
     let enforceUserLocation = false;
     if (currentBusiness) {
       try {
@@ -363,9 +372,10 @@ export const localAuthRouter = createRouter({
       businessIds: bizIds,
       accountId: currentBusiness?.accountId ?? user.accountId ?? null,
       accountRefId: user.accountRefId ?? currentBusiness?.accountRefId ?? null,
-      businessRole: junctions.find(j => j.businessId === effectiveCurrentBusinessId)?.role ?? user.role,
+      businessRole: effectiveRole,
       assignedLocationIds,
       enforceUserLocation,
+      permissions,
     };
   }),
 
@@ -445,6 +455,9 @@ export const localAuthRouter = createRouter({
             const token = await signLocalToken({ userId: retryUser.id, username: retryUser.username });
             const csrfToken = generateCsrfToken();
             setAuthCookies(ctx, token, csrfToken);
+            const retryRole = retryLinks.find(link => link.businessId === retryBizRows[0].id)?.role ?? retryUser.role;
+            await loadRolePermissionsFromDb();
+            const retryPermissions = getRolePermissionsWithCache(retryRole);
             return {
               token,
               csrfToken,
@@ -461,6 +474,7 @@ export const localAuthRouter = createRouter({
                 accountId,
                 accountRefId: retryUser.accountRefId ?? retryBizRows[0].accountRefId ?? retryAccount?.id ?? null,
                 referralApplied: false,
+                permissions: retryPermissions,
               },
             };
           }
@@ -677,6 +691,8 @@ export const localAuthRouter = createRouter({
       }
 
       const biz = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
+      await loadRolePermissionsFromDb();
+      const permissions = getRolePermissionsWithCache("owner");
       return {
         token,
         csrfToken,
@@ -686,6 +702,7 @@ export const localAuthRouter = createRouter({
           currentBusiness: biz[0] ?? null, businessIds: businessId ? [businessId] : [],
           phone: input.phone || null,
           accountId, accountRefId, referralApplied: firstMonthDiscountApplied,
+          permissions,
         }
       };
     }),

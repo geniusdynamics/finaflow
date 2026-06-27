@@ -38,9 +38,11 @@ export function DailySales() {
   const utils = trpc.useUtils();
   const { user } = useAuth();
   const role = user?.role ?? "viewer";
-  const canViewAll = hasPermission(role, PERMISSIONS.SALES_VIEW);
-  const canViewOwn = hasPermission(role, PERMISSIONS.SALES_VIEW_OWN);
-  const canCreate = hasPermission(role, PERMISSIONS.SALES_CREATE);
+  const userPerms = user?.permissions ?? [];
+  const permContext = userPerms.length > 0 ? userPerms : role;
+  const canViewAll = hasPermission(permContext, PERMISSIONS.SALES_VIEW);
+  const canViewOwn = hasPermission(permContext, PERMISSIONS.SALES_VIEW_OWN);
+  const canCreate = hasPermission(permContext, PERMISSIONS.SALES_CREATE);
   const { data: locations } = trpc.locations.list.useQuery();
   
   // Calculate date range based on period filter

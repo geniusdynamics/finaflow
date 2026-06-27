@@ -30,7 +30,8 @@ export function ProtectedRoute({ children, requiredPermission }: Props) {
 
   if (requiredPermission) {
     const perms = Array.isArray(requiredPermission) ? requiredPermission : [requiredPermission];
-    if (!hasAnyPermission(user.role, perms)) {
+    const userPerms = user.permissions?.length > 0 ? user.permissions : user.role;
+    if (!hasAnyPermission(userPerms, perms)) {
       return <Navigate to="/unauthorized" replace />;
     }
   }

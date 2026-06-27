@@ -18,11 +18,11 @@ import { MobileBottomNavigation } from "@/components/MobileNavigation";
 const allNavItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, perms: [PERMISSIONS.DASHBOARD_VIEW] },
   { path: "/daily-sales", label: "Daily Sales", icon: Receipt, perms: [PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_VIEW_OWN] },
-  { path: "/expenses", label: "Expenses", icon: TrendingDown, perms: [PERMISSIONS.EXPENSES_VIEW] },
-  { path: "/suppliers", label: "Suppliers", icon: Users, perms: [PERMISSIONS.SUPPLIERS_VIEW] },
-  { path: "/bills", label: "Bills", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW] },
-  { path: "/accounts", label: "Accounts", icon: CreditCard, perms: [PERMISSIONS.ACCOUNTS_VIEW] },
-  { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW] },
+  { path: "/expenses", label: "Expenses", icon: TrendingDown, perms: [PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE] },
+  { path: "/suppliers", label: "Suppliers", icon: Users, perms: [PERMISSIONS.SUPPLIERS_VIEW, PERMISSIONS.SUPPLIERS_MANAGE] },
+  { path: "/bills", label: "Bills", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE] },
+  { path: "/accounts", label: "Accounts", icon: CreditCard, perms: [PERMISSIONS.ACCOUNTS_VIEW, PERMISSIONS.ACCOUNTS_MANAGE] },
+  { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_PROCESS] },
   { path: "/wallet", label: "Wallet", icon: Wallet, perms: [PERMISSIONS.WALLET_VIEW] },
   { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
   { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
@@ -44,6 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return saved === "true";
   });
   const role = user?.role ?? "viewer";
+  const userPermissions = user?.permissions ?? [];
 
   const toggleSidebar = () => {
     setSidebarCollapsed((prev) => {
@@ -90,7 +91,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     onSuccess: () => { utils.invalidate(); window.location.reload(); },
   });
 
-  const navItems = allNavItems.filter((item) => hasAnyPermission(role, item.perms));
+  const navItems = allNavItems.filter((item) => hasAnyPermission(userPermissions.length > 0 ? userPermissions : role, item.perms));
   const isActive = useCallback((path: string) => location.pathname === path, [location.pathname]);
 
   const pinnedSection = (
