@@ -13,7 +13,8 @@ import { toast } from "sonner";
 
 export function Feedback() {
   const { user } = useAuth();
-  const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.FEEDBACK_MANAGE);
+  const permContext = user?.permissions?.length ? user.permissions : (user?.role ?? "viewer");
+  const canManage = hasPermission(permContext, PERMISSIONS.FEEDBACK_MANAGE);
   const utils = trpc.useUtils();
 
   const [qOpen, setQOpen] = useState(false);

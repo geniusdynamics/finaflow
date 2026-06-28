@@ -90,7 +90,8 @@ const PERMISSION_GROUPS = [
 export function Users() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.USERS_MANAGE);
+  const permContext = user?.permissions?.length ? user.permissions : (user?.role ?? "viewer");
+  const canManage = hasPermission(permContext, PERMISSIONS.USERS_MANAGE);
 
   const [tab, setTab] = useState<"users" | "businesses" | "permissions" | "metrics">("users");
   const [open, setOpen] = useState(false);

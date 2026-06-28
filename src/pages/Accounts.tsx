@@ -27,9 +27,10 @@ export function Accounts() {
   type OperationalSubType = "" | "cash" | "bank" | "prepaid_expense" | "accounts_receivable" | "fixed_asset";
 
   const { user } = useAuth();
-  const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.ACCOUNTS_MANAGE);
-  const canManagePM = hasPermission(user?.role ?? "viewer", PERMISSIONS.PAYMENT_METHODS_MANAGE);
-  const canViewPM = hasPermission(user?.role ?? "viewer", PERMISSIONS.PAYMENT_METHODS_VIEW);
+  const permContext = user?.permissions?.length ? user.permissions : (user?.role ?? "viewer");
+  const canManage = hasPermission(permContext, PERMISSIONS.ACCOUNTS_MANAGE);
+  const canManagePM = hasPermission(permContext, PERMISSIONS.PAYMENT_METHODS_MANAGE);
+  const canViewPM = hasPermission(permContext, PERMISSIONS.PAYMENT_METHODS_VIEW);
   const { data: settings } = trpc.settings.list.useQuery();
   const [searchParams, setSearchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");

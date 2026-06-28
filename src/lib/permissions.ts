@@ -139,5 +139,19 @@ const LANDING_PAGE_ORDER: { path: string; perms: Permission[] }[] = [
 
 export function getDefaultLandingPage(roleOrPerms: string | string[]): string {
   const accessible = LANDING_PAGE_ORDER.find((item) => hasAnyPermission(roleOrPerms, item.perms));
-  return accessible?.path ?? "/dashboard";
+  return accessible?.path ?? "/daily-sales";
+}
+
+/**
+ * Merge a user's role-based default permissions with their individual
+ * permissions (which may include DB-level overrides). When both are
+ * available, the merged set ensures the user sees nav items and UI
+ * features for every permission they actually hold.
+ */
+export function getEffectivePermissions(user: { role: string; permissions?: string[] }): string[] {
+  const roleDefaults = ROLE_PERMISSIONS[user.role] || [];
+  if (!user.permissions || user.permissions.length === 0) {
+    return roleDefaults;
+  }
+  return [...new Set([...roleDefaults, ...user.permissions])];
 }

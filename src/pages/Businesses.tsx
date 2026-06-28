@@ -50,7 +50,8 @@ function DefaultCurrencySelect({ businessId }: { businessId: number }) {
 export function Businesses() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.BUSINESS_MANAGE);
+  const permContext = user?.permissions?.length ? user.permissions : (user?.role ?? "viewer");
+  const canManage = hasPermission(permContext, PERMISSIONS.BUSINESS_MANAGE);
   const utils = trpc.useUtils();
 
   const [tab, setTab] = useState<"businesses" | "allocations">("businesses");

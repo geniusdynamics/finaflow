@@ -26,8 +26,8 @@ interface AddDebtDialogProps {
 
 export function AddDebtDialog({ trigger = "button", open: controlledOpen, onOpenChange, onSuccess }: AddDebtDialogProps) {
   const { user } = useAuth();
-  const role = user?.role ?? "viewer";
-  const canManage = hasPermission(role, PERMISSIONS.DEBTS_MANAGE);
+  const permContext = user?.permissions?.length ? user.permissions : (user?.role ?? "viewer");
+  const canManage = hasPermission(permContext, PERMISSIONS.DEBTS_MANAGE);
 
   const [internalOpen, setInternalOpen] = useState(false);
   const open = controlledOpen ?? internalOpen;

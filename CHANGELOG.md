@@ -1,5 +1,13 @@
 # Changelog
 
+## [Unreleased] — Role & Permission Enhancement, Landing-Page Fixes
+
+Bug fix: post-login landing page, navigation filtering, and route-protection improvements for create-only permission roles.
+
+### Fixed
+- **Landing page redirect for restricted roles** — `getDefaultLandingPage` fallback changed from `/dashboard` to `/daily-sales` so employees (who only have `SALES_CREATE`) aren't sent to a page they can't access ([src/lib/permissions.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\lib\permissions.ts)).
+- **All page-level permission checks now use user effective permissions** — previously, 9 frontend pages (`Accounts`, `Payroll`, `Users`, `Settings`, `Businesses`, `BusinessOverview`, `Feedback`, `Debts`, `AddDebtDialog`) checked permissions using `user.role` against hardcoded role definitions, ignoring DB-level permission overrides. Now they all use `user.permissions` (falling back to `user.role`) so custom role assignments are respected ([src/pages/Accounts.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Accounts.tsx), [src/pages/Payroll.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Payroll.tsx), [src/pages/Users.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Users.tsx), [src/pages/Settings.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Settings.tsx), [src/pages/Businesses.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Businesses.tsx), [src/pages/BusinessOverview.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\BusinessOverview.tsx), [src/pages/Feedback.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Feedback.tsx), [src/pages/Debts.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Debts.tsx), [src/components/AddDebtDialog.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\AddDebtDialog.tsx)).
+
 ## [Unreleased] — Version 1.0.5
 
 Permission-aware navigation, landing pages, data scoping, and the Users location-assignment bug fix.
