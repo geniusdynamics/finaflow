@@ -32,7 +32,7 @@ Permission-aware navigation, landing pages, data scoping, and the Users location
 ### Fixed
 - **Missing Expenses nav item for create-only roles** — effective-permission-based nav filtering ensures users with `expenses:create` see the Expenses page in both desktop and mobile menus.
 - **Unauthorized landing page** — users without `dashboard:view` are no longer dumped on a broken `/unauthorized` route after login; they land on their first accessible page.
-- **CI test suite failures** — added migration `0017` to the test bootstrap, mocked `useAuth` in `Home.test.tsx`, populated formerly empty test skeletons, fixed `budgets-router.test.ts` cleanup order, and made `notification-scope.test.ts` slugs unique so the full suite passes.
+- **CI test suite failures** — added migration `0017` to the test bootstrap, mocked `useAuth` in `Home.test.tsx`, populated formerly empty test skeletons, fixed `budgets-router.test.ts` cleanup order, made `notification-scope.test.ts` slugs unique, and refactored shared-plan budget tests to use isolated plans so the full suite passes reliably.
 
 ## [Unreleased] — Role & Permission Audit & Enhancement
 

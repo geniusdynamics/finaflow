@@ -278,83 +278,62 @@ describe("Budgets Router", () => {
 
   it("updateLines replaces lines on one bucket and leaves others unchanged", async () => {
     const caller = makeAuthedCaller(user, biz, [biz.id]);
-    const plan = await caller.budgets.get({ planId: sharedPlanId });
+    const { planId } = await createMonthlyPlan({ name: "Update Lines Test" });
+    const plan = await caller.budgets.get({ planId });
     const firstBucket = plan.buckets[0];
 
     await caller.budgets.updateLines({
-      planId: sharedPlanId,
+      planId,
       bucketId: firstBucket.id,
       lines: [{ categoryId: cat1.id, amount: "9999.99" }],
     });
 
-    const updated = await caller.budgets.get({ planId: sharedPlanId });
+    const updated = await caller.budgets.get({ planId });
     expect(updated.buckets[0].lines).toHaveLength(1);
     expect(updated.buckets[0].lines[0].amount).toBe("9999.99");
     expect(updated.buckets[1].lines).toHaveLength(2);
     expect(updated.buckets[1].lines[0].amount).toBe("1000.00");
     expect(updated.buckets[1].lines[1].amount).toBe("2000.00");
-
-    // Reset
-    await caller.budgets.updateLines({
-      planId: sharedPlanId,
-      bucketId: firstBucket.id,
-      lines: [
-        { categoryId: cat1.id, amount: "1000.00" },
-        { categoryId: cat2.id, amount: "2000.00" },
-      ],
-    });
   });
 
   // ── Test 8: UpdateLines preserves plan status ──────────────────────────
 
   it("updateLines does not change plan status", async () => {
     const caller = makeAuthedCaller(user, biz, [biz.id]);
-    const before = await caller.budgets.get({ planId: sharedPlanId });
+    const { planId } = await createMonthlyPlan({ name: "Status Preserve Test" });
+    const before = await caller.budgets.get({ planId });
     expect(before.status).toBe("draft");
 
     await caller.budgets.updateLines({
-      planId: sharedPlanId,
+      planId,
       bucketId: before.buckets[2].id,
       lines: [{ categoryId: cat1.id, amount: "500.00" }],
     });
 
-    const after = await caller.budgets.get({ planId: sharedPlanId });
+    const after = await caller.budgets.get({ planId });
     expect(after.status).toBe("draft");
-
-    // Reset
-    await caller.budgets.updateLines({
-      planId: sharedPlanId,
-      bucketId: before.buckets[2].id,
-      lines: [
-        { categoryId: cat1.id, amount: "1000.00" },
-        { categoryId: cat2.id, amount: "2000.00" },
-      ],
-    });
   });
 
   // ── Test 9: CopyMonthlyBucket ──────────────────────────────────────────
 
   it("copyMonthlyBucket copies lines to target buckets", async () => {
     const caller = makeAuthedCaller(user, biz, [biz.id]);
-    const plan = await caller.budgets.get({ planId: sharedPlanId });
+    const { planId } = await createMonthlyPlan({ name: "Copy Bucket Test" });
+    const plan = await caller.budgets.get({ planId });
     expect(plan.buckets).toHaveLength(12);
     const sourceBucket = plan.buckets[0];
     const target1 = plan.buckets[5];
     const target2 = plan.buckets[10];
 
-    // Defensive: verify the bucket exists before operating on it
-    const [bucketCheck] = await db.select({ id: bpb.id }).from(bpb).where(and(eq(bpb.id, sourceBucket.id), eq(bpb.planId, sharedPlanId))).limit(1);
-    if (!bucketCheck) throw new Error(`Bucket ${sourceBucket.id} for plan ${sharedPlanId} not found in DB`);
-
     // Make source bucket have a distinct value
     await caller.budgets.updateLines({
-      planId: sharedPlanId,
+      planId,
       bucketId: sourceBucket.id,
       lines: [{ categoryId: cat1.id, amount: "7777.00" }],
     });
 
     const result = await caller.budgets.copyMonthlyBucket({
-      planId: sharedPlanId,
+      planId,
       sourceBucketId: sourceBucket.id,
       targetBucketIds: [target1.id, target2.id],
     });
@@ -362,38 +341,23 @@ describe("Budgets Router", () => {
     expect(result.success).toBe(true);
     expect(result.copiedTo).toHaveLength(2);
 
-    const updated = await caller.budgets.get({ planId: sharedPlanId });
+    const updated = await caller.budgets.get({ planId });
     expect(updated.buckets[5].lines).toHaveLength(updated.buckets[0].lines.length);
     expect(updated.buckets[5].lines[0].amount).toBe(updated.buckets[0].lines[0].amount);
     expect(updated.buckets[10].lines[0].amount).toBe(updated.buckets[0].lines[0].amount);
-
-    // Reset all
-    for (const bid of [sourceBucket.id, target1.id, target2.id]) {
-      await caller.budgets.updateLines({
-        planId: sharedPlanId,
-        bucketId: bid,
-        lines: [
-          { categoryId: cat1.id, amount: "1000.00" },
-          { categoryId: cat2.id, amount: "2000.00" },
-        ],
-      });
-    }
   });
 
   // ── Test 10: CopyMonthlyBucket rejects source in targets ───────────────
 
   it("copyMonthlyBucket rejects source bucket in targets", async () => {
     const caller = makeAuthedCaller(user, biz, [biz.id]);
-    const plan = await caller.budgets.get({ planId: sharedPlanId });
+    const { planId } = await createMonthlyPlan({ name: "Copy Reject Test" });
+    const plan = await caller.budgets.get({ planId });
     expect(plan.buckets).toHaveLength(12);
-
-    // Verify plan exists before proceeding
-    const [planCheck] = await db.select({ id: bp.id }).from(bp).where(eq(bp.id, sharedPlanId)).limit(1);
-    if (!planCheck) throw new Error(`Plan ${sharedPlanId} not found in DB`);
 
     await expect(
       caller.budgets.copyMonthlyBucket({
-        planId: sharedPlanId,
+        planId,
         sourceBucketId: plan.buckets[0].id,
         targetBucketIds: [plan.buckets[0].id, plan.buckets[3].id],
       }),
