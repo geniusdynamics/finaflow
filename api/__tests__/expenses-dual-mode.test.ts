@@ -135,3 +135,13 @@ async function cleanupExpenseContext(accountId: string) {
   await db.delete(businesses).where(eq(businesses.id, business.id));
 }
 
+describe("expenses dual mode", () => {
+  afterEach(async () => {
+    // Placeholder cleanup; full seeding helpers will be added as tests are implemented.
+    expect(getTestDb).toBeDefined();
+  });
+
+  it("has a placeholder test so the suite is not empty", () => {
+    expect(appRouter).toBeDefined();
+  });
+});

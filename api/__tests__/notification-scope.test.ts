@@ -86,12 +86,12 @@ describe("Notification Business Isolation", () => {
       } as any)
       .returning();
 
-    await db
+    [locA] = await db
       .insert(locations)
       .values({
         businessId: bizA.id,
         name: "Branch A",
-        slug: "branch-a",
+        slug: "notifscope-branch-a",
         isActive: true,
         nextBillNumber: 1,
         nextExpenseNumber: 1,
@@ -138,7 +138,7 @@ describe("Notification Business Isolation", () => {
       .values({
         businessId: bizB.id,
         name: "Branch B",
-        slug: "branch-b",
+        slug: "notifscope-branch-b",
         isActive: true,
         nextBillNumber: 1,
         nextExpenseNumber: 1,

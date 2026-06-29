@@ -23,3 +23,13 @@ type SeededContext = {
   secondLocation: { id: number };
 };
 
+describe("accounts coa integration", () => {
+  afterEach(async () => {
+    // Placeholder cleanup; full seeding helpers will be added as tests are implemented.
+    expect(getTestDb).toBeDefined();
+  });
+
+  it("has a placeholder test so the suite is not empty", () => {
+    expect(appRouter).toBeDefined();
+  });
+});

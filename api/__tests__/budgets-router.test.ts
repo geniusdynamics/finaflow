@@ -49,13 +49,13 @@ describe("Budgets Router", () => {
       await db.delete(bbl).where(sql`${bbl.bucketId} IN (SELECT id FROM ${bpb} WHERE ${bpb.planId} IN (SELECT id FROM ${bp} WHERE ${bp.locationId} IN (SELECT id FROM ${locations} WHERE ${locations.businessId} = ${b.id})))`);
       await db.delete(bpb).where(sql`${bpb.planId} IN (SELECT id FROM ${bp} WHERE ${bp.locationId} IN (SELECT id FROM ${locations} WHERE ${locations.businessId} = ${b.id}))`);
       await db.delete(bp).where(sql`${bp.locationId} IN (SELECT id FROM ${locations} WHERE ${locations.businessId} = ${b.id})`);
+      await db.delete(expenseCategories).where(eq(expenseCategories.businessId, b.id));
       const locs = await db.select({ id: locations.id }).from(locations).where(eq(locations.businessId, b.id));
       for (const l of locs) {
         await db.delete(accounts).where(eq(accounts.locationId, l.id));
       }
       await db.delete(locations).where(eq(locations.businessId, b.id));
       await db.delete(accounts).where(eq(accounts.businessId, b.id));
-      await db.delete(expenseCategories).where(eq(expenseCategories.businessId, b.id));
       await db.delete(userBusinesses).where(eq(userBusinesses.businessId, b.id));
       await db.delete(businesses).where(eq(businesses.id, b.id));
     }

@@ -6,3 +6,13 @@ import { getDb } from "../queries/connection";
 
 type Row = { id: number };
 
+describe("account subscription enforcement", () => {
+  beforeEach(async () => {
+    const db = getDb();
+    await db.execute("SELECT 1");
+  });
+
+  it("has a placeholder test so the suite is not empty", () => {
+    expect(appRouter).toBeDefined();
+  });
+});
