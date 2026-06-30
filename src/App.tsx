@@ -4,12 +4,15 @@ import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AdminRoute } from "@/components/AdminRoute";
 import { Toaster } from "@/components/ui/sonner";
 import { PageSkeleton } from "@/components/Skeleton";
 import type { Permission } from "@/lib/permissions";
 
 const Home = lazy(() => import("./pages/Home"));
 const Login = lazy(() => import("./pages/Login"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Unauthorized = lazy(() => import("./pages/Unauthorized"));
 const Dashboard = lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
@@ -32,6 +35,7 @@ const BusinessDetails = lazy(() => import("./pages/BusinessDetails").then(m => (
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard").then(m => ({ default: m.PartnerDashboard })));
 const Profile = lazy(() => import("./pages/Profile").then(m => ({ default: m.Profile })));
 const Budgets = lazy(() => import("./pages/Budgets"));
+const Admin = lazy(() => import("./pages/Admin"));
 
 function SuspendedPage({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>;
@@ -47,6 +51,8 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Suspense fallback={<PageSkeleton />}><Home /></Suspense>} />
         <Route path="/login" element={<Suspense fallback={<PageSkeleton />}><Login /></Suspense>} />
+        <Route path="/forgot-password" element={<Suspense fallback={<PageSkeleton />}><ForgotPassword /></Suspense>} />
+        <Route path="/reset-password" element={<Suspense fallback={<PageSkeleton />}><ResetPassword /></Suspense>} />
         <Route path="/dashboard" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="dashboard:view"><Dashboard /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/daily-sales" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["sales:view", "sales:create", "sales:view_own"]}><DailySales /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/expenses" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["expenses:view", "expenses:create"]}><Expenses /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
@@ -71,6 +77,7 @@ export default function App() {
         <Route path="/businesses/:id/details" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><BusinessDetails /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/profile" element={<ErrorBoundary><SuspendedPage><ProtectedPage><Profile /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/partner" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="partner:view"><PartnerDashboard /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/admin" element={<ErrorBoundary><SuspendedPage><AdminRoute><Admin /></AdminRoute></SuspendedPage></ErrorBoundary>} />
         <Route path="/unauthorized" element={<Suspense fallback={<PageSkeleton />}><Unauthorized /></Suspense>} />
         <Route path="*" element={<Suspense fallback={<PageSkeleton />}><NotFound /></Suspense>} />
       </Routes>

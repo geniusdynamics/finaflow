@@ -64,6 +64,55 @@
       "when": 1781500000000,
       "tag": "0016_make_default_account_id_nullable",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782820850471,
+      "tag": "0009_living_menace",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782820850472,
+      "tag": "0018_user_sessions",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1782820850473,
+      "tag": "0019_user_sessions_cascade",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782820850474,
+      "tag": "0020_password_reset_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1782820850475,
+      "tag": "0021_email_logs",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1782820850476,
+      "tag": "0022_owner_broadcasts",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1782820850477,
+      "tag": "0023_notification_priority_and_links",
+      "breakpoints": true
     }
   ]
 }

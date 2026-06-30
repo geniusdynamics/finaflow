@@ -18,6 +18,7 @@ export interface AuthUser {
   businessRole: string;
   accountId: string | null;
   permissions: string[];
+  isSuperAdmin?: boolean;
 }
 
 export function setCsrfFromResponse(token: string | null) {

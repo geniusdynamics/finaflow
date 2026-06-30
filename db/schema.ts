@@ -45,6 +45,19 @@ export const allocationRightsEnum = pgEnum("allocation_rights", ["view_only", "c
 export const allocationInviteStatusEnum = pgEnum("allocation_invite_status", ["active", "consumed", "revoked", "expired"]);
 export const partnerAllocationStatusEnum = pgEnum("partner_allocation_status", ["active", "revoked"]);
 
+// Email logging enum
+export const emailLogTypeEnum = pgEnum("email_log_type", [
+  "welcome",
+  "new_signup_notification",
+  "password_reset",
+  "owner_broadcast",
+  "smtp_test",
+]);
+export const emailStatusEnum = pgEnum("email_status", ["pending", "sent", "failed", "skipped"]);
+
+// Owner broadcast channel enum
+export const broadcastChannelEnum = pgEnum("broadcast_channel", ["email", "notification", "banner"]);
+
 // Budget model enums
 export const budgetPeriodEnum = pgEnum("budget_period", ["monthly", "quarterly", "half-yearly", "annual"]);
 export const budgetPlanStatusEnum = pgEnum("budget_plan_status", ["draft", "active", "locked", "archived"]);
@@ -653,6 +666,48 @@ export const auditLog = pgTable("audit_log", {
 
 export type AuditLog = typeof auditLog.$inferSelect;
 
+// User login/logout sessions used for platform analytics
+export const userSessions = pgTable("user_sessions", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number" }).notNull().references(() => users.id),
+  accountId: varchar("accountId", { length: 100 }),
+  accountRefId: bigint("accountRefId", { mode: "number" }),
+  businessId: bigint("businessId", { mode: "number" }),
+  action: varchar("action", { length: 20 }).notNull().default("login"),
+  ipAddress: varchar("ipAddress", { length: 45 }),
+  userAgent: text("userAgent"),
+  location: varchar("location", { length: 255 }),
+  sessionDuration: integer("sessionDuration"),
+  loginAt: timestamp("loginAt").defaultNow().notNull(),
+  logoutAt: timestamp("logoutAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  idxUserId: index("idx_user_sessions_user_id").on(table.userId),
+  idxAccountId: index("idx_user_sessions_account_id").on(table.accountId),
+  idxAction: index("idx_user_sessions_action").on(table.action),
+  idxLoginAt: index("idx_user_sessions_login_at").on(table.loginAt),
+}));
+
+export type UserSession = typeof userSessions.$inferSelect;
+export type InsertUserSession = typeof userSessions.$inferInsert;
+
+// Password reset tokens
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number" }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  tokenHash: varchar("tokenHash", { length: 255 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  usedAt: timestamp("usedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  idxUserId: index("idx_password_reset_tokens_user_id").on(table.userId),
+  idxTokenHash: index("idx_password_reset_tokens_token_hash").on(table.tokenHash),
+  idxExpiresAt: index("idx_password_reset_tokens_expires_at").on(table.expiresAt),
+}));
+
+export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
+export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+
 // Businesses (multi-tenancy)
 export const businesses = pgTable("businesses", {
   id: serial("id").primaryKey(),
@@ -1176,6 +1231,15 @@ export const notifications = pgTable(
     entityId: bigint("entityId", { mode: "number" }),
     isRead: boolean("isRead").default(false).notNull(),
     isPushed: boolean("isPushed").default(false).notNull(),
+    // Priority: higher values are shown first (owner broadcasts default to 100, bill notifications to 0)
+    priority: integer("priority").default(0).notNull(),
+    // Optional banner/link fields
+    linkUrl: text("linkUrl"),
+    linkLabel: varchar("linkLabel", { length: 255 }),
+    linkClicks: integer("linkClicks").default(0).notNull(),
+    // Engagement tracking
+    readAt: timestamp("readAt"),
+    dismissedAt: timestamp("dismissedAt"),
     // Lifecycle state for highlighting
     highlightState: notificationHighlightEnum("highlightState").default("highlighted").notNull(),
     fadedAt: timestamp("fadedAt"),
@@ -1191,11 +1255,47 @@ export const notifications = pgTable(
     entityIdx: index("idx_notifications_entity").on(table.entityType, table.entityId),
     userHighlightIdx: index("idx_notifications_user_highlight").on(table.userId, table.highlightState),
     archivedIdx: index("idx_notifications_archived").on(table.userId, table.archivedAt),
+    priorityIdx: index("idx_notifications_priority").on(table.priority),
+    bannerIdx: index("idx_notifications_banner").on(table.userId, table.entityType),
   }),
 );
 
 export type Notification = typeof notifications.$inferSelect;
 export type NotificationInsert = typeof notifications.$inferInsert;
+
+// Email activity logs (privacy-safe: no recipient PII stored)
+export const emailLogs = pgTable("email_logs", {
+  id: serial("id").primaryKey(),
+  type: emailLogTypeEnum("type").notNull(),
+  status: emailStatusEnum("status").notNull().default("pending"),
+  errorMessage: text("errorMessage"),
+  sentAt: timestamp("sentAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  idxType: index("idx_email_logs_type").on(table.type),
+  idxStatus: index("idx_email_logs_status").on(table.status),
+  idxCreatedAt: index("idx_email_logs_created_at").on(table.createdAt),
+}));
+
+export type EmailLog = typeof emailLogs.$inferSelect;
+export type InsertEmailLog = typeof emailLogs.$inferInsert;
+
+// Owner broadcasts sent by super admins
+export const ownerBroadcasts = pgTable("owner_broadcasts", {
+  id: serial("id").primaryKey(),
+  title: varchar("title", { length: 255 }).notNull(),
+  message: text("message").notNull(),
+  channels: broadcastChannelEnum("channels").array().notNull().default(["email"]),
+  sentBy: bigint("sentBy", { mode: "number" }).notNull(),
+  recipientCount: integer("recipientCount").default(0).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  idxSentBy: index("idx_owner_broadcasts_sent_by").on(table.sentBy),
+  idxCreatedAt: index("idx_owner_broadcasts_created_at").on(table.createdAt),
+}));
+
+export type OwnerBroadcast = typeof ownerBroadcasts.$inferSelect;
+export type InsertOwnerBroadcast = typeof ownerBroadcasts.$inferInsert;
 
 // Supplier price history
 export const supplierPriceHistory = pgTable("supplier_price_history", {
