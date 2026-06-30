@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased] — Business Reset Transaction Abort Fix
+
+Fixed a CI-flaky transaction abort in `resetBusinessTransactions` caused by a try/catch inside a Postgres transaction.
+
+### Fixed
+- **Business reset no longer aborts when budget plan tables are missing** — the budget plan operations inside `resetBusinessTransactions` ran inside a `try/catch` block within a Drizzle `db.transaction()`. When those queries failed (e.g., tables didn't exist), the Postgres transaction was silently aborted, causing all subsequent queries — including the `purchase_orders` soft-delete — to fail with "current transaction is aborted". The fix wraps the budget plan operations in a SAVEPOINT so that on failure only those operations are rolled back, allowing the enclosing transaction to continue normally ([api/lib/business-reset.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\lib\business-reset.ts)).
+
 ## [Unreleased] — Role & Permission Enhancement, Landing-Page Fixes
 
 Bug fix: post-login landing page, navigation filtering, and route-protection improvements for create-only permission roles.

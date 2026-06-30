@@ -533,7 +533,14 @@ export async function resetBusinessTransactions(input: {
     // Budget plan model (migration 0014+): hard-delete child lines & buckets,
     // soft-delete the plan rows. All scoped by this business's location IDs
     // so other businesses' budgets are never touched.
+    //
+    // Use a savepoint so that if the budget plan tables don't exist yet,
+    // we can roll back only these operations and continue the transaction
+    // (otherwise a failed query inside a Postgres transaction aborts it entirely,
+    // even if the application-level error is caught by try/catch).
     try {
+      await tx.execute(sql`SAVEPOINT budget_plan_ops`);
+
       // Hard-delete budget bucket lines whose bucket belongs to a plan in scope
       const deletedLines = await tx
         .delete(budgetBucketLines)
@@ -555,8 +562,17 @@ export async function resetBusinessTransactions(input: {
         .where(and(sql`${budgetPlans.locationId} IN (${locIdSql})`, isNull(budgetPlans.deletedAt)))
         .returning({ id: budgetPlans.id });
       results.budget_plans = { count: softDeletedPlans.length };
+
+      await tx.execute(sql`RELEASE SAVEPOINT budget_plan_ops`);
     } catch {
       // budget plan tables don't exist yet (migration 0014 not applied)
+      // or another query error — roll back the savepoint so the outer
+      // transaction is NOT left in an aborted state
+      try {
+        await tx.execute(sql`ROLLBACK TO SAVEPOINT budget_plan_ops`);
+      } catch {
+        // Savepoint rollback itself failed; nothing more we can do
+      }
       results.budget_bucket_lines = { count: 0 };
       results.budget_plan_buckets = { count: 0 };
       results.budget_plans = { count: 0 };
