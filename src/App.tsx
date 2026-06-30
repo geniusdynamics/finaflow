@@ -4,13 +4,17 @@ import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AdminRoute } from "@/components/AdminRoute";
 import { Toaster } from "@/components/ui/sonner";
 import { PageSkeleton } from "@/components/Skeleton";
 import type { Permission } from "@/lib/permissions";
 
 const Home = lazy(() => import("./pages/Home"));
 const Login = lazy(() => import("./pages/Login"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Unauthorized = lazy(() => import("./pages/Unauthorized"));
 const Dashboard = lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
 const DailySales = lazy(() => import("./pages/DailySales").then(m => ({ default: m.DailySales })));
 const Expenses = lazy(() => import("./pages/Expenses").then(m => ({ default: m.Expenses })));
@@ -31,12 +35,13 @@ const BusinessDetails = lazy(() => import("./pages/BusinessDetails").then(m => (
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard").then(m => ({ default: m.PartnerDashboard })));
 const Profile = lazy(() => import("./pages/Profile").then(m => ({ default: m.Profile })));
 const Budgets = lazy(() => import("./pages/Budgets"));
+const Admin = lazy(() => import("./pages/Admin"));
 
 function SuspendedPage({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>;
 }
 
-function ProtectedPage({ children, requiredPermission }: { children: React.ReactNode; requiredPermission?: Permission }) {
+function ProtectedPage({ children, requiredPermission }: { children: React.ReactNode; requiredPermission?: Permission | Permission[] }) {
   return <ProtectedRoute requiredPermission={requiredPermission}>{children}</ProtectedRoute>;
 }
 
@@ -46,12 +51,14 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Suspense fallback={<PageSkeleton />}><Home /></Suspense>} />
         <Route path="/login" element={<Suspense fallback={<PageSkeleton />}><Login /></Suspense>} />
+        <Route path="/forgot-password" element={<Suspense fallback={<PageSkeleton />}><ForgotPassword /></Suspense>} />
+        <Route path="/reset-password" element={<Suspense fallback={<PageSkeleton />}><ResetPassword /></Suspense>} />
         <Route path="/dashboard" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="dashboard:view"><Dashboard /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/daily-sales" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="sales:view"><DailySales /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/expenses" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="expenses:view"><Expenses /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/suppliers" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="suppliers:view"><Suppliers /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/bills" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="bills:view"><Bills /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/accounts" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="accounts:view"><Accounts /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/daily-sales" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["sales:view", "sales:create", "sales:view_own"]}><DailySales /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/expenses" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["expenses:view", "expenses:create"]}><Expenses /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/suppliers" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["suppliers:view", "suppliers:manage"]}><Suppliers /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/bills" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["bills:view", "bills:create"]}><Bills /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/accounts" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["accounts:view", "accounts:manage"]}><Accounts /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/chart-of-accounts" element={<Navigate to="/accounts?section=chart-of-accounts" replace />} />
         <Route path="/locations" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><Locations /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/payroll" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="payroll:view"><Payroll /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
@@ -70,6 +77,8 @@ export default function App() {
         <Route path="/businesses/:id/details" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><BusinessDetails /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/profile" element={<ErrorBoundary><SuspendedPage><ProtectedPage><Profile /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/partner" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="partner:view"><PartnerDashboard /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/admin" element={<ErrorBoundary><SuspendedPage><AdminRoute><Admin /></AdminRoute></SuspendedPage></ErrorBoundary>} />
+        <Route path="/unauthorized" element={<Suspense fallback={<PageSkeleton />}><Unauthorized /></Suspense>} />
         <Route path="*" element={<Suspense fallback={<PageSkeleton />}><NotFound /></Suspense>} />
       </Routes>
       <Toaster />

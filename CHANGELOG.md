@@ -1,5 +1,135 @@
 # Changelog
 
+## [1.0.6]
+
+Release 1.0.6 bundles the admin dashboard, password reset, email logging, owner broadcasts, and notification improvements delivered since 1.0.5.
+
+### Added
+- **Admin dashboard** (`/admin`) — super-admin analytics for user sessions, active accounts, new-user retention, plans/trials, and SMTP configuration. Access is gated by `SUPER_ADMIN_ACCOUNT`.
+- **Login/logout session logging** — every login and logout is recorded with IP, user agent, account, business, and session duration.
+- **Password reset flow** — public `/forgot-password` and `/reset-password` pages with unique email tokens.
+- **Email activity logging** — privacy-safe logs of all transactional emails by type and status, visible in the admin Email Logs tab.
+- **Owner broadcasts** — super admins can send messages to all system owners via email, in-app notification, or floating popup banner.
+- **Floating banner notifications** — active banner notifications render as a dismissible banner at the top of every page and support hyperlinks with read/click/dismiss analytics.
+- **Broadcast analytics** — per-broadcast read counts, link clicks, dismissals, read rate, and CTR in the admin Broadcast tab.
+- **Account businesses/users columns** — the admin All Accounts table shows business and user counts per account.
+
+## [Unreleased] — Notification Priority, Floating Banners & Link Tracking
+
+Improved the notification system so owner broadcasts are not buried under bill notifications, overdue bills are fetched automatically, popup banners render as floating banners, and banner links support read/click/dismiss analytics.
+
+### Added
+- **Account businesses and users in admin** — the "All Accounts" table on the admin dashboard now shows the number of businesses and users per account (`api/admin-router.ts`, `src/pages/Admin.tsx`).
+- **Notification priority and link fields** — `notifications` table now has `priority`, `linkUrl`, `linkLabel`, `linkClicks`, `readAt`, and `dismissedAt` columns with supporting indexes (`db/schema.ts`, `db/migrations/0023_notification_priority_and_links.sql`).
+- **Auto-generated overdue bill notifications** — `notifications.list` now automatically generates overdue-bill notifications on every fetch, so users no longer need to click "Check Bills" to see them. The explicit "Check Bills" button still works as a manual refresh (`api/notifications-router.ts`).
+- **Notification priority sorting** — active notification lists are ordered by `priority DESC` then `createdAt DESC`, so owner broadcasts appear above bill notifications (`api/notifications-router.ts`, `src/components/Layout.tsx`).
+- **Floating banner component** — new `<BannerNotifications>` component renders active banner notifications as a dismissible banner at the top of every page inside `Layout`. It tracks reads (2-second view), link clicks, and dismissals (`src/components/BannerNotifications.tsx`, `src/components/Layout.tsx`).
+- **Banner link tracking** — `notifications.trackRead`, `notifications.trackLinkClick`, and `notifications.dismissBanner` endpoints record engagement. Banner links open in a new tab and increment click counts (`api/notifications-router.ts`).
+- **Owner broadcast priority and links** — broadcasts are created with `priority: 100` and can include an optional link URL/label. The admin Broadcast tab now exposes link fields and a performance analytics table (`api/admin-router.ts`, `src/pages/Admin.tsx`).
+- **Broadcast analytics** — new `admin.getNotificationAnalytics` endpoint and dashboard cards/table showing total reads, link clicks, dismissals, read rate, and CTR per broadcast (`api/admin-router.ts`, `src/pages/Admin.tsx`).
+
+### Changed
+- **Notification panel** — owner broadcasts now show a red "BROADCAST" badge and a distinct background so they stand out from bill notifications (`src/components/Layout.tsx`).
+
+## [Unreleased] — Password Reset, Email Logs & Owner Broadcasts
+
+Added a self-service password reset flow, privacy-safe email activity logging in the admin dashboard, and super-admin owner broadcast notifications across email, in-app, and banner channels.
+
+### Added
+- **Password reset flow** — new public `/forgot-password` and `/reset-password` pages. `localAuth.requestPasswordReset` generates a SHA-256 hashed token stored in `password_reset_tokens` for 1 hour and sends a branded reset email when SMTP is configured; `localAuth.resetPassword` verifies the token, updates the user's password, marks the token used, and revokes active refresh tokens (`src/pages/ForgotPassword.tsx`, `src/pages/ResetPassword.tsx`, `api/local-auth-router.ts`).
+- **Password reset email templates** — `passwordResetHtml` and `passwordResetText` branded Finaflow emails that explain the 1-hour expiry and include the reset URL (`api/lib/email-templates.ts`).
+- **Email activity logging** — new `email_logs` table records every transactional email by type and status without storing recipient PII. All system emails (welcome, signup notification, password reset, SMTP test, owner broadcast) are logged through `sendLoggedEmail` (`api/lib/logged-email.ts`, `api/lib/email.ts`, `db/schema.ts`, `db/migrations/0021_email_logs.sql`).
+- **Admin email logs** — new `admin.getEmailStats` and `admin.getEmailLogs` endpoints plus an "Email Logs" tab in the admin dashboard showing totals, sent today/this week, failures, type breakdown, and a privacy-safe activity table (`api/admin-router.ts`, `src/pages/Admin.tsx`).
+- **Owner broadcast notifications** — super admins can compose a title/message and send it to all system owners via email, in-app notification, popup banner, or any combination. Broadcasts are stored in `owner_broadcasts` and surfaced in a new "Broadcast" admin tab (`api/admin-router.ts`, `src/pages/Admin.tsx`, `db/schema.ts`, `db/migrations/0022_owner_broadcasts.sql`).
+- **Owner broadcast email templates** — `ownerBroadcastHtml` and `ownerBroadcastText` simple admin-to-owners announcement templates (`api/lib/email-templates.ts`).
+- **Database tables** — `password_reset_tokens`, `email_logs`, and `owner_broadcasts` with indexes and cascade rules (`db/schema.ts`, `db/migrations/0020_password_reset_tokens.sql`, `db/migrations/0021_email_logs.sql`, `db/migrations/0022_owner_broadcasts.sql`).
+
+### Changed
+- **Login page** — added a "Forgot password?" link on the credentials form that navigates to `/forgot-password` (`src/pages/Login.tsx`).
+- **Welcome and signup notification emails** now route through `sendLoggedEmail` so they appear in admin email logs (`api/local-auth-router.ts`).
+- **Admin SMTP test** now logs through `sendLoggedEmail` (`api/admin-router.ts`).
+
+## [Unreleased] — Login/Logout Logging & Admin Dashboard
+
+Added platform-wide user session logging and a new super-admin dashboard with analytics, subscription insights, and SMTP configuration.
+
+### Added
+- **User session logging** — new `user_sessions` table records every login/logout with IP, user agent, active business, account, and session duration. Includes indexes for fast analytics queries ([db/schema.ts](file://d:\DevCenter\abuilds\fina\finaflow\db\schema.ts), [db/migrations/0018_user_sessions.sql](file://d:\DevCenter\abuilds\fina\finaflow\db\migrations\0018_user_sessions.sql), [db/migrations/0019_user_sessions_cascade.sql](file://d:\DevCenter\abuilds\fina\finaflow\db\migrations\0019_user_sessions_cascade.sql)).
+- **Login/logout session tracking** — `localAuth.login`, `localAuth.register`, `localAuth.logout`, and `localAuth.logoutAll` now create and close `user_sessions` rows automatically. A `finaflow_session_id` cookie lets logout update the correct session ([api/local-auth-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\local-auth-router.ts)).
+- **Super admin env configuration** — `SUPER_ADMIN_ACCOUNT` env var designates which account has platform admin access; `ADMIN_ROUTE` customizes the admin path (default `admin`) ([api/lib/env.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\lib\env.ts), [.env.example](file://d:\DevCenter\abuilds\fina\finaflow\.env.example)).
+- **Admin tRPC router** — new `admin` router with super-admin-only procedures for login stats, active accounts, new-user retention, session durations, plan/trial distribution, account search, SMTP config read/write, test email, and super-admin notifications ([api/admin-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\admin-router.ts), [api/router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\router.ts), [api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts)).
+- **Admin dashboard UI** — new `/admin` page with overview cards, login activity chart, active accounts table, all-accounts search, new users table, plan/trial charts, and SMTP configuration panel. Accessible only to users whose account matches `SUPER_ADMIN_ACCOUNT`; everyone else gets a 404 ([src/pages/Admin.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Admin.tsx), [src/components/AdminRoute.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\AdminRoute.tsx), [src/App.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\App.tsx)).
+- **Admin navigation** — sidebar shows an "Admin" item only for super admin users ([src/components/Layout.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\Layout.tsx), [src/hooks/useAuth.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\hooks\useAuth.ts)).
+- **Welcome email on signup** — new users now receive a branded welcome email with their Account ID and login URL when SMTP is configured ([api/lib/email-templates.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\lib\email-templates.ts), [api/local-auth-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\local-auth-router.ts)).
+- **Super admin signup notifications** — super admin users are notified by email and in-app notification whenever a new account registers ([api/local-auth-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\local-auth-router.ts)).
+- **SMTP config management** — admin dashboard can read and update `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`, writing changes back to `.env` for local/self-hosted deployments ([api/lib/update-env.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\lib\update-env.ts), [api/admin-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\admin-router.ts)).
+
+### Changed
+- **`localAuth.me` and `localAuth.login` responses** now include `isSuperAdmin` so the frontend can gate admin UI without an extra round trip ([api/local-auth-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\local-auth-router.ts)).
+
+### Fixed
+- **Test database setup** now applies the `user_sessions` migrations so auth integration tests continue to pass ([api/test/setup.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\test\setup.ts)).
+
+## [Unreleased] — Transaction Abort & Deadlock Fixes
+
+Fixed two CI-flaky database contention issues in test cleanup and business reset.
+
+### Fixed
+- **Business reset no longer aborts when budget plan tables are missing** — the budget plan operations inside `resetBusinessTransactions` ran inside a `try/catch` block within a Drizzle `db.transaction()`. When those queries failed (e.g., tables didn't exist), the Postgres transaction was silently aborted, causing all subsequent queries — including the `purchase_orders` soft-delete — to fail with "current transaction is aborted". The fix wraps the budget plan operations in a SAVEPOINT so that on failure only those operations are rolled back, allowing the enclosing transaction to continue normally ([api/lib/business-reset.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\lib\business-reset.ts)).
+- **Test cleanup deadlock retry** — the `cleanupAccount` function in `local-auth-scope.test.ts` could deadlock when multiple pool connections contended for the same rows during concurrent DDL/DML across test setup and cleanup. The fix wraps cleanup in a retry loop with exponential backoff that catches Postgres deadlock errors (code `40P01`) and retries up to 3 times ([api/__tests__/local-auth-scope.test.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\__tests__/local-auth-scope.test.ts)).
+
+## [Unreleased] — Role & Permission Enhancement, Landing-Page Fixes
+
+Bug fix: post-login landing page, navigation filtering, and route-protection improvements for create-only permission roles.
+
+### Fixed
+- **Landing page redirect for restricted roles** — `getDefaultLandingPage` fallback changed from `/dashboard` to `/daily-sales` so employees (who only have `SALES_CREATE`) aren't sent to a page they can't access ([src/lib/permissions.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\lib\permissions.ts)).
+- **All page-level permission checks now use user effective permissions** — previously, 9 frontend pages (`Accounts`, `Payroll`, `Users`, `Settings`, `Businesses`, `BusinessOverview`, `Feedback`, `Debts`, `AddDebtDialog`) checked permissions using `user.role` against hardcoded role definitions, ignoring DB-level permission overrides. Now they all use `user.permissions` (falling back to `user.role`) so custom role assignments are respected ([src/pages/Accounts.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Accounts.tsx), [src/pages/Payroll.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Payroll.tsx), [src/pages/Users.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Users.tsx), [src/pages/Settings.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Settings.tsx), [src/pages/Businesses.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Businesses.tsx), [src/pages/BusinessOverview.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\BusinessOverview.tsx), [src/pages/Feedback.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Feedback.tsx), [src/pages/Debts.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Debts.tsx), [src/components/AddDebtDialog.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\AddDebtDialog.tsx)).
+
+## [Unreleased] — Version 1.0.5
+
+Permission-aware navigation, landing pages, data scoping, and the Users location-assignment bug fix.
+
+### Added
+- **Effective permissions returned by `localAuth.me`** — the `me` query now returns a `permissions` array computed from the active business role and the DB `role_permissions` table, keeping the frontend in sync with dynamic role changes ([api/local-auth-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\local-auth-router.ts), [api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts), [src/hooks/useAuth.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\hooks\useAuth.ts)).
+- **Permission-array helpers** — `hasPermission`, `hasAnyPermission`, and `getDefaultLandingPage` now accept either a role string or an explicit permissions array so callers can use the backend-provided effective permissions ([src/lib/permissions.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\lib\permissions.ts)).
+- **Permission-aware landing page** — `Login`, registration, and the marketing home page now redirect authenticated users to their first accessible page using effective permissions instead of hard-coding `/dashboard` ([src/pages/Login.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Login.tsx), [src/pages/Home.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Home.tsx), [src/lib/permissions.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\lib\permissions.ts)).
+- **`/unauthorized` route and page** — added a dedicated unauthorized page and wired it into `App.tsx` so `ProtectedRoute` has a valid redirect target ([src/pages/Unauthorized.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Unauthorized.tsx), [src/App.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\App.tsx)).
+- **`bills.enteredBy` column & migration** — added `enteredBy` to the `bills` table with an index and backfilled existing rows, enabling per-creator scoping ([db/schema.ts](file://d:\DevCenter\abuilds\fina\finaflow\db\schema.ts), [db/migrations/0017_add_bills_entered_by.sql](file://d:\DevCenter\abuilds\fina\finaflow\db\migrations\0017_add_bills_entered_by.sql)).
+
+### Changed
+- **Navigation respects effective permissions** — desktop sidebar, mobile bottom nav, and mobile hamburger menu now use the user's effective permissions, so pages like Expenses and Bills remain visible when a user has only create/pay permissions ([src/components/Layout.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\Layout.tsx), [src/components/MobileNavigation.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\MobileNavigation.tsx)).
+- **Route permissions updated for create-only access** — `/expenses` and `/bills` are now accessible with create permissions, and `/accounts`/`/suppliers` accept manage permissions ([src/App.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\App.tsx)).
+- **Expenses page create-vs-view gating** — create-only users see the Add Expense button and a restricted-history message; the expense list, filters, dashboard cards, and categories tab are hidden without view permission. Category management remains gated by `expenses:manage` ([src/pages/Expenses.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Expenses.tsx)).
+- **Bills page create/pay gating** — users with `bills:create`/`bills:pay` can access the page and see only bills they created; the full list, summary cards, and recurring templates remain hidden without `bills:view` ([src/pages/Bills.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Bills.tsx), [api/bills-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\bills-router.ts)).
+- **Dashboard quick actions gated** — quick-action links are now only shown when the user has the relevant sales, expenses, bills, wallet, or payroll permissions ([src/pages/Dashboard.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Dashboard.tsx)).
+- **Bill-related alerts/notifications scoped** — `dashboard.alerts` and notification list, counts, overdue generation, and re-highlighting now hide bill-related data for users without `bills:view` ([api/dashboard-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\dashboard-router.ts), [api/notifications-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\notifications-router.ts)).
+- **Expense categories query accessible to creators** — `expenses.categories` now accepts `expenses:view` or `expenses:create`, so create-only users can select categories when adding expenses ([api/expenses-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\expenses-router.ts), [api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts)).
+- **Users location assignment sync** — saving locations in the Assign Locations dialog now updates the active edit form state, preventing the next "Save Changes" from clearing the newly assigned locations ([src/pages/Users.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Users.tsx)).
+
+### Fixed
+- **Missing Expenses nav item for create-only roles** — effective-permission-based nav filtering ensures users with `expenses:create` see the Expenses page in both desktop and mobile menus.
+- **Unauthorized landing page** — users without `dashboard:view` are no longer dumped on a broken `/unauthorized` route after login; they land on their first accessible page.
+- **CI test suite failures** — added migration `0017` to the test bootstrap, mocked `useAuth` in `Home.test.tsx`, populated formerly empty test skeletons, fixed `budgets-router.test.ts` cleanup order, made `notification-scope.test.ts` slugs unique, and refactored shared-plan budget tests to use isolated plans so the full suite passes reliably.
+
+## [Unreleased] — Role & Permission Audit & Enhancement
+
+## [Unreleased] — Role & Permission Audit & Enhancement
+
+### Added
+- **Granular permission framework** — introduced `SALES_VIEW_OWN` (`sales:view_own`) and `EXPENSES_VIEW_OWN` (`expenses:view_own`) permissions supporting owner-only view of self-created entries across the system ([api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts), [src/lib/permissions.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\lib\permissions.ts)).
+- **`requireAnyPermission` middleware** — backend middleware factory supporting OR-logic permission checks so procedures can be gated by multiple permission alternatives ([api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts)).
+- **`salesViewOwn` / `expenseViewOwn` procedure aliases** — pre-built tRPC procedure aliases for owner-only query endpoints ([api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts)).
+- **`dailySales.listOwn` endpoint** — owner-only list that filters by `enteredBy = currentUser.id`, accessible only to users with `SALES_VIEW_OWN` ([api/daily-sales-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\daily-sales-router.ts)).
+- **Permission-aware mobile navigation** — `MobileBottomNavigation` and `MobileHamburgerMenu` now filter visible items based on the user's role permissions, matching the desktop sidebar behavior ([src/components/MobileNavigation.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\MobileNavigation.tsx)).
+- **`ProtectedRoute` multi-permission support** — `requiredPermission` now accepts `Permission | Permission[]`; arrays use OR logic (any match grants access) ([src/components/ProtectedRoute.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\ProtectedRoute.tsx)).
+
+### Changed
+- **Employee role restricted** — reduced from 11 permissions to a single permission `SALES_CREATE`, blocking access to dashboards, bills, reports, expenses, suppliers, M-PESA, debts, calendar, and all other modules ([api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts), [src/lib/permissions.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\lib\permissions.ts)).
+- **`/daily-sales` route gated by OR logic** — now accessible to users with `SALES_VIEW`, `SALES_CREATE`, or `SALES_VIEW_OWN` ([src/App.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\App.tsx)).
+- **Daily Sales sidebar/mobile nav item** — shown when user has `SALES_VIEW`, `SALES_CREATE`, or `SALES_VIEW_OWN` ([src/components/Layout.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\Layout.tsx), [src/components/MobileNavigation.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\MobileNavigation.tsx)).
+- **DailySales page conditional rendering** — dynamically selects `dailySales.list` vs `dailySales.listOwn` based on permissions; hides the sales list, filters, and empty state when the user has only `SALES_CREATE` ([src/pages/DailySales.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\DailySales.tsx)).
+
 ## [Unreleased] — Payment-Method-Location-Permission Remediation
 
 ### Added

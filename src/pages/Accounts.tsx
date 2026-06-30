@@ -27,9 +27,10 @@ export function Accounts() {
   type OperationalSubType = "" | "cash" | "bank" | "prepaid_expense" | "accounts_receivable" | "fixed_asset";
 
   const { user } = useAuth();
-  const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.ACCOUNTS_MANAGE);
-  const canManagePM = hasPermission(user?.role ?? "viewer", PERMISSIONS.PAYMENT_METHODS_MANAGE);
-  const canViewPM = hasPermission(user?.role ?? "viewer", PERMISSIONS.PAYMENT_METHODS_VIEW);
+  const permContext = user?.permissions?.length ? user.permissions : (user?.role ?? "viewer");
+  const canManage = hasPermission(permContext, PERMISSIONS.ACCOUNTS_MANAGE);
+  const canManagePM = hasPermission(permContext, PERMISSIONS.PAYMENT_METHODS_MANAGE);
+  const canViewPM = hasPermission(permContext, PERMISSIONS.PAYMENT_METHODS_VIEW);
   const { data: settings } = trpc.settings.list.useQuery();
   const [searchParams, setSearchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");
@@ -68,7 +69,7 @@ export function Accounts() {
   const [pmOpen, setPmOpen] = useState(false);
   const [pmEditId, setPmEditId] = useState<number | null>(null);
   const [tagOpen, setTagOpen] = useState(false);
-  const [pmForm, setPmForm] = useState({ name: "", code: "", color: "#C73E1D", sortOrder: "0" });
+  const [pmForm, setPmForm] = useState({ name: "", code: "", color: "#C73E1D", sortOrder: "0", locationId: "", linkedAccountId: "" });
   const [tagLocId, setTagLocId] = useState<string>("");
   const [assignAccountMap, setAssignAccountMap] = useState<Record<number, string>>({});
 
@@ -135,7 +136,7 @@ export function Accounts() {
     { enabled: !!tagLocId }
   );
   const createPM = trpc.paymentMethods.create.useMutation({
-    onSuccess: () => { setPmOpen(false); setPmForm({ name: "", code: "", color: "#C73E1D", sortOrder: "0" }); refetchPM(); toast.success("Payment method added"); },
+    onSuccess: () => { setPmOpen(false); setPmForm({ name: "", code: "", color: "#C73E1D", sortOrder: "0", locationId: "", linkedAccountId: "" }); refetchPM(); toast.success("Payment method added"); },
     onError: (err) => toast.error(err.message),
   });
   const updatePM = trpc.paymentMethods.update.useMutation({
@@ -451,12 +452,33 @@ export function Accounts() {
                 </DialogTrigger>
                 <DialogContent className="bg-white">
                   <DialogHeader><DialogTitle className="font-serif text-xl">Add Payment Method</DialogTitle></DialogHeader>
-                  <form onSubmit={(e) => { e.preventDefault(); createPM.mutate({ name: pmForm.name, code: pmForm.code, color: pmForm.color, sortOrder: +pmForm.sortOrder }); }} className="space-y-3">
+                  <form onSubmit={(e) => { e.preventDefault(); createPM.mutate({ name: pmForm.name, code: pmForm.code, color: pmForm.color, sortOrder: +pmForm.sortOrder, locationId: pmForm.locationId ? +pmForm.locationId : undefined, linkedAccountId: pmForm.linkedAccountId ? +pmForm.linkedAccountId : undefined }); }} className="space-y-3">
                     <div><Label>Name</Label><Input value={pmForm.name} onChange={e => setPmForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Visa Card" required /></div>
                     <div><Label>Code (unique ID)</Label><Input value={pmForm.code} onChange={e => setPmForm(p => ({ ...p, code: e.target.value.toLowerCase().replace(/\s+/g, "_") }))} placeholder="e.g. visa_card" required /></div>
                     <div className="grid grid-cols-2 gap-3">
                       <div><Label>Color</Label><div className="flex items-center gap-2"><input type="color" value={pmForm.color} onChange={e => setPmForm(p => ({ ...p, color: e.target.value }))} className="h-10 w-10 rounded border p-0.5" /><span className="text-xs text-[#8D8A87]">{pmForm.color}</span></div></div>
                       <div><Label>Sort Order</Label><Input type="number" value={pmForm.sortOrder} onChange={e => setPmForm(p => ({ ...p, sortOrder: e.target.value }))} /></div>
+                    </div>
+                    {/* Optional: assign to branch + account at creation time */}
+                    <div className="rounded-lg border border-[#E8E0D8] bg-[#F5EDE6]/30 p-3 space-y-3">
+                      <p className="text-xs font-medium text-[#8D8A87]">Optional: Assign to Branch</p>
+                      <p className="text-xs text-[#8D8A87]">Link this payment method to a branch account now, or skip and assign it later via "Tag to Branches".</p>
+                      <div><Label className="text-xs">Branch</Label>
+                        <select value={pmForm.locationId} onChange={e => { setPmForm(p => ({ ...p, locationId: e.target.value, linkedAccountId: "" })); }} className="w-full rounded border px-3 py-2 text-sm">
+                          <option value="">No branch (assign later)</option>
+                          {locations?.filter(l => l.isActive !== false).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                        </select>
+                      </div>
+                      {pmForm.locationId && (
+                        <div><Label className="text-xs">Account</Label>
+                          <select value={pmForm.linkedAccountId} onChange={e => setPmForm(p => ({ ...p, linkedAccountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
+                            <option value="">Select an account (optional)</option>
+                            {accounts?.filter(a => a.isActive && (a.locationId === +pmForm.locationId || !a.locationId)).map(a => (
+                              <option key={a.id} value={a.id}>{a.name} · {a.type}{a.accountCode ? ` (${a.accountCode})` : ""}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </div>
                     <Button type="submit" className="w-full bg-[#2E7D32]" disabled={createPM.isPending}>{createPM.isPending ? "Adding..." : "Add Payment Method"}</Button>
                   </form>

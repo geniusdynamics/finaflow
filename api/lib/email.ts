@@ -2,7 +2,7 @@
 // ABOUTME: Keeps email delivery optional in development while using real SMTP in configured environments.
 import nodemailer from "nodemailer";
 
-type EmailPayload = {
+export type EmailPayload = {
   to: string;
   subject: string;
   text: string;

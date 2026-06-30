@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { accounts, businesses, locations, users, userBusinesses } from "@db/schema";
+import { accounts, businesses, locations, users, userBusinesses, userLocations } from "@db/schema";
 import { getAccountSubscription, type DbClient } from "./account-subscriptions";
 
 export interface ProvisionBusinessInput {
@@ -70,12 +70,6 @@ export async function provisionBusiness(input: ProvisionBusinessInput): Promise<
     isActive: true,
   } satisfies typeof userBusinesses.$inferInsert);
 
-  const resolvedAccountRefId = accountRefId ?? businessRow.accountRefId ?? null;
-  await tx.update(users).set({
-    currentBusinessId: businessId,
-    accountRefId: resolvedAccountRefId,
-  }).where(eq(users.id, userId));
-
   const [locResult] = await tx.insert(locations).values({
     businessId,
     name: "Main Branch",
@@ -83,6 +77,21 @@ export async function provisionBusiness(input: ProvisionBusinessInput): Promise<
     isActive: true,
   } satisfies typeof locations.$inferInsert).returning();
   const locationId = locResult.id;
+
+  const resolvedAccountRefId = accountRefId ?? businessRow.accountRefId ?? null;
+  await tx.update(users).set({
+    currentBusinessId: businessId,
+    locationId,
+    accountRefId: resolvedAccountRefId,
+  }).where(eq(users.id, userId));
+
+  await tx.insert(userLocations).values({
+    userId,
+    locationId,
+    isPrimary: true,
+    isActive: true,
+    assignedBy: userId,
+  });
 
   if (testFailPoint === "before-default-accounts") {
     throw new Error("Simulated registration failure before default account creation");

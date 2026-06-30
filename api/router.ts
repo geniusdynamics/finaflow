@@ -34,10 +34,12 @@ import { chartOfAccountsRouter } from "./chart-of-accounts-router";
 import { walletRouter } from "./wallet-router";
 import { walletManagementRouter } from "./wallet-management-router";
 import { debtsRouter } from "./debts-router";
+import { adminRouter } from "./admin-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
+  admin: adminRouter,
   accountSubscriptions: accountSubscriptionsRouter,
   auth: authRouter,
   localAuth: localAuthRouter,

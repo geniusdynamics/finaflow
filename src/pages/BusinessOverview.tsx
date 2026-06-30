@@ -57,7 +57,8 @@ export function BusinessOverview() {
   const { id } = useParams<{ id: string }>();
   const businessId = id ? Number(id) : null;
   const { user } = useAuth();
-  const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.BUSINESS_MANAGE);
+  const permContext = user?.permissions?.length ? user.permissions : (user?.role ?? "viewer");
+  const canManage = hasPermission(permContext, PERMISSIONS.BUSINESS_MANAGE);
 
   const utils = trpc.useUtils();
 

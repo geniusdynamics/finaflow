@@ -58,7 +58,8 @@ function FiscalYearSetting() {
 export function Settings() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.SETTINGS_MANAGE);
+  const permContext = user?.permissions?.length ? user.permissions : (user?.role ?? "viewer");
+  const canManage = hasPermission(permContext, PERMISSIONS.SETTINGS_MANAGE);
   const utils = trpc.useUtils();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get("tab") as "features" | "account" | "integrations" | "feedback" | "wallets" | null;

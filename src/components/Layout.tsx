@@ -14,15 +14,16 @@ import { useState, useCallback, useEffect } from "react";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 import { APP_VERSION_DISPLAY } from "@/lib/version";
 import { MobileBottomNavigation } from "@/components/MobileNavigation";
+import { BannerNotifications } from "@/components/BannerNotifications";
 
 const allNavItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, perms: [PERMISSIONS.DASHBOARD_VIEW] },
-  { path: "/daily-sales", label: "Daily Sales", icon: Receipt, perms: [PERMISSIONS.SALES_VIEW] },
-  { path: "/expenses", label: "Expenses", icon: TrendingDown, perms: [PERMISSIONS.EXPENSES_VIEW] },
-  { path: "/suppliers", label: "Suppliers", icon: Users, perms: [PERMISSIONS.SUPPLIERS_VIEW] },
-  { path: "/bills", label: "Bills", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW] },
-  { path: "/accounts", label: "Accounts", icon: CreditCard, perms: [PERMISSIONS.ACCOUNTS_VIEW] },
-  { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW] },
+  { path: "/daily-sales", label: "Daily Sales", icon: Receipt, perms: [PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_VIEW_OWN] },
+  { path: "/expenses", label: "Expenses", icon: TrendingDown, perms: [PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE] },
+  { path: "/suppliers", label: "Suppliers", icon: Users, perms: [PERMISSIONS.SUPPLIERS_VIEW, PERMISSIONS.SUPPLIERS_MANAGE] },
+  { path: "/bills", label: "Bills", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE] },
+  { path: "/accounts", label: "Accounts", icon: CreditCard, perms: [PERMISSIONS.ACCOUNTS_VIEW, PERMISSIONS.ACCOUNTS_MANAGE] },
+  { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_PROCESS] },
   { path: "/wallet", label: "Wallet", icon: Wallet, perms: [PERMISSIONS.WALLET_VIEW] },
   { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
   { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
@@ -31,6 +32,7 @@ const allNavItems = [
   
   { path: "/settings", label: "Settings", icon: Settings, perms: [PERMISSIONS.SETTINGS_MANAGE] },
   { path: "/partner", label: "Partner", icon: Handshake, perms: [PERMISSIONS.PARTNER_VIEW] },
+  { path: "/admin", label: "Admin", icon: ShieldCheck, perms: [], adminOnly: true },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -44,6 +46,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return saved === "true";
   });
   const role = user?.role ?? "viewer";
+  const userPermissions = user?.permissions ?? [];
 
   const toggleSidebar = () => {
     setSidebarCollapsed((prev) => {
@@ -54,11 +57,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   };
 
   const { data: alertList } = trpc.alerts.checkAll.useQuery(undefined, { refetchInterval: 60000 });
-  const { data: notifCount } = trpc.notifications.unreadCount.useQuery(undefined, { refetchInterval: 30000 });
   const { data: highlightedCount } = trpc.notifications.highlightedCount.useQuery(undefined, { refetchInterval: 30000 });
   const { data: notifList } = trpc.notifications.list.useQuery({ limit: 20, unreadOnly: false });
   const utils = trpc.useUtils();
-  const markNotifRead = trpc.notifications.markRead.useMutation({ onSuccess: () => utils.notifications.invalidate() });
   const clickFadeNotif = trpc.notifications.clickFade.useMutation({ onSuccess: () => utils.notifications.invalidate() });
   const dismissNotif = trpc.notifications.dismiss.useMutation({ onSuccess: () => utils.notifications.invalidate() });
   const clearAllNotifs = trpc.notifications.clearAll.useMutation({
@@ -90,7 +91,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
     onSuccess: () => { utils.invalidate(); window.location.reload(); },
   });
 
-  const navItems = allNavItems.filter((item) => hasAnyPermission(role, item.perms));
+  const navItems = allNavItems.filter((item) => {
+    if ((item as { adminOnly?: boolean }).adminOnly) {
+      return user?.isSuperAdmin === true;
+    }
+    return hasAnyPermission(userPermissions.length > 0 ? userPermissions : role, item.perms);
+  });
   const isActive = useCallback((path: string) => location.pathname === path, [location.pathname]);
 
   const pinnedSection = (
@@ -139,11 +145,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     <div
                       key={n.id}
                       onClick={() => clickFadeNotif.mutate({ id: n.id })}
-                      className={`group flex items-start gap-2 border-b border-[#E8E0D8] px-3 py-2 text-xs transition-colors ${n.severity === "critical" ? "bg-[#D32F2F]/5 text-[#D32F2F]" : n.severity === "warning" ? "bg-[#ED6C02]/5 text-[#EDA102]" : "text-[#2D2A26]"} ${isFaded ? "opacity-50" : !n.isRead ? "font-medium" : "opacity-80"} hover:bg-[#F5EDE6]`}
+                      className={`group flex items-start gap-2 border-b border-[#E8E0D8] px-3 py-2 text-xs transition-colors ${n.type === "owner_broadcast" ? "bg-[#C73E1D]/5" : n.severity === "critical" ? "bg-[#D32F2F]/5 text-[#D32F2F]" : n.severity === "warning" ? "bg-[#ED6C02]/5 text-[#EDA102]" : "text-[#2D2A26]"} ${isFaded ? "opacity-50" : !n.isRead ? "font-medium" : "opacity-80"} hover:bg-[#F5EDE6]`}
                     >
                       <div className="flex-1 min-w-0">
                         <p className="flex items-center gap-1">
                           <span className="text-[10px]">{!isFaded && !n.isRead && "● "}</span>
+                          {n.type === "owner_broadcast" && (
+                            <span className="rounded bg-[#C73E1D] px-1 py-0 text-[9px] font-bold text-white">BROADCAST</span>
+                          )}
                           {n.title}
                         </p>
                         <p className="text-[10px] opacity-70">{n.message}</p>
@@ -422,6 +431,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
       {/* Main Content */}
       <main className={`min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:ml-16" : "lg:ml-64"}`}>
+        <BannerNotifications />
         <div className="mx-auto max-w-7xl p-4 lg:p-8 pb-20 lg:pb-8">
           {children}
         </div>

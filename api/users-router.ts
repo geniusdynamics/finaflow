@@ -80,8 +80,9 @@ export async function syncUserLocationAssignments(
   locationIds: number[],
   assignedBy?: number | null,
 ) {
-  // Guard: If no valid location IDs provided, skip sync entirely to prevent
+  // Legacy guard: If no valid location IDs provided, skip sync entirely to prevent
   // accidental deletion of all existing user-location assignments.
+  // Prefer applyUserLocationScope for new code.
   const validIds = locationIds.filter((value): value is number => Number.isFinite(value));
   if (validIds.length === 0) {
     console.warn("[users] syncUserLocationAssignments: called with empty or invalid locationIds array — skipping sync");
@@ -109,6 +110,125 @@ export async function syncUserLocationAssignments(
   }).where(eq(users.id, userId));
 
   return uniqueLocationIds;
+}
+
+// ── Explicit location-scope command ────────────────────────────────────
+
+export type LocationScopeMode = "preserve" | "replace" | "clear";
+
+export interface ApplyScopeInput {
+  userId: number;
+  operatorId?: number | null;
+  mode: LocationScopeMode;
+  locationIds: number[];
+}
+
+/**
+ * Apply a user-location scope change with an explicit mode.
+ *
+ * | Mode        | Result                                                 |
+ * |-------------|--------------------------------------------------------|
+ * | `preserve`  | Keep current rows (no-op).                             |
+ * | `replace`   | Rewrite rows from the supplied set.                    |
+ * | `clear`     | Deactivate all rows and null legacy `locationId`.      |
+ *
+ * Returns the `{ scopeMode, effectiveLocationIds }` that the caller
+ * should include in the API response.
+ */
+export async function applyUserLocationScope(
+  tx: Pick<ReturnType<typeof getDb>, "delete" | "insert" | "update" | "select">,
+  input: ApplyScopeInput,
+): Promise<{ scopeMode: "all" | "assigned" | "none"; effectiveLocationIds: number[] }> {
+  const { userId, operatorId, mode, locationIds } = input;
+
+  if (mode === "preserve") {
+    // Return current state without mutation.
+    return computeUserScope(tx, userId);
+  }
+
+  if (mode === "clear") {
+    try {
+      await tx.update(userLocations)
+        .set({ isActive: false })
+        .where(eq(userLocations.userId, userId));
+    } catch {
+      // Table may not exist yet. Safe to skip.
+    }
+    await tx.update(users)
+      .set({ locationId: null })
+      .where(eq(users.id, userId));
+    return { scopeMode: "none", effectiveLocationIds: [] };
+  }
+
+  // mode === "replace"
+  const validIds = locationIds.filter((value): value is number => Number.isFinite(value));
+  if (validIds.length === 0) {
+    // Explicit replace with empty set — treat as clear.
+    return applyUserLocationScope(tx, { ...input, mode: "clear" });
+  }
+
+  const uniqueLocationIds = Array.from(new Set(validIds));
+
+  try {
+    await tx.delete(userLocations).where(eq(userLocations.userId, userId));
+  } catch {
+    // Table may not exist yet. Safe to skip.
+  }
+
+  await tx.insert(userLocations).values(uniqueLocationIds.map((locationId, index) => ({
+    userId,
+    locationId,
+    isPrimary: index === 0,
+    isActive: true,
+    assignedBy: operatorId ?? null,
+  })));
+
+  await tx.update(users).set({
+    locationId: uniqueLocationIds[0] ?? null,
+  }).where(eq(users.id, userId));
+
+  return { scopeMode: "assigned", effectiveLocationIds: uniqueLocationIds };
+}
+
+/**
+ * Compute the current scope mode and effective location IDs for a user
+ * without mutating anything.
+ */
+async function computeUserScope(
+  tx: Pick<ReturnType<typeof getDb>, "select">,
+  userId: number,
+): Promise<{ scopeMode: "all" | "assigned" | "none"; effectiveLocationIds: number[] }> {
+  const rows = await tx.select({ locationId: userLocations.locationId })
+    .from(userLocations)
+    .where(and(eq(userLocations.userId, userId), eq(userLocations.isActive, true)));
+
+  const ids = rows.map(r => r.locationId);
+
+  if (ids.length === 0) {
+    return { scopeMode: "none", effectiveLocationIds: [] };
+  }
+  return { scopeMode: "assigned", effectiveLocationIds: ids };
+}
+
+/**
+ * Compute the user-facing scope mode from role and stored location assignments.
+ *
+ * - owner/admin always produce `"all"` (they have unrestricted branch access).
+ * - Other roles with assigned rows produce `"assigned"`.
+ * - Other roles with no assigned rows produce `"none"`.
+ */
+export function computeScopeMode(
+  role: string,
+  locationIds: number[],
+): { scopeMode: "all" | "assigned" | "none"; effectiveLocationIds: number[] } {
+  if (role === "owner" || role === "admin") {
+    // Owner/admin always have unrestricted access; preserve stored IDs for display.
+    return { scopeMode: "all", effectiveLocationIds: locationIds };
+  }
+  if (locationIds.length > 0) {
+    return { scopeMode: "assigned", effectiveLocationIds: locationIds };
+  }
+  return { scopeMode: "none", effectiveLocationIds: [] };
 }
 
 export const usersRouter = createRouter({
@@ -156,14 +276,19 @@ export const usersRouter = createRouter({
       byUser[row.userId].push(row.locationId);
     }
 
-    return userRows.map((user) => ({
-      ...user,
-      // Only real user_locations rows; the legacy single-location value is
-      // exposed separately so the frontend can synthesize a pre-check without
-      // falsely implying junction rows exist.
-      locationIds: byUser[user.id] ?? [],
-      legacyLocationId: user.locationId ?? null,
-    }));
+    return userRows.map((user) => {
+      const { scopeMode, effectiveLocationIds } = computeScopeMode(user.role, byUser[user.id] ?? []);
+      return {
+        ...user,
+        // Only real user_locations rows; the legacy single-location value is
+        // exposed separately so the frontend can synthesize a pre-check without
+        // falsely implying junction rows exist.
+        locationIds: byUser[user.id] ?? [],
+        legacyLocationId: user.locationId ?? null,
+        scopeMode,
+        effectiveLocationIds,
+      };
+    });
   }),
 
   get: authedQuery
@@ -177,9 +302,14 @@ export const usersRouter = createRouter({
         .limit(1);
       if (rows.length === 0) return null;
 
+      const locationIds = await getUserLocationIds(input.id);
+      const { scopeMode, effectiveLocationIds } = computeScopeMode(rows[0].role, locationIds);
+
       return {
         ...rows[0],
-        locationIds: await getUserLocationIds(input.id),
+        locationIds,
+        scopeMode,
+        effectiveLocationIds,
       };
     }),
 
@@ -229,9 +359,12 @@ export const usersRouter = createRouter({
           } as typeof userBusinesses.$inferInsert);
         }
 
-        if (locationIds.length > 0) {
-          await syncUserLocationAssignments(tx, createdUser.id, locationIds, currentUserId);
-        }
+        const scope = await applyUserLocationScope(tx, {
+          userId: createdUser.id,
+          operatorId: currentUserId,
+          mode: locationIds.length > 0 ? "replace" : "preserve",
+          locationIds,
+        });
 
         await logAudit({
           userId: currentUserId ?? createdUser.id,
@@ -306,7 +439,12 @@ export const usersRouter = createRouter({
         }
 
         if (Array.isArray(nextLocationIds)) {
-          await syncUserLocationAssignments(tx, id, nextLocationIds, currentUserId);
+          await applyUserLocationScope(tx, {
+            userId: id,
+            operatorId: currentUserId,
+            mode: "replace",
+            locationIds: nextLocationIds,
+          });
         }
       });
 
@@ -348,7 +486,12 @@ export const usersRouter = createRouter({
       }
 
       await db.transaction(async (tx) => {
-        await syncUserLocationAssignments(tx, input.id, input.locationIds, currentUserId);
+        await applyUserLocationScope(tx, {
+          userId: input.id,
+          operatorId: currentUserId,
+          mode: "replace",
+          locationIds: input.locationIds,
+        });
       });
 
       await logAudit({

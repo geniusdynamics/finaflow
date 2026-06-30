@@ -69,7 +69,12 @@ function getFundingAccounts(paymentMethod: string, allAccounts: any[] | undefine
 
 export function Expenses() {
   const { user } = useAuth();
-  const canManage = hasPermission(user?.role ?? "viewer", PERMISSIONS.EXPENSES_MANAGE);
+  const role = user?.role ?? "viewer";
+  const userPerms = user?.permissions ?? [];
+  const permContext = userPerms.length > 0 ? userPerms : role;
+  const canView = hasPermission(permContext, PERMISSIONS.EXPENSES_VIEW);
+  const canCreate = hasPermission(permContext, PERMISSIONS.EXPENSES_CREATE);
+  const canManage = hasPermission(permContext, PERMISSIONS.EXPENSES_MANAGE);
 
   const [open, setOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
@@ -110,7 +115,7 @@ export function Expenses() {
     return f;
   }, [branchFilter, periodFilter, dateRange]);
 
-  const { data: expenses, refetch } = trpc.expenses.list.useQuery(expenseFilters);
+  const { data: expenses, refetch } = trpc.expenses.list.useQuery(expenseFilters, { enabled: canView });
 
   const createExpense = trpc.expenses.create.useMutation({
     onSuccess: () => { toast.success("Expense added successfully"); setOpen(false); resetForm(); refetch(); },
@@ -406,24 +411,13 @@ export function Expenses() {
   return (
     <Layout>
       <div className="space-y-6">
-        {/* Section tabs */}
-        <div className="flex items-center gap-2 border-b border-[#E8E0D8]">
-          <button onClick={() => setTab("expenses")} className={`px-4 py-2 text-sm font-medium ${tab === "expenses" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
-            <Receipt className="mr-1 inline h-4 w-4"/>Expenses
-          </button>
-          <button onClick={() => setTab("categories")} className={`px-4 py-2 text-sm font-medium ${tab === "categories" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
-            <BookOpen className="mr-1 inline h-4 w-4"/>Categories
-          </button>
-        </div>
-
-        {tab === "expenses" && (
-        <>
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-serif text-2xl font-bold text-[#2D2A26]">Expenses</h1>
             <p className="mt-1 text-sm text-[#8D8A87]">Track all business expenditures</p>
           </div>
+          {canCreate && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button className="bg-[#C73E1D] hover:bg-[#C73E1D]/90"><Plus className="mr-2 h-4 w-4" />Add Expense</Button>
@@ -564,8 +558,35 @@ export function Expenses() {
               </form>
             </DialogContent>
           </Dialog>
+          )}
         </div>
 
+        {canView && (
+        <>
+        {/* Section tabs */}
+        <div className="flex items-center gap-2 border-b border-[#E8E0D8]">
+          <button onClick={() => setTab("expenses")} className={`px-4 py-2 text-sm font-medium ${tab === "expenses" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <Receipt className="mr-1 inline h-4 w-4"/>Expenses
+          </button>
+          <button onClick={() => setTab("categories")} className={`px-4 py-2 text-sm font-medium ${tab === "categories" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <BookOpen className="mr-1 inline h-4 w-4"/>Categories
+          </button>
+        </div>
+        </>
+        )}
+
+        {!canView && canCreate && (
+          <Card className="border-[#E8E0D8] bg-white">
+            <CardContent className="py-12 text-center">
+              <Receipt className="mx-auto mb-3 h-8 w-8 text-[#8D8A87]/40" />
+              <p className="text-sm font-medium text-[#2D2A26]">Expense history is restricted</p>
+              <p className="mt-1 text-xs text-[#8D8A87]">You can record new expenses, but viewing the history requires additional permissions.</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {canView && tab === "expenses" && (
+        <>
         {/* Dashboard Cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Card className="border-[#E8E0D8] bg-white">
@@ -664,7 +685,7 @@ export function Expenses() {
         </>
         )}
 
-        {tab === "categories" && (
+        {canView && tab === "categories" && (
         <>
         {/* Categories - Tag Style */}
         <div>
@@ -751,7 +772,7 @@ export function Expenses() {
         </>
         )}
 
-        {tab === "expenses" && (
+        {canView && tab === "expenses" && (
         <>
         {/* Expenses Table */}
         <Card className="border-[#E8E0D8]">

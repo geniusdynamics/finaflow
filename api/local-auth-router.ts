@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, publicQuery, getRolePermissionsWithCache, loadRolePermissionsFromDb } from "./middleware";
 import { getDb } from "./queries/connection";
 import {
   users,
@@ -11,6 +11,9 @@ import {
   accounts,
   refreshTokens,
   appSettings,
+  userSessions,
+  notifications,
+  passwordResetTokens,
   type InsertCustomerAccount,
   type InsertUser,
 } from "@db/schema";
@@ -20,7 +23,11 @@ import { env } from "./lib/env";
 import { hashPassword, verifyPassword } from "./lib/password";
 import { generateCsrfToken } from "./lib/csrf";
 import { logAudit } from "./lib/audit";
+import { isEmailConfigured } from "./lib/email";
+import { sendLoggedEmail } from "./lib/logged-email";
+import { welcomeEmailHtml, welcomeEmailText, newSignupNotificationHtml, newSignupNotificationText, passwordResetHtml, passwordResetText } from "./lib/email-templates";
 import { serialize } from "cookie";
+import { createHash, randomBytes } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_TRIAL_DAYS, getPlanConfig } from "./lib/subscriptions";
 import { provisionBusiness, seedBusinessAccounting } from "./lib/business-provisioning";
@@ -131,6 +138,43 @@ function setAuthCookies(ctx: AuthCookieContext, token: string, csrfToken: string
 
 function getClientIp(ctx: Pick<AuthCookieContext, "req">): string {
   return ctx.req.headers.get("x-forwarded-for") || ctx.req.headers.get("x-real-ip") || "unknown";
+}
+
+async function recordLoginSession(
+  db: ReturnType<typeof getDb>,
+  ctx: AuthCookieContext,
+  params: {
+    userId: number;
+    accountId: string;
+    accountRefId: number | null;
+    businessId: number;
+  },
+): Promise<void> {
+  const userAgent = ctx.req.headers.get("user-agent") || "";
+  const [sessionRow] = await db.insert(userSessions).values({
+    userId: params.userId,
+    accountId: params.accountId,
+    accountRefId: params.accountRefId,
+    businessId: params.businessId,
+    action: "login",
+    ipAddress: getClientIp(ctx),
+    userAgent,
+    loginAt: new Date(),
+  }).returning({ id: userSessions.id });
+
+  if (sessionRow) {
+    const host = ctx.req.headers.get("host") || "";
+    const isLocal = host.startsWith("localhost:") || host.startsWith("127.0.0.1:") ||
+      host.endsWith(".localhost") || host.includes(".localhost:") ||
+      host.endsWith(".local") || host.includes(".local:");
+    ctx.resHeaders.append("Set-Cookie", serialize("finaflow_session_id", String(sessionRow.id), {
+      httpOnly: false,
+      secure: !isLocal,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 30 * 24 * 60 * 60,
+    }));
+  }
 }
 
 export const localAuthRouter = createRouter({
@@ -269,6 +313,17 @@ export const localAuthRouter = createRouter({
         ip: getClientIp(ctx),
       });
 
+      await recordLoginSession(db, ctx, {
+        userId: user.id,
+        accountId,
+        accountRefId: account?.id ?? null,
+        businessId: currentBusiness?.id ?? accountBusiness.id,
+      });
+
+      const effectiveRole = junctions.find(j => j.businessId === currentBusiness?.id)?.role ?? user.role;
+      await loadRolePermissionsFromDb();
+      const permissions = getRolePermissionsWithCache(effectiveRole);
+
       return {
         token,
         csrfToken,
@@ -277,6 +332,8 @@ export const localAuthRouter = createRouter({
           email: user.email, currentBusinessId: currentBusiness?.id ?? null,
           currentBusiness, businessIds: bizIds, accountId: currentBusiness?.accountId ?? user.accountId ?? accountId,
           accountRefId,
+          permissions,
+          isSuperAdmin: accountId === env.superAdminAccount,
         }
       };
     }),
@@ -340,6 +397,10 @@ export const localAuthRouter = createRouter({
       // Gracefully degrade — user_locations table may not exist if migration hasn't been applied
     }
 
+    const effectiveRole = junctions.find(j => j.businessId === effectiveCurrentBusinessId)?.role ?? user.role;
+    await loadRolePermissionsFromDb();
+    const permissions = getRolePermissionsWithCache(effectiveRole);
+
     let enforceUserLocation = false;
     if (currentBusiness) {
       try {
@@ -363,9 +424,11 @@ export const localAuthRouter = createRouter({
       businessIds: bizIds,
       accountId: currentBusiness?.accountId ?? user.accountId ?? null,
       accountRefId: user.accountRefId ?? currentBusiness?.accountRefId ?? null,
-      businessRole: junctions.find(j => j.businessId === effectiveCurrentBusinessId)?.role ?? user.role,
+      businessRole: effectiveRole,
       assignedLocationIds,
       enforceUserLocation,
+      permissions,
+      isSuperAdmin: (currentBusiness?.accountId ?? user.accountId ?? "") === env.superAdminAccount,
     };
   }),
 
@@ -445,6 +508,15 @@ export const localAuthRouter = createRouter({
             const token = await signLocalToken({ userId: retryUser.id, username: retryUser.username });
             const csrfToken = generateCsrfToken();
             setAuthCookies(ctx, token, csrfToken);
+            const retryRole = retryLinks.find(link => link.businessId === retryBizRows[0].id)?.role ?? retryUser.role;
+            await recordLoginSession(db, ctx, {
+              userId: retryUser.id,
+              accountId,
+              accountRefId: retryUser.accountRefId ?? retryBizRows[0].accountRefId ?? retryAccount?.id ?? null,
+              businessId: retryBizRows[0].id,
+            });
+            await loadRolePermissionsFromDb();
+            const retryPermissions = getRolePermissionsWithCache(retryRole);
             return {
               token,
               csrfToken,
@@ -461,6 +533,8 @@ export const localAuthRouter = createRouter({
                 accountId,
                 accountRefId: retryUser.accountRefId ?? retryBizRows[0].accountRefId ?? retryAccount?.id ?? null,
                 referralApplied: false,
+                permissions: retryPermissions,
+                isSuperAdmin: accountId === env.superAdminAccount,
               },
             };
           }
@@ -663,6 +737,13 @@ export const localAuthRouter = createRouter({
       const csrfToken = generateCsrfToken();
       setAuthCookies(ctx, token, csrfToken);
 
+      await recordLoginSession(db, ctx, {
+        userId,
+        accountId,
+        accountRefId,
+        businessId,
+      });
+
       try {
         await logAudit({
           userId,
@@ -676,7 +757,53 @@ export const localAuthRouter = createRouter({
         console.error("[register] audit log failed", error);
       }
 
+      // Send welcome email to the new user and notify the super admin.
+      try {
+        if (input.email && isEmailConfigured()) {
+          const loginUrl = env.appUrl;
+          await sendLoggedEmail("welcome", {
+            to: input.email,
+            subject: `Welcome to Finaflow, ${input.name}!`,
+            text: welcomeEmailText(input.name, businessName, accountId, loginUrl),
+            html: welcomeEmailHtml(input.name, businessName, accountId, loginUrl),
+          });
+        }
+
+        if (env.superAdminAccount) {
+          const superAdminUsers = await db.select({ id: users.id, email: users.email }).from(users)
+            .where(and(eq(users.accountId, env.superAdminAccount), isNull(users.deletedAt)));
+
+          // In-app notification for every super admin user.
+          for (const sa of superAdminUsers) {
+            await db.insert(notifications).values({
+              userId: sa.id,
+              type: "new_signup",
+              title: `New user registered: ${input.name}`,
+              message: `Account: ${accountId}, Email: ${input.email}`,
+              severity: "info",
+            } as typeof notifications.$inferInsert);
+          }
+
+          // Email notification to the first super admin with an email address.
+          if (isEmailConfigured()) {
+            const notifyEmail = superAdminUsers.find((sa) => sa.email)?.email;
+            if (notifyEmail) {
+              await sendLoggedEmail("new_signup_notification", {
+                to: notifyEmail,
+                subject: `New Finaflow Signup: ${input.name} (${accountId})`,
+                text: newSignupNotificationText(input.name, input.email, businessName, accountId),
+                html: newSignupNotificationHtml(input.name, input.email, businessName, accountId),
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error("[register] signup notification failed", error);
+      }
+
       const biz = await db.select().from(businesses).where(eq(businesses.id, businessId)).limit(1);
+      await loadRolePermissionsFromDb();
+      const permissions = getRolePermissionsWithCache("owner");
       return {
         token,
         csrfToken,
@@ -686,6 +813,8 @@ export const localAuthRouter = createRouter({
           currentBusiness: biz[0] ?? null, businessIds: businessId ? [businessId] : [],
           phone: input.phone || null,
           accountId, accountRefId, referralApplied: firstMonthDiscountApplied,
+          permissions,
+          isSuperAdmin: accountId === env.superAdminAccount,
         }
       };
     }),
@@ -940,6 +1069,79 @@ export const localAuthRouter = createRouter({
       return { success: true, message: "Password changed successfully" };
     }),
 
+  requestPasswordReset: publicQuery
+    .input(z.object({ email: z.string().email().max(255) }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const normalizedEmail = input.email.trim().toLowerCase();
+      const userRows = await db.select().from(users)
+        .where(and(eq(users.email, normalizedEmail), isNull(users.deletedAt), eq(users.isActive, true)))
+        .limit(1);
+      const user = userRows[0];
+
+      if (user) {
+        const plainToken = randomBytes(32).toString("hex");
+        const tokenHash = createHash("sha256").update(plainToken).digest("hex");
+        const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+        await db.insert(passwordResetTokens).values({
+          userId: user.id,
+          tokenHash,
+          expiresAt,
+        } as typeof passwordResetTokens.$inferInsert);
+
+        if (isEmailConfigured()) {
+          const resetUrl = `${env.appUrl}/reset-password?token=${plainToken}`;
+          await sendLoggedEmail("password_reset", {
+            to: user.email || normalizedEmail,
+            subject: "Reset your Finaflow password",
+            text: passwordResetText(user.name || user.username || "there", resetUrl),
+            html: passwordResetHtml(user.name || user.username || "there", resetUrl),
+          });
+        }
+      }
+
+      return { success: true, message: "If an account exists with that email, a reset link has been sent." };
+    }),
+
+  resetPassword: publicQuery
+    .input(z.object({
+      token: z.string().min(1).max(255),
+      password: z.string().min(6).max(100),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const tokenHash = createHash("sha256").update(input.token).digest("hex");
+
+      const tokenRows = await db.select().from(passwordResetTokens)
+        .where(and(
+          eq(passwordResetTokens.tokenHash, tokenHash),
+          sql`${passwordResetTokens.expiresAt} > ${new Date()}`,
+          isNull(passwordResetTokens.usedAt),
+        ))
+        .limit(1);
+      const tokenRecord = tokenRows[0];
+
+      if (!tokenRecord) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired reset token" });
+      }
+
+      const userRows = await db.select().from(users)
+        .where(and(eq(users.id, tokenRecord.userId), isNull(users.deletedAt)))
+        .limit(1);
+      if (!userRows[0]) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired reset token" });
+      }
+
+      const newHash = await hashPassword(input.password);
+      await db.transaction(async (tx) => {
+        await tx.update(users).set({ passwordHash: newHash }).where(eq(users.id, tokenRecord.userId));
+        await tx.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, tokenRecord.id));
+      });
+
+      return { success: true, message: "Password reset successfully. You can now sign in with your new password." };
+    }),
+
   refresh: publicQuery.mutation(async ({ ctx }) => {
     const cookies = parseCookie(ctx.req.headers.get("cookie") || "");
     const refreshToken = cookies["finaflow_refresh_token"];
@@ -968,9 +1170,13 @@ export const localAuthRouter = createRouter({
   logout: publicQuery.mutation(async ({ ctx }) => {
     const cookies = parseCookie(ctx.req.headers.get("cookie") || "");
     const refreshToken = cookies["finaflow_refresh_token"];
+    const sessionId = cookies["finaflow_session_id"];
+    const db = getDb();
     if (refreshToken) {
-      const db = getDb();
       await db.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.tokenHash, refreshToken));
+    }
+    if (sessionId) {
+      await closeSessionById(db, parseInt(sessionId, 10));
     }
     clearAuthCookies(ctx.resHeaders);
     return { success: true };
@@ -979,11 +1185,12 @@ export const localAuthRouter = createRouter({
   logoutAll: publicQuery.mutation(async ({ ctx }) => {
     const cookies = parseCookie(ctx.req.headers.get("cookie") || "");
     const token = cookies["finaflow_token"] || ctx.req.headers.get("authorization")?.slice(7);
+    const db = getDb();
     if (token) {
       const claim = await verifyLocalToken(token);
       if (claim) {
-        const db = getDb();
         await db.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.userId, claim.userId));
+        await closeUserSessions(db, claim.userId);
       }
     }
     clearAuthCookies(ctx.resHeaders);
@@ -991,10 +1198,47 @@ export const localAuthRouter = createRouter({
   }),
 });
 
+async function closeSessionById(db: ReturnType<typeof getDb>, sessionId: number): Promise<void> {
+  if (isNaN(sessionId)) return;
+  try {
+    const [row] = await db.select({ loginAt: userSessions.loginAt }).from(userSessions)
+      .where(eq(userSessions.id, sessionId)).limit(1);
+    if (row?.loginAt) {
+      const duration = Math.floor((Date.now() - row.loginAt.getTime()) / 1000);
+      await db.update(userSessions).set({
+        action: "logout",
+        logoutAt: new Date(),
+        sessionDuration: duration,
+      }).where(eq(userSessions.id, sessionId));
+    }
+  } catch (e) {
+    console.error("[logout] closeSessionById failed", e);
+  }
+}
+
+async function closeUserSessions(db: ReturnType<typeof getDb>, userId: number): Promise<void> {
+  try {
+    const now = new Date();
+    const rows = await db.select({ id: userSessions.id, loginAt: userSessions.loginAt }).from(userSessions)
+      .where(and(eq(userSessions.userId, userId), eq(userSessions.action, "login"), isNull(userSessions.logoutAt)));
+    for (const row of rows) {
+      const duration = Math.floor((now.getTime() - row.loginAt.getTime()) / 1000);
+      await db.update(userSessions).set({
+        action: "logout",
+        logoutAt: now,
+        sessionDuration: duration,
+      }).where(eq(userSessions.id, row.id));
+    }
+  } catch (e) {
+    console.error("[logoutAll] closeUserSessions failed", e);
+  }
+}
+
 function clearAuthCookies(resHeaders: Headers): void {
   resHeaders.append("Set-Cookie", serialize("finaflow_token", "", { httpOnly: true, path: "/", maxAge: 0 }));
   resHeaders.append("Set-Cookie", serialize("csrf_token", "", { httpOnly: false, path: "/", maxAge: 0 }));
   resHeaders.append("Set-Cookie", serialize("finaflow_refresh_token", "", { httpOnly: true, path: "/", maxAge: 0 }));
+  resHeaders.append("Set-Cookie", serialize("finaflow_session_id", "", { httpOnly: false, path: "/", maxAge: 0 }));
 }
 
 function parseCookie(cookieHeader: string): Record<string, string> {

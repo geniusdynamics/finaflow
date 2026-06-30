@@ -8,6 +8,10 @@ vi.mock("react-helmet-async", () => ({
   Helmet: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
 
+vi.mock("@/hooks/useAuth", () => ({
+  useAuth: () => ({ user: null, isLoading: false }),
+}));
+
 import Home from "../Home";
 
 function renderHomeAt(path = "/") {

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, authedQuery, ownerQuery, getCurrentBusinessLocationIds } from "./middleware";
+import { createRouter, authedQuery, ownerQuery, getCurrentBusinessLocationIds, getRolePermissionsWithCache, PERMISSIONS } from "./middleware";
 import { getDb } from "./queries/connection";
 import { dailySales, expenses, bills, accounts, mpesaTransactions, mobileWalletTransactions, recurringBillTemplates, payrollPeriods } from "@db/schema";
 import { eq, and, isNull, sql, desc } from "drizzle-orm";
@@ -64,13 +64,21 @@ export const dashboardRouter = createRouter({
     const d30 = new Date(Date.now() + 30 * 86400000).toISOString().split("T")[0];
     const locIds = await getCurrentBusinessLocationIds(ctx);
     if (locIds.length === 0) return { overdueBills: [], upcomingBills7: [], upcomingBills30: [], lowBalanceAccounts: [], upcomingRecurring: [], today };
-    const billLocFilter = sql`${bills.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`;
     const acctLocFilter = sql`${accounts.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`;
     const recurLocFilter = sql`${recurringBillTemplates.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`;
 
-    const overdue = await db.select().from(bills).where(and(sql`${bills.dueDate} < ${today}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).limit(10);
-    const up7 = await db.select().from(bills).where(and(sql`${bills.dueDate} BETWEEN ${today} AND ${d7}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).orderBy(bills.dueDate).limit(10);
-    const up30 = await db.select().from(bills).where(and(sql`${bills.dueDate} BETWEEN ${d7} AND ${d30}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).orderBy(bills.dueDate).limit(10);
+    const user = ctx.user;
+    const canViewBills = user ? getRolePermissionsWithCache(user.role).includes(PERMISSIONS.BILLS_VIEW) : false;
+
+    let overdue: typeof bills.$inferSelect[] = [];
+    let up7: typeof bills.$inferSelect[] = [];
+    let up30: typeof bills.$inferSelect[] = [];
+    if (canViewBills) {
+      const billLocFilter = sql`${bills.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`;
+      overdue = await db.select().from(bills).where(and(sql`${bills.dueDate} < ${today}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).limit(10);
+      up7 = await db.select().from(bills).where(and(sql`${bills.dueDate} BETWEEN ${today} AND ${d7}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).orderBy(bills.dueDate).limit(10);
+      up30 = await db.select().from(bills).where(and(sql`${bills.dueDate} BETWEEN ${d7} AND ${d30}`, isNull(bills.deletedAt), sql`${bills.status} IN ('pending','partial')`, billLocFilter)).orderBy(bills.dueDate).limit(10);
+    }
     const lowBal = await db.select().from(accounts).where(and(isNull(accounts.deletedAt), eq(accounts.isActive, true), isNull(accounts.accountType), sql`${accounts.currentBalance} < 5000`, acctLocFilter));
     const recur = await db.select().from(recurringBillTemplates).where(and(isNull(recurringBillTemplates.deletedAt), eq(recurringBillTemplates.isActive, true), sql`${recurringBillTemplates.nextDueDate} <= ${d30}`, recurLocFilter)).orderBy(recurringBillTemplates.nextDueDate).limit(10);
 

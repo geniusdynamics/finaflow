@@ -4,12 +4,13 @@ import type { ReactNode } from "react";
 import { Navigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { Spinner } from "@/components/ui/spinner";
-import { hasPermission } from "@/lib/permissions";
+import { hasAnyPermission } from "@/lib/permissions";
 import type { Permission } from "@/lib/permissions";
 
 interface Props {
   children: ReactNode;
-  requiredPermission?: Permission;
+  /** Single required permission (AND) or array of permissions (OR — any match grants access) */
+  requiredPermission?: Permission | Permission[];
 }
 
 export function ProtectedRoute({ children, requiredPermission }: Props) {
@@ -27,8 +28,12 @@ export function ProtectedRoute({ children, requiredPermission }: Props) {
     return <Navigate to="/login" replace />;
   }
 
-  if (requiredPermission && !hasPermission(user.role, requiredPermission)) {
-    return <Navigate to="/unauthorized" replace />;
+  if (requiredPermission) {
+    const perms = Array.isArray(requiredPermission) ? requiredPermission : [requiredPermission];
+    const userPerms = user.permissions?.length > 0 ? user.permissions : user.role;
+    if (!hasAnyPermission(userPerms, perms)) {
+      return <Navigate to="/unauthorized" replace />;
+    }
   }
 
   return <>{children}</>;

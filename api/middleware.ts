@@ -8,6 +8,7 @@ import { getDb } from "./queries/connection";
 import { businesses, locations, users, userBusinesses, userLocations, appSettings, rolePermissions, type Business } from "@db/schema";
 import { eq, and, sql, isNull, type AnyColumn, type AnyTable } from "drizzle-orm";
 import type { RightsProfile } from "./lib/partner-allocations";
+import { env } from "./lib/env";
 
 export const ErrorMessages = {
   unknownError: "Unknown error",
@@ -24,9 +25,11 @@ export const ErrorMessages = {
 export const PERMISSIONS = {
   SALES_VIEW: "sales:view",
   SALES_CREATE: "sales:create",
+  SALES_VIEW_OWN: "sales:view_own",
   EXPENSES_VIEW: "expenses:view",
   EXPENSES_CREATE: "expenses:create",
   EXPENSES_MANAGE: "expenses:manage",
+  EXPENSES_VIEW_OWN: "expenses:view_own",
   BILLS_VIEW: "bills:view",
   BILLS_CREATE: "bills:create",
   BILLS_PAY: "bills:pay",
@@ -111,14 +114,8 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.PAYMENT_METHODS_VIEW,
   ],
   employee: [
-    PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE,
-    PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE,
-    PERMISSIONS.BILLS_VIEW,
-    PERMISSIONS.SUPPLIERS_VIEW,
-    PERMISSIONS.MPESA_VIEW,
-    PERMISSIONS.FEEDBACK_MANAGE,
-    PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.CALENDAR_VIEW,
-    PERMISSIONS.DEBTS_VIEW,
+    // Sole permission: can create new daily sales entries only
+    PERMISSIONS.SALES_CREATE,
   ],
   viewer: [
     PERMISSIONS.SALES_VIEW,
@@ -168,8 +165,8 @@ export function invalidateRolePermissionCache(): void {
   ROLE_CACHE_LOADED = false;
 }
 
-// Override hasPermission to check DB cache first, then fall back to hardcoded defaults
-function getRolePermissionsWithCache(role: string): Permission[] {
+// Effective permissions for a role: DB cache first, then hardcoded defaults.
+export function getRolePermissionsWithCache(role: string): Permission[] {
   if (ROLE_PERMISSIONS_CACHE && ROLE_PERMISSIONS_CACHE[role]) {
     return ROLE_PERMISSIONS_CACHE[role];
   }
@@ -303,6 +300,32 @@ export function requirePermission(permission: Permission) {
   });
 }
 
+// Middleware factory that checks if user has ANY of the listed permissions (OR logic)
+export function requireAnyPermission(permissions: Permission[]) {
+  return t.middleware(async (opts) => {
+    const user = opts.ctx.user;
+    if (!user) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: ErrorMessages.authRequired,
+      });
+    }
+    await loadRolePermissionsFromDb();
+    const basePermissions = getRolePermissionsWithCache(user.role);
+    const effectivePermissions = user.accessSource === "allocated" && user.allocationRightsProfile
+      ? clampPermissionsForAllocation(basePermissions, user.allocationRightsProfile)
+      : basePermissions;
+    const hasAny = permissions.some((p) => effectivePermissions.includes(p));
+    if (!hasAny) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: ErrorMessages.insufficientRole,
+      });
+    }
+    return opts.next({ ctx: { ...opts.ctx, user } });
+  });
+}
+
 // Tier enforcement middleware
 export const requireTier = (feature: string) => t.middleware(async (opts) => {
   const user = opts.ctx.user;
@@ -353,13 +376,17 @@ export const authedQuery = t.procedure.use(requireAuth);
 
 // Permission-protected procedures
 export const salesQuery = t.procedure.use(requirePermission(PERMISSIONS.SALES_VIEW));
+export const salesViewOwn = t.procedure.use(requirePermission(PERMISSIONS.SALES_VIEW_OWN));
 export const salesCreate = t.procedure.use(requirePermission(PERMISSIONS.SALES_CREATE));
 export const expenseQuery = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_VIEW));
+export const expenseViewOwn = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_VIEW_OWN));
 export const expenseCreate = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_CREATE));
+export const expenseViewOrCreate = t.procedure.use(requireAnyPermission([PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE]));
 export const expenseManage = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_MANAGE));
 export const billQuery = t.procedure.use(requirePermission(PERMISSIONS.BILLS_VIEW));
 export const billCreate = t.procedure.use(requirePermission(PERMISSIONS.BILLS_CREATE));
 export const billPay = t.procedure.use(requirePermission(PERMISSIONS.BILLS_PAY));
+export const billAccess = t.procedure.use(requireAnyPermission([PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE, PERMISSIONS.BILLS_PAY]));
 export const supplierQuery = t.procedure.use(requirePermission(PERMISSIONS.SUPPLIERS_VIEW));
 export const supplierManage = t.procedure.use(requirePermission(PERMISSIONS.SUPPLIERS_MANAGE));
 export const accountQuery = t.procedure.use(requirePermission(PERMISSIONS.ACCOUNTS_VIEW));
@@ -406,6 +433,24 @@ const requireOwner = t.middleware(async (opts) => {
   return opts.next({ ctx: { ...opts.ctx, user } });
 });
 export const ownerQuery = t.procedure.use(requireOwner);
+
+// Super-admin middleware: grants access to users whose accountId matches SUPER_ADMIN_ACCOUNT env var.
+// Returns 404 (NOT_FOUND) instead of 403 so the route stays hidden from non-admins.
+const requireSuperAdmin = t.middleware(async (opts) => {
+  const user = opts.ctx.user;
+  if (!user) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: ErrorMessages.authRequired });
+  }
+  if (!env.superAdminAccount) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
+  }
+  const userAccount = user.accountId;
+  if (userAccount !== env.superAdminAccount) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
+  }
+  return opts.next({ ctx: { ...opts.ctx, user } });
+});
+export const adminProcedure = t.procedure.use(requireAuth).use(requireSuperAdmin);
 
 export async function getEnforceUserLocation(ctx: UserContextCarrier): Promise<boolean> {
   const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
