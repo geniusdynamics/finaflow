@@ -46,6 +46,9 @@ import {
   billPayments,
   bills,
   budgets,
+  budgetBucketLines,
+  budgetPlanBuckets,
+  budgetPlans,
   dailyMpesaLedger,
   dailySalePayments,
   dailySales,
@@ -526,6 +529,39 @@ export async function resetBusinessTransactions(input: {
       isActive: false,
     });
     await softDeleteLocationScoped("budgets", budgets);
+
+    // Budget plan model (migration 0014+): hard-delete child lines & buckets,
+    // soft-delete the plan rows. All scoped by this business's location IDs
+    // so other businesses' budgets are never touched.
+    try {
+      // Hard-delete budget bucket lines whose bucket belongs to a plan in scope
+      const deletedLines = await tx
+        .delete(budgetBucketLines)
+        .where(sql`${budgetBucketLines.bucketId} IN (SELECT ${budgetPlanBuckets.id} FROM ${budgetPlanBuckets} WHERE ${budgetPlanBuckets.planId} IN (SELECT ${budgetPlans.id} FROM ${budgetPlans} WHERE ${budgetPlans.locationId} IN (${locIdSql})))`)
+        .returning({ id: budgetBucketLines.id });
+      results.budget_bucket_lines = { count: deletedLines.length };
+
+      // Hard-delete buckets whose plan is in scope
+      const deletedBuckets = await tx
+        .delete(budgetPlanBuckets)
+        .where(sql`${budgetPlanBuckets.planId} IN (SELECT ${budgetPlans.id} FROM ${budgetPlans} WHERE ${budgetPlans.locationId} IN (${locIdSql}))`)
+        .returning({ id: budgetPlanBuckets.id });
+      results.budget_plan_buckets = { count: deletedBuckets.length };
+
+      // Soft-delete the plans themselves (keeps a tombstone, clears transactional data)
+      const softDeletedPlans = await tx
+        .update(budgetPlans)
+        .set({ deletedAt: now, status: "archived", updatedAt: now })
+        .where(and(sql`${budgetPlans.locationId} IN (${locIdSql})`, isNull(budgetPlans.deletedAt)))
+        .returning({ id: budgetPlans.id });
+      results.budget_plans = { count: softDeletedPlans.length };
+    } catch {
+      // budget plan tables don't exist yet (migration 0014 not applied)
+      results.budget_bucket_lines = { count: 0 };
+      results.budget_plan_buckets = { count: 0 };
+      results.budget_plans = { count: 0 };
+    }
+
     await softDeleteLocationScoped("purchase_orders", purchaseOrders, {
       status: "cancelled",
     });
