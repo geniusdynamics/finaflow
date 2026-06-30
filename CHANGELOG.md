@@ -1,11 +1,12 @@
 # Changelog
 
-## [Unreleased] — Business Reset Transaction Abort Fix
+## [Unreleased] — Transaction Abort & Deadlock Fixes
 
-Fixed a CI-flaky transaction abort in `resetBusinessTransactions` caused by a try/catch inside a Postgres transaction.
+Fixed two CI-flaky database contention issues in test cleanup and business reset.
 
 ### Fixed
 - **Business reset no longer aborts when budget plan tables are missing** — the budget plan operations inside `resetBusinessTransactions` ran inside a `try/catch` block within a Drizzle `db.transaction()`. When those queries failed (e.g., tables didn't exist), the Postgres transaction was silently aborted, causing all subsequent queries — including the `purchase_orders` soft-delete — to fail with "current transaction is aborted". The fix wraps the budget plan operations in a SAVEPOINT so that on failure only those operations are rolled back, allowing the enclosing transaction to continue normally ([api/lib/business-reset.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\lib\business-reset.ts)).
+- **Test cleanup deadlock retry** — the `cleanupAccount` function in `local-auth-scope.test.ts` could deadlock when multiple pool connections contended for the same rows during concurrent DDL/DML across test setup and cleanup. The fix wraps cleanup in a retry loop with exponential backoff that catches Postgres deadlock errors (code `40P01`) and retries up to 3 times ([api/__tests__/local-auth-scope.test.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\__tests__/local-auth-scope.test.ts)).
 
 ## [Unreleased] — Role & Permission Enhancement, Landing-Page Fixes
 

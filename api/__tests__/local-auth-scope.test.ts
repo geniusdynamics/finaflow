@@ -4,6 +4,27 @@ import { getDb } from "../queries/connection";
 import { accounts, businesses, customerAccounts, expenseCategories, locations, refreshTokens, userBusinesses, users } from "@db/schema";
 import { and, eq, isNull, or } from "drizzle-orm";
 
+/**
+ * Retry a function if it throws a Postgres deadlock error (code 40P01).
+ * Deadlocks can occur when multiple pool connections contend for the same rows
+ * during concurrent DDL/DML across test setup and cleanup.
+ */
+async function withDeadlockRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (err: unknown) {
+      const pgErr = err as { code?: string };
+      if (pgErr?.code === "40P01" && attempt <= maxRetries) {
+        // Exponential backoff: 100ms, 200ms, 400ms
+        await new Promise((r) => setTimeout(r, 100 * 2 ** (attempt - 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+}
+
 function createCaller(cookieHeader = "") {
   return appRouter.createCaller({
     req: new Request("http://localhost/api/trpc", {
@@ -30,65 +51,67 @@ function getRegisterCaller() {
 }
 
 async function cleanupAccount(accountId: string, email?: string, username?: string) {
-  const db = getDb();
+  await withDeadlockRetry(async () => {
+    const db = getDb();
 
-  const matchingUsers = await db.select().from(users).where(
-    and(
-      or(
-        eq(users.accountId, accountId),
-        eq(users.accountRefId, (await db.select({ id: customerAccounts.id })
+    const matchingUsers = await db.select().from(users).where(
+      and(
+        or(
+          eq(users.accountId, accountId),
+          eq(users.accountRefId, (await db.select({ id: customerAccounts.id })
+            .from(customerAccounts)
+            .where(eq(customerAccounts.accountId, accountId))
+            .limit(1))[0]?.id ?? -1),
+        ),
+        isNull(users.deletedAt),
+      ),
+    );
+
+    for (const user of matchingUsers) {
+      await db.delete(refreshTokens).where(eq(refreshTokens.userId, user.id));
+      await db.delete(userBusinesses).where(eq(userBusinesses.userId, user.id));
+    }
+
+    const matchingBusinesses = await db.select().from(businesses)
+      .where(or(
+        eq(businesses.accountId, accountId),
+        eq(businesses.accountRefId, (await db.select({ id: customerAccounts.id })
           .from(customerAccounts)
           .where(eq(customerAccounts.accountId, accountId))
           .limit(1))[0]?.id ?? -1),
-      ),
-      isNull(users.deletedAt),
-    ),
-  );
+      ));
+    for (const business of matchingBusinesses) {
+      await db.delete(expenseCategories).where(eq(expenseCategories.businessId, business.id));
+      const businessLocations = await db.select().from(locations).where(eq(locations.businessId, business.id));
+      for (const location of businessLocations) {
+        await db.delete(accounts).where(eq(accounts.locationId, location.id));
+      }
+      await db.delete(locations).where(eq(locations.businessId, business.id));
+    }
 
-  for (const user of matchingUsers) {
-    await db.delete(refreshTokens).where(eq(refreshTokens.userId, user.id));
-    await db.delete(userBusinesses).where(eq(userBusinesses.userId, user.id));
-  }
-
-  const matchingBusinesses = await db.select().from(businesses)
-    .where(or(
+    await db.delete(businesses).where(or(
       eq(businesses.accountId, accountId),
       eq(businesses.accountRefId, (await db.select({ id: customerAccounts.id })
         .from(customerAccounts)
         .where(eq(customerAccounts.accountId, accountId))
         .limit(1))[0]?.id ?? -1),
     ));
-  for (const business of matchingBusinesses) {
-    await db.delete(expenseCategories).where(eq(expenseCategories.businessId, business.id));
-    const businessLocations = await db.select().from(locations).where(eq(locations.businessId, business.id));
-    for (const location of businessLocations) {
-      await db.delete(accounts).where(eq(accounts.locationId, location.id));
+    await db.delete(users).where(or(
+      eq(users.accountId, accountId),
+      eq(users.accountRefId, (await db.select({ id: customerAccounts.id })
+        .from(customerAccounts)
+        .where(eq(customerAccounts.accountId, accountId))
+        .limit(1))[0]?.id ?? -1),
+    ));
+    await db.delete(customerAccounts).where(eq(customerAccounts.accountId, accountId));
+
+    if (email) {
+      await db.delete(users).where(eq(users.email, email));
     }
-    await db.delete(locations).where(eq(locations.businessId, business.id));
-  }
-
-  await db.delete(businesses).where(or(
-    eq(businesses.accountId, accountId),
-    eq(businesses.accountRefId, (await db.select({ id: customerAccounts.id })
-      .from(customerAccounts)
-      .where(eq(customerAccounts.accountId, accountId))
-      .limit(1))[0]?.id ?? -1),
-  ));
-  await db.delete(users).where(or(
-    eq(users.accountId, accountId),
-    eq(users.accountRefId, (await db.select({ id: customerAccounts.id })
-      .from(customerAccounts)
-      .where(eq(customerAccounts.accountId, accountId))
-      .limit(1))[0]?.id ?? -1),
-  ));
-  await db.delete(customerAccounts).where(eq(customerAccounts.accountId, accountId));
-
-  if (email) {
-    await db.delete(users).where(eq(users.email, email));
-  }
-  if (username) {
-    await db.delete(users).where(eq(users.username, username));
-  }
+    if (username) {
+      await db.delete(users).where(eq(users.username, username));
+    }
+  });
 }
 
 const testAccountId = "SCOPETEST1";
