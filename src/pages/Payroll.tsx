@@ -16,8 +16,8 @@ import { toast } from "sonner";
 
 export function Payroll() {
   const { user } = useAuth();
-  const role = user?.role ?? "viewer";
-  const canProcess = hasPermission(role, PERMISSIONS.PAYROLL_PROCESS);
+  const permContext = user?.permissions?.length ? user.permissions : (user?.role ?? "viewer");
+  const canProcess = hasPermission(permContext, PERMISSIONS.PAYROLL_PROCESS);
   const { data: settings } = trpc.settings.list.useQuery();
 
   const [periodOpen, setPeriodOpen] = useState(false);

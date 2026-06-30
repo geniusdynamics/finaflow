@@ -422,6 +422,7 @@ export const bills = pgTable("bills", {
   debtId: bigint("debtId", { mode: "number" }),
   reversedAt: timestamp("reversedAt"),
   reversedBy: bigint("reversedBy", { mode: "number" }),
+  enteredBy: bigint("enteredBy", { mode: "number" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),

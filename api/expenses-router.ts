@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, expenseQuery, expenseCreate, expenseManage, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
+import { createRouter, expenseQuery, expenseViewOrCreate, expenseCreate, expenseManage, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
 import { expenses, expenseItems, expenseCategories, accounts, ledgerEntries, suppliers, bills, attachments, locations } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
@@ -65,7 +65,7 @@ export const updateExpenseInputSchema = z.object({
 });
 
 export const expensesRouter = createRouter({
-  categories: expenseQuery.query(async ({ ctx }) => {
+  categories: expenseViewOrCreate.query(async ({ ctx }) => {
     const db = getDb();
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;

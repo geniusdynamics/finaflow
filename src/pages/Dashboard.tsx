@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Link } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/hooks/useAuth";
 import { formatDate, getLocalDateString, formatKES } from "@/lib/utils";
+import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
 import {
   TrendingUp,
   TrendingDown,
@@ -18,6 +20,16 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export function Dashboard() {
+  const { user } = useAuth();
+  const role = user?.role ?? "viewer";
+  const userPerms = user?.permissions ?? [];
+  const permContext = userPerms.length > 0 ? userPerms : role;
+  const canSales = hasAnyPermission(permContext, [PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_VIEW_OWN]);
+  const canExpenses = hasAnyPermission(permContext, [PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE]);
+  const canBills = hasAnyPermission(permContext, [PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE]);
+  const canWallet = hasAnyPermission(permContext, [PERMISSIONS.WALLET_VIEW, PERMISSIONS.WALLET_IMPORT]);
+  const canPayroll = hasAnyPermission(permContext, [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_PROCESS]);
+
   const [dateRange, setDateRange] = useState(() => ({
     from: getLocalDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
     to: getLocalDateString(),
@@ -177,11 +189,11 @@ export function Dashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <QuickActionLink to="/daily-sales" icon={<Receipt className="h-4 w-4" />} label="Record Daily Sales" />
-                <QuickActionLink to="/expenses" icon={<TrendingDown className="h-4 w-4" />} label="Log Expense" />
-                <QuickActionLink to="/bills" icon={<AlertTriangle className="h-4 w-4" />} label="Record Bill Payment" />
-                <QuickActionLink to="/wallet" icon={<Wallet className="h-4 w-4" />} label="Import Mobile Wallet" />
-                <QuickActionLink to="/payroll" icon={<Users className="h-4 w-4" />} label="Process Payroll" />
+                {canSales && <QuickActionLink to="/daily-sales" icon={<Receipt className="h-4 w-4" />} label="Record Daily Sales" />}
+                {canExpenses && <QuickActionLink to="/expenses" icon={<TrendingDown className="h-4 w-4" />} label="Log Expense" />}
+                {canBills && <QuickActionLink to="/bills" icon={<AlertTriangle className="h-4 w-4" />} label="Record Bill Payment" />}
+                {canWallet && <QuickActionLink to="/wallet" icon={<Wallet className="h-4 w-4" />} label="Import Mobile Wallet" />}
+                {canPayroll && <QuickActionLink to="/payroll" icon={<Users className="h-4 w-4" />} label="Process Payroll" />}
               </div>
             </CardContent>
           </Card>

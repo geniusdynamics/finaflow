@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, billQuery, billCreate, billPay, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity } from "./middleware";
+import { createRouter, billQuery, billAccess, billCreate, billPay, getCurrentBusinessLocationIds, getRolePermissionsWithCache, requireAuthorizedLocation, requireAuthorizedEntity, PERMISSIONS } from "./middleware";
 import { getDb } from "./queries/connection";
 import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, expenseCategories, debts } from "@db/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
@@ -140,10 +140,12 @@ async function resolveBillCategoryId(db: DbClient, billId: number, supplierId?: 
 }
 
 export const billsRouter = createRouter({
-  list: billQuery
+  list: billAccess
     .input(z.object({ locationId: z.number().optional(), status: z.enum(["pending", "partial", "paid", "overdue", "cancelled"]).optional(), supplierId: z.number().optional(), page: z.number().default(1), pageSize: z.number().default(50) }).optional())
     .query(async ({ input, ctx }) => {
       const db = getDb();
+      const user = ctx.user;
+      if (!user) throw new Error("Authentication required");
       const conditions = [isNull(bills.deletedAt)];
       if (input?.locationId) {
         await requireAuthorizedLocation(ctx, input.locationId);
@@ -155,6 +157,13 @@ export const billsRouter = createRouter({
       }
       if (input?.status) conditions.push(eq(bills.status, input.status));
       if (input?.supplierId) conditions.push(eq(bills.supplierId, input.supplierId));
+
+      // Users who can create/pay but cannot view all bills are restricted to their own records.
+      const effectivePerms = getRolePermissionsWithCache(user.role);
+      if (!effectivePerms.includes(PERMISSIONS.BILLS_VIEW)) {
+        conditions.push(eq(bills.enteredBy, user.id));
+      }
+
       const page = input?.page ?? 1;
       const pageSize = input?.pageSize ?? 50;
       const offset = (page - 1) * pageSize;
@@ -199,6 +208,7 @@ export const billsRouter = createRouter({
           billNumber, description: input.description,
           amount: input.amount, balanceDue: input.amount,
           issueDate: input.issueDate, dueDate: input.dueDate,
+          enteredBy,
         } as BillInsert).returning();
         billId = result.id;
 

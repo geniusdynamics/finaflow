@@ -11,6 +11,7 @@ import { Link, useSearchParams, useNavigate } from "react-router";
 import { Landmark, LogIn, Store, Eye, EyeOff, Briefcase, CheckCircle, Gift, Building, Globe, Loader2, Check, X, ArrowRight, ArrowLeft, ChevronLeft, UserPlus, Handshake } from "lucide-react";
 import { setCsrfFromResponse } from "@/hooks/useAuth";
 import { setAuthToken } from "@/providers/trpc";
+import { getDefaultLandingPage } from "@/lib/permissions";
 
 
 type Intent = "login" | "signup";
@@ -100,7 +101,10 @@ export default function Login() {
       // This avoids the race where ProtectedRoute finds stale null
       // data in cache (isLoading=false) and redirects back to /login.
       utils.localAuth.me.reset();
-      navigate("/dashboard");
+      const user = data.user as Record<string, unknown> | undefined;
+      const userPerms = Array.isArray(user?.permissions) ? (user?.permissions as string[]) : [];
+      const userRole = (user?.role as string) ?? "viewer";
+      navigate(getDefaultLandingPage(userPerms.length > 0 ? userPerms : userRole));
     },
     onError: (err: { message?: string }) => {
       const message = err.message || "Login failed. Check your username and password.";
@@ -116,7 +120,10 @@ export default function Login() {
       if (data.token) setAuthToken(data.token as string);
       toast.success("Welcome, " + (data.user as Record<string, string>)?.name + "! Your account is ready.");
       utils.localAuth.me.reset();
-      navigate("/dashboard");
+      const user = data.user as Record<string, unknown> | undefined;
+      const userPerms = Array.isArray(user?.permissions) ? (user?.permissions as string[]) : [];
+      const userRole = (user?.role as string) ?? "viewer";
+      navigate(getDefaultLandingPage(userPerms.length > 0 ? userPerms : userRole));
     },
     onError: (err: { message?: string }) => toast.error(err.message || "Registration failed"),
   });

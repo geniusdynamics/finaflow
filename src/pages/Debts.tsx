@@ -23,8 +23,8 @@ import { toast } from "sonner";
 
 export function Debts({ embedded }: { embedded?: boolean }) {
   const { user } = useAuth();
-  const role = user?.role ?? "viewer";
-  const canManage = hasPermission(role, PERMISSIONS.DEBTS_MANAGE);
+  const permContext = user?.permissions?.length ? user.permissions : (user?.role ?? "viewer");
+  const canManage = hasPermission(permContext, PERMISSIONS.DEBTS_MANAGE);
 
   const [editId, setEditId] = useState<number | null>(null);
   const [paymentId, setPaymentId] = useState<number | null>(null);

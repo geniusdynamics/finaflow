@@ -3,7 +3,7 @@
 // ABOUTME: state machine (highlighted → faded → re-highlighted) and automatic
 // ABOUTME: clearance on action completion (bill payment, manual clear-all, etc.).
 import { z } from "zod";
-import { createRouter, authedQuery, getCurrentBusinessLocationIds } from "./middleware";
+import { createRouter, authedQuery, getCurrentBusinessLocationIds, getRolePermissionsWithCache, PERMISSIONS } from "./middleware";
 import { getDb } from "./queries/connection";
 import { notifications, bills } from "@db/schema";
 import { eq, and, desc, sql, isNull, inArray } from "drizzle-orm";
@@ -15,6 +15,10 @@ import {
   type ClearedReason,
   type NotificationLifecycleRecord,
 } from "./lib/notification-lifecycle";
+
+function canViewBills(role: string): boolean {
+  return getRolePermissionsWithCache(role).includes(PERMISSIONS.BILLS_VIEW);
+}
 
 // Re-helper: convert a DB row into the lifecycle record interface
 function toLifecycleRecord(row: typeof notifications.$inferSelect): NotificationLifecycleRecord {
@@ -45,13 +49,17 @@ export const notificationsRouter = createRouter({
     .query(async ({ input, ctx }) => {
       const db = getDb();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const userId = (ctx as any).user?.id;
+      const user = (ctx as any).user;
+      const userId = user?.id;
       const cond = [eq(notifications.userId, userId)];
       if (!input?.includeArchived) {
         cond.push(isNull(notifications.archivedAt));
         cond.push(isNull(notifications.clearedAt));
       }
       if (input?.unreadOnly) cond.push(eq(notifications.isRead, false));
+      if (!canViewBills(user?.role ?? "viewer")) {
+        cond.push(sql`${notifications.entityType} IS DISTINCT FROM 'bill'`);
+      }
       return db
         .select()
         .from(notifications)
@@ -254,7 +262,9 @@ export const notificationsRouter = createRouter({
   autoReHighlight: authedQuery.mutation(async ({ ctx }) => {
     const db = getDb();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const userId = (ctx as any).user?.id;
+    const user = (ctx as any).user;
+    const userId = user?.id;
+    const userCanViewBills = canViewBills(user?.role ?? "viewer");
     const now = new Date();
     const fadedRows = await db
       .select()
@@ -265,13 +275,16 @@ export const notificationsRouter = createRouter({
           eq(notifications.highlightState, "faded"),
           isNull(notifications.clearedAt),
           isNull(notifications.archivedAt),
+          userCanViewBills ? undefined : sql`${notifications.entityType} IS DISTINCT FROM 'bill'`,
         ),
       );
 
     // Pre-fetch overdue bill ids for bill-typed notifications
-    const billIds = fadedRows
-      .filter((r) => r.entityType === "bill" && r.entityId != null)
-      .map((r) => Number(r.entityId));
+    const billIds = userCanViewBills
+      ? fadedRows
+          .filter((r) => r.entityType === "bill" && r.entityId != null)
+          .map((r) => Number(r.entityId))
+      : [];
     const today = new Date().toISOString().split("T")[0];
     const overdueBillIds = new Set<number>();
     if (billIds.length > 0) {
@@ -329,17 +342,20 @@ export const notificationsRouter = createRouter({
   unreadCount: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const userId = (ctx as any).user?.id;
+    const user = (ctx as any).user;
+    const userId = user?.id;
+    const cond = [
+      eq(notifications.userId, userId),
+      eq(notifications.isRead, false),
+      isNull(notifications.clearedAt),
+    ];
+    if (!canViewBills(user?.role ?? "viewer")) {
+      cond.push(sql`${notifications.entityType} IS DISTINCT FROM 'bill'`);
+    }
     const [result] = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(notifications)
-      .where(
-        and(
-          eq(notifications.userId, userId),
-          eq(notifications.isRead, false),
-          isNull(notifications.clearedAt),
-        ),
-      );
+      .where(and(...cond));
     return result?.count ?? 0;
   }),
 
@@ -347,17 +363,20 @@ export const notificationsRouter = createRouter({
   highlightedCount: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const userId = (ctx as any).user?.id;
+    const user = (ctx as any).user;
+    const userId = user?.id;
+    const cond = [
+      eq(notifications.userId, userId),
+      eq(notifications.highlightState, "highlighted"),
+      isNull(notifications.clearedAt),
+    ];
+    if (!canViewBills(user?.role ?? "viewer")) {
+      cond.push(sql`${notifications.entityType} IS DISTINCT FROM 'bill'`);
+    }
     const [result] = await db
       .select({ count: sql<number>`COUNT(*)` })
       .from(notifications)
-      .where(
-        and(
-          eq(notifications.userId, userId),
-          eq(notifications.highlightState, "highlighted"),
-          isNull(notifications.clearedAt),
-        ),
-      );
+      .where(and(...cond));
     return result?.count ?? 0;
   }),
 
@@ -370,7 +389,11 @@ export const notificationsRouter = createRouter({
   generateOverdueNotifications: authedQuery.mutation(async ({ ctx }) => {
     const db = getDb();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const userId = (ctx as any).user?.id;
+    const user = (ctx as any).user;
+    const userId = user?.id;
+    if (!canViewBills(user?.role ?? "viewer")) {
+      return { created: 0, reHighlighted: 0 };
+    }
     const today = new Date().toISOString().split("T")[0];
 
     const locIds = await getCurrentBusinessLocationIds(ctx);

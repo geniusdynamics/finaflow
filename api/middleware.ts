@@ -164,8 +164,8 @@ export function invalidateRolePermissionCache(): void {
   ROLE_CACHE_LOADED = false;
 }
 
-// Override hasPermission to check DB cache first, then fall back to hardcoded defaults
-function getRolePermissionsWithCache(role: string): Permission[] {
+// Effective permissions for a role: DB cache first, then hardcoded defaults.
+export function getRolePermissionsWithCache(role: string): Permission[] {
   if (ROLE_PERMISSIONS_CACHE && ROLE_PERMISSIONS_CACHE[role]) {
     return ROLE_PERMISSIONS_CACHE[role];
   }
@@ -380,10 +380,12 @@ export const salesCreate = t.procedure.use(requirePermission(PERMISSIONS.SALES_C
 export const expenseQuery = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_VIEW));
 export const expenseViewOwn = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_VIEW_OWN));
 export const expenseCreate = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_CREATE));
+export const expenseViewOrCreate = t.procedure.use(requireAnyPermission([PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE]));
 export const expenseManage = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_MANAGE));
 export const billQuery = t.procedure.use(requirePermission(PERMISSIONS.BILLS_VIEW));
 export const billCreate = t.procedure.use(requirePermission(PERMISSIONS.BILLS_CREATE));
 export const billPay = t.procedure.use(requirePermission(PERMISSIONS.BILLS_PAY));
+export const billAccess = t.procedure.use(requireAnyPermission([PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE, PERMISSIONS.BILLS_PAY]));
 export const supplierQuery = t.procedure.use(requirePermission(PERMISSIONS.SUPPLIERS_VIEW));
 export const supplierManage = t.procedure.use(requirePermission(PERMISSIONS.SUPPLIERS_MANAGE));
 export const accountQuery = t.procedure.use(requirePermission(PERMISSIONS.ACCOUNTS_VIEW));

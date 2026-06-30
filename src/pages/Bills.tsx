@@ -47,8 +47,12 @@ function getFundingAccounts(paymentMethod: string, allAccounts: FundingAccount[]
 export function Bills() {
   const { user } = useAuth();
   const role = user?.role ?? "viewer";
-  const canCreate = hasPermission(role, PERMISSIONS.BILLS_CREATE);
-  const canPay = hasPermission(role, PERMISSIONS.BILLS_PAY);
+  const userPerms = user?.permissions ?? [];
+  const permContext = userPerms.length > 0 ? userPerms : role;
+  const canViewAll = hasPermission(permContext, PERMISSIONS.BILLS_VIEW);
+  const canCreate = hasPermission(permContext, PERMISSIONS.BILLS_CREATE);
+  const canPay = hasPermission(permContext, PERMISSIONS.BILLS_PAY);
+  const canAccess = canViewAll || canCreate || canPay;
 
   const [open, setOpen] = useState(false);
   const [recurringOpen, setRecurringOpen] = useState(false);
@@ -59,9 +63,9 @@ export function Bills() {
   const { data: suppliers } = trpc.suppliers.list.useQuery();
   const { data: accounts } = trpc.accounts.list.useQuery();
   const { data: categories } = trpc.expenses.categories.useQuery();
-  const { data: bills } = trpc.bills.list.useQuery({});
-  const { data: recurring } = trpc.bills.listRecurring.useQuery({});
-  const { data: billsSummary } = trpc.dashboard.billsSummary.useQuery();
+  const { data: bills } = trpc.bills.list.useQuery({}, { enabled: canAccess });
+  const { data: recurring } = trpc.bills.listRecurring.useQuery({}, { enabled: canViewAll });
+  const { data: billsSummary } = trpc.dashboard.billsSummary.useQuery(undefined, { enabled: canViewAll });
   const { data: billItemsData } = trpc.bills.getItems.useQuery(
     { billId: itemsOpen ?? 0 }, { enabled: itemsOpen !== null }
   );
@@ -320,6 +324,17 @@ export function Bills() {
           )}
         </div>
 
+        {canAccess && !canViewAll && (
+          <Card className="border-[#D4A854]/30 bg-[#D4A854]/5">
+            <CardContent className="py-4 text-center">
+              <p className="text-sm font-medium text-[#2D2A26]">Limited bill view</p>
+              <p className="text-xs text-[#8D8A87]">You can only see bills you created. Full bill history requires additional permissions.</p>
+            </CardContent>
+          </Card>
+        )}
+
+        {canAccess && (
+        <>
         {/* Bills Dashboard */}
         {billsSummary && (
           <div className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -408,12 +423,14 @@ export function Bills() {
             ))}{(!bills || bills.length === 0) && <tr><td colSpan={8} className="py-8 text-center text-sm text-[#8D8A87]"><CreditCard className="mx-auto mb-2 h-8 w-8 opacity-30"/>No bills yet.</td></tr>}</tbody>
           </table></div>
         </CardContent></Card>
+        </>
+        )}
 
-        {itemsOpen && (
+        {itemsOpen && canAccess && (
           <Card className="border-[#D4A854]"><CardHeader className="pb-3"><CardTitle className="font-serif text-lg">Bill Items: {bills?.find(b => b.id === itemsOpen)?.description}</CardTitle></CardHeader>
             <CardContent>
               <div className="overflow-x-auto mb-4"><table className="w-full"><thead><tr className="border-b"><th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Item</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Qty</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Unit Price</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Total</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Category</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]"></th></tr></thead>
-                <tbody className="divide-y">{billItemsData?.map(item => <tr key={item.id} className="hover:bg-[#F5EDE6]/50"><td className="py-2 text-sm">{item.itemName}</td><td className="py-2 text-right font-mono text-sm">{item.quantity}</td><td className="py-2 text-right font-mono text-sm">{formatKES(item.unitPrice)}</td><td className="py-2 text-right font-mono text-sm font-semibold">{formatKES(item.totalPrice)}</td><td className="py-2 text-right text-xs">{categories?.find(c => c.id === item.categoryId)?.name ?? "-"}</td><td className="py-2 text-right"><Button size="sm" variant="ghost" onClick={() => deleteItem.mutate({ id: item.id })}><Trash2 className="h-3 w-3 text-[#D32F2F]"/></Button></td></tr>)}{(!billItemsData || billItemsData.length === 0) && <tr><td colSpan={6} className="py-4 text-center text-sm text-[#8D8A87]">No items yet.</td></tr>}</tbody>
+                <tbody className="divide-y">{billItemsData?.map(item => <tr key={item.id} className="hover:bg-[#F5EDE6]/50"><td className="py-2 text-sm">{item.itemName}</td><td className="py-2 text-right font-mono text-sm">{item.quantity}</td><td className="py-2 text-right font-mono text-sm">{formatKES(item.unitPrice)}</td><td className="py-2 text-right font-mono text-sm font-semibold">{formatKES(item.totalPrice)}</td><td className="py-2 text-right text-xs">{categories?.find(c => c.id === item.categoryId)?.name ?? "-"}</td><td className="py-2 text-right">{canCreate && <Button size="sm" variant="ghost" onClick={() => deleteItem.mutate({ id: item.id })}><Trash2 className="h-3 w-3 text-[#D32F2F]"/></Button>}</td></tr>)}{(!billItemsData || billItemsData.length === 0) && <tr><td colSpan={6} className="py-4 text-center text-sm text-[#8D8A87]">No items yet.</td></tr>}</tbody>
               </table></div>
               {selectedBillForItems && (
                 <div className={`mt-3 flex justify-end gap-6 rounded p-3 ${isOverBudget ? "bg-red-50 border border-red-200" : itemsTotal > 0 ? "bg-green-50 border border-green-200" : ""}`}>

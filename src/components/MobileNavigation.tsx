@@ -27,18 +27,18 @@ import { resetQueryClient, trpc } from "@/providers/trpc";
 const primaryNavItems: { path: string; label: string; icon: () => React.ReactNode; perms: Permission[] }[] = [
   { path: "/dashboard", label: "Dashboard", icon: () => <LayoutDashboard className="h-5 w-5" />, perms: [PERMISSIONS.DASHBOARD_VIEW] },
   { path: "/daily-sales", label: "Sales", icon: () => <Receipt className="h-5 w-5" />, perms: [PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_VIEW_OWN] },
-  { path: "/expenses", label: "Expenses", icon: () => <TrendingDown className="h-5 w-5" />, perms: [PERMISSIONS.EXPENSES_VIEW] },
-  { path: "/bills", label: "Bills", icon: () => <FileText className="h-5 w-5" />, perms: [PERMISSIONS.BILLS_VIEW] },
+  { path: "/expenses", label: "Expenses", icon: () => <TrendingDown className="h-5 w-5" />, perms: [PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE] },
+  { path: "/bills", label: "Bills", icon: () => <FileText className="h-5 w-5" />, perms: [PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE] },
   { path: "/reports", label: "Reports", icon: () => <FileSpreadsheet className="h-5 w-5" />, perms: [PERMISSIONS.REPORTS_VIEW] },
 ];
 
 // ABOUTME: Secondary navigation items shown in hamburger menu with required permissions.
 const secondaryNavItems: { path: string; label: string; icon: React.ComponentType<{ className?: string }>; perms: Permission[] }[] = [
-  { path: "/suppliers", label: "Suppliers", icon: Building, perms: [PERMISSIONS.SUPPLIERS_VIEW] },
-  { path: "/bills", label: "Bills", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW] },
-  { path: "/accounts", label: "Accounts", icon: CreditCard, perms: [PERMISSIONS.ACCOUNTS_VIEW] },
-  { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW] },
-  { path: "/wallet", label: "Wallet", icon: Wallet, perms: [PERMISSIONS.WALLET_VIEW] },
+  { path: "/suppliers", label: "Suppliers", icon: Building, perms: [PERMISSIONS.SUPPLIERS_VIEW, PERMISSIONS.SUPPLIERS_MANAGE] },
+  { path: "/bills", label: "Bills", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE] },
+  { path: "/accounts", label: "Accounts", icon: CreditCard, perms: [PERMISSIONS.ACCOUNTS_VIEW, PERMISSIONS.ACCOUNTS_MANAGE] },
+  { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_PROCESS] },
+  { path: "/wallet", label: "Wallet", icon: Wallet, perms: [PERMISSIONS.WALLET_VIEW, PERMISSIONS.WALLET_IMPORT] },
   { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
   { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
   { path: "/users", label: "Users & Roles", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },
@@ -50,8 +50,9 @@ export function MobileBottomNavigation() {
   const location = useLocation();
   const { user } = useAuth();
   const role = user?.role ?? "viewer";
+  const userPermissions = user?.permissions ?? [];
 
-  const visibleItems = primaryNavItems.filter((item) => hasAnyPermission(role, item.perms));
+  const visibleItems = primaryNavItems.filter((item) => hasAnyPermission(userPermissions.length > 0 ? userPermissions : role, item.perms));
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#E8E0D8] bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
@@ -88,6 +89,7 @@ export function MobileHamburgerMenu({
   const location = useLocation();
   const { user } = useAuth();
   const role = user?.role ?? "viewer";
+  const userPermissions = user?.permissions ?? [];
   const { data: businesses } = trpc.businesses.list.useQuery();
   const switchBusiness = trpc.businesses.switch.useMutation({
     onSuccess: () => {
@@ -97,7 +99,7 @@ export function MobileHamburgerMenu({
   });
   const [bizOpen, setBizOpen] = useState(false);
 
-  const visibleSecondaryItems = secondaryNavItems.filter((item) => hasAnyPermission(role, item.perms));
+  const visibleSecondaryItems = secondaryNavItems.filter((item) => hasAnyPermission(userPermissions.length > 0 ? userPermissions : role, item.perms));
 
   return (
     <>

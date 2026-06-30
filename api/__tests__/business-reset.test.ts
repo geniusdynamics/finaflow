@@ -442,11 +442,16 @@ async function cleanupResetContext(accountId: string) {
   await db.delete(journalEntries).where(eq(journalEntries.businessId, business.id));
   await db.delete(expenses).where(eq(expenses.businessId, business.id));
   await db.delete(bills).where(eq(bills.businessId, business.id));
-  // Try to clean up budget bucket lines if the table exists (migration 0014+)
+  // Try to clean up budget plan model if the table exists (migration 0014+)
+  // IMPORTANT: Scope by this business's location IDs to avoid deleting
+  // other tests' budget data (which causes FK violations and flaky failures).
   try {
-    await db.delete(budgetBucketLines).where(sql`${budgetBucketLines.id} > 0`);
-    await db.delete(budgetPlanBuckets).where(sql`${budgetPlanBuckets.id} > 0`);
-    await db.delete(budgetPlans).where(sql`${budgetPlans.id} > 0`);
+    if (locIds.length > 0) {
+      const locIdSql = sql.join(locIds.map((id) => sql`${id}`), sql`, `);
+      await db.delete(budgetBucketLines).where(sql`${budgetBucketLines.bucketId} IN (SELECT id FROM ${budgetPlanBuckets} WHERE ${budgetPlanBuckets.planId} IN (SELECT id FROM ${budgetPlans} WHERE ${budgetPlans.locationId} IN (${locIdSql})))`);
+      await db.delete(budgetPlanBuckets).where(sql`${budgetPlanBuckets.planId} IN (SELECT id FROM ${budgetPlans} WHERE ${budgetPlans.locationId} IN (${locIdSql}))`);
+      await db.delete(budgetPlans).where(sql`${budgetPlans.locationId} IN (${locIdSql})`);
+    }
   } catch {
     // budget plan tables don't exist yet (migration 0014 not applied)
   }

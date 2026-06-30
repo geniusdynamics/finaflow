@@ -11,6 +11,7 @@ import type { Permission } from "@/lib/permissions";
 const Home = lazy(() => import("./pages/Home"));
 const Login = lazy(() => import("./pages/Login"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Unauthorized = lazy(() => import("./pages/Unauthorized"));
 const Dashboard = lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
 const DailySales = lazy(() => import("./pages/DailySales").then(m => ({ default: m.DailySales })));
 const Expenses = lazy(() => import("./pages/Expenses").then(m => ({ default: m.Expenses })));
@@ -48,10 +49,10 @@ export default function App() {
         <Route path="/login" element={<Suspense fallback={<PageSkeleton />}><Login /></Suspense>} />
         <Route path="/dashboard" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="dashboard:view"><Dashboard /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/daily-sales" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["sales:view", "sales:create", "sales:view_own"]}><DailySales /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/expenses" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="expenses:view"><Expenses /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/suppliers" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="suppliers:view"><Suppliers /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/bills" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="bills:view"><Bills /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/accounts" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="accounts:view"><Accounts /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/expenses" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["expenses:view", "expenses:create"]}><Expenses /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/suppliers" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["suppliers:view", "suppliers:manage"]}><Suppliers /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/bills" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["bills:view", "bills:create"]}><Bills /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/accounts" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["accounts:view", "accounts:manage"]}><Accounts /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/chart-of-accounts" element={<Navigate to="/accounts?section=chart-of-accounts" replace />} />
         <Route path="/locations" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><Locations /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/payroll" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="payroll:view"><Payroll /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="/businesses/:id/details" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><BusinessDetails /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/profile" element={<ErrorBoundary><SuspendedPage><ProtectedPage><Profile /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/partner" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="partner:view"><PartnerDashboard /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/unauthorized" element={<Suspense fallback={<PageSkeleton />}><Unauthorized /></Suspense>} />
         <Route path="*" element={<Suspense fallback={<PageSkeleton />}><NotFound /></Suspense>} />
       </Routes>
       <Toaster />

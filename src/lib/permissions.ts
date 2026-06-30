@@ -109,10 +109,49 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   ],
 };
 
-export function hasPermission(role: string, permission: Permission): boolean {
-  return (ROLE_PERMISSIONS[role] || []).includes(permission);
+export function hasPermission(roleOrPerms: string | string[], permission: Permission): boolean {
+  const perms = Array.isArray(roleOrPerms) ? roleOrPerms : (ROLE_PERMISSIONS[roleOrPerms] || []);
+  return perms.includes(permission);
 }
 
-export function hasAnyPermission(role: string, permissions: Permission[]): boolean {
-  return permissions.some((p) => hasPermission(role, p));
+export function hasAnyPermission(roleOrPerms: string | string[], permissions: Permission[]): boolean {
+  return permissions.some((p) => hasPermission(roleOrPerms, p));
+}
+
+// Ordered list of post-login landing candidates. The first page the user's role
+// has any permission for becomes their default entry point after authentication.
+const LANDING_PAGE_ORDER: { path: string; perms: Permission[] }[] = [
+  { path: "/dashboard", perms: [PERMISSIONS.DASHBOARD_VIEW] },
+  { path: "/daily-sales", perms: [PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_VIEW_OWN] },
+  { path: "/expenses", perms: [PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE] },
+  { path: "/bills", perms: [PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE] },
+  { path: "/suppliers", perms: [PERMISSIONS.SUPPLIERS_VIEW, PERMISSIONS.SUPPLIERS_MANAGE] },
+  { path: "/accounts", perms: [PERMISSIONS.ACCOUNTS_VIEW, PERMISSIONS.ACCOUNTS_MANAGE] },
+  { path: "/payroll", perms: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_PROCESS] },
+  { path: "/wallet", perms: [PERMISSIONS.WALLET_VIEW, PERMISSIONS.WALLET_IMPORT] },
+  { path: "/calendar", perms: [PERMISSIONS.CALENDAR_VIEW] },
+  { path: "/reports", perms: [PERMISSIONS.REPORTS_VIEW] },
+  { path: "/budgets", perms: [PERMISSIONS.BUDGETS_VIEW, PERMISSIONS.BUDGET_MANAGE] },
+  { path: "/users", perms: [PERMISSIONS.USERS_MANAGE] },
+  { path: "/settings", perms: [PERMISSIONS.SETTINGS_MANAGE] },
+  { path: "/partner", perms: [PERMISSIONS.PARTNER_VIEW] },
+];
+
+export function getDefaultLandingPage(roleOrPerms: string | string[]): string {
+  const accessible = LANDING_PAGE_ORDER.find((item) => hasAnyPermission(roleOrPerms, item.perms));
+  return accessible?.path ?? "/daily-sales";
+}
+
+/**
+ * Merge a user's role-based default permissions with their individual
+ * permissions (which may include DB-level overrides). When both are
+ * available, the merged set ensures the user sees nav items and UI
+ * features for every permission they actually hold.
+ */
+export function getEffectivePermissions(user: { role: string; permissions?: string[] }): string[] {
+  const roleDefaults = ROLE_PERMISSIONS[user.role] || [];
+  if (!user.permissions || user.permissions.length === 0) {
+    return roleDefaults;
+  }
+  return [...new Set([...roleDefaults, ...user.permissions])];
 }

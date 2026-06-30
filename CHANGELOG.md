@@ -1,5 +1,49 @@
 # Changelog
 
+## [Unreleased] — Transaction Abort & Deadlock Fixes
+
+Fixed two CI-flaky database contention issues in test cleanup and business reset.
+
+### Fixed
+- **Business reset no longer aborts when budget plan tables are missing** — the budget plan operations inside `resetBusinessTransactions` ran inside a `try/catch` block within a Drizzle `db.transaction()`. When those queries failed (e.g., tables didn't exist), the Postgres transaction was silently aborted, causing all subsequent queries — including the `purchase_orders` soft-delete — to fail with "current transaction is aborted". The fix wraps the budget plan operations in a SAVEPOINT so that on failure only those operations are rolled back, allowing the enclosing transaction to continue normally ([api/lib/business-reset.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\lib\business-reset.ts)).
+- **Test cleanup deadlock retry** — the `cleanupAccount` function in `local-auth-scope.test.ts` could deadlock when multiple pool connections contended for the same rows during concurrent DDL/DML across test setup and cleanup. The fix wraps cleanup in a retry loop with exponential backoff that catches Postgres deadlock errors (code `40P01`) and retries up to 3 times ([api/__tests__/local-auth-scope.test.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\__tests__/local-auth-scope.test.ts)).
+
+## [Unreleased] — Role & Permission Enhancement, Landing-Page Fixes
+
+Bug fix: post-login landing page, navigation filtering, and route-protection improvements for create-only permission roles.
+
+### Fixed
+- **Landing page redirect for restricted roles** — `getDefaultLandingPage` fallback changed from `/dashboard` to `/daily-sales` so employees (who only have `SALES_CREATE`) aren't sent to a page they can't access ([src/lib/permissions.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\lib\permissions.ts)).
+- **All page-level permission checks now use user effective permissions** — previously, 9 frontend pages (`Accounts`, `Payroll`, `Users`, `Settings`, `Businesses`, `BusinessOverview`, `Feedback`, `Debts`, `AddDebtDialog`) checked permissions using `user.role` against hardcoded role definitions, ignoring DB-level permission overrides. Now they all use `user.permissions` (falling back to `user.role`) so custom role assignments are respected ([src/pages/Accounts.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Accounts.tsx), [src/pages/Payroll.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Payroll.tsx), [src/pages/Users.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Users.tsx), [src/pages/Settings.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Settings.tsx), [src/pages/Businesses.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Businesses.tsx), [src/pages/BusinessOverview.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\BusinessOverview.tsx), [src/pages/Feedback.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Feedback.tsx), [src/pages/Debts.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Debts.tsx), [src/components/AddDebtDialog.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\AddDebtDialog.tsx)).
+
+## [Unreleased] — Version 1.0.5
+
+Permission-aware navigation, landing pages, data scoping, and the Users location-assignment bug fix.
+
+### Added
+- **Effective permissions returned by `localAuth.me`** — the `me` query now returns a `permissions` array computed from the active business role and the DB `role_permissions` table, keeping the frontend in sync with dynamic role changes ([api/local-auth-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\local-auth-router.ts), [api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts), [src/hooks/useAuth.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\hooks\useAuth.ts)).
+- **Permission-array helpers** — `hasPermission`, `hasAnyPermission`, and `getDefaultLandingPage` now accept either a role string or an explicit permissions array so callers can use the backend-provided effective permissions ([src/lib/permissions.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\lib\permissions.ts)).
+- **Permission-aware landing page** — `Login`, registration, and the marketing home page now redirect authenticated users to their first accessible page using effective permissions instead of hard-coding `/dashboard` ([src/pages/Login.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Login.tsx), [src/pages/Home.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Home.tsx), [src/lib/permissions.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\lib\permissions.ts)).
+- **`/unauthorized` route and page** — added a dedicated unauthorized page and wired it into `App.tsx` so `ProtectedRoute` has a valid redirect target ([src/pages/Unauthorized.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Unauthorized.tsx), [src/App.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\App.tsx)).
+- **`bills.enteredBy` column & migration** — added `enteredBy` to the `bills` table with an index and backfilled existing rows, enabling per-creator scoping ([db/schema.ts](file://d:\DevCenter\abuilds\fina\finaflow\db\schema.ts), [db/migrations/0017_add_bills_entered_by.sql](file://d:\DevCenter\abuilds\fina\finaflow\db\migrations\0017_add_bills_entered_by.sql)).
+
+### Changed
+- **Navigation respects effective permissions** — desktop sidebar, mobile bottom nav, and mobile hamburger menu now use the user's effective permissions, so pages like Expenses and Bills remain visible when a user has only create/pay permissions ([src/components/Layout.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\Layout.tsx), [src/components/MobileNavigation.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\MobileNavigation.tsx)).
+- **Route permissions updated for create-only access** — `/expenses` and `/bills` are now accessible with create permissions, and `/accounts`/`/suppliers` accept manage permissions ([src/App.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\App.tsx)).
+- **Expenses page create-vs-view gating** — create-only users see the Add Expense button and a restricted-history message; the expense list, filters, dashboard cards, and categories tab are hidden without view permission. Category management remains gated by `expenses:manage` ([src/pages/Expenses.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Expenses.tsx)).
+- **Bills page create/pay gating** — users with `bills:create`/`bills:pay` can access the page and see only bills they created; the full list, summary cards, and recurring templates remain hidden without `bills:view` ([src/pages/Bills.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Bills.tsx), [api/bills-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\bills-router.ts)).
+- **Dashboard quick actions gated** — quick-action links are now only shown when the user has the relevant sales, expenses, bills, wallet, or payroll permissions ([src/pages/Dashboard.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Dashboard.tsx)).
+- **Bill-related alerts/notifications scoped** — `dashboard.alerts` and notification list, counts, overdue generation, and re-highlighting now hide bill-related data for users without `bills:view` ([api/dashboard-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\dashboard-router.ts), [api/notifications-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\notifications-router.ts)).
+- **Expense categories query accessible to creators** — `expenses.categories` now accepts `expenses:view` or `expenses:create`, so create-only users can select categories when adding expenses ([api/expenses-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\expenses-router.ts), [api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts)).
+- **Users location assignment sync** — saving locations in the Assign Locations dialog now updates the active edit form state, preventing the next "Save Changes" from clearing the newly assigned locations ([src/pages/Users.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Users.tsx)).
+
+### Fixed
+- **Missing Expenses nav item for create-only roles** — effective-permission-based nav filtering ensures users with `expenses:create` see the Expenses page in both desktop and mobile menus.
+- **Unauthorized landing page** — users without `dashboard:view` are no longer dumped on a broken `/unauthorized` route after login; they land on their first accessible page.
+- **CI test suite failures** — added migration `0017` to the test bootstrap, mocked `useAuth` in `Home.test.tsx`, populated formerly empty test skeletons, fixed `budgets-router.test.ts` cleanup order, made `notification-scope.test.ts` slugs unique, and refactored shared-plan budget tests to use isolated plans so the full suite passes reliably.
+
+## [Unreleased] — Role & Permission Audit & Enhancement
+
 ## [Unreleased] — Role & Permission Audit & Enhancement
 
 ### Added
