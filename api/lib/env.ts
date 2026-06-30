@@ -21,4 +21,10 @@ export const env = {
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10),
   rateLimitMaxLogin: parseInt(process.env.RATE_LIMIT_MAX_LOGIN || "10", 10),
   rateLimitMaxApi: parseInt(process.env.RATE_LIMIT_MAX_API || "100", 10),
+  superAdminAccount: process.env.SUPER_ADMIN_ACCOUNT || "",
+  adminRoute: process.env.ADMIN_ROUTE || "admin",
+  smtpHost: process.env.SMTP_HOST || "",
+  smtpPort: process.env.SMTP_PORT || "",
+  smtpUser: process.env.SMTP_USER || "",
+  smtpFrom: process.env.SMTP_FROM || "",
 };

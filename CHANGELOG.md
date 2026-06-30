@@ -1,5 +1,75 @@
 # Changelog
 
+## [1.0.6]
+
+Release 1.0.6 bundles the admin dashboard, password reset, email logging, owner broadcasts, and notification improvements delivered since 1.0.5.
+
+### Added
+- **Admin dashboard** (`/admin`) — super-admin analytics for user sessions, active accounts, new-user retention, plans/trials, and SMTP configuration. Access is gated by `SUPER_ADMIN_ACCOUNT`.
+- **Login/logout session logging** — every login and logout is recorded with IP, user agent, account, business, and session duration.
+- **Password reset flow** — public `/forgot-password` and `/reset-password` pages with unique email tokens.
+- **Email activity logging** — privacy-safe logs of all transactional emails by type and status, visible in the admin Email Logs tab.
+- **Owner broadcasts** — super admins can send messages to all system owners via email, in-app notification, or floating popup banner.
+- **Floating banner notifications** — active banner notifications render as a dismissible banner at the top of every page and support hyperlinks with read/click/dismiss analytics.
+- **Broadcast analytics** — per-broadcast read counts, link clicks, dismissals, read rate, and CTR in the admin Broadcast tab.
+- **Account businesses/users columns** — the admin All Accounts table shows business and user counts per account.
+
+## [Unreleased] — Notification Priority, Floating Banners & Link Tracking
+
+Improved the notification system so owner broadcasts are not buried under bill notifications, overdue bills are fetched automatically, popup banners render as floating banners, and banner links support read/click/dismiss analytics.
+
+### Added
+- **Account businesses and users in admin** — the "All Accounts" table on the admin dashboard now shows the number of businesses and users per account (`api/admin-router.ts`, `src/pages/Admin.tsx`).
+- **Notification priority and link fields** — `notifications` table now has `priority`, `linkUrl`, `linkLabel`, `linkClicks`, `readAt`, and `dismissedAt` columns with supporting indexes (`db/schema.ts`, `db/migrations/0023_notification_priority_and_links.sql`).
+- **Auto-generated overdue bill notifications** — `notifications.list` now automatically generates overdue-bill notifications on every fetch, so users no longer need to click "Check Bills" to see them. The explicit "Check Bills" button still works as a manual refresh (`api/notifications-router.ts`).
+- **Notification priority sorting** — active notification lists are ordered by `priority DESC` then `createdAt DESC`, so owner broadcasts appear above bill notifications (`api/notifications-router.ts`, `src/components/Layout.tsx`).
+- **Floating banner component** — new `<BannerNotifications>` component renders active banner notifications as a dismissible banner at the top of every page inside `Layout`. It tracks reads (2-second view), link clicks, and dismissals (`src/components/BannerNotifications.tsx`, `src/components/Layout.tsx`).
+- **Banner link tracking** — `notifications.trackRead`, `notifications.trackLinkClick`, and `notifications.dismissBanner` endpoints record engagement. Banner links open in a new tab and increment click counts (`api/notifications-router.ts`).
+- **Owner broadcast priority and links** — broadcasts are created with `priority: 100` and can include an optional link URL/label. The admin Broadcast tab now exposes link fields and a performance analytics table (`api/admin-router.ts`, `src/pages/Admin.tsx`).
+- **Broadcast analytics** — new `admin.getNotificationAnalytics` endpoint and dashboard cards/table showing total reads, link clicks, dismissals, read rate, and CTR per broadcast (`api/admin-router.ts`, `src/pages/Admin.tsx`).
+
+### Changed
+- **Notification panel** — owner broadcasts now show a red "BROADCAST" badge and a distinct background so they stand out from bill notifications (`src/components/Layout.tsx`).
+
+## [Unreleased] — Password Reset, Email Logs & Owner Broadcasts
+
+Added a self-service password reset flow, privacy-safe email activity logging in the admin dashboard, and super-admin owner broadcast notifications across email, in-app, and banner channels.
+
+### Added
+- **Password reset flow** — new public `/forgot-password` and `/reset-password` pages. `localAuth.requestPasswordReset` generates a SHA-256 hashed token stored in `password_reset_tokens` for 1 hour and sends a branded reset email when SMTP is configured; `localAuth.resetPassword` verifies the token, updates the user's password, marks the token used, and revokes active refresh tokens (`src/pages/ForgotPassword.tsx`, `src/pages/ResetPassword.tsx`, `api/local-auth-router.ts`).
+- **Password reset email templates** — `passwordResetHtml` and `passwordResetText` branded Finaflow emails that explain the 1-hour expiry and include the reset URL (`api/lib/email-templates.ts`).
+- **Email activity logging** — new `email_logs` table records every transactional email by type and status without storing recipient PII. All system emails (welcome, signup notification, password reset, SMTP test, owner broadcast) are logged through `sendLoggedEmail` (`api/lib/logged-email.ts`, `api/lib/email.ts`, `db/schema.ts`, `db/migrations/0021_email_logs.sql`).
+- **Admin email logs** — new `admin.getEmailStats` and `admin.getEmailLogs` endpoints plus an "Email Logs" tab in the admin dashboard showing totals, sent today/this week, failures, type breakdown, and a privacy-safe activity table (`api/admin-router.ts`, `src/pages/Admin.tsx`).
+- **Owner broadcast notifications** — super admins can compose a title/message and send it to all system owners via email, in-app notification, popup banner, or any combination. Broadcasts are stored in `owner_broadcasts` and surfaced in a new "Broadcast" admin tab (`api/admin-router.ts`, `src/pages/Admin.tsx`, `db/schema.ts`, `db/migrations/0022_owner_broadcasts.sql`).
+- **Owner broadcast email templates** — `ownerBroadcastHtml` and `ownerBroadcastText` simple admin-to-owners announcement templates (`api/lib/email-templates.ts`).
+- **Database tables** — `password_reset_tokens`, `email_logs`, and `owner_broadcasts` with indexes and cascade rules (`db/schema.ts`, `db/migrations/0020_password_reset_tokens.sql`, `db/migrations/0021_email_logs.sql`, `db/migrations/0022_owner_broadcasts.sql`).
+
+### Changed
+- **Login page** — added a "Forgot password?" link on the credentials form that navigates to `/forgot-password` (`src/pages/Login.tsx`).
+- **Welcome and signup notification emails** now route through `sendLoggedEmail` so they appear in admin email logs (`api/local-auth-router.ts`).
+- **Admin SMTP test** now logs through `sendLoggedEmail` (`api/admin-router.ts`).
+
+## [Unreleased] — Login/Logout Logging & Admin Dashboard
+
+Added platform-wide user session logging and a new super-admin dashboard with analytics, subscription insights, and SMTP configuration.
+
+### Added
+- **User session logging** — new `user_sessions` table records every login/logout with IP, user agent, active business, account, and session duration. Includes indexes for fast analytics queries ([db/schema.ts](file://d:\DevCenter\abuilds\fina\finaflow\db\schema.ts), [db/migrations/0018_user_sessions.sql](file://d:\DevCenter\abuilds\fina\finaflow\db\migrations\0018_user_sessions.sql), [db/migrations/0019_user_sessions_cascade.sql](file://d:\DevCenter\abuilds\fina\finaflow\db\migrations\0019_user_sessions_cascade.sql)).
+- **Login/logout session tracking** — `localAuth.login`, `localAuth.register`, `localAuth.logout`, and `localAuth.logoutAll` now create and close `user_sessions` rows automatically. A `finaflow_session_id` cookie lets logout update the correct session ([api/local-auth-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\local-auth-router.ts)).
+- **Super admin env configuration** — `SUPER_ADMIN_ACCOUNT` env var designates which account has platform admin access; `ADMIN_ROUTE` customizes the admin path (default `admin`) ([api/lib/env.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\lib\env.ts), [.env.example](file://d:\DevCenter\abuilds\fina\finaflow\.env.example)).
+- **Admin tRPC router** — new `admin` router with super-admin-only procedures for login stats, active accounts, new-user retention, session durations, plan/trial distribution, account search, SMTP config read/write, test email, and super-admin notifications ([api/admin-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\admin-router.ts), [api/router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\router.ts), [api/middleware.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\middleware.ts)).
+- **Admin dashboard UI** — new `/admin` page with overview cards, login activity chart, active accounts table, all-accounts search, new users table, plan/trial charts, and SMTP configuration panel. Accessible only to users whose account matches `SUPER_ADMIN_ACCOUNT`; everyone else gets a 404 ([src/pages/Admin.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\pages\Admin.tsx), [src/components/AdminRoute.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\AdminRoute.tsx), [src/App.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\App.tsx)).
+- **Admin navigation** — sidebar shows an "Admin" item only for super admin users ([src/components/Layout.tsx](file://d:\DevCenter\abuilds\fina\finaflow\src\components\Layout.tsx), [src/hooks/useAuth.ts](file://d:\DevCenter\abuilds\fina\finaflow\src\hooks\useAuth.ts)).
+- **Welcome email on signup** — new users now receive a branded welcome email with their Account ID and login URL when SMTP is configured ([api/lib/email-templates.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\lib\email-templates.ts), [api/local-auth-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\local-auth-router.ts)).
+- **Super admin signup notifications** — super admin users are notified by email and in-app notification whenever a new account registers ([api/local-auth-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\local-auth-router.ts)).
+- **SMTP config management** — admin dashboard can read and update `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM`, writing changes back to `.env` for local/self-hosted deployments ([api/lib/update-env.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\lib\update-env.ts), [api/admin-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\admin-router.ts)).
+
+### Changed
+- **`localAuth.me` and `localAuth.login` responses** now include `isSuperAdmin` so the frontend can gate admin UI without an extra round trip ([api/local-auth-router.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\local-auth-router.ts)).
+
+### Fixed
+- **Test database setup** now applies the `user_sessions` migrations so auth integration tests continue to pass ([api/test/setup.ts](file://d:\DevCenter\abuilds\fina\finaflow\api\test\setup.ts)).
+
 ## [Unreleased] — Transaction Abort & Deadlock Fixes
 
 Fixed two CI-flaky database contention issues in test cleanup and business reset.

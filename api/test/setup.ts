@@ -214,6 +214,12 @@ async function ensureTestDatabase(): Promise<void> {
       "0015_fiscal_year_start_month.sql",
       "0016_make_default_account_id_nullable.sql",
       "0017_add_bills_entered_by.sql",
+      "0018_user_sessions.sql",
+      "0019_user_sessions_cascade.sql",
+      "0020_password_reset_tokens.sql",
+      "0021_email_logs.sql",
+      "0022_owner_broadcasts.sql",
+      "0023_notification_priority_and_links.sql",
     ]) {
       const p = path.resolve(import.meta.dirname, `../../db/migrations/${file}`);
       if (fs.existsSync(p)) {

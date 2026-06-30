@@ -8,6 +8,7 @@ import { getDb } from "./queries/connection";
 import { businesses, locations, users, userBusinesses, userLocations, appSettings, rolePermissions, type Business } from "@db/schema";
 import { eq, and, sql, isNull, type AnyColumn, type AnyTable } from "drizzle-orm";
 import type { RightsProfile } from "./lib/partner-allocations";
+import { env } from "./lib/env";
 
 export const ErrorMessages = {
   unknownError: "Unknown error",
@@ -432,6 +433,24 @@ const requireOwner = t.middleware(async (opts) => {
   return opts.next({ ctx: { ...opts.ctx, user } });
 });
 export const ownerQuery = t.procedure.use(requireOwner);
+
+// Super-admin middleware: grants access to users whose accountId matches SUPER_ADMIN_ACCOUNT env var.
+// Returns 404 (NOT_FOUND) instead of 403 so the route stays hidden from non-admins.
+const requireSuperAdmin = t.middleware(async (opts) => {
+  const user = opts.ctx.user;
+  if (!user) {
+    throw new TRPCError({ code: "UNAUTHORIZED", message: ErrorMessages.authRequired });
+  }
+  if (!env.superAdminAccount) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
+  }
+  const userAccount = user.accountId;
+  if (userAccount !== env.superAdminAccount) {
+    throw new TRPCError({ code: "NOT_FOUND", message: "Not found" });
+  }
+  return opts.next({ ctx: { ...opts.ctx, user } });
+});
+export const adminProcedure = t.procedure.use(requireAuth).use(requireSuperAdmin);
 
 export async function getEnforceUserLocation(ctx: UserContextCarrier): Promise<boolean> {
   const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
