@@ -14,8 +14,10 @@ async function withDeadlockRetry<T>(fn: () => Promise<T>, maxRetries = 3): Promi
     try {
       return await fn();
     } catch (err: unknown) {
-      const pgErr = err as { code?: string };
-      if (pgErr?.code === "40P01" && attempt <= maxRetries) {
+      // Drizzle wraps the pg error; code may be on the outer error or its cause
+      const e = err as { code?: string; cause?: { code?: string } };
+      const isDeadlock = e?.code === "40P01" || e?.cause?.code === "40P01";
+      if (isDeadlock && attempt <= maxRetries) {
         // Exponential backoff: 100ms, 200ms, 400ms
         await new Promise((r) => setTimeout(r, 100 * 2 ** (attempt - 1)));
         continue;
