@@ -10,6 +10,7 @@ import { getExpenseAccountSubType } from "./lib/accounting-maps";
 import { reverseLedgerEntriesForTransaction } from "./lib/accounting-reversal";
 import { payBill } from "./lib/bill-payment";
 import { clearNotificationsForBill } from "./lib/notification-clearance";
+import { triggerBillPaid } from "./lib/webhook-triggers";
 import type { DbClient } from "./lib/account-subscriptions";
 
 type Db = ReturnType<typeof getDb>;
@@ -371,6 +372,12 @@ export const billsRouter = createRouter({
         return payResult;
       });
 
+      void triggerBillPaid(bill.businessId!, {
+        billId: input.billId,
+        amount: input.amount,
+        paymentId: result.paymentId,
+      });
+
       return { id: result.paymentId, newBalanceDue: result.newBalanceDue, status: result.status, success: true };
     }),
 
@@ -378,18 +385,28 @@ export const billsRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      await requireAuthorizedEntity(ctx, bills, input.id);
+      const bill = await requireAuthorizedEntity(ctx, bills, input.id);
       const existingLedger = await db
         .select({ id: ledgerEntries.id })
         .from(ledgerEntries)
-        .where(eq(ledgerEntries.transactionId, input.id))
+        .where(and(eq(ledgerEntries.transactionId, input.id), isNull(ledgerEntries.deletedAt)))
         .limit(1);
 
-      if (existingLedger[0]) {
+      if (existingLedger[0] && !bill.reversedAt) {
         throw new Error("Posted bills cannot be deleted. Reverse the posted entry instead.");
       }
 
-      await db.update(bills).set({ deletedAt: new Date() }).where(eq(bills.id, input.id));
+      await db.transaction(async (tx) => {
+        await tx
+          .update(ledgerEntries)
+          .set({ deletedAt: new Date() })
+          .where(eq(ledgerEntries.transactionId, input.id));
+        await tx
+          .update(billItems)
+          .set({ deletedAt: new Date() })
+          .where(eq(billItems.billId, input.id));
+        await tx.update(bills).set({ deletedAt: new Date() }).where(eq(bills.id, input.id));
+      });
       return { success: true };
     }),
 

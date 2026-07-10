@@ -92,6 +92,19 @@ export function Accounts() {
 
   const { data: locations } = trpc.locations.list.useQuery();
   const { data: accounts } = trpc.accounts.list.useQuery();
+
+  // Reset pending account selections when switching branches so we don't try to
+  // link an account from a previously selected branch.
+  useEffect(() => {
+    setAssignAccountMap({});
+  }, [tagLocId]);
+
+  const tagLocationId = tagLocId ? +tagLocId : null;
+  const linkableAccounts = useMemo(
+    () => accounts?.filter((a) => a.isActive && (a.locationId === null || a.locationId === tagLocationId)) ?? [],
+    [accounts, tagLocationId]
+  );
+
   const {
     data: balanceHistory,
     isLoading: isBalanceHistoryLoading,
@@ -370,7 +383,9 @@ export function Accounts() {
                         <option value="">Select branch</option>
                         {locations
                           ?.filter(l => {
-                            // Only show accessible branches when location enforcement is ON
+                            // Owners and admins can manage all branches; otherwise
+                            // respect location enforcement and the user's assignments.
+                            if (user?.role === "owner" || user?.role === "admin") return true;
                             const enforce = settings?.["enforceLocationAssignment"] === "true";
                             if (!enforce) return true;
                             return user?.assignedLocationIds?.includes(l.id) ?? false;
@@ -428,7 +443,7 @@ export function Accounts() {
                                     className="flex-1 rounded border border-[#E8E0D8] px-2 py-1 text-xs"
                                   >
                                     <option value="">Link to account (optional)</option>
-                                    {accounts?.map(a => <option key={a.id} value={a.id}>{a.name} · {a.type}</option>)}
+                                    {linkableAccounts.map(a => <option key={a.id} value={a.id}>{a.name} · {a.type}</option>)}
                                   </select>
                                 </div>
                                 {isActive && currentAcctName && (

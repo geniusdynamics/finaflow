@@ -15,7 +15,7 @@ export const env = {
   appSecret: required("APP_SECRET"),
   isProduction: process.env.NODE_ENV === "production",
   databaseUrl: required("DATABASE_URL"),
-  appUrl: process.env.APP_URL || "http://localhost:3000",
+  appUrl: process.env.APP_URL || "http://localhost:3200",
   bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || "12", 10),
   nhifRate: parseFloat(process.env.NHIF_RATE || "2.75"),
   rateLimitWindowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || "60000", 10),

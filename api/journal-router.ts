@@ -1,9 +1,15 @@
 import { z } from "zod";
-import { createRouter, accountManage, getCurrentBusinessLocationIds } from "./middleware";
+import {
+  createRouter,
+  accountManage,
+  accountManageOrApiKey,
+  getCurrentBusinessLocationIds,
+} from "./middleware";
 import { getDb } from "./queries/connection";
 import { journalEntries, journalLines, accounts, locations, userBusinesses } from "@db/schema";
 import { and, asc, eq, isNull, isNotNull } from "drizzle-orm";
 import { logAudit } from "./lib/audit";
+import { dispatchWebhook } from "./lib/webhook-dispatcher";
 import type { JournalLineInput } from "./lib/journal";
 import {
   createJournalEntry,
@@ -82,7 +88,7 @@ export const journalRouter = createRouter({
       return getJournalEntryWithLines(input.id);
     }),
 
-  create: accountManage
+  create: accountManageOrApiKey
     .input(
       z.object({
         businessId: z.number(),
@@ -105,8 +111,6 @@ export const journalRouter = createRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      
-
       const lines: JournalLineInput[] = input.lines.map((line) => ({
         accountId: line.accountId,
         debit: line.debit,
@@ -122,13 +126,13 @@ export const journalRouter = createRouter({
         sourceType: input.sourceType,
         sourceId: input.sourceId,
         lines,
-        createdBy: ctx.user.id,
+        createdBy: ctx.user?.id ?? null,
         postImmediately: input.postImmediately,
       });
 
       // ABOUTME: Audit trail for manual journal entries — tracks user, CoA IDs, and account IDs
       await logAudit({
-        userId: ctx.user.id,
+        userId: ctx.user?.id ?? ctx.apiKey?.id ?? null,
         businessId: input.businessId,
         action: "CREATE",
         resource: "journal_entries",
@@ -140,6 +144,13 @@ export const journalRouter = createRouter({
           postImmediately: input.postImmediately,
           sourceType: input.sourceType || "manual",
         },
+      });
+
+      void dispatchWebhook(input.businessId, "journal.created", {
+        journalEntryId: entry.id,
+        businessId: input.businessId,
+        description: input.description,
+        reference: input.reference,
       });
 
       return entry;

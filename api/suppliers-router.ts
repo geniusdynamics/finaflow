@@ -3,6 +3,7 @@ import { createRouter, supplierQuery, supplierManage, requireAuthorizedLocation,
 import { getDb } from "./queries/connection";
 import { suppliers, bills, billPayments, locations } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
+import { triggerSupplierUpdated } from "./lib/webhook-triggers";
 
 export const suppliersRouter = createRouter({
   list: supplierQuery.query(async ({ ctx }) => {
@@ -58,6 +59,13 @@ export const suppliersRouter = createRouter({
         currentBalance: cb, totalBilled: cb, notes: input.notes,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).returning();
+
+      void triggerSupplierUpdated(businessId, {
+        supplierId: result.id,
+        name: input.name,
+        email: input.email ?? null,
+      });
+
       return { id: result.id, success: true };
     }),
 
@@ -82,9 +90,20 @@ export const suppliersRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
       await requireAuthorizedBusinessEntity(ctx, suppliers, input.id);
       const { id, ...updates } = input;
       await db.update(suppliers).set(updates).where(eq(suppliers.id, id));
+
+      if (businessId) {
+        void triggerSupplierUpdated(businessId, {
+          supplierId: id,
+          name: input.name ?? null,
+          email: input.email ?? null,
+        });
+      }
+
       return { success: true };
     }),
 

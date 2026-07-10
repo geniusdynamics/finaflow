@@ -14,7 +14,7 @@ import { securityHeaders } from "./lib/security-headers";
 import { csrfProtection } from "./lib/csrf";
 import { apiLimiter, loginLimiter, lookupAccountLimiter } from "./lib/rate-limit";
 import { getDb, closePool } from "./queries/connection";
-import { sql } from "drizzle-orm";
+import { sql, eq, and, isNull } from "drizzle-orm";
 import { processTrialLifecycle, TRIAL_JOB_INTERVAL_MS } from "./lib/subscriptions";
 import { shouldStartStandaloneServer } from "./lib/server-runtime";
 import { walletRegistry } from "./lib/mobile-wallet/provider-registry";
@@ -24,11 +24,20 @@ import { SasapayProvider } from "./lib/mobile-wallet/providers/sasapay-provider"
 import { startExchangeRateSync, validateEnvConfig } from "./lib/exchange-rate-sync";
 import { seedSupportedCurrencies, seedDefaultExchangeRates } from "./lib/seed-currencies";
 import { seedWalletProviders } from "./lib/seed-wallet-providers";
+import { resolveApiKeyMiddleware, type ApiKeyVariables } from "./lib/api-key-middleware";
+import { ingestDailySales } from "./lib/daily-sales-ingestion";
+import {
+  signWebhookPayload,
+  decryptWebhookSecret,
+} from "./lib/webhook-dispatcher";
+import { handleProviderWebhook, type FinabillWebhookPayload } from "./lib/webhook-handlers";
+import { integrationConnections } from "@db/schema";
+import crypto from "crypto";
 // import { ensureDatabaseReady } from "./lib/db-startup";
 
 // await ensureDatabaseReady(env.databaseUrl);
 
-const app = new Hono<{ Bindings: HttpBindings }>();
+const app = new Hono<{ Bindings: HttpBindings; Variables: ApiKeyVariables }>();
 
 function resolveCorsOrigin(origin: string | undefined): string | undefined {
   if (!origin) return env.appUrl;
@@ -100,9 +109,53 @@ async function trpcRateLimiter(c: any, next: any) {
 }
 
 app.use("/*", csrfProtection);
-app.use("/api/trpc*", trpcRateLimiter, apiLimiter);
+app.use("/api/trpc/*", trpcRateLimiter, apiLimiter);
 
-app.use("/api/trpc*", async (c) => {
+app.post("/api/integration/daily-sales", resolveApiKeyMiddleware, async (c) => {
+  try {
+    const apiKey = c.get("apiKey");
+
+    const body = await c.req.json();
+    const result = await ingestDailySales({
+      businessId: apiKey.businessId,
+      saleDate: body.saleDate,
+      sourceSystem: body.sourceSystem ?? "finabill",
+      sourceBatchId: body.sourceBatchId,
+      payments: body.payments ?? [],
+      discountAmount: body.discountAmount,
+      voidAmount: body.voidAmount,
+      unpaidAmount: body.unpaidAmount,
+      ticketCount: body.ticketCount,
+      orderCount: body.orderCount,
+      notes: body.notes,
+    });
+
+    if (!result.success) {
+      return c.json({ error: result.error, warnings: result.warnings }, 400);
+    }
+
+    const status = result.warnings.length > 0 ? 202 : 200;
+    return c.json(
+      {
+        success: true,
+        dailySaleId: result.dailySaleId,
+        netSales: result.netSales,
+        warnings: result.warnings,
+        created: result.created,
+      },
+      status
+    );
+  } catch (err) {
+    console.error("[daily-sales-ingestion] error:", err);
+    Sentry.captureException(err);
+    return c.json(
+      { error: err instanceof Error ? err.message : "Internal server error" },
+      500
+    );
+  }
+});
+
+app.use("/api/trpc/*", async (c) => {
   const method = c.req.method;
   const path = new URL(c.req.url).pathname;
   console.log(`→ ${method} ${path}`);
@@ -126,13 +179,88 @@ app.use("/api/trpc*", async (c) => {
     return c.json({ error: "Internal server error" }, 500);
   }
 });
+function constantTimeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
+  } catch {
+    return false;
+  }
+}
+
+app.post("/api/webhooks/finabill", async (c) => {
+  try {
+    const rawBody = await c.req.text();
+    let payload: FinabillWebhookPayload;
+    try {
+      payload = JSON.parse(rawBody);
+    } catch {
+      return c.json({ error: "Invalid JSON body" }, 400);
+    }
+
+    const businessId =
+      typeof payload.businessId === "number" ? payload.businessId : null;
+    if (!businessId) {
+      return c.json({ error: "Missing businessId" }, 400);
+    }
+
+    const db = getDb();
+    const [connection] = await db
+      .select()
+      .from(integrationConnections)
+      .where(
+        and(
+          eq(integrationConnections.businessId, businessId),
+          eq(integrationConnections.targetSystem, "finabill"),
+          eq(integrationConnections.isActive, true),
+          isNull(integrationConnections.deletedAt)
+        )
+      )
+      .limit(1);
+
+    if (!connection?.webhookSecret) {
+      return c.json({ error: "Webhook secret not configured" }, 401);
+    }
+
+    const secret = decryptWebhookSecret(connection.webhookSecret);
+    if (!secret) {
+      return c.json({ error: "Invalid webhook secret" }, 401);
+    }
+
+    const expectedSignature = signWebhookPayload(rawBody, secret);
+    const providedSignature = c.req.header("X-Fina-Signature") ?? "";
+    if (!constantTimeCompare(providedSignature, expectedSignature)) {
+      return c.json({ error: "Invalid signature" }, 401);
+    }
+
+    const result = await handleProviderWebhook("finabill", payload as Record<string, unknown>);
+    return c.json(result.body, result.status as 200 | 400 | 500);
+  } catch (err) {
+    console.error("[webhooks/finabill] error:", err);
+    Sentry.captureException(err);
+    return c.json(
+      { error: err instanceof Error ? err.message : "Internal server error" },
+      500
+    );
+  }
+});
+
+app.post("/api/webhooks/:provider", async (c) => {
+  const provider = c.req.param("provider");
+  if (provider === "finabill") {
+    return c.json({ error: "Use /api/webhooks/finabill" }, 404);
+  }
+  const result = await handleProviderWebhook(provider, {});
+  return c.json(result.body, result.status as 200 | 501);
+});
+
 app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
 export default app;
 
 const { serve } = await import("@hono/node-server");
 const { serveStaticFiles } = await import("./lib/vite");
-serveStaticFiles(app);
+serveStaticFiles(app as never);
 
 async function runTrialLifecycleJob() {
   try {
@@ -200,7 +328,7 @@ seedDefaultExchangeRates().catch((err) => {
   Sentry.captureException(err);
 });
 
-const port = parseInt(process.env.PORT || "3000");
+const port = parseInt(process.env.PORT || "3200");
 const server = runStandaloneServer
   ? serve({ fetch: app.fetch, port }, () => {
       console.log(`Server running on http://localhost:${port}/`);

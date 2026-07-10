@@ -8,6 +8,7 @@ import { getDb } from "./queries/connection";
 import { businesses, locations, users, userBusinesses, userLocations, appSettings, rolePermissions, type Business } from "@db/schema";
 import { eq, and, sql, isNull, type AnyColumn, type AnyTable } from "drizzle-orm";
 import type { RightsProfile } from "./lib/partner-allocations";
+import type { ResolvedApiKey } from "./lib/api-key-auth";
 import { env } from "./lib/env";
 
 export const ErrorMessages = {
@@ -53,6 +54,7 @@ export const PERMISSIONS = {
   INQUIRY_VIEW: "inquiry:view",
   API_KEYS_MANAGE: "api_keys:manage",
   WEBHOOKS_MANAGE: "webhooks:manage",
+  INTEGRATIONS_MANAGE: "integrations:manage",
   PARTNER_VIEW: "partner:view",
   PURCHASE_ORDERS_VIEW: "po:view",
   PURCHASE_ORDERS_MANAGE: "po:manage",
@@ -95,6 +97,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.DEBTS_VIEW, PERMISSIONS.DEBTS_MANAGE,
     PERMISSIONS.PAYMENT_METHODS_VIEW, PERMISSIONS.PAYMENT_METHODS_MANAGE,
     PERMISSIONS.EXPENSE_CATEGORIES_MANAGE,
+    PERMISSIONS.INTEGRATIONS_MANAGE,
   ],
   manager: [
     PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE,
@@ -112,6 +115,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.ALERTS_CONFIG, PERMISSIONS.LEDGER_VIEW, PERMISSIONS.DASHBOARD_VIEW,
     PERMISSIONS.DEBTS_VIEW, PERMISSIONS.DEBTS_MANAGE,
     PERMISSIONS.PAYMENT_METHODS_VIEW,
+    PERMISSIONS.EXPENSE_CATEGORIES_MANAGE,
   ],
   employee: [
     // Sole permission: can create new daily sales entries only
@@ -224,6 +228,10 @@ interface TrpcCtx {
   req: Request;
   resHeaders: Headers;
   user?: TrpcUser;
+  apiKey?: ResolvedApiKey;
+  businessId?: number | null;
+  apiKeyId?: number;
+  apiKeyScopes?: string[];
 }
 
 type UserContextCarrier = Pick<TrpcCtx, "user">;
@@ -272,6 +280,35 @@ const requireAuth = t.middleware(async (opts) => {
     });
   }
   return opts.next({ ctx: { ...opts.ctx, user } });
+});
+
+export const requireApiKey = (scope?: string) =>
+  t.middleware(async (opts) => {
+    const apiKey = opts.ctx.apiKey;
+    if (!apiKey) {
+      throw new TRPCError({
+        code: "UNAUTHORIZED",
+        message: "Valid API key required",
+      });
+    }
+    if (scope && !apiKey.scopes.includes(scope) && !apiKey.scopes.includes("admin")) {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: `API key missing required scope: ${scope}`,
+      });
+    }
+    return opts.next({
+      ctx: { ...opts.ctx, apiKey, businessId: apiKey.businessId },
+    });
+  });
+
+export const apiKeyProcedure = publicQuery.use(requireApiKey());
+
+export const requireAuthOrApiKey = t.middleware(async (opts) => {
+  if (opts.ctx.user || opts.ctx.apiKey) {
+    return opts.next({ ctx: opts.ctx });
+  }
+  throw new TRPCError({ code: "UNAUTHORIZED", message: ErrorMessages.authRequired });
 });
 
 // Permission middleware factory
@@ -391,6 +428,28 @@ export const supplierQuery = t.procedure.use(requirePermission(PERMISSIONS.SUPPL
 export const supplierManage = t.procedure.use(requirePermission(PERMISSIONS.SUPPLIERS_MANAGE));
 export const accountQuery = t.procedure.use(requirePermission(PERMISSIONS.ACCOUNTS_VIEW));
 export const accountManage = t.procedure.use(requirePermission(PERMISSIONS.ACCOUNTS_MANAGE));
+const requireAccountManageOrApiKey = t.middleware(async (opts) => {
+  if (opts.ctx.user) {
+    await loadRolePermissionsFromDb();
+    const basePermissions = getRolePermissionsWithCache(opts.ctx.user.role);
+    const effectivePermissions =
+      opts.ctx.user.accessSource === "allocated" && opts.ctx.user.allocationRightsProfile
+        ? clampPermissionsForAllocation(basePermissions, opts.ctx.user.allocationRightsProfile)
+        : basePermissions;
+    if (effectivePermissions.includes(PERMISSIONS.ACCOUNTS_MANAGE)) {
+      return opts.next({ ctx: opts.ctx });
+    }
+  }
+  if (
+    opts.ctx.apiKey &&
+    (opts.ctx.apiKey.scopes.includes("journal:write") || opts.ctx.apiKey.scopes.includes("admin"))
+  ) {
+    return opts.next({ ctx: opts.ctx });
+  }
+  throw new TRPCError({ code: "FORBIDDEN", message: ErrorMessages.insufficientRole });
+});
+
+export const accountManageOrApiKey = t.procedure.use(requireAccountManageOrApiKey);
 export const payrollQuery = t.procedure.use(requirePermission(PERMISSIONS.PAYROLL_VIEW));
 export const payrollProcess = t.procedure.use(requirePermission(PERMISSIONS.PAYROLL_PROCESS));
 export const mpesaQuery = t.procedure.use(requirePermission(PERMISSIONS.MPESA_VIEW));
@@ -414,6 +473,7 @@ export const ledgerView = t.procedure.use(requirePermission(PERMISSIONS.LEDGER_V
 export const resetTransactions = t.procedure.use(requirePermission(PERMISSIONS.RESET_TRANSACTIONS));
 export const apiKeysManage = t.procedure.use(requirePermission(PERMISSIONS.API_KEYS_MANAGE));
 export const webhooksManage = t.procedure.use(requirePermission(PERMISSIONS.WEBHOOKS_MANAGE));
+export const integrationsManage = t.procedure.use(requirePermission(PERMISSIONS.INTEGRATIONS_MANAGE));
 export const partnerView = t.procedure.use(requirePermission(PERMISSIONS.PARTNER_VIEW));
 export const debtsView = t.procedure.use(requirePermission(PERMISSIONS.DEBTS_VIEW));
 export const debtsManage = t.procedure.use(requirePermission(PERMISSIONS.DEBTS_MANAGE));

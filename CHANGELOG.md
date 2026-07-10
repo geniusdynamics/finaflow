@@ -1,5 +1,84 @@
 # Changelog
 
+## [Unreleased] — Partner & Referral Improvements
+
+Fixed the broken referral-code landing flow, made partner pages usable on mobile, and ensured referred businesses show up in the partner client list.
+
+### Added
+- **Referral code prefill** — visiting `/login?ref=FINA…` now opens the Sign Up tab and prefills the referral code field automatically (`src/pages/Login.tsx`).
+
+### Changed
+- **Partner Dashboard mobile layout** — the referral link, referred-business list, client list, and commission history now render as stacked cards on small screens while keeping desktop tables. The "Calculate Commissions" button remains above "Generate Code" and both are full-width on mobile (`src/pages/PartnerDashboard.tsx`).
+- **Allocation management mobile layout** — business/right selectors, generated code/link display, and the allocations list now stack cleanly on mobile (`src/components/partner/AllocationManagement.tsx`).
+- **Allocations tab mobile layout** — the claim code input/button stack vertically on mobile and allocated businesses render as cards (`src/components/partner/AllocationsTab.tsx`).
+
+### Fixed
+- **Partner client list now includes referred businesses** — `partnerRouter.clients` now returns businesses where the user is either the assigned partner or the referring user (`api/partner-router.ts`).
+
+### Tests
+- `npm run check` passes.
+- `api/__tests__/partner-allocations-contract.test.ts`, `api/__tests__/partner-allocations-rights.test.ts`, and `api/__tests__/local-auth-registration.test.ts` remain green.
+
+## [Unreleased] — Partner Dashboard Mobile Layout
+
+Fixed the Partner Dashboard header on mobile so the action buttons no longer overflow the screen.
+
+### Changed
+- **Partner header actions** — the "Calculate Commissions" and "Generate Code" buttons now stack vertically on mobile, with "Calculate Commissions" on top as requested. On desktop they remain side-by-side. Both buttons are full-width on small screens (`src/pages/PartnerDashboard.tsx`).
+
+## [Unreleased] — Journal Entries Mobile Usability
+
+Made the Journal Entries page usable on mobile devices by fixing the Chart-of-Accounts account picker and reworking the line-item layout so it no longer relies on a cramped 12-column grid.
+
+### Changed
+- **Journal line-item layout** — each line is now a self-contained card on mobile with the account picker, debit/credit/memo fields stacked clearly. On larger screens the same card collapses into a compact horizontal row (`src/pages/JournalEntries.tsx`).
+- **Journal entry details dialog** — replaced the rigid three-column table with a stacked list of lines that fits narrow screens (`src/pages/JournalEntries.tsx`).
+- **CoA account picker popover** — the picker now opens wide enough for mobile (`w-[calc(100vw-2rem)] max-w-sm`) and stays anchored below the trigger, with a larger touch-friendly search input and scrollable grouped account list (`src/components/CoAJournalAccountPicker.tsx`).
+
+### Tests
+- `npm run check` passes and `api/__tests__/journal-and-sales.test.ts` remains green.
+
+## [Unreleased] — Expense Category UX, Inline Supplier/Category Creation, Delete-After-Revert Fixes
+
+Improved expense-category management on mobile, added permission-gated inline supplier/category creation during expense and bill entry, and fixed the inability to delete bills and expenses after they had been reversed.
+
+### Added
+- **Inline supplier creation** — a "New Supplier" button next to the supplier select in the Add Expense, Add Bill, and Add Recurring Bill forms lets users with `SUPPLIERS_MANAGE` create a supplier on the fly and immediately select it (`src/components/QuickSupplierDialog.tsx`, `src/pages/Expenses.tsx`, `src/pages/Bills.tsx`).
+- **Inline expense-category creation** — a "New Category" button next to the category selector in the same forms lets users with `EXPENSE_CATEGORIES_MANAGE` add a category without leaving the form (`src/components/QuickCategoryDialog.tsx`, `src/pages/Expenses.tsx`, `src/pages/Bills.tsx`).
+
+### Changed
+- **Expense category editor UI** — the Categories tab now displays categories as responsive cards with always-visible edit/delete actions, color dots, classification badges, and account-mode labels. Editing opens a full dialog with name, description, color, classification, accounting mode, and default account instead of tiny inline hover controls (`src/pages/Expenses.tsx`).
+- **Expense-category permissions** — category create/update/delete mutations now consistently require `EXPENSE_CATEGORIES_MANAGE` on the backend, and the manager role includes that permission so managers can keep managing categories (`api/expenses-router.ts`, `api/middleware.ts`, `src/lib/permissions.ts`).
+
+### Fixed
+- **Delete after reverse for expenses** — reversing an expense creates reversal ledger entries, which previously blocked deletion. The delete guard now allows deletion when the record is already reversed and soft-deletes the associated ledger entries and expense items (`api/expenses-router.ts`).
+- **Delete after reverse for bills** — the same fix applies to bills: reversed bills can now be deleted, and their ledger entries and bill items are soft-deleted (`api/bills-router.ts`).
+
+### Tests
+- Added `posted-delete-guards` test cases verifying that reversed expenses and bills can be deleted and that their ledger entries (and bill items) are soft-deleted (`api/__tests__/posted-delete-guards.test.ts`).
+- Marked the `posted record delete guards` suite as sequential to avoid concurrency-related database interference.
+
+## [Unreleased] — Logout & Payment Method Branch Linking
+
+Fixed logout not clearing the session cookie, and tightened the "Tag to Branches" payment-method/account linking UI so only valid branch-level or business-level accounts can be selected.
+
+### Fixed
+- **Logout redirect / session clearing** — `useAuth().logout` now calls the `localAuth.logout` tRPC mutation so the server clears the `finaflow_token`, `csrf_token`, and session cookies before resetting client state and redirecting to `/login` (`src/hooks/useAuth.ts`, `src/components/AuthLayout.tsx`). The logout mutations now mirror the original cookie `SameSite`/`Secure` attributes and always clear cookies even if the database session/refresh-token cleanup fails (`api/local-auth-router.ts`).
+- **Payment method account linking inconsistency** — the "Tag to Branches" dialog now only shows accounts that belong to the selected branch or are business-level (`locationId` is `null`). This prevents the backend validation error that occurred when users picked an account from a different branch (`src/pages/Accounts.tsx`).
+
+### Changed
+- **Branch dropdown in Tag to Branches** — owners and admins now see every branch; other users still see only their assigned branches when location enforcement is enabled (`src/pages/Accounts.tsx`).
+
+## [Unreleased] — tRPC Route Fix & Default Port 3200
+
+Fixed a dev-server routing issue that caused tRPC batch requests to fall through to the 404 handler, and changed the default development port to 3200.
+
+### Fixed
+- **tRPC batch route matching** — changed the Hono route patterns in `api/boot.ts` from `/api/trpc*` to `/api/trpc/*` so tRPC batch requests (`/api/trpc/localAuth.lookupAccount?batch=1`) are handled correctly instead of returning a plain `{"error":"Not Found"}` response that the tRPC client could not transform (`api/boot.ts`).
+
+### Changed
+- **Default dev server port** — Vite, the standalone backend, and the `APP_URL` fallback now default to port `3200` instead of `3000`/`5173`. The `.env.example` and README have been updated to match (`vite.config.ts`, `api/boot.ts`, `api/lib/env.ts`, `.env.example`, `README.md`).
+
 ## [1.0.6]
 
 Release 1.0.6 bundles the admin dashboard, password reset, email logging, owner broadcasts, and notification improvements delivered since 1.0.5.

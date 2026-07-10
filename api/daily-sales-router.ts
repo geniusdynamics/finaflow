@@ -4,6 +4,7 @@ import { getDb } from "./queries/connection";
 import { dailySales, accounts, ledgerEntries, attachments, dailySalePayments, locationPaymentMethods, locations } from "@db/schema";
 import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
 import { d } from "./lib/decimal";
+import { triggerSaleRecorded } from "./lib/webhook-triggers";
 
 export const dailySalesRouter = createRouter({
   // ABOUTME: Full-view list — requires sales:view (sees all entries).
@@ -288,6 +289,12 @@ export const dailySalesRouter = createRouter({
             } as any).returning();
           }
         }
+      });
+
+      void triggerSaleRecorded(businessId, {
+        dailySaleId: saleId,
+        saleDate: saleDateStr,
+        netSales: netSales.toFixed(2),
       });
 
       return { id: saleId, netSales: netSales.toFixed(2), success: true };

@@ -157,7 +157,7 @@ The app will be available at:
 | URL | Mode |
 |-----|------|
 | `https://finaflow.localhost` | Portless (HTTPS) |
-| `http://localhost:5173` | Direct Vite |
+| `http://localhost:3200` | Direct Vite |
 
 Log in with the demo credentials from the seeder output and explore the Dashboard, Sales, Expenses, Payroll, Reports, and other modules.
 
@@ -197,7 +197,7 @@ There are three seed scripts for different purposes:
 | `ECONNREFUSED :5432` | PostgreSQL not running | Start PostgreSQL service or check `pg_isready` |
 | `relation "accounts" does not exist` | Migrations not run | `npm run db:migrate:run` |
 | `openssl: command not found` *(Windows)* | OpenSSL not on PATH | Install OpenSSL or use `npm run dev:app` |
-| Port 3000 in use | Another process on that port | Kill the process or set `PORT` env var |
+| Port 3200 in use | Another process on that port | Kill the process or set `PORT` env var |
 | `Cannot find module 'tsx'` | Dependencies not installed | `npm install` |
 | CORS errors in browser | `APP_URL` mismatch | Set `APP_URL` to match your browser URL |
 | Portless fails to start | CA certificate not trusted | Run `npx portless trust` or use `npm run dev:app` |
@@ -232,7 +232,7 @@ Key configuration is documented in `.env.example`. Essential variables:
 | `DATABASE_URL` | — | PostgreSQL connection string |
 | `APP_ID` | — | Application identifier |
 | `APP_SECRET` | — | JWT signing secret |
-| `APP_URL` | `http://localhost:5173` | Frontend URL for CORS |
+| `APP_URL` | `http://localhost:3200` | Frontend URL for CORS |
 | `BCRYPT_ROUNDS` | `12` | Password hashing cost factor |
 | `NHIF_RATE` | `2.75` | NHIF/SHIF contribution rate (%) |
 | `RATE_LIMIT_WINDOW_MS` | `60000` | Rate limit window in ms |

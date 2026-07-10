@@ -1,6 +1,6 @@
 // ABOUTME: Sign-in / sign-up page with persistent tabbed intent switcher, mobile-friendly 48px touch targets, and prominent "already have an account" CTA.
 // ABOUTME: Form state is preserved when users toggle between Sign In and Sign Up so they never have to retype already-entered data.
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,8 +45,9 @@ export default function Login() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const preselectedType = searchParams.get("type");
+  const referralCodeFromUrl = searchParams.get("ref");
   const initialIntent: Intent =
-    preselectedType === "partner" || preselectedType === "standard" ? "signup" : "login";
+    preselectedType === "partner" || preselectedType === "standard" || referralCodeFromUrl ? "signup" : "login";
   const initialUserType: UserType = preselectedType === "partner" ? "partner" : "standard";
 
   const [intent, setIntent] = useState<Intent>(initialIntent);
@@ -64,8 +65,15 @@ export default function Login() {
     name: "", username: "", email: "", password: "", confirmPassword: "",
     accountName: "", phone: "", businessName: "", createDemo: false,
     userType: initialUserType,
-    referralCode: "",
+    referralCode: referralCodeFromUrl ? referralCodeFromUrl.toUpperCase() : "",
   });
+
+  // Prefill the referral code from ?ref= and keep it in sync if the URL changes.
+  useEffect(() => {
+    if (referralCodeFromUrl) {
+      setSignupForm((prev) => ({ ...prev, referralCode: referralCodeFromUrl.toUpperCase() }));
+    }
+  }, [referralCodeFromUrl]);
   const [accountNameStatus, setAccountNameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
   const [accountNameMessage, setAccountNameMessage] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);

@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, CreditCard, AlertTriangle, CheckCircle, Clock, Trash2, Package, Search, Camera, Calendar, Repeat, FileText, RotateCcw, OctagonX } from "lucide-react";
 import { LocationSelector } from "@/components/LocationSelector";
 import { ExpenseCategorySelector } from "@/components/ExpenseCategorySelector";
+import { QuickSupplierDialog } from "@/components/QuickSupplierDialog";
+import { QuickCategoryDialog } from "@/components/QuickCategoryDialog";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -52,6 +54,8 @@ export function Bills() {
   const canViewAll = hasPermission(permContext, PERMISSIONS.BILLS_VIEW);
   const canCreate = hasPermission(permContext, PERMISSIONS.BILLS_CREATE);
   const canPay = hasPermission(permContext, PERMISSIONS.BILLS_PAY);
+  const canManageSuppliers = hasPermission(permContext, PERMISSIONS.SUPPLIERS_MANAGE);
+  const canManageCategories = hasPermission(permContext, PERMISSIONS.EXPENSE_CATEGORIES_MANAGE);
   const canAccess = canViewAll || canCreate || canPay;
 
   const [open, setOpen] = useState(false);
@@ -268,7 +272,10 @@ export function Bills() {
                        />
                     </div>
                     <div><Label>Description</Label><Input value={recForm.description} onChange={e => setRecForm(p => ({...p, description: e.target.value}))} placeholder="e.g. Rent, License" required /></div>
-                    <div><ExpenseCategorySelector categories={categories} value={recForm.categoryId} onChange={v => setRecForm(p => ({...p, categoryId: v}))} label="Default Category" placeholder="Optional" /></div>
+                    <div className="flex items-end gap-2">
+                      <ExpenseCategorySelector className="flex-1" categories={categories} value={recForm.categoryId} onChange={v => setRecForm(p => ({...p, categoryId: v}))} label="Default Category" placeholder="Optional" />
+                      {canManageCategories && <QuickCategoryDialog businessId={user?.currentBusinessId ?? 0} onCreated={(id) => setRecForm(p => ({...p, categoryId: String(id)}))} />}
+                    </div>
                     <div className="grid grid-cols-2 gap-3"><div><Label>Amount</Label><Input type="number" step="0.01" value={recForm.amount} onChange={e => setRecForm(p => ({...p, amount: e.target.value}))} required /></div><div><Label>Frequency</Label><select value={recForm.frequency} onChange={e => setRecForm(p => ({...p, frequency: e.target.value as "daily" | "weekly" | "monthly" | "quarterly" | "annually"}))} className="w-full rounded border px-3 py-2 text-sm"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div></div>
                     <div><Label>Next Due</Label><Input type="date" value={recForm.nextDueDate} onChange={e => setRecForm(p => ({...p, nextDueDate: e.target.value}))} required /></div>
                     <Button type="submit" className="w-full bg-[#C73E1D]" disabled={createRecurring.isPending}>{createRecurring.isPending ? "Saving..." : "Add Recurring"}</Button>
@@ -288,8 +295,17 @@ export function Bills() {
                         enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
                         required
                       />
-                    </div><div><Label>Supplier</Label><select value={form.supplierId} onChange={e => setForm(p => ({...p, supplierId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Optional</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div></div>
-                    <div><ExpenseCategorySelector categories={categories} value={form.categoryId} onChange={v => setForm(p => ({...p, categoryId: v}))} label="Category" placeholder="Use supplier/default logic" /></div>
+                    </div><div>
+                      <Label>Supplier</Label>
+                      <div className="flex items-end gap-2">
+                        <select value={form.supplierId} onChange={e => setForm(p => ({...p, supplierId: e.target.value}))} className="flex-1 rounded border px-3 py-2 text-sm"><option value="">Optional</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
+                        {canManageSuppliers && <QuickSupplierDialog onCreated={(id) => setForm(p => ({...p, supplierId: String(id)}))} />}
+                      </div>
+                    </div></div>
+                    <div className="flex items-end gap-2">
+                      <ExpenseCategorySelector className="flex-1" categories={categories} value={form.categoryId} onChange={v => setForm(p => ({...p, categoryId: v}))} label="Category" placeholder="Use supplier/default logic" />
+                      {canManageCategories && <QuickCategoryDialog businessId={user?.currentBusinessId ?? 0} onCreated={(id) => setForm(p => ({...p, categoryId: String(id)}))} />}
+                    </div>
                     <div><Label>Description</Label><Input value={form.description} onChange={e => setForm(p => ({...p, description: e.target.value}))} required /></div>
                     <div className="grid grid-cols-2 gap-3">
                       <div><Label>Bill Number <span className="text-[#8D8A87] font-normal">(optional)</span></Label><Input value={form.billNumber} onChange={e => setForm(p => ({...p, billNumber: e.target.value}))} placeholder="Auto: BILL-0001" /></div>

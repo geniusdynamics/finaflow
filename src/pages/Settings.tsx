@@ -5,6 +5,7 @@ import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions";
+import { FinabillIntegrationCard } from "@/components/FinabillIntegrationCard";
 import { APP_VERSION_FULL } from "@/lib/version";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -897,6 +898,9 @@ export function Settings() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* FinaBill integration */}
+            <FinabillIntegrationCard canManage={canManage} />
 
             {/* Currency Exchanges */}
             <Card className="border-[#E8E0D8]"><CardHeader className="pb-3">

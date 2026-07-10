@@ -52,17 +52,26 @@ export function PartnerDashboard() {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h1 className="font-serif text-2xl font-bold text-[#2D2A26]">Partner Dashboard</h1>
             <p className="mt-1 text-sm text-[#8D8A87]">Manage client businesses, referrals, and track revenue share</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleGenerateCode} disabled={generateCode.isPending}>
-              <RefreshCw className="mr-1 h-4 w-4" />{generateCode.isPending ? "Generating..." : "Generate Code"}
-            </Button>
-            <Button onClick={() => calculate.mutate({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 })} disabled={calculate.isPending} className="bg-[#C73E1D]">
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              onClick={() => calculate.mutate({ year: new Date().getFullYear(), month: new Date().getMonth() + 1 })}
+              disabled={calculate.isPending}
+              className="w-full bg-[#C73E1D] sm:w-auto"
+            >
               <DollarSign className="mr-1 h-4 w-4" />{calculate.isPending ? "Calculating..." : "Calculate Commissions"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleGenerateCode}
+              disabled={generateCode.isPending}
+              className="w-full sm:w-auto"
+            >
+              <RefreshCw className="mr-1 h-4 w-4" />{generateCode.isPending ? "Generating..." : "Generate Code"}
             </Button>
           </div>
         </div>
@@ -114,14 +123,14 @@ export function PartnerDashboard() {
 
                 {referralCode ? (
                   <div className="space-y-3">
-                    <div className="flex items-center gap-2 rounded-lg border border-[#E8E0D8] bg-[#F5EDE6] px-3 py-2">
-                      <Link2 className="h-4 w-4 text-[#8D8A87]" />
-                      <span className="flex-1 text-sm font-mono text-[#2D2A26] truncate">{referralLink}</span>
-                      <Button size="sm" variant="ghost" onClick={copyLink}>
+                    <div className="flex flex-col gap-2 rounded-lg border border-[#E8E0D8] bg-[#F5EDE6] px-3 py-2 sm:flex-row sm:items-center">
+                      <Link2 className="h-4 w-4 shrink-0 text-[#8D8A87]" />
+                      <span className="min-w-0 flex-1 truncate text-sm font-mono text-[#2D2A26]">{referralLink}</span>
+                      <Button size="sm" variant="ghost" onClick={copyLink} className="shrink-0">
                         {copied ? <CheckCircle className="h-4 w-4 text-[#2E7D32]" /> : <Copy className="h-4 w-4 text-[#8D8A87]" />}
                       </Button>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
                       <span className="text-xs text-[#8D8A87]">Referral Code:</span>
                       <span className="rounded bg-[#C73E1D]/10 px-2 py-0.5 font-mono text-sm font-semibold text-[#C73E1D]">{referralCode}</span>
                       <Button size="sm" variant="ghost" onClick={handleGenerateCode} disabled={generateCode.isPending}>
@@ -147,7 +156,8 @@ export function PartnerDashboard() {
                   <CardTitle className="font-serif text-lg flex items-center gap-2"><Users className="h-5 w-5 text-[#2E7D32]"/> Referred Businesses</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="overflow-x-auto">
+                  {/* Desktop table */}
+                  <div className="hidden overflow-x-auto md:block">
                     <table className="w-full">
                       <thead><tr className="border-b"><th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Business</th><th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Account ID</th><th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Plan</th><th className="pb-2 text-center text-xs uppercase text-[#8D8A87]">Discount</th></tr></thead>
                       <tbody className="divide-y">{referrals.referrals.map(r => (
@@ -160,6 +170,20 @@ export function PartnerDashboard() {
                       ))}</tbody>
                     </table>
                   </div>
+
+                  {/* Mobile cards */}
+                  <div className="space-y-3 md:hidden">
+                    {referrals.referrals.map(r => (
+                      <div key={r.id} className="rounded-lg border border-[#E8E0D8] bg-[#F5EDE6]/30 p-4">
+                        <p className="text-sm font-medium">{r.name}</p>
+                        <p className="mb-2 font-mono text-xs text-[#8D8A87]">{r.accountId}</p>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="rounded-full bg-[#F5EDE6] px-2 py-0.5 capitalize text-[#8D8A87]">{r.plan}</span>
+                          {r.firstMonthDiscountApplied ? <span className="rounded-full bg-[#2E7D32]/10 px-2 py-0.5 text-[#2E7D32]">10% Applied</span> : <span className="text-[#8D8A87]">-</span>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             )}
@@ -167,7 +191,8 @@ export function PartnerDashboard() {
             {/* Client List */}
             <Card className="border-[#E8E0D8]"><CardHeader className="pb-3"><CardTitle className="font-serif text-lg flex items-center gap-2"><Building className="h-5 w-5 text-[#2E7D32]"/> Client Businesses</CardTitle></CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
+                {/* Desktop table */}
+                <div className="hidden overflow-x-auto md:block">
                   <table className="w-full">
                     <thead><tr className="border-b"><th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Name</th><th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Plan</th><th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Status</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Rev Share</th></tr></thead>
                     <tbody className="divide-y">{clients?.map(c => (
@@ -179,6 +204,23 @@ export function PartnerDashboard() {
                       </tr>
                     ))}</tbody>
                   </table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="space-y-3 md:hidden">
+                  {clients?.map(c => (
+                    <div key={c.id} className="rounded-lg border border-[#E8E0D8] bg-[#F5EDE6]/30 p-4">
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="text-sm font-medium">{c.name}</span>
+                        {c.isDemo && <span className="rounded bg-[#8D8A87]/10 px-1.5 py-0.5 text-[10px] text-[#8D8A87]">DEMO</span>}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="rounded-full bg-[#F5EDE6] px-2 py-0.5 capitalize text-[#8D8A87]">{c.plan}</span>
+                        <span className={`rounded-full px-2 py-0.5 ${c.isActive ? "bg-[#2E7D32]/10 text-[#2E7D32]" : "bg-[#D32F2F]/10 text-[#D32F2F]"}`}>{c.isActive ? "Active" : "Inactive"}</span>
+                        <span className="font-mono text-[#8D8A87]">{c.revSharePercent}% rev share</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
                 {(!clients || clients.length === 0) && <p className="py-8 text-center text-sm text-[#8D8A87]">No client businesses yet.</p>}
               </CardContent>
@@ -198,7 +240,8 @@ export function PartnerDashboard() {
             {commissions && commissions.length > 0 ? (
               <Card className="border-[#E8E0D8]"><CardHeader className="pb-3"><CardTitle className="font-serif text-lg flex items-center gap-2"><TrendingUp className="h-5 w-5 text-[#D4A854]"/> Commission History</CardTitle></CardHeader>
                 <CardContent>
-                  <div className="overflow-x-auto">
+                  {/* Desktop table */}
+                  <div className="hidden overflow-x-auto md:block">
                     <table className="w-full">
                       <thead><tr className="border-b"><th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Period</th><th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Business</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Subscription</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Rate</th><th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Commission</th><th className="pb-2 text-center text-xs uppercase text-[#8D8A87]">Status</th></tr></thead>
                       <tbody className="divide-y">{commissions.map(c => (
@@ -212,6 +255,24 @@ export function PartnerDashboard() {
                         </tr>
                       ))}</tbody>
                     </table>
+                  </div>
+
+                  {/* Mobile cards */}
+                  <div className="space-y-3 md:hidden">
+                    {commissions.map(c => (
+                      <div key={c.id} className="rounded-lg border border-[#E8E0D8] bg-[#F5EDE6]/30 p-4">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-xs text-[#8D8A87]">{c.month}/{c.year}</span>
+                          <span className={`rounded-full px-2 py-0.5 text-xs ${c.status === "paid" ? "bg-[#2E7D32]/10 text-[#2E7D32]" : "bg-[#ED6C02]/10 text-[#ED6C02]"}`}>{c.status}</span>
+                        </div>
+                        <p className="mb-2 text-sm">{(c as any).businessName}</p>
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="font-mono">{formatKES(c.subscriptionAmount ?? "")} sub</span>
+                          <span className="text-[#8D8A87]">{c.commissionPercent}% rate</span>
+                          <span className="font-mono font-semibold text-[#D4A854]">{formatKES(c.commissionAmount ?? "")}</span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </CardContent>
               </Card>

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { createRouter, authedQuery, ownerQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { allocationInvites, businesses, partnerAllocations, partnerCommissions, userBusinesses, users } from "@db/schema";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { logAudit } from "./lib/audit";
 import { RIGHTS_PROFILES, generateAllocationCode } from "./lib/partner-allocations";
 
@@ -275,9 +275,18 @@ export const partnerRouter = createRouter({
   clients: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     const userId = ctx.user!.id;
-    // Find businesses where this user is marked as partner
-    const clientBiz = await db.select().from(businesses).where(and(eq(businesses.partnerId, userId), isNull(businesses.deletedAt))).orderBy(sql`businesses.createdAt DESC`);
-    return clientBiz;
+    // Include businesses where this user is the assigned partner OR the referring user
+    const clientBiz = await db.select().from(businesses).where(and(
+      or(eq(businesses.partnerId, userId), eq(businesses.referredByUserId, userId)),
+      isNull(businesses.deletedAt),
+    )).orderBy(sql`businesses.createdAt DESC`);
+    // Deduplicate in case both conditions match
+    const seen = new Set<number>();
+    return clientBiz.filter((b) => {
+      if (seen.has(b.id)) return false;
+      seen.add(b.id);
+      return true;
+    });
   }),
 
   // Commission report for a period

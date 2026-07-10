@@ -2,7 +2,7 @@ import { getDb } from "../queries/connection";
 import { auditLog } from "@db/schema";
 
 export async function logAudit(params: {
-  userId: string | number;
+  userId?: string | number | null;
   businessId?: string | number;
   action: "CREATE" | "UPDATE" | "DELETE" | "RESTORE" | "LOGIN" | "LOGOUT" | "DOWNLOAD";
   resource: string;
@@ -18,7 +18,7 @@ export async function logAudit(params: {
       action: params.action,
       oldValues: null,
       newValues: params.details ? JSON.stringify(params.details) : null,
-      changedBy: Number(params.userId),
+      changedBy: params.userId ? Number(params.userId) : null,
       ipAddress: params.ip,
     } satisfies typeof auditLog.$inferInsert);
   } catch (e) {

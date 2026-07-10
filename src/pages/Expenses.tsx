@@ -10,9 +10,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trash2, Receipt, Tag, Pencil, X, AlertCircle, Camera, FileText, Download, Printer, Wallet, TrendingUp, Filter, BookOpen, RotateCcw } from "lucide-react";
+import { Plus, Trash2, Receipt, Tag, Pencil, AlertCircle, Camera, FileText, Download, Printer, Wallet, TrendingUp, Filter, BookOpen, RotateCcw } from "lucide-react";
 import { LocationSelector } from "@/components/LocationSelector";
 import { ExpenseCategorySelector } from "@/components/ExpenseCategorySelector";
+import { QuickSupplierDialog } from "@/components/QuickSupplierDialog";
+import { QuickCategoryDialog } from "@/components/QuickCategoryDialog";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -75,6 +77,8 @@ export function Expenses() {
   const canView = hasPermission(permContext, PERMISSIONS.EXPENSES_VIEW);
   const canCreate = hasPermission(permContext, PERMISSIONS.EXPENSES_CREATE);
   const canManage = hasPermission(permContext, PERMISSIONS.EXPENSES_MANAGE);
+  const canManageSuppliers = hasPermission(permContext, PERMISSIONS.SUPPLIERS_MANAGE);
+  const canManageCategories = hasPermission(permContext, PERMISSIONS.EXPENSE_CATEGORIES_MANAGE);
 
   const [open, setOpen] = useState(false);
   const [catOpen, setCatOpen] = useState(false);
@@ -175,6 +179,7 @@ export function Expenses() {
     accountId: "", billId: "",
   });
   const [catForm, setCatForm] = useState({ name: "", description: "", color: "#C73E1D", accountingClass: "operating_expense", defaultAccountId: "", mode: "system" as CategoryMode });
+  const [editCatForm, setEditCatForm] = useState({ name: "", description: "", color: "#C73E1D", accountingClass: "operating_expense", defaultAccountId: "", mode: "system" as CategoryMode });
   const [attachments, setAttachments] = useState<{ imageData: string; mimeType: string; caption: string }[]>([]);
   const todayDate = getLocalDateString();
 
@@ -374,6 +379,35 @@ export function Expenses() {
     });
   };
 
+  const startEditCategory = (c: NonNullable<typeof categories>[number]) => {
+    setEditCat(c.id);
+    setEditCatForm({
+      name: c.name,
+      description: c.description ?? "",
+      color: c.color ?? "#C73E1D",
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      accountingClass: (c.accountingClass as any) ?? "operating_expense",
+      defaultAccountId: c.defaultAccountId ? String(c.defaultAccountId) : "",
+      mode: c.defaultAccountId ? "link" : "system",
+    });
+  };
+
+  const handleEditCat = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editCat) return;
+    if (!editCatForm.name.trim()) { toast.error("Category name is required"); return; }
+    if (editCatForm.mode === "link" && !editCatForm.defaultAccountId) { toast.error("Please select a default expense account"); return; }
+    updateCat.mutate({
+      id: editCat,
+      name: editCatForm.name,
+      description: editCatForm.description,
+      color: editCatForm.color,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      accountingClass: editCatForm.accountingClass as any,
+      defaultAccountId: editCatForm.mode === "link" && editCatForm.defaultAccountId ? +editCatForm.defaultAccountId : undefined,
+    });
+  };
+
   const totalExpenses = expenses?.reduce((sum, e) => sum + parseFloat(e.amount), 0) ?? 0;
 
   // Export to CSV
@@ -437,14 +471,21 @@ export function Expenses() {
                     />
                   </div>
                   {!hasMultiCategoryItems && (
-                    <div>
+                    <div className="flex items-end gap-2">
                       <ExpenseCategorySelector
+                        className="flex-1"
                         categories={categories}
                         value={form.categoryIds[0]?.toString() ?? ""}
                         onChange={v => setForm(p => ({ ...p, categoryIds: v ? [parseInt(v)] : [] }))}
                         label={<>Category {form.billId && selectedBill?.categoryId && <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span>}</>}
                         hint={form.billId ? (selectedBill?.categoryId ? "Category from linked bill." : (selectedSupplier?.autoCategoryId ? "Using supplier default." : undefined)) : undefined}
                       />
+                      {canManageCategories && (
+                        <QuickCategoryDialog
+                          businessId={user?.currentBusinessId ?? 0}
+                          onCreated={(id) => setForm(p => ({ ...p, categoryIds: [id] }))}
+                        />
+                      )}
                     </div>
                   )}
                 </div>
@@ -510,10 +551,16 @@ export function Expenses() {
                     {getFundingAccounts(form.paymentMethod, accounts)?.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name}{loc ? ` (${loc})` : ""}</option>; })}
                   </select>
                 </div>
-                <div><Label>Supplier {form.billId ? <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span> : ""}</Label>
-                  <select value={form.supplierId} onChange={e => setForm(p => ({ ...p, supplierId: e.target.value, billId: "" }))} className="w-full rounded border px-3 py-2 text-sm" disabled={!!form.billId}>
-                    <option value="">{form.billId ? "Auto-filled from bill" : "Optional"}</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                  </select>
+                <div>
+                  <Label>Supplier {form.billId ? <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span> : ""}</Label>
+                  <div className="flex items-end gap-2">
+                    <select value={form.supplierId} onChange={e => setForm(p => ({ ...p, supplierId: e.target.value, billId: "" }))} className="flex-1 rounded border px-3 py-2 text-sm" disabled={!!form.billId}>
+                      <option value="">{form.billId ? "Auto-filled from bill" : "Optional"}</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                    {!form.billId && canManageSuppliers && (
+                      <QuickSupplierDialog onCreated={(id) => setForm(p => ({ ...p, supplierId: String(id), billId: "" }))} />
+                    )}
+                  </div>
                 </div>
                 {selectedSupplier && (
                   <div className="rounded-lg bg-[#F5EDE6] p-2 text-xs text-[#2D2A26]">
@@ -687,31 +734,33 @@ export function Expenses() {
 
         {canView && tab === "categories" && (
         <>
-        {/* Categories - Tag Style */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
+        {/* Categories */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
             <h2 className="font-medium text-[#2D2A26]">Expense Categories</h2>
-            {canManage && (
+            {canManageCategories && (
               <Dialog open={catOpen} onOpenChange={setCatOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm" variant="outline" className="border-[#2E7D32] text-[#2E7D32]"><Plus className="mr-1 h-3 w-3" />Add</Button>
                 </DialogTrigger>
-                <DialogContent className="bg-white">
+                <DialogContent className="bg-white max-h-[90vh] overflow-y-auto">
                   <DialogHeader><DialogTitle className="font-serif text-xl">Add Category</DialogTitle></DialogHeader>
                   <form onSubmit={handleCat} className="space-y-3">
                     <div><Label>Name</Label><Input value={catForm.name} onChange={e => setCatForm(p => ({ ...p, name: e.target.value }))} required /></div>
                     <div><Label>Description</Label><Input value={catForm.description} onChange={e => setCatForm(p => ({ ...p, description: e.target.value }))} /></div>
-                    <div><Label>Color</Label><div className="flex items-center gap-2"><input type="color" value={catForm.color} onChange={e => setCatForm(p => ({ ...p, color: e.target.value }))} className="h-10 w-10 rounded border p-0.5" /><span className="text-xs text-[#8D8A87]">{catForm.color}</span></div></div>
-                    <div>
-                      <Label>Classification</Label>
-                      <select value={catForm.accountingClass} onChange={e => setCatForm(p => ({ ...p, accountingClass: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
-                        <option value="operating_expense">Operating Expense</option>
-                        <option value="admin_expense">Administrative Expense</option>
-                        <option value="cogs">Cost of Goods Sold</option>
-                        <option value="marketing">Marketing Expense</option>
-                        <option value="depreciation">Depreciation</option>
-                        <option value="other">Other Expense</option>
-                      </select>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div><Label>Color</Label><div className="flex items-center gap-2"><input type="color" value={catForm.color} onChange={e => setCatForm(p => ({ ...p, color: e.target.value }))} className="h-10 w-10 rounded border p-0.5" /><span className="text-xs text-[#8D8A87]">{catForm.color}</span></div></div>
+                      <div>
+                        <Label>Classification</Label>
+                        <select value={catForm.accountingClass} onChange={e => setCatForm(p => ({ ...p, accountingClass: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
+                          <option value="operating_expense">Operating Expense</option>
+                          <option value="admin_expense">Administrative Expense</option>
+                          <option value="cogs">Cost of Goods Sold</option>
+                          <option value="marketing">Marketing Expense</option>
+                          <option value="depreciation">Depreciation</option>
+                          <option value="other">Other Expense</option>
+                        </select>
+                      </div>
                     </div>
                     <div>
                       <Label>Accounting Mode</Label>
@@ -734,41 +783,81 @@ export function Expenses() {
               </Dialog>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {catsLoading && <p className="text-sm text-[#8D8A87]">Loading categories...</p>}
-            {catsError && (
-              <div className="flex items-center gap-2 rounded-lg bg-red-50 p-2 text-sm text-red-600">
-                <AlertCircle className="h-4 w-4 shrink-0" /><span>Error: {catsError.message}</span>
-              </div>
-            )}
-            {!catsLoading && !catsError && categories?.length === 0 && <p className="text-sm text-[#8D8A87]">No categories yet.</p>}
+
+          {catsLoading && <p className="text-sm text-[#8D8A87]">Loading categories...</p>}
+          {catsError && (
+            <div className="flex items-center gap-2 rounded-lg bg-red-50 p-2 text-sm text-red-600">
+              <AlertCircle className="h-4 w-4 shrink-0" /><span>Error: {catsError.message}</span>
+            </div>
+          )}
+          {!catsLoading && !catsError && categories?.length === 0 && <p className="text-sm text-[#8D8A87]">No categories yet.</p>}
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {categories?.map(c => (
-              <div key={c.id} className="group relative inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-all hover:shadow" style={{ backgroundColor: (c.color ?? "#C73E1D") + "20", color: c.color ?? "#C73E1D", border: `1px solid ${(c.color ?? "#C73E1D")}40` }}>
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: c.color ?? "#C73E1D" }}></span>
-                <span>{c.name}</span>
-                {editCat === c.id ? (
-                  <>
-                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-                    <select value={c.accountingClass ?? "operating_expense"} onChange={e => updateCat.mutate({ id: c.id, accountingClass: e.target.value as any })} className="w-28 rounded border px-1 py-0.5 text-[10px]">
-                      <option value="operating_expense">Operating</option>
-                      <option value="admin_expense">Admin</option>
-                      <option value="cogs">COGS</option>
-                      <option value="marketing">Marketing</option>
-                      <option value="other">Other</option>
-                    </select>
-                    <input type="color" value={c.color ?? "#C73E1D"} onChange={e => updateCat.mutate({ id: c.id, color: e.target.value })} className="h-5 w-5 rounded p-0" />
-                    <button onClick={() => setEditCat(null)}><X className="h-3 w-3" /></button>
-                  </>
-                ) : (
-                  <>
-                    {canManage && <button onClick={() => setEditCat(c.id)} className="opacity-0 group-hover:opacity-100 transition-opacity"><Pencil className="h-2.5 w-2.5" /></button>}
-                    {canManage && <button onClick={() => { if (confirm("Delete?")) deleteCat.mutate({ id: c.id }); }} className="opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-2.5 w-2.5" /></button>}
-                  </>
-                )}
+              <div key={c.id} className="rounded-lg border border-[#E8E0D8] bg-white p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: c.color ?? "#C73E1D" }} />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-[#2D2A26]">{c.name}</p>
+                      {c.description && <p className="truncate text-xs text-[#8D8A87]">{c.description}</p>}
+                    </div>
+                  </div>
+                  {canManageCategories && (
+                    <div className="flex shrink-0 items-center gap-1">
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => startEditCategory(c)}><Pencil className="h-3.5 w-3.5 text-[#8D8A87]" /></Button>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => { if (confirm("Delete this category?")) deleteCat.mutate({ id: c.id }); }}><Trash2 className="h-3.5 w-3.5 text-[#D32F2F]" /></Button>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2 flex flex-wrap gap-1">
+                  <span className="rounded-full bg-[#F5EDE6] px-2 py-0.5 text-[10px] capitalize text-[#8D8A87]">{(c.accountingClass ?? "operating_expense").replace(/_/g, " ")}</span>
+                  <span className="rounded-full bg-[#F5EDE6] px-2 py-0.5 text-[10px] text-[#8D8A87]">{c.defaultAccountId ? "Linked account" : "System managed"}</span>
+                </div>
               </div>
             ))}
           </div>
         </div>
+
+        {/* Edit Category Dialog */}
+        <Dialog open={editCat !== null} onOpenChange={(v) => { if (!v) setEditCat(null); }}>
+          <DialogContent className="bg-white max-h-[90vh] overflow-y-auto">
+            <DialogHeader><DialogTitle className="font-serif text-xl">Edit Category</DialogTitle></DialogHeader>
+            <form onSubmit={handleEditCat} className="space-y-3">
+              <div><Label>Name</Label><Input value={editCatForm.name} onChange={e => setEditCatForm(p => ({ ...p, name: e.target.value }))} required /></div>
+              <div><Label>Description</Label><Input value={editCatForm.description} onChange={e => setEditCatForm(p => ({ ...p, description: e.target.value }))} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Color</Label><div className="flex items-center gap-2"><input type="color" value={editCatForm.color} onChange={e => setEditCatForm(p => ({ ...p, color: e.target.value }))} className="h-10 w-10 rounded border p-0.5" /><span className="text-xs text-[#8D8A87]">{editCatForm.color}</span></div></div>
+                <div>
+                  <Label>Classification</Label>
+                  <select value={editCatForm.accountingClass} onChange={e => setEditCatForm(p => ({ ...p, accountingClass: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
+                    <option value="operating_expense">Operating Expense</option>
+                    <option value="admin_expense">Administrative Expense</option>
+                    <option value="cogs">Cost of Goods Sold</option>
+                    <option value="marketing">Marketing Expense</option>
+                    <option value="depreciation">Depreciation</option>
+                    <option value="other">Other Expense</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <Label>Accounting Mode</Label>
+                <select value={editCatForm.mode} onChange={e => setEditCatForm(p => ({ ...p, mode: e.target.value as CategoryMode, defaultAccountId: e.target.value === "link" ? p.defaultAccountId : "" }))} className="w-full rounded border px-3 py-2 text-sm">
+                  <option value="system">Let the system manage the backing account</option>
+                  <option value="link">Link an existing chart account</option>
+                </select>
+              </div>
+              <div>
+                <Label>Default Expense Account</Label>
+                <select value={editCatForm.defaultAccountId} onChange={e => setEditCatForm(p => ({ ...p, defaultAccountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required={editCatForm.mode === "link"} disabled={editCatForm.mode !== "link"}>
+                  <option value="">{editCatForm.mode === "link" ? "Select expense account..." : "System managed"}</option>
+                  {coa?.grouped?.expense?.map(a => <option key={a.id} value={a.id}>{a.accountCode} - {a.name}</option>)}
+                </select>
+              </div>
+              <Button type="submit" className="w-full bg-[#2E7D32]" disabled={updateCat.isPending}>{updateCat.isPending ? "Saving..." : "Save Changes"}</Button>
+            </form>
+          </DialogContent>
+        </Dialog>
         </>
         )}
 

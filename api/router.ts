@@ -24,6 +24,7 @@ import { alertsRouter } from "./alerts-router";
 import { payrollSettingsRouter } from "./payroll-settings-router";
 import { poRouter } from "./po-router";
 import { integrationsRouter } from "./integrations-router";
+import { integrationFinabillRouter } from "./integration-finabill-router";
 import { partnerRouter } from "./partner-router";
 import { notificationsRouter } from "./notifications-router";
 import { supplierPricesRouter } from "./supplier-prices-router";
@@ -66,6 +67,7 @@ export const appRouter = createRouter({
   payrollSettings: payrollSettingsRouter,
   po: poRouter,
   integrations: integrationsRouter,
+  integrationFinabill: integrationFinabillRouter,
   partner: partnerRouter,
   notifications: notificationsRouter,
   supplierPrices: supplierPricesRouter,

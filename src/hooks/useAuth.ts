@@ -31,11 +31,19 @@ export function useAuth() {
     refetchOnWindowFocus: true,
   });
 
-  const logout = () => {
-    resetQueryClient();
-    setCsrfFromResponse(null);
-    setAuthToken(null);
-    window.location.href = "/login";
+  const logoutMutation = trpc.localAuth.logout.useMutation();
+
+  const logout = async () => {
+    try {
+      await logoutMutation.mutateAsync();
+    } catch (err) {
+      console.error("[logout] server logout failed, continuing with client logout", err);
+    } finally {
+      resetQueryClient();
+      setCsrfFromResponse(null);
+      setAuthToken(null);
+      window.location.href = "/login";
+    }
   };
 
   return { user: user as AuthUser | null, isLoading, logout };

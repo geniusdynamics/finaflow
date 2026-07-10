@@ -284,6 +284,7 @@ export const dailySales = pgTable("daily_sales", {
   id: serial("id").primaryKey(),
   locationId: bigint("locationId", { mode: "number" }).notNull(),
   saleDate: date("saleDate").notNull(),
+  sourceBatchId: varchar("source_batch_id", { length: 255 }),
   cashTotal: numeric("cashTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
   cardTotal: numeric("cardTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
   mpesaTotal: numeric("mpesaTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
@@ -311,6 +312,23 @@ export const dailySales = pgTable("daily_sales", {
 });
 
 export type DailySale = typeof dailySales.$inferSelect;
+
+// External channel mappings for daily sales ingestion from integrated systems
+export const externalChannelMappings = pgTable("external_channel_mappings", {
+  id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  sourceSystem: varchar("sourceSystem", { length: 50 }).notNull(),
+  channelKey: varchar("channelKey", { length: 100 }).notNull(),
+  channelLabel: varchar("channelLabel", { length: 255 }),
+  paymentMethodId: bigint("paymentMethodId", { mode: "number" }),
+  accountId: bigint("accountId", { mode: "number" }),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+});
+
+export type ExternalChannelMapping = typeof externalChannelMappings.$inferSelect;
 
 // Expense categories
 export const expenseCategories = pgTable("expense_categories", {
@@ -1360,12 +1378,41 @@ export const apiKeys = pgTable("api_keys", {
   keyPrefix: varchar("keyPrefix", { length: 20 }).notNull(),
   scopes: json("scopes"),
   lastUsedAt: timestamp("lastUsedAt"),
+  expiresAt: timestamp("expiresAt"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   deletedAt: timestamp("deletedAt"),
 });
 
 export type ApiKey = typeof apiKeys.$inferSelect;
+
+// Integration connections (incoming webhook secrets, OAuth tokens for external systems)
+export const integrationConnections = pgTable(
+  "integration_connections",
+  {
+    id: serial("id").primaryKey(),
+    businessId: bigint("businessId", { mode: "number" })
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    targetSystem: varchar("targetSystem", { length: 50 }).notNull(),
+    authMode: varchar("authMode", { length: 20 }).default("api_key"),
+    authData: json("authData"),
+    webhookSecret: text("webhookSecret"),
+    isActive: boolean("isActive").default(true).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+    deletedAt: timestamp("deletedAt"),
+  },
+  (table) => ({
+    businessTargetIdx: uniqueIndex("idx_integration_connections_business_target").on(
+      table.businessId,
+      table.targetSystem
+    ),
+  })
+);
+
+export type IntegrationConnection = typeof integrationConnections.$inferSelect;
+export type InsertIntegrationConnection = typeof integrationConnections.$inferInsert;
 
 // Webhooks
 export const webhooks = pgTable("webhooks", {

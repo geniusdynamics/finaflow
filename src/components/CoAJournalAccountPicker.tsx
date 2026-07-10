@@ -130,8 +130,10 @@ export function CoAJournalAccountPicker({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="w-[var(--radix-popover-trigger-width)] max-h-[var(--radix-popover-content-available-height)] overflow-hidden p-0"
+        className="w-[calc(100vw-2rem)] max-w-sm overflow-hidden p-0 sm:w-[var(--radix-popover-trigger-width)]"
         align="start"
+        side="bottom"
+        sideOffset={4}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <Command shouldFilter={false} className="h-full max-h-full">
@@ -142,7 +144,7 @@ export function CoAJournalAccountPicker({
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name or code…"
-              className="h-7 w-full bg-transparent text-sm outline-none placeholder:text-[#A6A29C]"
+              className="h-7 w-full bg-transparent text-base outline-none placeholder:text-[#A6A29C] sm:text-sm"
             />
             {search && (
               <Button

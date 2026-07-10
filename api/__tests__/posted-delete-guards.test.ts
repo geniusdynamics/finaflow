@@ -6,6 +6,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { appRouter } from "../router";
 import {
   accounts,
+  billItems,
   bills,
   businesses,
   expenseCategories,
@@ -25,17 +26,6 @@ type SeededContext = {
 };
 
 type Row = { id: number };
-
-interface CallerUser {
-  id: number;
-  role: string;
-  currentBusinessId: number;
-  accountId: string;
-  accountRefId: number | null;
-  currentBusiness: { id: number; accountId: string; accountRefId: number | null; plan: string; maxBranches: number | null; maxUsers: number | null; features: unknown };
-  businessIds: number[];
-}
-
 
 async function seedDeleteContext(seed: string): Promise<SeededContext> {
   const db = getTestDb();
@@ -143,7 +133,7 @@ function createCaller(ctx: SeededContext) {
   } as any);
 }
 
-describe("posted record delete guards", () => {
+describe.sequential("posted record delete guards", () => {
   const seededAccountIds: string[] = [];
 
   afterEach(async () => {
@@ -408,5 +398,184 @@ describe("posted record delete guards", () => {
     const [savedBill] = await db.select().from(bills).where(eq(bills.id, bill.id)).limit(1);
     expect(savedBill.reversedAt).not.toBeNull();
     expect(savedBill.status).toBe("cancelled");
+  });
+
+  it("allows deleting a reversed expense and soft-deletes its ledger entries", async () => {
+    const seed = `DELREVEXP-${Date.now()}`;
+    const ctx = await seedDeleteContext(seed);
+    seededAccountIds.push(ctx.accountId);
+    const caller = createCaller(ctx);
+    const db = getTestDb();
+
+    const cashRows = await db.insert(accounts).values({
+      businessId: ctx.business.id,
+      locationId: ctx.location.id,
+      name: "Reversal Cash",
+      type: "cash",
+      accountType: "asset",
+      accountSubType: "cash",
+      currentBalance: "800.00",
+      openingBalance: "1000.00",
+    } satisfies typeof accounts.$inferInsert).returning();
+    const [cashAccount] = cashRows as Row[];
+
+    const expenseRows = await db.insert(accounts).values({
+      businessId: ctx.business.id,
+      locationId: null,
+      name: "Office Expense",
+      type: "bank_account",
+      accountType: "expense",
+      accountSubType: "operating_expense",
+      currentBalance: "200.00",
+      openingBalance: "0.00",
+    } satisfies typeof accounts.$inferInsert).returning();
+    const [expenseAccount] = expenseRows as Row[];
+
+    const [category] = await db.insert(expenseCategories).values({
+      businessId: ctx.business.id,
+      name: "Ops",
+      accountingClass: "operating_expense",
+      defaultAccountId: expenseAccount.id,
+    } satisfies typeof expenseCategories.$inferInsert).returning();
+
+    const [expense] = await db.insert(expenses).values({
+      locationId: ctx.location.id,
+      businessId: ctx.business.id,
+      categoryId: category.id,
+      amount: "200.00",
+      description: "Expense to delete after reverse",
+      expenseDate: "2026-05-10",
+      paymentMethod: "cash",
+      accountId: cashAccount.id,
+      enteredBy: ctx.user.id,
+    } satisfies typeof expenses.$inferInsert).returning();
+
+    await db.insert(ledgerEntries).values([
+      {
+        accountId: cashAccount.id,
+        transactionType: "expense",
+        transactionId: expense.id,
+        entryType: "credit",
+        amount: "200.00",
+        balanceAfter: "800.00",
+        entryDate: "2026-05-10",
+        createdBy: ctx.user.id,
+      },
+      {
+        accountId: expenseAccount.id,
+        transactionType: "expense",
+        transactionId: expense.id,
+        entryType: "debit",
+        amount: "200.00",
+        balanceAfter: "200.00",
+        entryDate: "2026-05-10",
+        createdBy: ctx.user.id,
+      },
+    ] satisfies Array<typeof ledgerEntries.$inferInsert>);
+
+    await caller.expenses.reverse({ id: expense.id, reason: "Duplicate" });
+    await caller.expenses.delete({ id: expense.id });
+
+    const [savedExpense] = await db.select().from(expenses).where(eq(expenses.id, expense.id)).limit(1);
+    const remainingLedger = await db.select().from(ledgerEntries).where(eq(ledgerEntries.transactionId, expense.id));
+
+    expect(savedExpense.deletedAt).not.toBeNull();
+    expect(remainingLedger.length).toBeGreaterThanOrEqual(2);
+    expect(remainingLedger.every((entry) => entry.deletedAt !== null)).toBe(true);
+  });
+
+  it("allows deleting a reversed bill and soft-deletes its ledger entries and items", async () => {
+    const seed = `DELREVBILL-${Date.now()}`;
+    const ctx = await seedDeleteContext(seed);
+    seededAccountIds.push(ctx.accountId);
+    const caller = createCaller(ctx);
+    const db = getTestDb();
+
+    const apRows = await db.insert(accounts).values({
+      businessId: ctx.business.id,
+      locationId: null,
+      name: "Accounts Payable",
+      type: "bank_account",
+      accountType: "liability",
+      accountSubType: "accounts_payable",
+      currentBalance: "300.00",
+      openingBalance: "0.00",
+    } satisfies typeof accounts.$inferInsert).returning();
+    const [apAccount] = apRows as Row[];
+
+    const expAcctRows = await db.insert(accounts).values({
+      businessId: ctx.business.id,
+      locationId: null,
+      name: "Ops Expense",
+      type: "bank_account",
+      accountType: "expense",
+      accountSubType: "operating_expense",
+      currentBalance: "300.00",
+      openingBalance: "0.00",
+    } satisfies typeof accounts.$inferInsert).returning();
+    const [expenseAccount] = expAcctRows as Row[];
+
+    const [category] = await db.insert(expenseCategories).values({
+      businessId: ctx.business.id,
+      name: "Ops",
+      accountingClass: "operating_expense",
+      defaultAccountId: expenseAccount.id,
+    } satisfies typeof expenseCategories.$inferInsert).returning();
+
+    const [bill] = await db.insert(bills).values({
+      locationId: ctx.location.id,
+      businessId: ctx.business.id,
+      categoryId: category.id,
+      description: "Bill to delete after reverse",
+      amount: "300.00",
+      balanceDue: "300.00",
+      issueDate: "2026-05-10",
+      dueDate: "2026-06-10",
+    } satisfies typeof bills.$inferInsert).returning();
+
+    await db.insert(billItems).values({
+      billId: bill.id,
+      itemName: "Service",
+      quantity: "1",
+      unitPrice: "300.00",
+      totalPrice: "300.00",
+      categoryId: category.id,
+    } satisfies typeof billItems.$inferInsert);
+
+    await db.insert(ledgerEntries).values([
+      {
+        accountId: expenseAccount.id,
+        transactionType: "expense",
+        transactionId: bill.id,
+        entryType: "debit",
+        amount: "300.00",
+        balanceAfter: "300.00",
+        entryDate: "2026-05-10",
+        createdBy: ctx.user.id,
+      },
+      {
+        accountId: apAccount.id,
+        transactionType: "bill_payment",
+        transactionId: bill.id,
+        entryType: "credit",
+        amount: "300.00",
+        balanceAfter: "300.00",
+        entryDate: "2026-05-10",
+        createdBy: ctx.user.id,
+      },
+    ] satisfies Array<typeof ledgerEntries.$inferInsert>);
+
+    await caller.bills.reverse({ id: bill.id, reason: "Vendor error" });
+    await caller.bills.delete({ id: bill.id });
+
+    const [savedBill] = await db.select().from(bills).where(eq(bills.id, bill.id)).limit(1);
+    const remainingLedger = await db.select().from(ledgerEntries).where(eq(ledgerEntries.transactionId, bill.id));
+    const remainingItems = await db.select().from(billItems).where(eq(billItems.billId, bill.id));
+
+    expect(savedBill.deletedAt).not.toBeNull();
+    expect(remainingLedger.length).toBeGreaterThanOrEqual(2);
+    expect(remainingLedger.every((entry) => entry.deletedAt !== null)).toBe(true);
+    expect(remainingItems.length).toBe(1);
+    expect(remainingItems[0].deletedAt).not.toBeNull();
   });
 });
