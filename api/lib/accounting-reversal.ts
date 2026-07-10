@@ -1,6 +1,6 @@
 // ABOUTME: Reverses direct ledger-posted accounting source rows without deleting their history.
 // ABOUTME: Creates equal-and-opposite ledger entries and updates account balances consistently.
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { accounts, ledgerEntries } from "@db/schema";
 import type { DbClient } from "./account-subscriptions";
@@ -11,13 +11,27 @@ interface ReverseLedgerEntriesInput {
   transactionId: number;
   userId: number;
   reason: string;
+  /** When set, only reverse ledger rows with these transactionType values. */
+  transactionTypes?: Array<"sale" | "expense" | "bill_payment" | "supplier_payment" | "journal" | "loan_origination" | "loan_disbursement">;
 }
 
 export async function reverseLedgerEntriesForTransaction(input: ReverseLedgerEntriesInput) {
+  // Only reverse active (non-deleted) original postings for this transaction.
+  // Prefer explicit transactionTypes to avoid cross-module transactionId collisions.
+  const conditions = [
+    eq(ledgerEntries.transactionId, input.transactionId),
+    isNull(ledgerEntries.deletedAt),
+  ];
+  if (input.transactionTypes && input.transactionTypes.length > 0) {
+    conditions.push(
+      inArray(ledgerEntries.transactionType, input.transactionTypes as any),
+    );
+  }
+
   const originalEntries = await input.db
     .select()
     .from(ledgerEntries)
-    .where(eq(ledgerEntries.transactionId, input.transactionId));
+    .where(and(...conditions));
 
   if (originalEntries.length === 0) {
     throw new Error("Only posted records with ledger entries can be reversed.");

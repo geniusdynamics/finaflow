@@ -6,12 +6,18 @@ export type ApiKeyVariables = {
   apiKey: ResolvedApiKey;
 };
 
+function hasRequiredScope(apiKey: ResolvedApiKey, scope?: string): boolean {
+  if (!scope) return true;
+  return apiKey.scopes.includes(scope) || apiKey.scopes.includes("admin");
+}
+
 /**
  * Hono middleware that resolves a Fina API key from the Authorization header
  * and stores the resolved key on the Hono context under "apiKey".
+ * Pass `scope` to require a specific capability (admin always satisfies).
  */
-export const resolveApiKeyMiddleware = createMiddleware<{ Variables: ApiKeyVariables }>(
-  async (c, next) => {
+export function resolveApiKeyMiddleware(scope?: string) {
+  return createMiddleware<{ Variables: ApiKeyVariables }>(async (c, next) => {
     const authHeader = c.req.header("authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return c.json({ error: "Missing Authorization header" }, 401);
@@ -27,7 +33,11 @@ export const resolveApiKeyMiddleware = createMiddleware<{ Variables: ApiKeyVaria
       return c.json({ error: "Invalid API key" }, 401);
     }
 
+    if (!hasRequiredScope(apiKey, scope)) {
+      return c.json({ error: `API key missing required scope: ${scope}` }, 403);
+    }
+
     c.set("apiKey", apiKey);
     await next();
-  }
-);
+  });
+}

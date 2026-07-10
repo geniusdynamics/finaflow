@@ -1,5 +1,28 @@
 # Changelog
 
+## [Unreleased] — Production Risk Hardening for Integrations
+
+Hardened uncommitted integration/migration work before commit: fixed migration collisions, tenant isolation, machine-auth scopes, and ledger soft-delete filters.
+
+### Added
+- **Additive migration `0025_integration_connections_and_channel_maps`** — creates `integration_connections` and `external_channel_mappings`, adds `api_keys.expiresAt` and `daily_sales.source_batch_id`, and installs FK/index guards with `IF NOT EXISTS` (`db/migrations/0025_integration_connections_and_channel_maps.sql`).
+- **Scoped machine auth** — Hono API-key middleware accepts a required scope (`sales:write`, etc.); daily-sales ingest requires `sales:write` (`api/lib/api-key-middleware.ts`, `api/boot.ts`).
+- **Integration user role allowlist** — Finabill `upsertUser` requires `users:write` and only allows non-privileged roles (`manager`, `employee`, `accountant`, `viewer`, `cashier`) with location ownership checks (`api/integration-finabill-router.ts`).
+
+### Changed
+- **Daily sales ingest requires `locationId` + `sourceBatchId`** — no longer picks the first active location for a business (`api/lib/daily-sales-ingestion.ts`, `api/boot.ts`).
+- **CSRF allowlist** — machine routes under `/api/integration/` are exempt alongside webhooks/tRPC (`api/lib/csrf.ts`).
+- **Journal create tenant binding** — API-key callers are forced to their key's `businessId` (`api/journal-router.ts`).
+- **Webhook master-data updates** — `coa.updated` / `supplier.updated` require `externalId` (no name-only matching) (`api/lib/webhook-handlers.ts`).
+
+### Fixed
+- **Removed colliding migrations** — deleted unsafe `0016_fresh_impossible_man`, `0018_silent_lorna_dane`, `0024_api_keys_expires_at`, and phantom journal tags that could break production migrators.
+- **Ledger soft-delete filters** — bill/expense deletes now filter by `transactionType` (`expense` / `bill_payment`) so unrelated ledger rows with the same `transactionId` are not soft-deleted (`api/bills-router.ts`, `api/expenses-router.ts`).
+
+### Tests
+- Updated Finabill integration tests for required `locationId` and scoped middleware (`api/__tests__/integration-finabill.test.ts`).
+- `npm run check` and targeted integration/delete-guard tests.
+
 ## [Unreleased] — Partner & Referral Improvements
 
 Fixed the broken referral-code landing flow, made partner pages usable on mobile, and ensured referred businesses show up in the partner client list.

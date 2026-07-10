@@ -111,6 +111,12 @@ export const journalRouter = createRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
+      // Machine keys may only write within their own business tenant.
+      if (ctx.apiKey && !ctx.user && input.businessId !== ctx.apiKey.businessId) {
+        throw new Error("API key cannot create journal entries for another business");
+      }
+      const businessId = ctx.apiKey && !ctx.user ? ctx.apiKey.businessId : input.businessId;
+
       const lines: JournalLineInput[] = input.lines.map((line) => ({
         accountId: line.accountId,
         debit: line.debit,
@@ -119,7 +125,7 @@ export const journalRouter = createRouter({
       }));
 
       const entry = await createJournalEntry({
-        businessId: input.businessId,
+        businessId,
         entryDate: input.entryDate,
         description: input.description,
         reference: input.reference,
@@ -133,7 +139,7 @@ export const journalRouter = createRouter({
       // ABOUTME: Audit trail for manual journal entries — tracks user, CoA IDs, and account IDs
       await logAudit({
         userId: ctx.user?.id ?? ctx.apiKey?.id ?? null,
-        businessId: input.businessId,
+        businessId,
         action: "CREATE",
         resource: "journal_entries",
         resourceId: entry.id,
@@ -143,12 +149,13 @@ export const journalRouter = createRouter({
           accountIds: lines.map((l) => l.accountId),
           postImmediately: input.postImmediately,
           sourceType: input.sourceType || "manual",
+          authMethod: ctx.apiKey ? "api_key" : "user",
         },
       });
 
-      void dispatchWebhook(input.businessId, "journal.created", {
+      void dispatchWebhook(businessId, "journal.created", {
         journalEntryId: entry.id,
-        businessId: input.businessId,
+        businessId,
         description: input.description,
         reference: input.reference,
       });

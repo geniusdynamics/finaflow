@@ -1,7 +1,7 @@
 // ABOUTME: Verifies posted accounting records cannot be silently deleted after hitting the ledger.
 // ABOUTME: Protects expense and bill history until explicit reversal workflows handle corrections.
 import { afterEach, describe, expect, it } from "vitest";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 
 import { appRouter } from "../router";
 import {
@@ -568,8 +568,20 @@ describe.sequential("posted record delete guards", () => {
     await caller.bills.reverse({ id: bill.id, reason: "Vendor error" });
     await caller.bills.delete({ id: bill.id });
 
-    const [savedBill] = await db.select().from(bills).where(eq(bills.id, bill.id)).limit(1);
-    const remainingLedger = await db.select().from(ledgerEntries).where(eq(ledgerEntries.transactionId, bill.id));
+const [savedBill] = await db.select().from(bills).where(eq(bills.id, bill.id)).limit(1);
+    // Only bill-owned ledger types — transactionId alone can collide across modules.
+    const remainingLedger = await db
+      .select()
+      .from(ledgerEntries)
+      .where(
+        and(
+          eq(ledgerEntries.transactionId, bill.id),
+          or(
+            eq(ledgerEntries.transactionType, "expense"),
+            eq(ledgerEntries.transactionType, "bill_payment"),
+          ),
+        ),
+      );
     const remainingItems = await db.select().from(billItems).where(eq(billItems.billId, bill.id));
 
     expect(savedBill.deletedAt).not.toBeNull();

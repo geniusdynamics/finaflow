@@ -18,31 +18,23 @@ async function refreshAccountFromWebhook(businessId: number, data: Record<string
   }
 
   const externalId = data.externalId ? String(data.externalId) : null;
+  if (!externalId) {
+    // Name-only matching is too risky for production master data updates.
+    return { updated: false, reason: "externalId is required for coa.updated" };
+  }
   const accountCode = data.accountCode ? String(data.accountCode) : null;
 
-  const existing = externalId
-    ? await db
-        .select()
-        .from(accounts)
-        .where(
-          and(
-            eq(accounts.businessId, businessId),
-            eq(accounts.externalId, externalId),
-            isNull(accounts.deletedAt)
-          )
-        )
-        .limit(1)
-    : await db
-        .select()
-        .from(accounts)
-        .where(
-          and(
-            eq(accounts.businessId, businessId),
-            eq(accounts.name, name),
-            isNull(accounts.deletedAt)
-          )
-        )
-        .limit(1);
+  const existing = await db
+    .select()
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.businessId, businessId),
+        eq(accounts.externalId, externalId),
+        isNull(accounts.deletedAt)
+      )
+    )
+    .limit(1);
 
   if (existing[0]) {
     await db
@@ -85,6 +77,13 @@ async function refreshSupplierFromWebhook(businessId: number, data: Record<strin
     return { updated: false, reason: "missing supplier name" };
   }
 
+  const externalId = data.externalId ? String(data.externalId) : null;
+  if (!externalId) {
+    // Name-only matching is too risky for production master data updates.
+    return { updated: false, reason: "externalId is required for supplier.updated" };
+  }
+
+  // Prefer stable external id; fall back to exact business+name only when externalId was stored as notes/metadata later.
   const existing = await db
     .select()
     .from(suppliers)
@@ -108,7 +107,7 @@ async function refreshSupplierFromWebhook(businessId: number, data: Record<strin
         updatedAt: new Date(),
       })
       .where(eq(suppliers.id, existing[0].id));
-    return { updated: true, supplierId: existing[0].id };
+    return { updated: true, supplierId: existing[0].id, externalId };
   }
 
   const [created] = (await db
@@ -122,7 +121,7 @@ async function refreshSupplierFromWebhook(businessId: number, data: Record<strin
     } as any)
     .returning()) as any[];
 
-  return { updated: true, created: true, supplierId: created.id };
+  return { updated: true, created: true, supplierId: created.id, externalId };
 }
 
 export async function handleFinabillWebhook(

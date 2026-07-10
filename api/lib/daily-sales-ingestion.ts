@@ -14,6 +14,7 @@ import { d } from "./decimal";
 
 export type DailySalesIngestionInput = {
   businessId: number;
+  locationId: number;
   saleDate: string;
   sourceSystem: string;
   sourceBatchId: string;
@@ -143,23 +144,36 @@ export async function ingestDailySales(
   const db = getDb();
   logIntegration(input, "started", {
     channelCount: input.payments.length,
+    locationId: input.locationId,
   });
+
+  if (!input.sourceBatchId?.trim()) {
+    const error = "sourceBatchId is required";
+    logIntegration(input, "failed", { error });
+    return { success: false, error };
+  }
+
+  if (!input.locationId) {
+    const error = "locationId is required";
+    logIntegration(input, "failed", { error });
+    return { success: false, error };
+  }
 
   const [location] = await db
     .select()
     .from(locations)
     .where(
       and(
+        eq(locations.id, input.locationId),
         eq(locations.businessId, input.businessId),
         eq(locations.isActive, true),
         isNull(locations.deletedAt)
       )
     )
-    .orderBy(locations.id)
     .limit(1);
 
   if (!location) {
-    const error = "No active location found for business";
+    const error = "Location not found for business or inactive";
     logIntegration(input, "failed", { error });
     return { success: false, error };
   }

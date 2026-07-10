@@ -497,10 +497,15 @@ export const expensesRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const expense = await requireAuthorizedEntity(ctx, expenses, input.id);
+      const expenseLedgerFilter = and(
+        eq(ledgerEntries.transactionId, input.id),
+        eq(ledgerEntries.transactionType, "expense" as any),
+        isNull(ledgerEntries.deletedAt),
+      );
       const existingLedger = await db
         .select({ id: ledgerEntries.id })
         .from(ledgerEntries)
-        .where(and(eq(ledgerEntries.transactionId, input.id), isNull(ledgerEntries.deletedAt)))
+        .where(expenseLedgerFilter)
         .limit(1);
 
       if (existingLedger[0] && !expense.reversedAt) {
@@ -511,7 +516,12 @@ export const expensesRouter = createRouter({
         await tx
           .update(ledgerEntries)
           .set({ deletedAt: new Date() })
-          .where(eq(ledgerEntries.transactionId, input.id));
+          .where(
+            and(
+              eq(ledgerEntries.transactionId, input.id),
+              eq(ledgerEntries.transactionType, "expense" as any),
+            ),
+          );
         await tx
           .update(expenseItems)
           .set({ deletedAt: new Date() })
@@ -532,12 +542,13 @@ export const expensesRouter = createRouter({
       }
 
       await db.transaction(async (tx) => {
-        await reverseLedgerEntriesForTransaction({
+await reverseLedgerEntriesForTransaction({
           db: tx,
           transactionId: input.id,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           userId: (ctx as any).user?.id ?? 1,
           reason: input.reason,
+          transactionTypes: ["expense"],
         });
 
         await tx

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, billQuery, billAccess, billCreate, billPay, getCurrentBusinessLocationIds, getRolePermissionsWithCache, requireAuthorizedLocation, requireAuthorizedEntity, PERMISSIONS } from "./middleware";
 import { getDb } from "./queries/connection";
 import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, expenseCategories, debts } from "@db/schema";
-import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, or, isNull, desc, sql, inArray } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { notFutureDateString } from "./lib/future-date";
 import { ensureSystemAccount } from "./lib/accounting-accounts";
@@ -386,10 +386,19 @@ export const billsRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const bill = await requireAuthorizedEntity(ctx, bills, input.id);
+const billLedgerTypes = or(
+        eq(ledgerEntries.transactionType, "expense" as any),
+        eq(ledgerEntries.transactionType, "bill_payment" as any),
+      );
+      const billLedgerFilter = and(
+        eq(ledgerEntries.transactionId, input.id),
+        billLedgerTypes,
+        isNull(ledgerEntries.deletedAt),
+      );
       const existingLedger = await db
         .select({ id: ledgerEntries.id })
         .from(ledgerEntries)
-        .where(and(eq(ledgerEntries.transactionId, input.id), isNull(ledgerEntries.deletedAt)))
+        .where(billLedgerFilter)
         .limit(1);
 
       if (existingLedger[0] && !bill.reversedAt) {
@@ -400,7 +409,15 @@ export const billsRouter = createRouter({
         await tx
           .update(ledgerEntries)
           .set({ deletedAt: new Date() })
-          .where(eq(ledgerEntries.transactionId, input.id));
+          .where(
+            and(
+              eq(ledgerEntries.transactionId, input.id),
+              or(
+                eq(ledgerEntries.transactionType, "expense" as any),
+                eq(ledgerEntries.transactionType, "bill_payment" as any),
+              ),
+            ),
+          );
         await tx
           .update(billItems)
           .set({ deletedAt: new Date() })
@@ -431,12 +448,13 @@ export const billsRouter = createRouter({
       }
 
       await db.transaction(async (tx) => {
-        await reverseLedgerEntriesForTransaction({
+await reverseLedgerEntriesForTransaction({
           db: tx,
           transactionId: input.id,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           userId: (ctx as any).user?.id ?? 1,
           reason: input.reason,
+          transactionTypes: ["expense", "bill_payment"],
         });
 
         await tx

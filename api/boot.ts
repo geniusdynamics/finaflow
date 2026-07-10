@@ -111,13 +111,20 @@ async function trpcRateLimiter(c: any, next: any) {
 app.use("/*", csrfProtection);
 app.use("/api/trpc/*", trpcRateLimiter, apiLimiter);
 
-app.post("/api/integration/daily-sales", resolveApiKeyMiddleware, async (c) => {
+app.post("/api/integration/daily-sales", resolveApiKeyMiddleware("sales:write"), async (c) => {
   try {
     const apiKey = c.get("apiKey");
 
     const body = await c.req.json();
+    if (body.locationId == null || Number.isNaN(Number(body.locationId))) {
+      return c.json({ error: "locationId is required" }, 400);
+    }
+    if (!body.sourceBatchId || typeof body.sourceBatchId !== "string") {
+      return c.json({ error: "sourceBatchId is required" }, 400);
+    }
     const result = await ingestDailySales({
       businessId: apiKey.businessId,
+      locationId: Number(body.locationId),
       saleDate: body.saleDate,
       sourceSystem: body.sourceSystem ?? "finabill",
       sourceBatchId: body.sourceBatchId,

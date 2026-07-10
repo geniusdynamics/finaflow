@@ -47,6 +47,22 @@ function logIntegration(
   }
 }
 
+const INTEGRATION_ALLOWED_ROLES = new Set([
+  "manager",
+  "employee",
+  "accountant",
+  "viewer",
+  "cashier",
+]);
+
+function assertAllowedIntegrationRole(role: string) {
+  if (!INTEGRATION_ALLOWED_ROLES.has(role)) {
+    throw new Error(
+      `Role "${role}" is not allowed via integration API. Allowed: ${Array.from(INTEGRATION_ALLOWED_ROLES).join(", ")}`,
+    );
+  }
+}
+
 export const integrationFinabillRouter = createRouter({
   verify: apiKeyProcedure.query(async ({ ctx }) => {
     const businessId = getBusinessId(ctx);
@@ -376,7 +392,7 @@ export const integrationFinabillRouter = createRouter({
     }),
 
   upsertUser: apiKeyProcedure
-    .use(requireApiKey("write"))
+    .use(requireApiKey("users:write"))
     .input(
       z.object({
         externalId: z.string().optional(),
@@ -394,6 +410,24 @@ export const integrationFinabillRouter = createRouter({
       if (!businessId) {
         logIntegration(ctx, "finabill.upsertUser", "failed", { error: "No active business" });
         throw new Error("No active business");
+      }
+
+      assertAllowedIntegrationRole(input.role);
+
+      if (input.locationIds.length > 0) {
+        const validLocations = await db
+          .select({ id: locations.id })
+          .from(locations)
+          .where(
+            and(
+              eq(locations.businessId, businessId),
+              inArray(locations.id, input.locationIds),
+              isNull(locations.deletedAt),
+            ),
+          );
+        if (validLocations.length !== input.locationIds.length) {
+          throw new Error("One or more locationIds do not belong to this business");
+        }
       }
 
       const existing = input.externalId

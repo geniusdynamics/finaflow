@@ -175,6 +175,7 @@ describe("daily sales ingestion", () => {
   it("creates a daily sales entry from aggregated channels", async () => {
     const result = await ingestDailySales({
       businessId: testBusinessId,
+      locationId: testLocationId,
       saleDate: "2026-07-01",
       sourceSystem: "finabill",
       sourceBatchId: `finabill:business:${testBusinessId}:2026-07-01`,
@@ -207,6 +208,7 @@ describe("daily sales ingestion", () => {
 
     const first = await ingestDailySales({
       businessId: testBusinessId,
+      locationId: testLocationId,
       saleDate: "2026-07-02",
       sourceSystem: "finabill",
       sourceBatchId,
@@ -218,6 +220,7 @@ describe("daily sales ingestion", () => {
 
     const second = await ingestDailySales({
       businessId: testBusinessId,
+      locationId: testLocationId,
       saleDate: "2026-07-02",
       sourceSystem: "finabill",
       sourceBatchId,
@@ -235,6 +238,7 @@ describe("daily sales ingestion", () => {
   it("returns warnings for unmapped channels but still creates the entry", async () => {
     const result = await ingestDailySales({
       businessId: testBusinessId,
+      locationId: testLocationId,
       saleDate: "2026-07-03",
       sourceSystem: "finabill",
       sourceBatchId: `finabill:business:${testBusinessId}:2026-07-03`,
@@ -328,7 +332,7 @@ describe("integration API key authentication", () => {
 
   it("rejects the Hono daily-sales endpoint without a valid API key", async () => {
     const app = new Hono<{ Variables: ApiKeyVariables }>();
-    app.post("/daily-sales", resolveApiKeyMiddleware, (c) =>
+    app.post("/daily-sales", resolveApiKeyMiddleware("sales:write"), (c) =>
       c.json({ ok: true })
     );
 
@@ -341,10 +345,10 @@ describe("integration API key authentication", () => {
   });
 
   it("accepts the Hono daily-sales endpoint with a valid API key", async () => {
-    const { rawKey } = await createTestApiKey(testBusinessId);
+    const { rawKey } = await createTestApiKey(testBusinessId, ["sales:write"]);
 
     const app = new Hono<{ Variables: ApiKeyVariables }>();
-    app.post("/daily-sales", resolveApiKeyMiddleware, (c) => {
+    app.post("/daily-sales", resolveApiKeyMiddleware("sales:write"), (c) => {
       const key = c.get("apiKey");
       return c.json({ ok: true, businessId: key.businessId });
     });
