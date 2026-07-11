@@ -2,6 +2,7 @@
 // ABOUTME: Uses the new mobile_wallet_transactions table with provider-agnostic filtering.
 
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createRouter, walletQuery, walletImport, walletAdmin, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
 import { mobileWalletTransactions, mobileWalletProviders, mobileWalletDailyLedger, mobileWalletReconciliation, providerConfigs, expenses, suppliers, accounts, ledgerEntries, locations } from "@db/schema";
@@ -40,8 +41,9 @@ export const walletRouter = createRouter({
 
     listForLocation: walletQuery
       .input(z.object({ locationId: z.number() }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const db = getDb();
+        await requireAuthorizedLocation(ctx, input.locationId);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let configs: any[] = [];
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -73,8 +75,10 @@ export const walletRouter = createRouter({
 
     setDefault: walletAdmin
       .input(z.object({ locationId: z.number(), provider: z.string(), accountId: z.number() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = getDb();
+        await requireAuthorizedLocation(ctx, input.locationId);
+        await requireAuthorizedBusinessEntity(ctx, accounts, input.accountId);
         await db.update(providerConfigs).set({ isDefault: false })
           .where(and(eq(providerConfigs.locationId, input.locationId), isNull(providerConfigs.deletedAt)));
         await db.insert(providerConfigs).values({
@@ -429,17 +433,15 @@ export const walletRouter = createRouter({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const userId = (ctx as any).user?.id ?? 1;
 
-        const txn = await db.select().from(mobileWalletTransactions).where(eq(mobileWalletTransactions.id, input.walletTxnId)).limit(1);
-        if (!txn[0]) throw new Error("Wallet transaction not found");
-        if (txn[0].txnType !== "topup") throw new Error("Only topup transactions can be linked to a bank account");
+        const txn = await requireAuthorizedEntity(ctx, mobileWalletTransactions, input.walletTxnId);
+        if (txn.txnType !== "topup") throw new Error("Only topup transactions can be linked to a bank account");
 
-        const acct = await db.select().from(accounts).where(eq(accounts.id, input.sourceAccountId)).limit(1);
-        if (!acct[0]) throw new Error("Source account not found");
+        const acct = await requireAuthorizedBusinessEntity(ctx, accounts, input.sourceAccountId);
 
-        const topupAmount = Math.abs(parseFloat(txn[0].amount));
-        const fee = parseFloat(txn[0].txnFee);
+        const topupAmount = Math.abs(parseFloat(txn.amount));
+        const fee = parseFloat(txn.txnFee);
         const totalOutflow = topupAmount + fee;
-        const oldBal = parseFloat(acct[0].currentBalance);
+        const oldBal = parseFloat(acct.currentBalance);
         const newBal = (oldBal - totalOutflow).toFixed(2);
 
         await db.insert(ledgerEntries).values({
@@ -449,8 +451,8 @@ export const walletRouter = createRouter({
           entryType: "debit",
           amount: topupAmount.toFixed(2),
           balanceAfter: (oldBal - topupAmount).toFixed(2),
-          description: `${txn[0].provider} topup to wallet: ${txn[0].providerTxnId}`,
-          entryDate: txn[0].txnDate,
+          description: `${txn.provider} topup to wallet: ${txn.providerTxnId}`,
+          entryDate: txn.txnDate,
           createdBy: userId,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any).returning();
@@ -463,8 +465,8 @@ export const walletRouter = createRouter({
             entryType: "debit",
             amount: fee.toFixed(2),
             balanceAfter: newBal,
-            description: `${txn[0].provider} topup transaction fee: ${txn[0].providerTxnId}`,
-            entryDate: txn[0].txnDate,
+            description: `${txn.provider} topup transaction fee: ${txn.providerTxnId}`,
+            entryDate: txn.txnDate,
             createdBy: userId,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any).returning();
@@ -473,24 +475,22 @@ export const walletRouter = createRouter({
         await db.update(accounts).set({ currentBalance: newBal }).where(eq(accounts.id, input.sourceAccountId));
 
         if (input.destinationAccountId) {
-          const destAcct = await db.select().from(accounts).where(eq(accounts.id, input.destinationAccountId)).limit(1);
-          if (destAcct[0]) {
-            const destOldBal = parseFloat(destAcct[0].currentBalance);
-            const destNewBal = (destOldBal + topupAmount).toFixed(2);
-            await db.insert(ledgerEntries).values({
-              accountId: input.destinationAccountId,
-              transactionType: "mpesa_topup",
-              transactionId: input.walletTxnId,
-              entryType: "credit",
-              amount: topupAmount.toFixed(2),
-              balanceAfter: destNewBal,
-              description: `Topup received from ${acct[0].name}: ${txn[0].providerTxnId}`,
-              entryDate: txn[0].txnDate,
-              createdBy: userId,
+          const destAcct = await requireAuthorizedBusinessEntity(ctx, accounts, input.destinationAccountId);
+          const destOldBal = parseFloat(destAcct.currentBalance);
+          const destNewBal = (destOldBal + topupAmount).toFixed(2);
+          await db.insert(ledgerEntries).values({
+            accountId: input.destinationAccountId,
+            transactionType: "mpesa_topup",
+            transactionId: input.walletTxnId,
+            entryType: "credit",
+            amount: topupAmount.toFixed(2),
+            balanceAfter: destNewBal,
+            description: `Topup received from ${acct.name}: ${txn.providerTxnId}`,
+            entryDate: txn.txnDate,
+            createdBy: userId,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } as any).returning();
-            await db.update(accounts).set({ currentBalance: destNewBal }).where(eq(accounts.id, input.destinationAccountId));
-          }
+          } as any).returning();
+          await db.update(accounts).set({ currentBalance: destNewBal }).where(eq(accounts.id, input.destinationAccountId));
         }
 
         await db.update(mobileWalletTransactions).set({
@@ -559,8 +559,10 @@ export const walletRouter = createRouter({
         openingBalance: z.string(),
         notes: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = getDb();
+        await requireAuthorizedLocation(ctx, input.locationId);
+        await requireAuthorizedBusinessEntity(ctx, accounts, input.accountId);
 
         const conditions = [
           eq(mobileWalletTransactions.locationId, input.locationId),
@@ -610,14 +612,20 @@ export const walletRouter = createRouter({
   reconciliation: createRouter({
     list: walletQuery
       .input(z.object({
+        locationId: z.number().optional(),
         provider: z.string().optional(),
         dateFrom: z.string().optional(),
         dateTo: z.string().optional(),
       }))
-      .query(async ({ input }) => {
+      .query(async ({ input, ctx }) => {
         const db = getDb();
+        const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
+        if (!businessId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "No active business context available." });
+        }
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const conditions: any[] = [];
+        const conditions: any[] = [eq(mobileWalletReconciliation.businessId, businessId)];
+        if (input?.locationId) conditions.push(eq(mobileWalletReconciliation.locationId, input.locationId));
         if (input?.provider) conditions.push(eq(mobileWalletReconciliation.provider, input.provider));
         if (input?.dateFrom) conditions.push(sql`${mobileWalletReconciliation.txnDate} >= ${input.dateFrom}`);
         if (input?.dateTo) conditions.push(sql`${mobileWalletReconciliation.txnDate} <= ${input.dateTo}`);
@@ -626,6 +634,7 @@ export const walletRouter = createRouter({
 
     create: walletAdmin
       .input(z.object({
+        locationId: z.number().optional(),
         provider: z.string(),
         txnDate: z.string(),
         orphanCount: z.number().optional(),
@@ -634,9 +643,18 @@ export const walletRouter = createRouter({
         matchedTotal: z.string().optional(),
         notes: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const db = getDb();
+        const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
+        if (!businessId) {
+          throw new TRPCError({ code: "FORBIDDEN", message: "No active business context available." });
+        }
+        if (input.locationId) {
+          await requireAuthorizedLocation(ctx, input.locationId);
+        }
         const [result] = await db.insert(mobileWalletReconciliation).values({
+          businessId,
+          locationId: input.locationId,
           provider: input.provider,
           txnDate: input.txnDate,
           orphanCount: input.orphanCount ?? 0,

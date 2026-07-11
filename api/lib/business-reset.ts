@@ -608,10 +608,10 @@ export async function resetBusinessTransactions(input: {
       .returning({ id: mpesaReconciliation.id });
     results.mpesa_reconciliation = { count: mpesaRecDeleted.length };
 
-    // 7e. mobile_wallet_reconciliation (transient)
+    // 7e. mobile_wallet_reconciliation (business-scoped)
     const walletRecDeleted = await tx
       .delete(mobileWalletReconciliation)
-      .where(sql`1=1`)
+      .where(eq(mobileWalletReconciliation.businessId, input.businessId))
       .returning({ id: mobileWalletReconciliation.id });
     results.mobile_wallet_reconciliation = { count: walletRecDeleted.length };
 

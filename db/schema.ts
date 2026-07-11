@@ -1676,6 +1676,8 @@ export type InsertMobileWalletDailyLedger = typeof mobileWalletDailyLedger.$infe
 
 export const mobileWalletReconciliation = pgTable("mobile_wallet_reconciliation", {
   id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }),
   provider: varchar("provider", { length: 20 }).notNull().references(() => mobileWalletProviders.code, { onDelete: "no action" }),
   txnDate: date("txnDate").notNull(),
   orphanCount: integer("orphanCount").default(0),
@@ -1686,7 +1688,9 @@ export const mobileWalletReconciliation = pgTable("mobile_wallet_reconciliation"
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   resolvedAt: timestamp("resolvedAt"),
-});
+}, (table) => ({
+  uniqueBusinessReconciliation: uniqueIndex("idx_wallet_reconciliation_business_provider_date").on(table.businessId, table.provider, table.txnDate),
+}));
 
 export type MobileWalletReconciliation = typeof mobileWalletReconciliation.$inferSelect;
 export type InsertMobileWalletReconciliation = typeof mobileWalletReconciliation.$inferInsert;

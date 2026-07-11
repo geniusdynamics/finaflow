@@ -233,6 +233,10 @@ async function ensureTestDatabase(): Promise<void> {
       "0016_fresh_impossible_man.sql",
       "0018_silent_lorna_dane.sql",
       "0024_api_keys_expires_at.sql",
+      "0025_integration_connections_and_channel_maps.sql",
+      "0026_fina_connect_sessions.sql",
+      "0027_fina_connect_target_business.sql",
+      "0028_wallet_reconciliation_tenant_scope.sql",
     ]) {
       const p = path.resolve(import.meta.dirname, `../../db/migrations/${file}`);
       if (fs.existsSync(p)) {

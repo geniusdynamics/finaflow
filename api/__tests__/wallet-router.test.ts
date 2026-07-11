@@ -4,12 +4,15 @@ import { afterEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { appRouter } from "../router";
 import {
+  accounts,
   businesses,
   locations,
   users,
   userBusinesses,
   supportedCurrencies,
   mobileWalletProviders,
+  mobileWalletTransactions,
+  mobileWalletReconciliation,
 } from "@db/schema";
 import { getTestDb } from "../test/db";
 
@@ -476,5 +479,150 @@ describe("Wallet Import-Then-Display Regression", () => {
 
     const allStats = await caller.wallet.transactions.stats({});
     expect(Number(allStats.summary.countIn) + Number(allStats.summary.countOut)).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("Wallet Scope Isolation", () => {
+  const seededAccountIds: string[] = [];
+
+  afterEach(async () => {
+    for (const aid of seededAccountIds) {
+      await cleanupWalletCtx(aid);
+    }
+    seededAccountIds.length = 0;
+  });
+
+  async function seedScopeTestPair(seed: string) {
+    const ctxA = await seedWalletTestCtx(`${seed}-A`);
+    const ctxB = await seedWalletTestCtx(`${seed}-B`);
+    seededAccountIds.push(ctxA.accountId, ctxB.accountId);
+    await seedMpesaProviderLocal();
+    const db = getTestDb();
+
+    const acctA = (await db.insert(accounts).values({
+      businessId: ctxA.business.id,
+      locationId: ctxA.location.id,
+      name: `Wallet Account A ${seed}`,
+      type: "bank_account",
+      currentBalance: "10000.00",
+      isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any).returning())[0];
+
+    const acctB = (await db.insert(accounts).values({
+      businessId: ctxB.business.id,
+      locationId: ctxB.location.id,
+      name: `Wallet Account B ${seed}`,
+      type: "bank_account",
+      currentBalance: "10000.00",
+      isActive: true,
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any).returning())[0];
+
+    const txnA = (await db.insert(mobileWalletTransactions).values({
+      locationId: ctxA.location.id,
+      provider: "mpesa",
+      providerTxnId: `TOPUP-A-${seed}-${Date.now()}`,
+      txnDate: "2025-01-01",
+      txnType: "topup",
+      direction: "out",
+      amount: "1000.00",
+      currency: "KES",
+      txnFee: "0.00",
+      status: "completed",
+      isLinked: false,
+      description: "Topup A",
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any).returning())[0];
+
+    const txnB = (await db.insert(mobileWalletTransactions).values({
+      locationId: ctxB.location.id,
+      provider: "mpesa",
+      providerTxnId: `TOPUP-B-${seed}-${Date.now()}`,
+      txnDate: "2025-01-01",
+      txnType: "topup",
+      direction: "out",
+      amount: "1000.00",
+      currency: "KES",
+      txnFee: "0.00",
+      status: "completed",
+      isLinked: false,
+      description: "Topup B",
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any).returning())[0];
+
+    return { ctxA, ctxB, acctA, acctB, txnA, txnB };
+  }
+
+  it("providers.listForLocation rejects a location outside the active business", async () => {
+    const { ctxA, ctxB } = await seedScopeTestPair("list-loc");
+    const callerA = createCaller(ctxA);
+    await expect(
+      callerA.wallet.providers.listForLocation({ locationId: ctxB.location.id })
+    ).rejects.toThrow();
+  });
+
+  it("providers.setDefault rejects a location or account outside the active business", async () => {
+    const { ctxA, ctxB, acctB } = await seedScopeTestPair("set-default");
+    const callerA = createCaller(ctxA);
+    await expect(
+      callerA.wallet.providers.setDefault({ locationId: ctxB.location.id, provider: "mpesa", accountId: acctB.id })
+    ).rejects.toThrow();
+  });
+
+  it("transactions.linkTopupToAccount rejects a wallet transaction from another business", async () => {
+    const { ctxA, ctxB: _ctxB, acctA, txnB } = await seedScopeTestPair("link-topup");
+    const callerA = createCaller(ctxA);
+    await expect(
+      callerA.wallet.transactions.linkTopupToAccount({ walletTxnId: txnB.id, sourceAccountId: acctA.id })
+    ).rejects.toThrow();
+  });
+
+  it("transactions.linkTopupToAccount rejects a source account from another business", async () => {
+    const { ctxA, ctxB: _ctxB, acctB, txnA } = await seedScopeTestPair("link-topup-acct");
+    const callerA = createCaller(ctxA);
+    await expect(
+      callerA.wallet.transactions.linkTopupToAccount({ walletTxnId: txnA.id, sourceAccountId: acctB.id })
+    ).rejects.toThrow();
+  });
+
+  it("dailyLedger.create rejects a location or account from another business", async () => {
+    const { ctxA, ctxB, acctB } = await seedScopeTestPair("ledger-create");
+    const callerA = createCaller(ctxA);
+    await expect(
+      callerA.wallet.dailyLedger.create({ locationId: ctxB.location.id, provider: "mpesa", accountId: acctB.id, ledgerDate: "2025-01-01", openingBalance: "0.00" })
+    ).rejects.toThrow();
+  });
+
+  it("reconciliation.list only returns rows for the active business", async () => {
+    const { ctxA, ctxB: _ctxB } = await seedScopeTestPair("recon-list");
+    const db = getTestDb();
+    await db.insert(mobileWalletReconciliation).values([
+      { businessId: ctxA.business.id, provider: "mpesa", txnDate: "2025-01-01", orphanCount: 1 } as any,
+      { businessId: _ctxB.business.id, provider: "mpesa", txnDate: "2025-01-01", orphanCount: 2 } as any,
+    ]);
+
+    const callerA = createCaller(ctxA);
+    const listA = await callerA.wallet.reconciliation.list({ provider: "mpesa" });
+    expect(listA).toHaveLength(1);
+    expect(listA[0].orphanCount).toBe(1);
+
+    const callerB = createCaller(_ctxB);
+    const listB = await callerB.wallet.reconciliation.list({ provider: "mpesa" });
+    expect(listB).toHaveLength(1);
+    expect(listB[0].orphanCount).toBe(2);
+  });
+
+  it("reconciliation.create stamps the active business and optional authorized location", async () => {
+    const { ctxA } = await seedScopeTestPair("recon-create");
+    const callerA = createCaller(ctxA);
+    const created = await callerA.wallet.reconciliation.create({
+      locationId: ctxA.location.id,
+      provider: "mpesa",
+      txnDate: "2025-01-01",
+      orphanCount: 3,
+    });
+    expect(created.businessId).toBe(ctxA.business.id);
+    expect(created.locationId).toBe(ctxA.location.id);
   });
 });

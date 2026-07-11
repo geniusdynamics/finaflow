@@ -149,6 +149,7 @@ export async function migrateMpesaToProviderFramework(): Promise<{
   for (const rec of oldRec) {
     try {
       await db.insert(mobileWalletReconciliation).values({
+        businessId: -1, // historical mpesa_reconciliation lacks business scope; migrate to correct business manually if needed
         provider: "mpesa",
         txnDate: rec.txnDate,
         orphanCount: rec.orphanCount,
@@ -159,7 +160,7 @@ export async function migrateMpesaToProviderFramework(): Promise<{
         notes: rec.notes,
         createdAt: rec.createdAt,
         resolvedAt: rec.resolvedAt,
-      }).onConflictDoNothing({ target: [mobileWalletReconciliation.provider, mobileWalletReconciliation.txnDate] });
+      }).onConflictDoNothing({ target: [mobileWalletReconciliation.businessId, mobileWalletReconciliation.provider, mobileWalletReconciliation.txnDate] });
       result.reconciliationMigrated++;
     } catch (err) {
       console.error(`[migrate-mpesa] Failed to migrate reconciliation ${rec.id}:`, err);
