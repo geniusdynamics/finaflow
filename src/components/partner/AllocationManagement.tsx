@@ -245,7 +245,6 @@ export function AllocationManagement() {
             </div>
           ) : (
             <>
-              {/* Desktop table */}
               <div className="hidden overflow-x-auto md:block">
               <table className="w-full">
                 <thead>

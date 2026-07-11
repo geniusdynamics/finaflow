@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased] — Database Performance & Integrity
+
+Added production-safe indexes and foreign keys to high-volume financial tables, plus tooling to keep future schema changes safe.
+
+### Added
+- **Core performance indexes** — 40 new partial/composite indexes on `bills`, `expenses`, `daily_sales`, `ledger_entries`, `bill_payments`, `recurring_bill_templates`, `debts`, `mpesa_transactions`, `api_keys`, `locations`, `businesses`, `users`, `accounts`, `audit_log`, and `exchange_rates` (`db/schema.ts`, `db/migrations/0017_steep_tarantula.sql`).
+- **Core foreign keys** — 25 `NO ACTION` FKs on financial tables (e.g. `bills.supplierId`, `expenses.billId`, `bill_payments.billId`) added with `NOT VALID` + `VALIDATE CONSTRAINT` to avoid long locks (`db/schema.ts`, `db/migrations/0018_bent_hellcat.sql`).
+- **Migration safety check script** — read-only diagnostic that reports table row counts, missing indexes, and orphan rows for proposed FKs (`scripts/migration-safety-check.ts`).
+- **Database migration runbook** — documents backup, `CONCURRENTLY`, `NOT VALID`/`VALIDATE`, rollback, and validation steps (`docs/database-migrations.md`).
+
+### Changed
+- **Schema indexes/FKs** — `db/schema.ts` now declares the new indexes and foreign keys as the source of truth.
+
+### Tests
+- Ran `scripts/migration-safety-check.ts` against the dev database: zero orphan rows found.
+- Applied `0017` and `0018` manually to the dev database; all `CREATE INDEX CONCURRENTLY` builds and FK validations succeeded.
+- `npm run check` passes.
+
 ## [Unreleased] — Production Risk Hardening for Integrations
 
 Hardened uncommitted integration/migration work before commit: fixed migration collisions, tenant isolation, machine-auth scopes, and ledger soft-delete filters.
