@@ -144,7 +144,7 @@ export function Accounts() {
 
   // Payment Methods mutations
   const { data: paymentMethods, refetch: refetchPM } = trpc.paymentMethods.list.useQuery();
-  const { data: locMethods } = trpc.paymentMethods.byLocation.useQuery(
+  const { data: locMethods, refetch: refetchLocMethods } = trpc.paymentMethods.byLocation.useQuery(
     { locationId: +tagLocId },
     { enabled: !!tagLocId }
   );
@@ -160,7 +160,11 @@ export function Accounts() {
     onSuccess: () => { refetchPM(); toast.success("Deleted"); },
   });
   const assignToLoc = trpc.paymentMethods.assignToLocation.useMutation({
-    onSuccess: () => { utils.paymentMethods.byLocation.invalidate(); toast.success("Assigned"); },
+    onSuccess: async () => {
+      await utils.paymentMethods.byLocation.invalidate({ locationId: +tagLocId });
+      await refetchLocMethods();
+      toast.success("Assigned");
+    },
     onError: (err) => toast.error(err.message || "Failed to assign payment method to branch"),
   });
   const updateLocLink = trpc.paymentMethods.updateLocationLink.useMutation({

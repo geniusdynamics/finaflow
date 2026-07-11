@@ -1466,6 +1466,46 @@ export const integrationConnections = pgTable(
 export type IntegrationConnection = typeof integrationConnections.$inferSelect;
 export type InsertIntegrationConnection = typeof integrationConnections.$inferInsert;
 
+// ABOUTME: Short-lived first-party pairing sessions between Fina apps (FinaFlow <-> FinaBill).
+// ABOUTME: Stores hashed pairing/authorization codes and mutual-connect payload state.
+export const integrationConnectSessions = pgTable(
+  "integration_connect_sessions",
+  {
+    id: serial("id").primaryKey(),
+    sessionPublicId: varchar("sessionPublicId", { length: 64 }).notNull(),
+    initiatorSystem: varchar("initiatorSystem", { length: 50 }).notNull(),
+    partnerSystem: varchar("partnerSystem", { length: 50 }).notNull(),
+    initiatorBusinessId: bigint("initiatorBusinessId", { mode: "number" }),
+    partnerBusinessId: bigint("partnerBusinessId", { mode: "number" }),
+    codeHash: varchar("codeHash", { length: 255 }).notNull(),
+    codePrefix: varchar("codePrefix", { length: 20 }).notNull(),
+    state: varchar("state", { length: 128 }).notNull(),
+    codeChallenge: varchar("codeChallenge", { length: 128 }),
+    redirectUri: varchar("redirectUri", { length: 500 }),
+    scopes: json("scopes"),
+    status: varchar("status", { length: 20 }).default("pending").notNull(),
+    initiatorApiUrl: varchar("initiatorApiUrl", { length: 500 }),
+    initiatorAppUrl: varchar("initiatorAppUrl", { length: 500 }),
+    partnerApiUrl: varchar("partnerApiUrl", { length: 500 }),
+    partnerAppUrl: varchar("partnerAppUrl", { length: 500 }),
+    exchangePayload: json("exchangePayload"),
+    createdByUserId: bigint("createdByUserId", { mode: "number" }),
+    approvedByUserId: bigint("approvedByUserId", { mode: "number" }),
+    expiresAt: timestamp("expiresAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    publicIdIdx: uniqueIndex("idx_connect_sessions_public_id").on(table.sessionPublicId),
+    codePrefixIdx: index("idx_connect_sessions_code_prefix").on(table.codePrefix),
+    stateIdx: index("idx_connect_sessions_state").on(table.state),
+    statusIdx: index("idx_connect_sessions_status").on(table.status, table.expiresAt),
+  })
+);
+
+export type IntegrationConnectSession = typeof integrationConnectSessions.$inferSelect;
+export type InsertIntegrationConnectSession = typeof integrationConnectSessions.$inferInsert;
+
 // Webhooks
 export const webhooks = pgTable("webhooks", {
   id: serial("id").primaryKey(),

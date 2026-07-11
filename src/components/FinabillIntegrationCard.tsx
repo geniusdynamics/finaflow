@@ -45,6 +45,18 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
   const [apiKey, setApiKey] = useState("");
   const [webhookSecret, setWebhookSecret] = useState("");
   const [showSecret, setShowSecret] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [pairingCode, setPairingCode] = useState<string | null>(null);
+
+  const createSession = trpc.connect.createSession.useMutation({
+    onSuccess: (res) => {
+      sessionStorage.setItem(`fina_connect_verifier_${res.sessionPublicId}`, res.codeVerifier);
+      setPairingCode(res.pairingCode);
+      toast.success("Opening FinaBill to approve…");
+      window.location.href = res.authorizeUrl;
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   useEffect(() => {
     if (connection) {
@@ -129,6 +141,46 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
           {adapter?.description ?? "Receive daily sales, suppliers, and journal entries from FinaBill."}
         </p>
 
+        {canManage && (
+          <div className="rounded-lg border border-[#E8E0D8] bg-[#F5EDE6]/40 p-4 space-y-3">
+            <div>
+              <p className="font-medium text-sm">One-click connect</p>
+              <p className="text-xs text-[#8D8A87]">
+                Connect FinaBill without pasting API keys. Approve in FinaBill, then both apps store credentials automatically.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                className="bg-[#C73E1D]"
+                disabled={createSession.isPending}
+                onClick={() => createSession.mutate({ mode: "redirect" })}
+              >
+                {createSession.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Plug className="mr-2 h-4 w-4" /> Connect FinaBill
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  window.location.href = "/integrations/connect";
+                }}
+              >
+                Enter pairing code
+              </Button>
+            </div>
+            {pairingCode && (
+              <p className="text-xs text-[#8D8A87]">
+                Pairing code (if redirect fails): <code className="font-mono">{pairingCode}</code>
+              </p>
+            )}
+            <Button type="button" variant="ghost" size="sm" onClick={() => setShowAdvanced((v) => !v)}>
+              {showAdvanced ? "Hide" : "Show"} advanced / manual setup
+            </Button>
+          </div>
+        )}
+
+        {showAdvanced && (
         <form onSubmit={handleSave} className="space-y-4">
           <div className="space-y-2">
             <Label>Webhook URL</Label>
@@ -224,6 +276,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
             </div>
           )}
         </form>
+        )}
 
         {connection && (
           <div className="flex items-center justify-between rounded-lg border border-[#E8E0D8] px-4 py-3">

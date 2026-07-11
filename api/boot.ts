@@ -33,6 +33,12 @@ import {
 import { handleProviderWebhook, type FinabillWebhookPayload } from "./lib/webhook-handlers";
 import { integrationConnections } from "@db/schema";
 import crypto from "crypto";
+import {
+  partnerApproveSession,
+  completeReverseConnection,
+  getConnectSessionPublic,
+  resolvePairingCodeOnInitiator,
+} from "./lib/integrations/connect-service";
 // import { ensureDatabaseReady } from "./lib/db-startup";
 
 // await ensureDatabaseReady(env.databaseUrl);
@@ -42,12 +48,14 @@ const app = new Hono<{ Bindings: HttpBindings; Variables: ApiKeyVariables }>();
 function resolveCorsOrigin(origin: string | undefined): string | undefined {
   if (!origin) return env.appUrl;
   if (origin === env.appUrl) return origin;
+  if (env.finabillAppUrl && origin === env.finabillAppUrl.replace(/\/$/, "")) return origin;
 
   try {
     const url = new URL(origin);
     if (url.hostname === "localhost" || url.hostname === "127.0.0.1") return origin;
     if (url.hostname === "finaflow.localhost" || url.hostname.endsWith(".finaflow.localhost"))
       return origin;
+    if (url.hostname.endsWith(".localhost")) return origin;
     return undefined;
   } catch {
     return undefined;
@@ -110,6 +118,76 @@ async function trpcRateLimiter(c: any, next: any) {
 
 app.use("/*", csrfProtection);
 app.use("/api/trpc/*", trpcRateLimiter, apiLimiter);
+
+// Fina Connect machine-to-machine endpoints (CSRF-exempt via csrf.ts)
+app.post("/api/connect/partner-approve", async (c) => {
+  try {
+    const body = await c.req.json();
+    const result = await partnerApproveSession({
+      sessionPublicId: String(body.sessionPublicId ?? ""),
+      state: String(body.state ?? ""),
+      partnerBusinessId: Number(body.partnerBusinessId),
+      partnerApiUrl: String(body.partnerApiUrl ?? ""),
+      partnerAppUrl: String(body.partnerAppUrl ?? ""),
+      partnerApiKey: String(body.partnerApiKey ?? ""),
+      webhookSecret: String(body.webhookSecret ?? ""),
+      scopes: Array.isArray(body.scopes) ? body.scopes : undefined,
+      approvedByUserId: body.approvedByUserId ? Number(body.approvedByUserId) : undefined,
+    });
+    return c.json(result);
+  } catch (err) {
+    return c.json(
+      { error: err instanceof Error ? err.message : "Partner approve failed" },
+      400
+    );
+  }
+});
+
+app.post("/api/connect/complete", async (c) => {
+  try {
+    const body = await c.req.json();
+    const partnerBusinessId = Number(body.partnerBusinessId);
+    if (!Number.isFinite(partnerBusinessId) || partnerBusinessId <= 0) {
+      return c.json({ error: "partnerBusinessId required" }, 400);
+    }
+    const result = await completeReverseConnection({
+      partnerBusinessId,
+      initiatorSystem: String(body.initiatorSystem ?? "finabill"),
+      initiatorApiUrl: String(body.initiatorApiUrl ?? ""),
+      initiatorApiKey: String(body.initiatorApiKey ?? ""),
+      webhookSecret: String(body.webhookSecret ?? ""),
+      scopes: Array.isArray(body.scopes) ? body.scopes : undefined,
+    });
+    return c.json(result);
+  } catch (err) {
+    return c.json(
+      { error: err instanceof Error ? err.message : "Complete failed" },
+      400
+    );
+  }
+});
+
+app.get("/api/connect/sessions/:sessionPublicId", async (c) => {
+  const session = await getConnectSessionPublic(c.req.param("sessionPublicId"));
+  if (!session) return c.json({ error: "Not found" }, 404);
+  return c.json(session);
+});
+
+app.post("/api/connect/resolve-pairing", async (c) => {
+  try {
+    const body = await c.req.json();
+    const pairingCode = String(body.pairingCode ?? "").trim().toUpperCase();
+    if (!pairingCode) return c.json({ error: "pairingCode required" }, 400);
+    const session = await resolvePairingCodeOnInitiator(pairingCode);
+    if (!session) return c.json({ error: "Invalid or expired pairing code" }, 404);
+    return c.json(session);
+  } catch (err) {
+    return c.json(
+      { error: err instanceof Error ? err.message : "Resolve failed" },
+      400
+    );
+  }
+});
 
 app.post("/api/integration/daily-sales", resolveApiKeyMiddleware("sales:write"), async (c) => {
   try {

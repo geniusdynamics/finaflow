@@ -1,5 +1,31 @@
 # Changelog
 
+## [Unreleased] — Payment Method Assignment Refresh & Location Permission Sync
+
+Fixed the payment-method-to-branch assignment UI not refreshing after a successful add, and removed the stale-location-assignment block in daily sales entry by keeping the auth profile cache current.
+
+### Fixed
+- **Payment method branch assignment now refreshes immediately** — `assignToLocation` success in `src/pages/Accounts.tsx` now awaits targeted invalidation of `paymentMethods.byLocation` and explicitly refetches the location-specific assignment list, so the newly added method appears right after the toast.
+- **Daily sales no longer blocks on stale assigned locations** — `useAuth` in `src/hooks/useAuth.ts` sets `staleTime: 0` on `localAuth.me`, ensuring `assignedLocationIds` is re-fetched whenever the hook is observed. `src/pages/Users.tsx` also invalidates `localAuth.me` after `setUserLocations` and `users.update` change location assignments, so the LocationSelector enforces the most current set.
+
+### Tests
+- Added frontend-regression assertions in `api/__tests__/frontend-regressions.test.ts` guarding the refetch pattern, the auth stale-time setting, and the `localAuth.me` invalidation after location updates.
+- `api/__tests__/user-location-enforcement.test.ts`, `e2e/__tests__/user-multi-location-flow.test.ts`, `api/__tests__/journal-and-sales.test.ts`, `e2e/__tests__/sales-cycle.test.ts`, and `api/__tests__/users-create-values.test.ts` remain green.
+- `npm run check` passes.
+
+## [Unreleased] — Inline Supplier & Category Creation in Bills and Expenses
+
+Replaced the side-by-side "New" buttons next to supplier and category fields with a compact "+ Add …" option at the bottom of each combobox, freeing horizontal space and removing mobile scroll.
+
+### Changed
+- **Bills page inline creation** — supplier and category selects now show `+ Add supplier` / `+ Add category` as the last option in the dropdown. Selecting them opens the existing quick-create dialogs without leaving the form (`src/pages/Bills.tsx`).
+- **Expenses page inline creation** — same inline add-new behavior for suppliers and categories (`src/pages/Expenses.tsx`).
+- **Quick-create dialogs are now fully controlled** — `QuickCategoryDialog` and `QuickSupplierDialog` accept optional `open` / `onOpenChange` and an optional `trigger`; when no trigger is provided they render only the dialog content and are opened via the parent (`src/components/QuickCategoryDialog.tsx`, `src/components/QuickSupplierDialog.tsx`).
+- **ExpenseCategorySelector supports add-new option** — added optional `onAddNew` / `addNewLabel` props that render a final `+ Add category` option and intercept it without changing the controlled value (`src/components/ExpenseCategorySelector.tsx`).
+
+### Tests
+- `npm run check` passes.
+
 ## [Unreleased] — Database Performance & Integrity
 
 Added production-safe indexes and foreign keys to high-volume financial tables, plus tooling to keep future schema changes safe.
