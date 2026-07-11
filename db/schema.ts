@@ -1451,6 +1451,8 @@ export const integrationConnections = pgTable(
     authData: json("authData"),
     webhookSecret: text("webhookSecret"),
     isActive: boolean("isActive").default(true).notNull(),
+    targetBusinessId: bigint("targetBusinessId", { mode: "number" }),
+    targetBusinessName: varchar("targetBusinessName", { length: 255 }),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
     deletedAt: timestamp("deletedAt"),

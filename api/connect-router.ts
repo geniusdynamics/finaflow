@@ -10,6 +10,7 @@ import {
   exchangeConnectSession,
   approveAsPartner,
   resolvePairingCodeOnInitiator,
+  listBusinessConnectionStates,
   DEFAULT_CONNECT_SCOPES,
 } from "./lib/integrations/connect-service";
 import { env } from "./lib/env";
@@ -135,5 +136,11 @@ export const connectRouter = createRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "Connect session not found" });
       }
       return session;
+    }),
+
+  listBusinessConnectionStates: integrationsManage
+    .input(z.object({ targetSystem: z.string().min(1) }))
+    .query(async ({ input, ctx }) => {
+      return listBusinessConnectionStates({ userId: ctx.user!.id, targetSystem: input.targetSystem });
     }),
 });

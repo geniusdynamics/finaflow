@@ -127,6 +127,7 @@ app.post("/api/connect/partner-approve", async (c) => {
       sessionPublicId: String(body.sessionPublicId ?? ""),
       state: String(body.state ?? ""),
       partnerBusinessId: Number(body.partnerBusinessId),
+      partnerBusinessName: body.partnerBusinessName ? String(body.partnerBusinessName) : undefined,
       partnerApiUrl: String(body.partnerApiUrl ?? ""),
       partnerAppUrl: String(body.partnerAppUrl ?? ""),
       partnerApiKey: String(body.partnerApiKey ?? ""),
@@ -146,17 +147,20 @@ app.post("/api/connect/partner-approve", async (c) => {
 app.post("/api/connect/complete", async (c) => {
   try {
     const body = await c.req.json();
-    const partnerBusinessId = Number(body.partnerBusinessId);
-    if (!Number.isFinite(partnerBusinessId) || partnerBusinessId <= 0) {
+    const businessId = Number(body.partnerBusinessId);
+    if (!Number.isFinite(businessId) || businessId <= 0) {
       return c.json({ error: "partnerBusinessId required" }, 400);
     }
+    const targetBusinessId = body.initiatorBusinessId ? Number(body.initiatorBusinessId) : null;
     const result = await completeReverseConnection({
-      partnerBusinessId,
-      initiatorSystem: String(body.initiatorSystem ?? "finabill"),
-      initiatorApiUrl: String(body.initiatorApiUrl ?? ""),
-      initiatorApiKey: String(body.initiatorApiKey ?? ""),
+      businessId,
+      targetSystem: String(body.initiatorSystem ?? "finabill"),
+      targetUrl: String(body.initiatorApiUrl ?? ""),
+      apiKey: String(body.initiatorApiKey ?? ""),
       webhookSecret: String(body.webhookSecret ?? ""),
       scopes: Array.isArray(body.scopes) ? body.scopes : undefined,
+      targetBusinessId: targetBusinessId && Number.isFinite(targetBusinessId) ? targetBusinessId : null,
+      targetBusinessName: body.initiatorBusinessName ? String(body.initiatorBusinessName) : null,
     });
     return c.json(result);
   } catch (err) {

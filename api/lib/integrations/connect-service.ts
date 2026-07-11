@@ -1,12 +1,15 @@
 // ABOUTME: First-party Fina Connect protocol for mutual app pairing (FinaFlow <-> FinaBill).
 // ABOUTME: Creates short-lived sessions, exchanges API keys, and upserts sibling connections.
 import crypto from "crypto";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, inArray } from "drizzle-orm";
 import { getDb } from "../../queries/connection";
 import {
   apiKeys,
   integrationConnections,
   integrationConnectSessions,
+  users,
+  userBusinesses,
+  businesses,
 } from "@db/schema";
 import { env } from "../env";
 import { encryptString, decryptString } from "../crypto";
@@ -73,6 +76,8 @@ export async function upsertSiblingConnection(input: {
   apiKey: string;
   webhookSecret?: string | null;
   scopes?: string[];
+  targetBusinessId?: number | null;
+  targetBusinessName?: string | null;
 }): Promise<{ id: number }> {
   const db = getDb();
   const now = new Date();
@@ -104,6 +109,8 @@ export async function upsertSiblingConnection(input: {
         isActive: true,
         updatedAt: now,
         deletedAt: null,
+        targetBusinessId: input.targetBusinessId ?? existing.targetBusinessId,
+        targetBusinessName: input.targetBusinessName ?? existing.targetBusinessName,
       })
       .where(eq(integrationConnections.id, existing.id))
       .returning();
@@ -121,6 +128,8 @@ export async function upsertSiblingConnection(input: {
       isActive: true,
       createdAt: now,
       updatedAt: now,
+      targetBusinessId: input.targetBusinessId ?? null,
+      targetBusinessName: input.targetBusinessName ?? null,
     })
     .returning();
   return { id: created.id };
@@ -144,6 +153,24 @@ export async function createConnectSession(input: {
   const partnerApiUrl = env.finabillApiUrl.replace(/\/$/, "");
   const initiatorAppUrl = env.appUrl.replace(/\/$/, "");
   const initiatorApiUrl = env.apiUrl.replace(/\/$/, "");
+
+  // Prevent duplicate connections from the same business.
+  const [existingConnection] = await db
+    .select()
+    .from(integrationConnections)
+    .where(
+      and(
+        eq(integrationConnections.businessId, input.businessId),
+        eq(integrationConnections.targetSystem, SIBLING),
+        isNull(integrationConnections.deletedAt)
+      )
+    )
+    .limit(1);
+  if (existingConnection?.isActive) {
+    throw new Error(
+      `This business is already connected to ${SIBLING}. Disconnect or switch businesses before connecting again.`
+    );
+  }
 
   await db.insert(integrationConnectSessions).values({
     sessionPublicId,
@@ -243,6 +270,7 @@ export async function partnerApproveSession(input: {
   sessionPublicId: string;
   state: string;
   partnerBusinessId: number;
+  partnerBusinessName?: string | null;
   partnerApiUrl: string;
   partnerAppUrl: string;
   partnerApiKey: string;
@@ -302,6 +330,7 @@ export async function partnerApproveSession(input: {
         webhookSecret: encryptString(input.webhookSecret),
         partnerScopes: input.scopes ?? session.scopes ?? [...DEFAULT_CONNECT_SCOPES],
         reportedPartnerApiUrl: input.partnerApiUrl.replace(/\/$/, ""),
+        partnerBusinessName: input.partnerBusinessName ?? null,
       },
       updatedAt: new Date(),
     })
@@ -383,6 +412,13 @@ export async function exchangeConnectSession(input: {
     scopes
   );
 
+  const [localBusiness] = await db
+    .select({ name: businesses.name })
+    .from(businesses)
+    .where(eq(businesses.id, input.businessId))
+    .limit(1);
+  const initiatorBusinessName = localBusiness?.name ?? null;
+
   const connection = await upsertSiblingConnection({
     businessId: input.businessId,
     targetSystem: SIBLING,
@@ -390,6 +426,9 @@ export async function exchangeConnectSession(input: {
     apiKey: partnerApiKey,
     webhookSecret,
     scopes,
+    targetBusinessId: session.partnerBusinessId,
+    targetBusinessName:
+      typeof payload.partnerBusinessName === "string" ? payload.partnerBusinessName : null,
   });
 
   const completeRes = await fetch(`${partnerApiUrl}/api/connect/complete`, {
@@ -400,6 +439,7 @@ export async function exchangeConnectSession(input: {
       partnerBusinessId: session.partnerBusinessId,
       initiatorSystem: SYSTEM,
       initiatorBusinessId: input.businessId,
+      initiatorBusinessName,
       initiatorApiUrl: env.apiUrl.replace(/\/$/, ""),
       initiatorAppUrl: env.appUrl.replace(/\/$/, ""),
       initiatorApiKey: inbound.key,
@@ -437,20 +477,24 @@ export async function exchangeConnectSession(input: {
 }
 
 export async function completeReverseConnection(input: {
-  partnerBusinessId: number;
-  initiatorSystem: string;
-  initiatorApiUrl: string;
-  initiatorApiKey: string;
+  businessId: number;
+  targetSystem: string;
+  targetUrl: string;
+  apiKey: string;
   webhookSecret: string;
   scopes?: string[];
+  targetBusinessId?: number | null;
+  targetBusinessName?: string | null;
 }) {
   const connection = await upsertSiblingConnection({
-    businessId: input.partnerBusinessId,
-    targetSystem: input.initiatorSystem,
-    targetUrl: input.initiatorApiUrl,
-    apiKey: input.initiatorApiKey,
+    businessId: input.businessId,
+    targetSystem: input.targetSystem,
+    targetUrl: input.targetUrl,
+    apiKey: input.apiKey,
     webhookSecret: input.webhookSecret,
     scopes: input.scopes,
+    targetBusinessId: input.targetBusinessId,
+    targetBusinessName: input.targetBusinessName,
   });
   return { success: true, connectionId: connection.id };
 }
@@ -473,6 +517,14 @@ export async function approveAsPartner(input: {
   const webhookSecret = randomToken(32);
   const partnerApiUrl = env.apiUrl.replace(/\/$/, "");
   const partnerAppUrl = env.appUrl.replace(/\/$/, "");
+  const db = getDb();
+
+  const [localBusiness] = await db
+    .select({ name: businesses.name })
+    .from(businesses)
+    .where(eq(businesses.id, input.businessId))
+    .limit(1);
+  const partnerBusinessName = localBusiness?.name ?? null;
 
   const res = await fetch(
     `${input.initiatorApiUrl.replace(/\/$/, "")}/api/connect/partner-approve`,
@@ -483,6 +535,7 @@ export async function approveAsPartner(input: {
         sessionPublicId: input.sessionPublicId,
         state: input.state,
         partnerBusinessId: input.businessId,
+        partnerBusinessName,
         partnerApiUrl,
         partnerAppUrl,
         partnerApiKey: inbound.key,
@@ -510,6 +563,61 @@ export async function approveAsPartner(input: {
     webhookSecret,
     localApiKeyId: inbound.id,
   };
+}
+
+export async function listBusinessConnectionStates(input: { userId: number; targetSystem: string }) {
+  const db = getDb();
+
+  const junctions = await db
+    .select({ businessId: userBusinesses.businessId })
+    .from(userBusinesses)
+    .where(and(eq(userBusinesses.userId, input.userId), eq(userBusinesses.isActive, true)));
+  const businessIds = junctions.map((j) => j.businessId);
+  if (businessIds.length === 0) {
+    return { currentBusinessId: null as number | null, states: [] as { businessId: number; businessName: string; isConnected: boolean; targetBusinessId: number | null; targetBusinessName: string | null }[] };
+  }
+
+  const businessRows = await db
+    .select({ id: businesses.id, name: businesses.name })
+    .from(businesses)
+    .where(and(inArray(businesses.id, businessIds), isNull(businesses.deletedAt)));
+
+  const connectionRows = await db
+    .select({
+      businessId: integrationConnections.businessId,
+      isActive: integrationConnections.isActive,
+      targetBusinessId: integrationConnections.targetBusinessId,
+      targetBusinessName: integrationConnections.targetBusinessName,
+    })
+    .from(integrationConnections)
+    .where(
+      and(
+        inArray(integrationConnections.businessId, businessIds),
+        eq(integrationConnections.targetSystem, input.targetSystem),
+        isNull(integrationConnections.deletedAt)
+      )
+    );
+  const connectionByBusinessId = new Map(
+    connectionRows.map((c) => [c.businessId, c])
+  );
+
+  const states = businessRows.map((b) => {
+    const connection = connectionByBusinessId.get(b.id);
+    return {
+      businessId: b.id,
+      businessName: b.name,
+      isConnected: Boolean(connection?.isActive),
+      targetBusinessId: connection?.targetBusinessId ?? null,
+      targetBusinessName: connection?.targetBusinessName ?? null,
+    };
+  });
+
+  const [user] = await db
+    .select({ currentBusinessId: users.currentBusinessId })
+    .from(users)
+    .where(eq(users.id, input.userId))
+    .limit(1);
+  return { currentBusinessId: user?.currentBusinessId ?? null, states };
 }
 
 export async function resolvePairingCodeOnInitiator(pairingCode: string) {

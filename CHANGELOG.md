@@ -1,5 +1,23 @@
 # Changelog
 
+## [Unreleased] — Fina Connect target-business visibility
+
+Show which sibling business each connected business is paired with, so users can tell at a glance which FinaBill/FinaFlow business they are linked to.
+
+### Added
+- **`targetBusinessId` and `targetBusinessName` columns** on `integration_connections` to store the paired business identity from the sibling app (`db/schema.ts`, `db/migrations/0027_fina_connect_target_business.sql`).
+- **Backend target-business plumbing** — `connect-service` stores the partner business ID and name during connect, passes them through the `partner-approve` and `complete` machine-to-machine calls, and returns them from `listBusinessConnectionStates` (`api/lib/integrations/connect-service.ts`, `api/boot.ts`).
+- **Multi-business connection status panel** on the FinaBill card now shows the connected sibling business name and a “Switch” action per business (`src/components/FinabillIntegrationCard.tsx`).
+
+### Changed
+- The connected-state message now includes the sibling business name: e.g. “This business is connected to FinaBill (Acme Invoicing)”.
+- Pairing codes remain copyable with a clear “Continue to partner” button; duplicate-business guards are still enforced.
+
+### Tests
+- Targeted ESLint on the changed FinaFlow and FinaBill files returns no new errors.
+- FinaFlow `npm run typecheck` passes.
+- FinaBill `npm run typecheck` still reports pre-existing, unrelated errors in `pdf.test.ts`, `payments/collection-service.ts`, `events.ts`, and `PaymentFiscalSettings.tsx`.
+
 ## [Unreleased] — Payment Method Assignment Refresh & Location Permission Sync
 
 Fixed the payment-method-to-branch assignment UI not refreshing after a successful add, and removed the stale-location-assignment block in daily sales entry by keeping the auth profile cache current.
