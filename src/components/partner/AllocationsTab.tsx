@@ -5,11 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/hooks/useAuth";
 import { Building2, Key, CheckCircle, XCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
 export function AllocationsTab() {
+  const { user } = useAuth();
+  const canUsePartnerAllocations = user?.userType === "partner" || user?.role === "admin" || Boolean(user?.isSuperAdmin);
   const [allocationCode, setAllocationCode] = useState("");
   const { data: allocations, isLoading } = trpc.partner.listPartnerAllocations.useQuery();
   const utils = trpc.useUtils();
@@ -33,6 +36,16 @@ export function AllocationsTab() {
     }
     claimMutation.mutate({ code: allocationCode.trim().toUpperCase() });
   };
+
+  if (!canUsePartnerAllocations) {
+    return (
+      <Card className="border-[#E8E0D8]">
+        <CardContent className="py-10 text-center text-sm text-[#8D8A87]">
+          Partner allocations are available only to partner accounts and admins.
+        </CardContent>
+      </Card>
+    );
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {

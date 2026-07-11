@@ -41,6 +41,7 @@ export const billStatusEnum = pgEnum("billStatus", ["pending", "partial", "paid"
 export const payrollStatusEnum = pgEnum("payrollStatus", ["open", "processing", "paid", "cancelled"]);
 export const advanceStatusEnum = pgEnum("advanceStatus", ["pending", "approved", "partially_repaid", "repaid", "cancelled"]);
 export const leadStatusEnum = pgEnum("leadStatus", ["new", "contacted", "converted", "declined"]);
+export const leadCommissionStatusEnum = pgEnum("lead_commission_status", ["pending", "eligible", "info_only", "ineligible"]);
 export const orderStatusEnum = pgEnum("orderStatus", ["draft", "sent", "delivered", "billed", "cancelled"]);
 export const allocationRightsEnum = pgEnum("allocation_rights", ["view_only", "create_view", "manage"]);
 export const allocationInviteStatusEnum = pgEnum("allocation_invite_status", ["active", "consumed", "revoked", "expired"]);
@@ -53,6 +54,7 @@ export const emailLogTypeEnum = pgEnum("email_log_type", [
   "password_reset",
   "owner_broadcast",
   "smtp_test",
+  "lead_invitation",
 ]);
 export const emailStatusEnum = pgEnum("email_status", ["pending", "sent", "failed", "skipped"]);
 
@@ -1043,6 +1045,49 @@ export const businessInquiries = pgTable("business_inquiries", {
 });
 
 export type BusinessInquiry = typeof businessInquiries.$inferSelect;
+export type LeadCommissionStatus = typeof leadCommissionStatusEnum.enumValues[number];
+
+export const leads = pgTable("leads", {
+  id: serial("id").primaryKey(),
+  creatorUserId: bigint("creatorUserId", { mode: "number" }).notNull().references(() => users.id, { onDelete: "no action" }),
+  creatorAccountRefId: bigint("creatorAccountRefId", { mode: "number" }).references(() => customerAccounts.id, { onDelete: "no action" }),
+  creatorBusinessId: bigint("creatorBusinessId", { mode: "number" }).references(() => businesses.id, { onDelete: "no action" }),
+  businessName: varchar("businessName", { length: 255 }).notNull(),
+  contactName: varchar("contactName", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  normalizedEmail: varchar("normalizedEmail", { length: 320 }),
+  phone: varchar("phone", { length: 20 }),
+  normalizedPhone: varchar("normalizedPhone", { length: 20 }),
+  status: leadStatusEnum("status").default("new").notNull(),
+  matchedUserId: bigint("matchedUserId", { mode: "number" }).references(() => users.id, { onDelete: "no action" }),
+  matchedAccountRefId: bigint("matchedAccountRefId", { mode: "number" }).references(() => customerAccounts.id, { onDelete: "no action" }),
+  matchedBusinessId: bigint("matchedBusinessId", { mode: "number" }).references(() => businesses.id, { onDelete: "no action" }),
+  joinedAt: timestamp("joinedAt"),
+  joinedViaReferral: boolean("joinedViaReferral").default(false).notNull(),
+  referralCodeUsed: varchar("referralCodeUsed", { length: 50 }),
+  referredByBusinessId: bigint("referredByBusinessId", { mode: "number" }).references(() => businesses.id, { onDelete: "no action" }),
+  referredByUserId: bigint("referredByUserId", { mode: "number" }).references(() => users.id, { onDelete: "no action" }),
+  commissionStatus: leadCommissionStatusEnum("commissionStatus").default("pending").notNull(),
+  commissionEligible: boolean("commissionEligible").default(false).notNull(),
+  emailInvitedAt: timestamp("emailInvitedAt"),
+  smsPreparedAt: timestamp("smsPreparedAt"),
+  lastInvitationChannel: varchar("lastInvitationChannel", { length: 20 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  creatorUserIdx: index("idx_leads_creator_user").on(table.creatorUserId),
+  creatorAccountIdx: index("idx_leads_creator_account").on(table.creatorAccountRefId),
+  creatorBusinessIdx: index("idx_leads_creator_business").on(table.creatorBusinessId),
+  normalizedEmailIdx: index("idx_leads_normalized_email").on(table.normalizedEmail),
+  normalizedPhoneIdx: index("idx_leads_normalized_phone").on(table.normalizedPhone),
+  statusIdx: index("idx_leads_status").on(table.status),
+  matchedAccountIdx: index("idx_leads_matched_account").on(table.matchedAccountRefId),
+  deletedAtIdx: index("idx_leads_deleted_at").on(table.deletedAt),
+}));
+
+export type Lead = typeof leads.$inferSelect;
+export type InsertLead = typeof leads.$inferInsert;
 
 // Budgets per category per location per month
 export const budgets = pgTable("budgets", {

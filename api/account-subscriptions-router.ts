@@ -2,6 +2,7 @@
 // ABOUTME: Prefers customer_accounts data while preserving legacy business fallback during the migration window.
 import { z } from "zod";
 import { and, eq, isNull, sql } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
 import { authedQuery, createRouter } from "./middleware";
 import { getDb } from "./queries/connection";
 import { businesses, locations, customerAccounts } from "@db/schema";
@@ -15,6 +16,12 @@ import {
 } from "./lib/subscriptions";
 import { getAccountSubscription, getAccountUsage } from "./lib/account-subscriptions";
 import { logAudit } from "./lib/audit";
+import {
+  applyAccountReferral,
+  getAccountReferralSummary,
+  getCurrentUserLeadContact,
+  markLeadConverted,
+} from "./lib/leads";
 
 async function getCurrentBusiness(
   db: ReturnType<typeof import("./queries/connection").getDb>,
@@ -56,13 +63,11 @@ export const accountSubscriptionsRouter = createRouter({
       resolved.source === "account" ? resolved.account.features : syncedBusiness.features,
     );
 
-    let referredBy: { name: string; accountId: string } | null = null;
-    if (syncedBusiness.referredByBusinessId) {
-      const [ref] = await db.select({ name: businesses.name, accountId: businesses.accountId }).from(businesses)
-        .where(eq(businesses.id, syncedBusiness.referredByBusinessId))
-        .limit(1);
-      referredBy = ref ?? null;
-    }
+    const referralSummary = await getAccountReferralSummary(db, {
+      accountRefId: resolved.source === "account" ? resolved.account.id : syncedBusiness.accountRefId ?? null,
+      accountId,
+      currentBusinessId: businessId,
+    });
 
     const maxBusinesses = resolved.source === "account" ? resolved.account.maxBusinesses : planInfo.maxBusinesses;
     const maxUsers = resolved.source === "account"
@@ -100,7 +105,10 @@ export const accountSubscriptionsRouter = createRouter({
       features: resolved.source === "account" ? resolved.account.features : syncedBusiness.features,
       referralCode: syncedBusiness.referralCode,
       firstMonthDiscountApplied: syncedBusiness.firstMonthDiscountApplied,
-      referredBy,
+      referredBy: referralSummary?.referredBy ?? null,
+      canSetReferredBy: referralSummary?.canSetReferredBy ?? true,
+      referralCommissionEligible: referralSummary?.referralCommissionEligible ?? false,
+      referralSource: referralSummary?.referralSource ?? null,
       isTrial: subscriptionStatus === "trial",
       trialDaysRemaining: subscriptionStatus === "trial" && subscriptionExpiry
         ? Math.max(0, Math.ceil((new Date(subscriptionExpiry).getTime() - Date.now()) / 86400000))
@@ -113,6 +121,98 @@ export const accountSubscriptionsRouter = createRouter({
       source: resolved.source,
     };
   }),
+
+  setReferredBy: authedQuery
+    .input(z.object({ code: z.string().min(4).max(50) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;
+      if (!businessId) throw new TRPCError({ code: "BAD_REQUEST", message: "No active business selected" });
+
+      const syncedBusiness = await syncTrialState(db, businessId);
+      if (!syncedBusiness) throw new TRPCError({ code: "NOT_FOUND", message: "Business not found" });
+
+      const resolved = await getAccountSubscription(db, {
+        accountRefId: ctx.user?.accountRefId ?? syncedBusiness.accountRefId ?? null,
+        accountId: ctx.user?.accountId ?? syncedBusiness.accountId,
+        fallbackBusinessId: businessId,
+      });
+      const accountId = resolved.source === "account" ? resolved.account.accountId : syncedBusiness.accountId;
+      const accountRefId = resolved.source === "account" ? resolved.account.id : syncedBusiness.accountRefId ?? null;
+
+      const accountBusinesses = await db
+        .select({
+          id: businesses.id,
+          referredByBusinessId: businesses.referredByBusinessId,
+        })
+        .from(businesses)
+        .where(
+          accountRefId
+            ? and(eq(businesses.accountRefId, accountRefId), isNull(businesses.deletedAt))
+            : and(eq(businesses.accountId, accountId), isNull(businesses.deletedAt))
+        );
+
+      if (accountBusinesses.some((business) => business.referredByBusinessId)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Referred By has already been set for this account" });
+      }
+
+      const [referrer] = await db
+        .select({
+          id: businesses.id,
+          name: businesses.name,
+          accountId: businesses.accountId,
+          partnerId: businesses.partnerId,
+          referralCode: businesses.referralCode,
+        })
+        .from(businesses)
+        .where(and(eq(businesses.referralCode, input.code.trim().toUpperCase()), isNull(businesses.deletedAt)))
+        .limit(1);
+
+      if (!referrer) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Referral code not found" });
+      }
+      if (referrer.accountId === accountId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "You cannot refer your own account" });
+      }
+
+      await applyAccountReferral(db, {
+        accountRefId,
+        accountId,
+        referredByBusinessId: referrer.id,
+        referredByUserId: referrer.partnerId ?? null,
+      });
+
+      const contact = await getCurrentUserLeadContact(db, ctx.user!.id);
+      const lead = await markLeadConverted(db, {
+        email: contact.email,
+        phone: contact.phone,
+        matchedUserId: ctx.user!.id,
+        matchedAccountRefId: accountRefId,
+        matchedBusinessId: businessId,
+        referredByBusinessId: referrer.id,
+        referredByUserId: referrer.partnerId ?? null,
+        referralCodeUsed: referrer.referralCode,
+      });
+
+      await logAudit({
+        userId: ctx.user!.id,
+        businessId,
+        action: "UPDATE",
+        resource: "businesses",
+        resourceId: businessId,
+        details: {
+          operation: "set_referred_by",
+          referredByBusinessId: referrer.id,
+          commissionEligible: lead?.commissionEligible ?? false,
+        },
+      });
+
+      return {
+        success: true,
+        referredBy: { name: referrer.name, accountId: referrer.accountId },
+        commissionEligible: lead?.commissionEligible ?? false,
+      };
+    }),
 
   changePlan: authedQuery
     .input(z.object({ plan: z.enum(["free", "starter", "growth", "pro"]) }))

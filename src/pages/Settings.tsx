@@ -66,6 +66,7 @@ export function Settings() {
   const tabParam = searchParams.get("tab") as "features" | "account" | "integrations" | "feedback" | "wallets" | null;
   const [tab, setTab] = useState<"features" | "account" | "integrations" | "feedback" | "wallets">(tabParam || "features");
   const [walletSubTab, setWalletSubTab] = useState<"providers" | "rates" | "currencies">("providers");
+  const [referredByCode, setReferredByCode] = useState("");
 
   const isMobile = useIsMobile();
 
@@ -106,6 +107,14 @@ export function Settings() {
   const extendTrial = trpc.accountSubscriptions.extendTrial.useMutation({
     onSuccess: (data) => {
       toast.success(data.message);
+      utils.accountSubscriptions.mySubscription.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const setReferredBy = trpc.accountSubscriptions.setReferredBy.useMutation({
+    onSuccess: (data) => {
+      toast.success(data.commissionEligible ? "Referral linked and commission is eligible" : "Referral linked as information only");
+      setReferredByCode("");
       utils.accountSubscriptions.mySubscription.invalidate();
     },
     onError: (err) => toast.error(err.message),
@@ -494,14 +503,64 @@ export function Settings() {
                     )}
 
                     {/* Referred by */}
-                    {subscription.referredBy && (
-                      <div className="flex items-center gap-2 rounded-lg border border-[#E8E0D8] bg-[#F5EDE6] px-3 py-2">
+                    <div className="rounded-lg border border-[#E8E0D8] bg-[#F5EDE6]/40 p-4 space-y-3">
+                      <div className="flex items-center gap-2">
                         <Gift className="h-4 w-4 text-[#C73E1D]" />
-                        <span className="text-sm text-[#2D2A26]">
-                          Referred by <strong>{subscription.referredBy.name}</strong>
-                        </span>
+                        <p className="text-sm font-semibold text-[#2D2A26]">Referred By</p>
                       </div>
-                    )}
+
+                      {subscription.referredBy ? (
+                        <div className="space-y-2">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <span className="text-sm text-[#2D2A26]">
+                              Referred by <strong>{subscription.referredBy.name}</strong>
+                            </span>
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                              subscription.referralCommissionEligible
+                                ? "bg-[#2E7D32]/10 text-[#2E7D32]"
+                                : "bg-[#D4A854]/10 text-[#B8872E]"
+                            }`}>
+                              {subscription.referralCommissionEligible ? "Commission Eligible" : "Information Only"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-[#8D8A87]">
+                            {subscription.referralSource === "signup"
+                              ? "This referral was captured during signup."
+                              : "This referral was added after signup from account settings."}
+                          </p>
+                        </div>
+                      ) : subscription.canSetReferredBy ? (
+                        <div className="space-y-3">
+                          <p className="text-xs text-[#8D8A87]">
+                            If you signed up without a referral code, you can add it here. Commission only becomes eligible when the referrer had already added this account as a lead before signup.
+                          </p>
+                          <div className="flex flex-col gap-3 sm:flex-row">
+                            <div className="flex-1">
+                              <Label htmlFor="referred-by-code" className="text-xs text-[#8D8A87]">Referral Code</Label>
+                              <Input
+                                id="referred-by-code"
+                                value={referredByCode}
+                                onChange={(e) => setReferredByCode(e.target.value.toUpperCase())}
+                                placeholder="FINA..."
+                                className="mt-1"
+                              />
+                            </div>
+                            <div className="flex items-end">
+                              <Button
+                                type="button"
+                                onClick={() => setReferredBy.mutate({ code: referredByCode })}
+                                disabled={!referredByCode.trim() || setReferredBy.isPending}
+                                className="w-full bg-[#C73E1D] hover:bg-[#C73E1D]/90 sm:w-auto"
+                              >
+                                {setReferredBy.isPending ? "Saving..." : "Save Referral"}
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-[#8D8A87]">Referral information is already locked for this account.</p>
+                      )}
+                    </div>
 
                     <div className="space-y-1 text-xs text-[#8D8A87]">
                       <p>

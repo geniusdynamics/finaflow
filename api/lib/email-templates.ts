@@ -1,3 +1,5 @@
+// ABOUTME: Reusable branded email and SMS template builders for transactional communication.
+// ABOUTME: Keeps invitation, onboarding, password reset, and broadcast copy consistent across the app.
 export function welcomeEmailHtml(name: string, businessName: string, accountId: string, loginUrl: string): string {
   return `
 <!DOCTYPE html>
@@ -194,8 +196,75 @@ ${message}
 
 This is an announcement from the Finaflow team. No action is required unless stated above.
 
+Â© Finaflow. All rights reserved.
+`.trim();
+}
+
+type LeadInvitationTemplateParams = {
+  contactName: string;
+  referrerName: string;
+  businessName: string;
+  referralCode: string;
+  referralLink: string;
+};
+
+export function leadInvitationEmailHtml(params: LeadInvitationTemplateParams): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>You have been invited to Finaflow</title>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #2D2A26; }
+    .container { max-width: 600px; margin: 0 auto; padding: 24px; }
+    .brand { color: #C73E1D; font-weight: bold; font-size: 24px; margin-bottom: 24px; }
+    .card { background: #FFF9F5; border-radius: 12px; padding: 24px; margin: 24px 0; }
+    .button { display: inline-block; background: #C73E1D; color: #ffffff !important; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; }
+    .label { color: #8D8A87; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .value { font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+    .footer { color: #8D8A87; font-size: 12px; margin-top: 32px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="brand">Finaflow</div>
+    <h1>${escapeHtml(params.referrerName)} invited you to Finaflow</h1>
+    <p>Hi ${escapeHtml(params.contactName)},</p>
+    <p>${escapeHtml(params.referrerName)} believes ${escapeHtml(params.businessName)} should be on Finaflow and shared a direct invite with you.</p>
+    <div class="card">
+      <div class="label">Referral Code</div>
+      <div class="value">${escapeHtml(params.referralCode)}</div>
+      <p style="margin: 0 0 16px 0;">Use the referral link below to create your account.</p>
+      <a href="${escapeHtml(params.referralLink)}" class="button">Accept Invite</a>
+    </div>
+    <p>If the button does not work, copy and paste this link into your browser:</p>
+    <p><a href="${escapeHtml(params.referralLink)}">${escapeHtml(params.referralLink)}</a></p>
+    <div class="footer">
+      <p>© Finaflow. All rights reserved.</p>
+    </div>
+  </div>
+</body>
+</html>
+`.trim();
+}
+
+export function leadInvitationEmailText(params: LeadInvitationTemplateParams): string {
+  return `Hi ${params.contactName},
+
+${params.referrerName} invited ${params.businessName} to join Finaflow.
+
+Referral code: ${params.referralCode}
+Sign up link: ${params.referralLink}
+
+Use the referral link or code when creating the account.
+
 © Finaflow. All rights reserved.
 `.trim();
+}
+
+export function leadInvitationSmsText(params: Omit<LeadInvitationTemplateParams, "contactName">): string {
+  return `${params.referrerName} invited ${params.businessName} to Finaflow. Use code ${params.referralCode} or sign up here: ${params.referralLink}`;
 }
 
 function escapeHtml(value: string): string {

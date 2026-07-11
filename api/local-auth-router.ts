@@ -31,6 +31,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_TRIAL_DAYS, getPlanConfig } from "./lib/subscriptions";
 import { provisionBusiness, seedBusinessAccounting } from "./lib/business-provisioning";
+import { markLeadConverted } from "./lib/leads";
 
 const JWT_ALG = "HS256";
 const JWT_SECRET = new TextEncoder().encode(env.appSecret);
@@ -731,6 +732,21 @@ export const localAuthRouter = createRouter({
         await seedBusinessAccounting(businessId, locationId).catch((err) =>
           console.error("[register] seedAccountingData failed", err)
         );
+      }
+
+      try {
+        await markLeadConverted(db, {
+          email: input.email,
+          phone: input.phone || null,
+          matchedUserId: userId,
+          matchedAccountRefId: accountRefId,
+          matchedBusinessId: businessId,
+          referredByBusinessId,
+          referredByUserId,
+          referralCodeUsed: input.referralCode?.trim().toUpperCase() || null,
+        });
+      } catch (error) {
+        console.error("[register] lead attribution failed", error);
       }
 
       const token = await signLocalToken({ userId, username: input.username });

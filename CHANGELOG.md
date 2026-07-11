@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased] - Partner Leads Engine, Settings Referral Attribution, and Allocation Visibility
+
+Implemented the partner leads engine foundation, added account-level post-signup referral attribution in Settings, added the new Partner Dashboard leads workspace, and corrected allocation visibility so business owners still keep their owner-side allocation management in Businesses while partner-only claim access stays restricted.
+
+### Added
+- **Leads engine backend** - added the `leads` table, migration `0029_partner_leads`, lead normalization/matching helpers, invitation templates, and the new `leads` API router for create/list/update/email/SMS invite flows (`db/schema.ts`, `db/migrations/0029_partner_leads.sql`, `api/lib/leads.ts`, `api/leads-router.ts`, `api/router.ts`, `api/lib/email-templates.ts`).
+- **Signup and Settings referral attribution** - signup now marks matching leads as converted, and Settings can now save an account-level `Referred By` code with commission-eligibility feedback (`api/local-auth-router.ts`, `api/account-subscriptions-router.ts`, `src/pages/Settings.tsx`).
+- **Partner Dashboard leads workspace** - added the `Leads` tab, lead metrics, lead management UI, and owner allocation management in the dashboard (`src/pages/PartnerDashboard.tsx`, `src/components/partner/LeadsTab.tsx`, `src/components/partner/LeadFormDialog.tsx`, `src/components/partner/LeadStatusBadge.tsx`).
+
+### Changed
+- **Allocation visibility corrected** - restored owner-side `Partner Allocations` management in `Businesses` for business managers/owners, while keeping the claim-side allocation surface gated in `AllocationsTab` for partner/admin users (`src/pages/Businesses.tsx`, `src/components/partner/AllocationsTab.tsx`, `api/partner-router.ts`).
+
+### Tests
+- Added backend coverage for leads router flows, account-level referral attribution, and allocation authorization (`api/__tests__/leads-router.test.ts`, `api/__tests__/account-subscription-referral.test.ts`, `api/__tests__/partner-allocation-authorization.test.ts`, `api/lib/__tests__/leads.test.ts`, `api/__tests__/local-auth-registration.test.ts`).
+- Added frontend regression coverage for Settings referral UI, Businesses allocation visibility, and Partner Dashboard tab wiring (`src/pages/__tests__/partner-dashboard-visibility.test.ts`).
+- Verified the corrected owner allocation behavior with `npx vitest run api/__tests__/partner-allocation-authorization.test.ts src/pages/__tests__/partner-dashboard-visibility.test.ts`.
+
 ## [Unreleased] — Fina Connect target-business visibility
 
 Show which sibling business each connected business is paired with, so users can tell at a glance which FinaBill/FinaFlow business they are linked to.
