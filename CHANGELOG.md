@@ -1,5 +1,31 @@
 # Changelog
 
+## [Unreleased] - Dashboard Coherence: Featured Cash Position, 30-Day Cashflow Trend, and Mobile Wallet Mirror
+
+Made the main `/dashboard` page read top-down (position → trend → KPIs → details → alerts → summaries), added three new cards, and fixed the long-standing data-visibility gap where `summary.wallet` was returned by the backend but never rendered.
+
+### Added
+- **Featured Cash Position card** - new full-width hero card showing total cash on hand across all branches with a horizontal stacked bar breaking the total down by account type (Cash / Bank / Wallet / Other). Uses the `#2E7D32` gradient aesthetic from `Home.tsx` (`src/features/dashboard/CashPositionCard.tsx`, `src/features/dashboard/cash-position.ts`).
+- **30-Day Cashflow Trend chart** - new Recharts ComposedChart showing daily sales (area), expenses (bars), and net (line) over the selected period, with an empty-state fallback and a KES-denominated y-axis (`src/features/dashboard/CashflowTrendCard.tsx`, `src/features/dashboard/cashflow-trend-data.ts`).
+- **Mobile Wallet Summary card** - mirrors the existing M-PESA Summary block and reads from the previously-orphaned `summary.wallet` field. Falls back to a one-line empty state when no wallet activity exists (`src/features/dashboard/MobileWalletSummaryCard.tsx`).
+- **`dashboard.cashflowTrend` query** - new tRPC query that returns a dense per-day series of `{ date, sales, expenses, net }` for the requested date range, respecting the same `getCurrentBusinessLocationIds` filter as `summary` (`api/dashboard-router.ts`).
+- **`summary.previousPeriodTotals`** - the same-window total sales and total expenses for the period of equal length immediately preceding the current range, used to compute the trend % on each KPI card (`api/dashboard-router.ts`).
+- **`summary.cashPosition`** - aggregated cash position broken down by account type, returned alongside the existing `accounts` array (`api/dashboard-router.ts`).
+- **TrendKpiCard** - replacement for the in-page `KpiCard` helper. Adds a trend % badge in the corner (▲ green / ▼ red / — grey) computed from `previousPeriodTotals`, plus a gradient background that matches the Home page aesthetic (`src/features/dashboard/TrendKpiCard.tsx`).
+- **BillsPipelineCard** - unified card with three timeline sections (Overdue, Due in 7 Days, Due in 8–30 Days) that replaces the two separate alert cards and surfaces the previously-orphaned `alerts.upcomingBills30` data (`src/features/dashboard/BillsPipelineCard.tsx`).
+- **TodayStrip** - compact two-up row showing "Yesterday's Income" (from `dashboard.previousDayIncome`) and "Pending Today" (count + amount from `dashboard.dailyPayments`) to anchor the user in the right-now before they read the period view (`src/features/dashboard/TodayStrip.tsx`).
+
+### Changed
+- **Dashboard layout reshuffled** - new top-down order: header → Cash Position → 4 KPI cards (with trend %) → Today Strip + 30-day trend chart → Account Balances + Quick Actions → Bills Pipeline → M-PESA + Mobile Wallet pair (`src/pages/Dashboard.tsx`).
+- **KPI count reduced from 5 to 4** - "Unpaid Sales" was removed because it duplicates the Bills Pipeline. The remaining KPIs (Total Sales, Total Expenses, Net Cashflow, Bills Due) now fit cleanly on a 4-column grid at `lg:` and stack properly on mobile.
+- **M-PESA Summary retained inline** - the M-PESA block stays where it is; only a sibling Mobile Wallet card was added so the layout is now symmetric. The original M-PESA markup was untouched to avoid scope creep.
+- **Permission gating on new cards** - `CashPositionCard` and the KPI row gate on `ACCOUNTS_VIEW`; `MobileWalletSummaryCard` gates on `WALLET_VIEW`; `BillsPipelineCard` gates on `BILLS_VIEW`. `TodayStrip` and `CashflowTrendCard` always render.
+
+### Tests
+- Added unit coverage for the cash position aggregator and the cashflow trend chart helpers (`src/features/dashboard/__tests__/cash-position.test.ts`, `src/features/dashboard/__tests__/cashflow-trend-data.test.ts`).
+- Added source-level regression test asserting the new feature sub-components are wired into the Dashboard page and the in-page `KpiCard` helper is gone (`src/pages/__tests__/dashboard-coherence.test.ts`).
+- Added backend source-level regression test for the new `cashflowTrend` query, the `previousPeriodTotals` extension, and the `cashPosition` extension (`api/__tests__/dashboard-summary-extensions.test.ts`).
+
 ## [Unreleased] - Partner Leads Engine, Settings Referral Attribution, and Allocation Visibility
 
 Implemented the partner leads engine foundation, added account-level post-signup referral attribution in Settings, added the new Partner Dashboard leads workspace, and corrected allocation visibility so business owners still keep their owner-side allocation management in Businesses while partner-only claim access stays restricted.

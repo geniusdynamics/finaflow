@@ -17,10 +17,26 @@ export const dashboardRouter = createRouter({
       } else {
         locationFilter = await getCurrentBusinessLocationIds(ctx);
         if (locationFilter.length === 0) {
-          return { totalSales: "0", totalExpenses: "0", totalBillsDue: "0", totalUnpaidSales: "0", netCashflow: "0", accounts: [], mpesa: { totalIn: "0", totalOut: "0", totalFees: "0" } };
+          return {
+            totalSales: "0", totalExpenses: "0", totalBillsDue: "0", totalUnpaidSales: "0", netCashflow: "0",
+            previousPeriodTotals: { totalSales: "0", totalExpenses: "0" },
+            cashPosition: { total: "0", byType: { cash: "0", bank: "0", wallet: "0", other: "0" } },
+            accounts: [], mpesa: { totalIn: "0", totalOut: "0", totalFees: "0" },
+            wallet: { totalIn: "0", totalOut: "0", totalFees: "0" },
+          };
         }
       }
       const locIdSql = sql.join(locationFilter.map(id => sql`${id}`), sql`, `);
+
+      // Prior period window: same length, immediately preceding dateFrom..dateTo.
+      // Computed in JS so we don't depend on DB-specific date math.
+      const fromDate = new Date(`${input.dateFrom}T00:00:00Z`);
+      const toDate = new Date(`${input.dateTo}T00:00:00Z`);
+      const periodMs = toDate.getTime() - fromDate.getTime();
+      const priorTo = new Date(fromDate.getTime() - 86400000);
+      const priorFrom = new Date(priorTo.getTime() - periodMs);
+      const priorFromStr = priorFrom.toISOString().split("T")[0];
+      const priorToStr = priorTo.toISOString().split("T")[0];
 
       const salesConditions = [sql`${dailySales.saleDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`, isNull(dailySales.deletedAt), sql`${dailySales.locationId} IN (${locIdSql})`];
       const salesR = await db.select({ total: sql<string>`COALESCE(SUM(${dailySales.netSales}), 0)` }).from(dailySales).where(and(...salesConditions));
@@ -34,6 +50,27 @@ export const dashboardRouter = createRouter({
       const unpaidR = await db.select({ total: sql<string>`COALESCE(SUM(${dailySales.unpaidAmount}), 0)` }).from(dailySales).where(and(...salesConditions));
 
       const accts = await db.select().from(accounts).where(and(sql`${accounts.locationId} IN (${locIdSql})`, isNull(accounts.deletedAt), eq(accounts.isActive, true), isNull(accounts.accountType)));
+
+      // Prior period totals for the trend % on KPI cards.
+      const priorSalesConditions = [sql`${dailySales.saleDate} BETWEEN ${priorFromStr} AND ${priorToStr}`, isNull(dailySales.deletedAt), sql`${dailySales.locationId} IN (${locIdSql})`];
+      const priorSalesR = await db.select({ total: sql<string>`COALESCE(SUM(${dailySales.netSales}), 0)` }).from(dailySales).where(and(...priorSalesConditions));
+      const priorExpConditions = [sql`${expenses.expenseDate} BETWEEN ${priorFromStr} AND ${priorToStr}`, isNull(expenses.deletedAt), sql`${expenses.locationId} IN (${locIdSql})`];
+      const priorExpR = await db.select({ total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)` }).from(expenses).where(and(...priorExpConditions));
+
+      // Aggregate cash position by account.type using decimal.js for safety.
+      const cashPosition = accts.reduce(
+        (acc, a) => {
+          const balance = d(a.currentBalance);
+          acc.total = acc.total.plus(balance);
+          const t = (a.type ?? "other").toLowerCase();
+          if (t === "cash") acc.byType.cash = acc.byType.cash.plus(balance);
+          else if (t === "bank") acc.byType.bank = acc.byType.bank.plus(balance);
+          else if (t === "wallet") acc.byType.wallet = acc.byType.wallet.plus(balance);
+          else acc.byType.other = acc.byType.other.plus(balance);
+          return acc;
+        },
+        { total: d(0), byType: { cash: d(0), bank: d(0), wallet: d(0), other: d(0) } },
+      );
       const mpR = await db.select({
         totalIn: sql<string>`COALESCE(SUM(CASE WHEN ${mpesaTransactions.amount} > 0 THEN ${mpesaTransactions.amount} ELSE 0 END), 0)`,
         totalOut: sql<string>`COALESCE(SUM(CASE WHEN ${mpesaTransactions.amount} < 0 THEN ABS(${mpesaTransactions.amount}) ELSE 0 END), 0)`,
@@ -51,10 +88,72 @@ export const dashboardRouter = createRouter({
         totalBillsDue: billsR[0]?.total ?? "0",
         totalUnpaidSales: unpaidR[0]?.total ?? "0",
         netCashflow: d(salesR[0]?.total ?? "0").minus(d(expR[0]?.total ?? "0")).toFixed(2),
+        previousPeriodTotals: {
+          totalSales: priorSalesR[0]?.total ?? "0",
+          totalExpenses: priorExpR[0]?.total ?? "0",
+        },
+        cashPosition: {
+          total: cashPosition.total.toFixed(2),
+          byType: {
+            cash: cashPosition.byType.cash.toFixed(2),
+            bank: cashPosition.byType.bank.toFixed(2),
+            wallet: cashPosition.byType.wallet.toFixed(2),
+            other: cashPosition.byType.other.toFixed(2),
+          },
+        },
         accounts: accts.map((a) => ({ id: a.id, name: a.name, type: a.type, currentBalance: a.currentBalance })),
         mpesa: { totalIn: mpR[0]?.totalIn ?? "0", totalOut: mpR[0]?.totalOut ?? "0", totalFees: mpR[0]?.totalFees ?? "0" },
         wallet: { totalIn: walletR[0]?.totalIn ?? "0", totalOut: walletR[0]?.totalOut ?? "0", totalFees: walletR[0]?.totalFees ?? "0" },
       };
+    }),
+
+  cashflowTrend: authedQuery
+    .input(z.object({ dateFrom: z.string(), dateTo: z.string(), locationId: z.number().optional() }))
+    .query(async ({ input, ctx }) => {
+      const db = getDb();
+      let locationFilter: number[] | null = null;
+      if (input.locationId) {
+        locationFilter = [input.locationId];
+      } else {
+        locationFilter = await getCurrentBusinessLocationIds(ctx);
+        if (locationFilter.length === 0) return { days: [] };
+      }
+      const locIdSql = sql.join(locationFilter.map(id => sql`${id}`), sql`, `);
+
+      // Build a dense date array between dateFrom and dateTo (inclusive).
+      // Using UTC dates to match the YYYY-MM-DD string format used elsewhere.
+      const from = new Date(`${input.dateFrom}T00:00:00Z`);
+      const to = new Date(`${input.dateTo}T00:00:00Z`);
+      const dayCount = Math.max(0, Math.round((to.getTime() - from.getTime()) / 86400000) + 1);
+      const dayMap = new Map<string, { date: string; sales: string; expenses: string; net: string }>();
+      for (let i = 0; i < dayCount; i++) {
+        const d2 = new Date(from.getTime() + i * 86400000);
+        const dateStr = d2.toISOString().split("T")[0];
+        dayMap.set(dateStr, { date: dateStr, sales: "0", expenses: "0", net: "0" });
+      }
+
+      const salesByDay = await db.select({
+        day: sql<string>`to_char(${dailySales.saleDate}, 'YYYY-MM-DD')`,
+        total: sql<string>`COALESCE(SUM(${dailySales.netSales}), 0)`,
+      }).from(dailySales).where(and(sql`${dailySales.saleDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`, isNull(dailySales.deletedAt), sql`${dailySales.locationId} IN (${locIdSql})`)).groupBy(sql`${dailySales.saleDate}`);
+
+      const expByDay = await db.select({
+        day: sql<string>`to_char(${expenses.expenseDate}, 'YYYY-MM-DD')`,
+        total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`,
+      }).from(expenses).where(and(sql`${expenses.expenseDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`, isNull(expenses.deletedAt), sql`${expenses.locationId} IN (${locIdSql})`)).groupBy(sql`${expenses.expenseDate}`);
+
+      for (const row of salesByDay) {
+        const entry = dayMap.get(row.day);
+        if (entry) entry.sales = row.total;
+      }
+      for (const row of expByDay) {
+        const entry = dayMap.get(row.day);
+        if (entry) entry.expenses = row.total;
+      }
+      for (const entry of dayMap.values()) {
+        entry.net = d(entry.sales).minus(d(entry.expenses)).toFixed(2);
+      }
+      return { days: Array.from(dayMap.values()) };
     }),
 
   alerts: authedQuery.query(async ({ ctx }) => {
