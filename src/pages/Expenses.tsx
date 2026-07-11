@@ -84,6 +84,8 @@ export function Expenses() {
   const [catOpen, setCatOpen] = useState(false);
   const [editCat, setEditCat] = useState<number | null>(null);
   const [tab, setTab] = useState<"expenses" | "categories">("expenses");
+  const [addCategoryOpen, setAddCategoryOpen] = useState(false);
+  const [addSupplierOpen, setAddSupplierOpen] = useState(false);
 
   // Filters
   const [branchFilter, setBranchFilter] = useState<string>("");
@@ -471,22 +473,16 @@ export function Expenses() {
                     />
                   </div>
                   {!hasMultiCategoryItems && (
-                    <div className="flex items-end gap-2">
-                      <ExpenseCategorySelector
-                        className="flex-1"
-                        categories={categories}
-                        value={form.categoryIds[0]?.toString() ?? ""}
-                        onChange={v => setForm(p => ({ ...p, categoryIds: v ? [parseInt(v)] : [] }))}
-                        label={<>Category {form.billId && selectedBill?.categoryId && <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span>}</>}
-                        hint={form.billId ? (selectedBill?.categoryId ? "Category from linked bill." : (selectedSupplier?.autoCategoryId ? "Using supplier default." : undefined)) : undefined}
-                      />
-                      {canManageCategories && (
-                        <QuickCategoryDialog
-                          businessId={user?.currentBusinessId ?? 0}
-                          onCreated={(id) => setForm(p => ({ ...p, categoryIds: [id] }))}
-                        />
-                      )}
-                    </div>
+                    <ExpenseCategorySelector
+                      className="flex-1"
+                      categories={categories}
+                      value={form.categoryIds[0]?.toString() ?? ""}
+                      onChange={v => setForm(p => ({ ...p, categoryIds: v ? [parseInt(v)] : [] }))}
+                      label={<>Category {form.billId && selectedBill?.categoryId && <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span>}</>}
+                      hint={form.billId ? (selectedBill?.categoryId ? "Category from linked bill." : (selectedSupplier?.autoCategoryId ? "Using supplier default." : undefined)) : undefined}
+                      onAddNew={canManageCategories ? () => setAddCategoryOpen(true) : undefined}
+                      addNewLabel="Add category"
+                    />
                   )}
                 </div>
 
@@ -553,14 +549,23 @@ export function Expenses() {
                 </div>
                 <div>
                   <Label>Supplier {form.billId ? <span className="text-xs text-[#2E7D32] font-normal">(from bill)</span> : ""}</Label>
-                  <div className="flex items-end gap-2">
-                    <select value={form.supplierId} onChange={e => setForm(p => ({ ...p, supplierId: e.target.value, billId: "" }))} className="flex-1 rounded border px-3 py-2 text-sm" disabled={!!form.billId}>
-                      <option value="">{form.billId ? "Auto-filled from bill" : "Optional"}</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                    </select>
-                    {!form.billId && canManageSuppliers && (
-                      <QuickSupplierDialog onCreated={(id) => setForm(p => ({ ...p, supplierId: String(id), billId: "" }))} />
-                    )}
-                  </div>
+                  <select
+                    value={form.supplierId}
+                    onChange={e => {
+                      const v = e.target.value;
+                      if (v === "__add_supplier__") {
+                        setAddSupplierOpen(true);
+                        return;
+                      }
+                      setForm(p => ({ ...p, supplierId: v, billId: "" }));
+                    }}
+                    className="w-full rounded border px-3 py-2 text-sm"
+                    disabled={!!form.billId}
+                  >
+                    <option value="">{form.billId ? "Auto-filled from bill" : "Optional"}</option>
+                    {suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    {!form.billId && canManageSuppliers && <option value="__add_supplier__">+ Add supplier</option>}
+                  </select>
                 </div>
                 {selectedSupplier && (
                   <div className="rounded-lg bg-[#F5EDE6] p-2 text-xs text-[#2D2A26]">
@@ -943,6 +948,22 @@ export function Expenses() {
         </>
         )}
       </div>
+
+      {canManageCategories && (
+        <QuickCategoryDialog
+          businessId={user?.currentBusinessId ?? 0}
+          open={addCategoryOpen}
+          onOpenChange={setAddCategoryOpen}
+          onCreated={(id) => setForm(p => ({ ...p, categoryIds: [id] }))}
+        />
+      )}
+      {canManageSuppliers && (
+        <QuickSupplierDialog
+          open={addSupplierOpen}
+          onOpenChange={setAddSupplierOpen}
+          onCreated={(id) => setForm(p => ({ ...p, supplierId: String(id), billId: "" }))}
+        />
+      )}
     </Layout>
   );
 }

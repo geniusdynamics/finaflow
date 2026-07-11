@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
 type CategoryMode = "system" | "link";
@@ -22,10 +21,24 @@ interface QuickCategoryDialogProps {
   onCreated: (id: number) => void;
   disabled?: boolean;
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function QuickCategoryDialog({ businessId, onCreated, disabled, trigger }: QuickCategoryDialogProps) {
-  const [open, setOpen] = useState(false);
+export function QuickCategoryDialog({
+  businessId,
+  onCreated,
+  disabled: _disabled,
+  trigger,
+  open: controlledOpen,
+  onOpenChange,
+}: QuickCategoryDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (value: boolean) => {
+    onOpenChange?.(value);
+    setInternalOpen(value);
+  };
   const [form, setForm] = useState({
     name: "",
     description: "",
@@ -73,19 +86,7 @@ export function QuickCategoryDialog({ businessId, onCreated, disabled, trigger }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0 border-[#2E7D32] text-[#2E7D32] hover:bg-[#2E7D32]/10"
-            disabled={disabled}
-          >
-            <Plus className="mr-1 h-3.5 w-3.5" /> New
-          </Button>
-        )}
-      </DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-h-[90vh] overflow-y-auto bg-white">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl text-[#2D2A26]">New Expense Category</DialogTitle>

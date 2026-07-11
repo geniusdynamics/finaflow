@@ -4,16 +4,29 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
 interface QuickSupplierDialogProps {
   onCreated: (id: number) => void;
   disabled?: boolean;
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function QuickSupplierDialog({ onCreated, disabled }: QuickSupplierDialogProps) {
-  const [open, setOpen] = useState(false);
+export function QuickSupplierDialog({
+  onCreated,
+  disabled: _disabled,
+  trigger,
+  open: controlledOpen,
+  onOpenChange,
+}: QuickSupplierDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = (value: boolean) => {
+    onOpenChange?.(value);
+    setInternalOpen(value);
+  };
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -42,17 +55,7 @@ export function QuickSupplierDialog({ onCreated, disabled }: QuickSupplierDialog
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0 border-[#D4A854] text-[#D4A854] hover:bg-[#D4A854]/10"
-          disabled={disabled}
-        >
-          <Plus className="mr-1 h-3.5 w-3.5" /> New
-        </Button>
-      </DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-h-[90vh] overflow-y-auto bg-white">
         <DialogHeader>
           <DialogTitle className="font-serif text-xl text-[#2D2A26]">New Supplier</DialogTitle>
