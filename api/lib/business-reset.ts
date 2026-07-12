@@ -703,6 +703,19 @@ export async function resetBusinessTransactions(input: {
 
     // ── Step 11: Reset all account balances to zero (both current and opening), keep all active ───────
 
+    // Debug: Log accounts before reset
+    const accountsBeforeReset = await tx
+      .select({ id: accounts.id, name: accounts.name, businessId: accounts.businessId, locationId: accounts.locationId, currentBalance: accounts.currentBalance })
+      .from(accounts)
+      .where(and(
+        or(
+          eq(accounts.businessId, input.businessId),
+          locationIds.length > 0 ? inArray(accounts.locationId, locationIds) : eq(accounts.businessId, input.businessId)
+        ),
+        isNull(accounts.deletedAt)
+      ));
+    console.log('[business-reset] Accounts to reset:', JSON.stringify(accountsBeforeReset, null, 2));
+
     const resetAccounts = await tx
       .update(accounts)
       .set({ currentBalance: "0.00", openingBalance: "0.00", isActive: true })
@@ -714,6 +727,14 @@ export async function resetBusinessTransactions(input: {
         isNull(accounts.deletedAt)
       ))
       .returning({ id: accounts.id });
+    
+    // Debug: Log accounts after reset
+    const accountsAfterReset = await tx
+      .select({ id: accounts.id, name: accounts.name, currentBalance: accounts.currentBalance })
+      .from(accounts)
+      .where(inArray(accounts.id, resetAccounts.map(a => a.id)));
+    console.log('[business-reset] Accounts after reset:', JSON.stringify(accountsAfterReset, null, 2));
+    
     results.accounts = { count: resetAccounts.length };
     // User accounts are preserved (not soft-deleted), just zero-balanced
     results.user_accounts = { count: 0 };

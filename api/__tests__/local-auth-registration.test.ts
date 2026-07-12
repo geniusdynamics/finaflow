@@ -112,7 +112,10 @@ describe("Local Auth Registration", () => {
     expect(junctionRows).toHaveLength(1);
     expect(junctionRows[0].businessId).toBe(businessRows[0].id);
 
-    const locationRows = await db.select().from(locations).where(eq(locations.businessId, businessRows[0].id));
+    const locationRows = await db.select().from(locations).where(and(
+      eq(locations.businessId, businessRows[0].id),
+      isNull(locations.deletedAt)
+    ));
     expect(locationRows).toHaveLength(1);
 
     const accountRows = await db.select().from(accounts).where(eq(accounts.locationId, locationRows[0].id));
