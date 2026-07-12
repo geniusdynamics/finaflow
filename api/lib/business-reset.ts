@@ -709,7 +709,7 @@ export async function resetBusinessTransactions(input: {
       .where(and(
         or(
           eq(accounts.businessId, input.businessId),
-          inArray(accounts.locationId, locationIds)
+          locationIds.length > 0 ? inArray(accounts.locationId, locationIds) : eq(accounts.businessId, input.businessId)
         ),
         isNull(accounts.deletedAt)
       ))

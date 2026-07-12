@@ -35,7 +35,7 @@ describe("CurrencyConverter", () => {
     });
 
     it("throws error when no rate available", async () => {
-      await expect(converter.getRate("KES", "USD")).rejects.toThrow("No exchange rate");
+      await expect(converter.getRate("XXX", "YYY")).rejects.toThrow("No exchange rate");
     });
   });
 
