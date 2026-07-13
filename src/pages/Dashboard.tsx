@@ -76,7 +76,7 @@ export function Dashboard() {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-6 overflow-x-hidden">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -87,19 +87,19 @@ export function Dashboard() {
               Overview of your business cashflow
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               type="date"
               value={dateRange.from}
               onChange={(e) => setDateRange((p) => ({ ...p, from: e.target.value }))}
-              className="rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26]"
+              className="min-w-0 flex-1 rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26] sm:flex-none"
             />
             <span className="text-[#8D8A87]">to</span>
             <input
               type="date"
               value={dateRange.to}
               onChange={(e) => setDateRange((p) => ({ ...p, to: e.target.value }))}
-              className="rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26]"
+              className="min-w-0 flex-1 rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26] sm:flex-none"
             />
           </div>
         </div>

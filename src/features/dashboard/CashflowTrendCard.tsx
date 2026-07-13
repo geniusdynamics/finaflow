@@ -7,7 +7,6 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -105,9 +104,8 @@ export function CashflowTrendCard({ days, className }: CashflowTrendCardProps) {
             No cashflow activity in the selected period
           </div>
         ) : (
-          <ChartContainer className="h-[260px] w-full" config={chartConfig}>
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+          <ChartContainer className="h-[260px] w-full min-w-0 sm:aspect-auto [&_.recharts-surface]:!overflow-visible" config={chartConfig}>
+              <ComposedChart data={data} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="salesFill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#2E7D32" stopOpacity={0.35} />
@@ -156,7 +154,6 @@ export function CashflowTrendCard({ days, className }: CashflowTrendCardProps) {
                   activeDot={{ r: 4, fill: "#C73E1D" }}
                 />
               </ComposedChart>
-            </ResponsiveContainer>
           </ChartContainer>
         )}
       </CardContent>
