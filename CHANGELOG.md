@@ -2,10 +2,10 @@
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-07-12
+## [1.1.1] - 2026-07-11
 
 ### Changed
-- **Version bump to 1.1.0** - Updated application version across package.json, version.ts, and CHANGELOG.md in preparation for deployment.
+- **Version bump to 1.1.1** - Updated application version across package.json, package-lock.json, version.ts, and CHANGELOG.md in preparation for deployment.
 
 ## [Unreleased] - Dashboard Coherence: Featured Cash Position, 30-Day Cashflow Trend, and Mobile Wallet Mirror
 
