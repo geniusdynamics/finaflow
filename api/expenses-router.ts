@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, expenseQuery, expenseViewOrCreate, expenseCreate, expenseManage, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
+import { createRouter, expenseQuery, expenseViewOrCreate, expenseCreate, expenseManage, expenseCategoriesManage, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
 import { expenses, expenseItems, expenseCategories, accounts, ledgerEntries, suppliers, bills, attachments, locations } from "@db/schema";
 import { eq, and, isNull, desc, sql } from "drizzle-orm";
@@ -10,6 +10,7 @@ import { ensureSystemAccount } from "./lib/accounting-accounts";
 import { getExpenseAccountSubType } from "./lib/accounting-maps";
 import { payBill } from "./lib/bill-payment";
 import { reverseLedgerEntriesForTransaction } from "./lib/accounting-reversal";
+import { triggerExpenseCreated } from "./lib/webhook-triggers";
 
 export const expenseItemInputSchema = z.object({
   itemName: z.string().min(1),
@@ -78,7 +79,7 @@ export const expensesRouter = createRouter({
       .orderBy(expenseCategories.name);
   }),
 
-  createCategory: expenseCreate
+  createCategory: expenseCategoriesManage
     .input(z.object({ 
       name: z.string().min(1).max(100), 
       description: z.string().optional(), 
@@ -150,7 +151,7 @@ export const expensesRouter = createRouter({
       return { id: result.id, success: true };
     }),
 
-  updateCategory: expenseManage
+  updateCategory: expenseCategoriesManage
     .input(z.object({ 
       id: z.number(), 
       name: z.string().min(1).max(100).optional(), 
@@ -227,7 +228,7 @@ export const expensesRouter = createRouter({
       return { success: true };
     }),
 
-  deleteCategory: expenseManage
+  deleteCategory: expenseCategoriesManage
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
@@ -469,6 +470,12 @@ export const expensesRouter = createRouter({
 
       });
 
+      void triggerExpenseCreated(businessId, {
+        expenseId,
+        amount: input.amount,
+        accountId: accountId ?? null,
+      });
+
       return { id: expenseId, expenseNumber, success: true };
     }),
 
@@ -489,18 +496,38 @@ export const expensesRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      await requireAuthorizedEntity(ctx, expenses, input.id);
+      const expense = await requireAuthorizedEntity(ctx, expenses, input.id);
+      const expenseLedgerFilter = and(
+        eq(ledgerEntries.transactionId, input.id),
+        eq(ledgerEntries.transactionType, "expense" as any),
+        isNull(ledgerEntries.deletedAt),
+      );
       const existingLedger = await db
         .select({ id: ledgerEntries.id })
         .from(ledgerEntries)
-        .where(eq(ledgerEntries.transactionId, input.id))
+        .where(expenseLedgerFilter)
         .limit(1);
 
-      if (existingLedger[0]) {
+      if (existingLedger[0] && !expense.reversedAt) {
         throw new Error("Posted expenses cannot be deleted. Reverse the posted entry instead.");
       }
 
-      await db.update(expenses).set({ deletedAt: new Date() }).where(eq(expenses.id, input.id));
+      await db.transaction(async (tx) => {
+        await tx
+          .update(ledgerEntries)
+          .set({ deletedAt: new Date() })
+          .where(
+            and(
+              eq(ledgerEntries.transactionId, input.id),
+              eq(ledgerEntries.transactionType, "expense" as any),
+            ),
+          );
+        await tx
+          .update(expenseItems)
+          .set({ deletedAt: new Date() })
+          .where(eq(expenseItems.expenseId, input.id));
+        await tx.update(expenses).set({ deletedAt: new Date() }).where(eq(expenses.id, input.id));
+      });
       return { success: true };
     }),
 
@@ -515,12 +542,13 @@ export const expensesRouter = createRouter({
       }
 
       await db.transaction(async (tx) => {
-        await reverseLedgerEntriesForTransaction({
+await reverseLedgerEntriesForTransaction({
           db: tx,
           transactionId: input.id,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           userId: (ctx as any).user?.id ?? 1,
           reason: input.reason,
+          transactionTypes: ["expense"],
         });
 
         await tx

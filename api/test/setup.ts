@@ -22,7 +22,7 @@ import { airtelMoneyProvider } from "../lib/mobile-wallet/providers/airtel-money
 const skipTestDatabaseBootstrap = process.env.SKIP_API_TEST_DB === "1";
 
 // Increase timeout for database bootstrapping since it involves DDL operations
-const BOOTSTRAP_TIMEOUT = 60_000;
+const BOOTSTRAP_TIMEOUT = 120_000;
 
 async function tableExists(testPool: pg.Pool, tableName: string): Promise<boolean> {
   const result = await testPool.query(
@@ -184,6 +184,16 @@ async function ensureTestDatabase(): Promise<void> {
   });
 
   try {
+    // Defensive cleanup of stale test data before migrations. Leftover rows in
+    // location-related tables can cause duplicate-key failures during migration
+    // 0013; truncate them so each suite starts from a clean migration baseline.
+    if (await tableExists(testPool, "locations")) {
+      await testPool.query('TRUNCATE TABLE "locations" CASCADE');
+    }
+    if (await tableExists(testPool, "user_locations")) {
+      await testPool.query('TRUNCATE TABLE "user_locations" CASCADE');
+    }
+
     const baseSchemaPath = path.resolve(
       import.meta.dirname,
       "../../db/migrations/0000_outgoing_christian_walker.sql",
@@ -220,6 +230,14 @@ async function ensureTestDatabase(): Promise<void> {
       "0021_email_logs.sql",
       "0022_owner_broadcasts.sql",
       "0023_notification_priority_and_links.sql",
+      "0016_fresh_impossible_man.sql",
+      "0018_silent_lorna_dane.sql",
+      "0024_api_keys_expires_at.sql",
+      "0025_integration_connections_and_channel_maps.sql",
+      "0026_fina_connect_sessions.sql",
+      "0027_fina_connect_target_business.sql",
+      "0028_wallet_reconciliation_tenant_scope.sql",
+      "0029_partner_leads.sql",
     ]) {
       const p = path.resolve(import.meta.dirname, `../../db/migrations/${file}`);
       if (fs.existsSync(p)) {
@@ -240,7 +258,22 @@ beforeAll(async () => {
   if (skipTestDatabaseBootstrap) {
     return;
   }
-  await ensureTestDatabase();
+
+  // Retry bootstrap once if a transient connection race occurs.
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await ensureTestDatabase();
+      return;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 1) {
+        console.warn("Test database bootstrap failed, retrying once:", (error as Error)?.message);
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+    }
+  }
+  throw lastError;
 }, BOOTSTRAP_TIMEOUT);
 
 // Pool is not explicitly closed here because this is a shared setup file loaded for every test suite.

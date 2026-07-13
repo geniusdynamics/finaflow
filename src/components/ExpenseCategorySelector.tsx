@@ -16,7 +16,11 @@ interface ExpenseCategorySelectorProps {
   className?: string;
   disabled?: boolean;
   hint?: string;
+  onAddNew?: () => void;
+  addNewLabel?: string;
 }
+
+const ADD_NEW_VALUE = "__add_new__";
 
 export function ExpenseCategorySelector({
   categories = [],
@@ -28,6 +32,8 @@ export function ExpenseCategorySelector({
   className = "",
   disabled = false,
   hint,
+  onAddNew,
+  addNewLabel,
 }: ExpenseCategorySelectorProps) {
   const hasAutoSelected = useRef(false);
 
@@ -41,12 +47,23 @@ export function ExpenseCategorySelector({
     }
   }, [categories, value, onChange]);
 
+  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const next = e.target.value;
+    if (next === ADD_NEW_VALUE) {
+      onAddNew?.();
+      return;
+    }
+    onChange(next);
+  };
+
+  const resolvedAddNewLabel = addNewLabel ?? `Add ${typeof label === "string" ? label.toLowerCase() : "category"}`;
+
   return (
     <div className={`space-y-2 ${className}`}>
       {label && <Label>{label}</Label>}
       <select
         value={value}
-        onChange={e => onChange(e.target.value)}
+        onChange={handleChange}
         className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm"
         required={required}
         disabled={disabled}
@@ -55,6 +72,9 @@ export function ExpenseCategorySelector({
         {categories.map(c => (
           <option key={c.id} value={c.id}>{c.name}</option>
         ))}
+        {onAddNew && (
+          <option value={ADD_NEW_VALUE}>+ {resolvedAddNewLabel}</option>
+        )}
       </select>
       {hint && <p className="text-xs text-[#2E7D32]">{hint}</p>}
     </div>

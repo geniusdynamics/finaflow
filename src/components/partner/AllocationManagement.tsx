@@ -185,30 +185,36 @@ export function AllocationManagement() {
                 <CheckCircle className="h-5 w-5 text-[#2E7D32]" />
                 <span className="font-medium text-[#2E7D32]">Allocation Code Generated!</span>
               </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-[#8D8A87]">Code:</span>
-                  <code className="flex-1 rounded bg-white px-2 py-1 font-mono text-sm font-semibold text-[#2D2A26]">
-                    {generatedCode.code}
-                  </code>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => copyToClipboard(generatedCode.code, "Code")}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
+              <div className="space-y-3">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <span className="shrink-0 text-xs text-[#8D8A87]">Code:</span>
+                  <div className="flex flex-1 items-center gap-2">
+                    <code className="min-w-0 flex-1 truncate rounded bg-white px-2 py-1 font-mono text-sm font-semibold text-[#2D2A26]">
+                      {generatedCode.code}
+                    </code>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => copyToClipboard(generatedCode.code, "Code")}
+                      className="shrink-0"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Link2 className="h-4 w-4 text-[#8D8A87]" />
-                  <span className="flex-1 truncate text-xs text-[#8D8A87]">{generatedCode.link}</span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => copyToClipboard(generatedCode.link, "Link")}
-                  >
-                    <Copy className="h-4 w-4" />
-                  </Button>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Link2 className="h-4 w-4 shrink-0 text-[#8D8A87]" />
+                  <div className="flex flex-1 items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-xs text-[#8D8A87]">{generatedCode.link}</span>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => copyToClipboard(generatedCode.link, "Link")}
+                      className="shrink-0"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
               <p className="text-xs text-[#8D8A87]">
@@ -238,7 +244,8 @@ export function AllocationManagement() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              <div className="hidden overflow-x-auto md:block">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[#E8E0D8]">
@@ -284,7 +291,48 @@ export function AllocationManagement() {
                 </tbody>
               </table>
             </div>
-          )}
+
+            {/* Mobile cards */}
+            <div className="space-y-3 md:hidden">
+              {allocations.map((allocation) => (
+                <div
+                  key={allocation.id}
+                  className="rounded-lg border border-[#E8E0D8] bg-[#F5EDE6]/30 p-4"
+                >
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-[#2D2A26]">
+                        {allocation.businessName || `Business #${allocation.ownerBusinessId}`}
+                      </p>
+                      <p className="text-xs text-[#8D8A87]">
+                        {allocation.partnerUserName || `Partner #${allocation.partnerUserId}`}
+                      </p>
+                      {allocation.partnerUserEmail && (
+                        <p className="text-[10px] text-[#8D8A87]/70">{allocation.partnerUserEmail}</p>
+                      )}
+                    </div>
+                    {allocation.status === "active" && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setRevokeAllocationId(allocation.id)}
+                        className="shrink-0 text-[#D32F2F] hover:bg-[#D32F2F]/10 hover:text-[#D32F2F]"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    {getRightsBadge(allocation.rightsProfile)}
+                    {getStatusBadge(allocation.status)}
+                    <span className="text-[#8D8A87]">
+                      {formatDistanceToNow(new Date(allocation.createdAt), { addSuffix: true })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>)}
         </CardContent>
       </Card>
 

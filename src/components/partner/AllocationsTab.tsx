@@ -5,11 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/hooks/useAuth";
 import { Building2, Key, CheckCircle, XCircle, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
 export function AllocationsTab() {
+  const { user } = useAuth();
+  const canUsePartnerAllocations = user?.userType === "partner" || user?.role === "admin" || Boolean(user?.isSuperAdmin);
   const [allocationCode, setAllocationCode] = useState("");
   const { data: allocations, isLoading } = trpc.partner.listPartnerAllocations.useQuery();
   const utils = trpc.useUtils();
@@ -33,6 +36,16 @@ export function AllocationsTab() {
     }
     claimMutation.mutate({ code: allocationCode.trim().toUpperCase() });
   };
+
+  if (!canUsePartnerAllocations) {
+    return (
+      <Card className="border-[#E8E0D8]">
+        <CardContent className="py-10 text-center text-sm text-[#8D8A87]">
+          Partner allocations are available only to partner accounts and admins.
+        </CardContent>
+      </Card>
+    );
+  }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -92,7 +105,7 @@ export function AllocationsTab() {
           <p className="text-sm text-[#8D8A87]">
             Enter the allocation code provided by your client to gain access to their business.
           </p>
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <div className="flex-1">
               <Label htmlFor="allocationCode" className="text-xs text-[#8D8A87]">
                 Allocation Code
@@ -110,7 +123,7 @@ export function AllocationsTab() {
               <Button
                 onClick={handleClaim}
                 disabled={claimMutation.isPending || !allocationCode.trim()}
-                className="bg-[#C73E1D] hover:bg-[#A33317]"
+                className="w-full bg-[#C73E1D] hover:bg-[#A33317] sm:w-auto"
               >
                 {claimMutation.isPending ? "Claiming..." : "Claim Access"}
               </Button>
@@ -138,7 +151,9 @@ export function AllocationsTab() {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+              {/* Desktop table */}
+              <div className="hidden overflow-x-auto md:block">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-[#E8E0D8]">
@@ -168,7 +183,31 @@ export function AllocationsTab() {
                 </tbody>
               </table>
             </div>
-          )}
+
+            {/* Mobile cards */}
+            <div className="space-y-3 md:hidden">
+              {allocations.map((allocation) => (
+                <div
+                  key={allocation.id}
+                  className="rounded-lg border border-[#E8E0D8] bg-[#F5EDE6]/30 p-4"
+                >
+                  <p className="mb-1 text-sm font-medium text-[#2D2A26]">
+                    {allocation.businessName || `Business #${allocation.ownerBusinessId}`}
+                  </p>
+                  <p className="mb-3 text-xs text-[#8D8A87]">
+                    {allocation.businessAccountId || `Account #${allocation.ownerAccountId}`}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    {getRightsBadge(allocation.rightsProfile)}
+                    {getStatusBadge(allocation.status)}
+                    <span className="text-[#8D8A87]">
+                      {formatDistanceToNow(new Date(allocation.createdAt), { addSuffix: true })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>)}
         </CardContent>
       </Card>
     </div>

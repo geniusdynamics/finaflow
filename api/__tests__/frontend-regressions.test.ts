@@ -31,4 +31,27 @@ describe("Frontend regressions", () => {
 
     expect(source).not.toContain("<AuthLayout>{children}</AuthLayout>");
   });
+
+  it("refetches payment-method-by-location assignments after a successful branch assignment", () => {
+    const accountsPath = path.resolve(import.meta.dirname, "../../src/pages/Accounts.tsx");
+    const source = fs.readFileSync(accountsPath, "utf8");
+
+    expect(source).toContain("refetchLocMethods");
+    expect(source).toContain("utils.paymentMethods.byLocation.invalidate({ locationId: +tagLocId })");
+    expect(source).toContain("await refetchLocMethods();");
+  });
+
+  it("keeps the auth user profile fresh so assigned locations are current", () => {
+    const authPath = path.resolve(import.meta.dirname, "../../src/hooks/useAuth.ts");
+    const authSource = fs.readFileSync(authPath, "utf8");
+
+    expect(authSource).toContain("staleTime: 0");
+  });
+
+  it("invalidates the current user profile after user locations are updated", () => {
+    const usersPath = path.resolve(import.meta.dirname, "../../src/pages/Users.tsx");
+    const source = fs.readFileSync(usersPath, "utf8");
+
+    expect(source).toContain("utils.localAuth.me.invalidate()");
+  });
 });

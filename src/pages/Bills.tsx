@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Plus, CreditCard, AlertTriangle, CheckCircle, Clock, Trash2, Package, Search, Camera, Calendar, Repeat, FileText, RotateCcw, OctagonX } from "lucide-react";
 import { LocationSelector } from "@/components/LocationSelector";
 import { ExpenseCategorySelector } from "@/components/ExpenseCategorySelector";
+import { QuickSupplierDialog } from "@/components/QuickSupplierDialog";
+import { QuickCategoryDialog } from "@/components/QuickCategoryDialog";
 import { toast } from "sonner";
 
 function fileToBase64(file: File): Promise<string> {
@@ -52,12 +54,16 @@ export function Bills() {
   const canViewAll = hasPermission(permContext, PERMISSIONS.BILLS_VIEW);
   const canCreate = hasPermission(permContext, PERMISSIONS.BILLS_CREATE);
   const canPay = hasPermission(permContext, PERMISSIONS.BILLS_PAY);
+  const canManageSuppliers = hasPermission(permContext, PERMISSIONS.SUPPLIERS_MANAGE);
+  const canManageCategories = hasPermission(permContext, PERMISSIONS.EXPENSE_CATEGORIES_MANAGE);
   const canAccess = canViewAll || canCreate || canPay;
 
   const [open, setOpen] = useState(false);
   const [recurringOpen, setRecurringOpen] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState<number | null>(null);
   const [itemsOpen, setItemsOpen] = useState<number | null>(null);
+  const [addCategoryOpen, setAddCategoryOpen] = useState(false);
+  const [addSupplierOpen, setAddSupplierOpen] = useState(false);
 
   const { data: locations } = trpc.locations.list.useQuery();
   const { data: suppliers } = trpc.suppliers.list.useQuery();
@@ -268,7 +274,16 @@ export function Bills() {
                        />
                     </div>
                     <div><Label>Description</Label><Input value={recForm.description} onChange={e => setRecForm(p => ({...p, description: e.target.value}))} placeholder="e.g. Rent, License" required /></div>
-                    <div><ExpenseCategorySelector categories={categories} value={recForm.categoryId} onChange={v => setRecForm(p => ({...p, categoryId: v}))} label="Default Category" placeholder="Optional" /></div>
+                    <ExpenseCategorySelector
+                      className="flex-1"
+                      categories={categories}
+                      value={recForm.categoryId}
+                      onChange={v => setRecForm(p => ({...p, categoryId: v}))}
+                      label="Default Category"
+                      placeholder="Optional"
+                      onAddNew={canManageCategories ? () => setAddCategoryOpen(true) : undefined}
+                      addNewLabel="Add category"
+                    />
                     <div className="grid grid-cols-2 gap-3"><div><Label>Amount</Label><Input type="number" step="0.01" value={recForm.amount} onChange={e => setRecForm(p => ({...p, amount: e.target.value}))} required /></div><div><Label>Frequency</Label><select value={recForm.frequency} onChange={e => setRecForm(p => ({...p, frequency: e.target.value as "daily" | "weekly" | "monthly" | "quarterly" | "annually"}))} className="w-full rounded border px-3 py-2 text-sm"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="quarterly">Quarterly</option><option value="annually">Annually</option></select></div></div>
                     <div><Label>Next Due</Label><Input type="date" value={recForm.nextDueDate} onChange={e => setRecForm(p => ({...p, nextDueDate: e.target.value}))} required /></div>
                     <Button type="submit" className="w-full bg-[#C73E1D]" disabled={createRecurring.isPending}>{createRecurring.isPending ? "Saving..." : "Add Recurring"}</Button>
@@ -288,8 +303,35 @@ export function Bills() {
                         enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
                         required
                       />
-                    </div><div><Label>Supplier</Label><select value={form.supplierId} onChange={e => setForm(p => ({...p, supplierId: e.target.value}))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Optional</option>{suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div></div>
-                    <div><ExpenseCategorySelector categories={categories} value={form.categoryId} onChange={v => setForm(p => ({...p, categoryId: v}))} label="Category" placeholder="Use supplier/default logic" /></div>
+                    </div><div>
+                      <Label>Supplier</Label>
+                      <select
+                        value={form.supplierId}
+                        onChange={e => {
+                          const v = e.target.value;
+                          if (v === "__add_supplier__") {
+                            setAddSupplierOpen(true);
+                            return;
+                          }
+                          setForm(p => ({...p, supplierId: v}));
+                        }}
+                        className="w-full rounded border px-3 py-2 text-sm"
+                      >
+                        <option value="">Optional</option>
+                        {suppliers?.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                        {canManageSuppliers && <option value="__add_supplier__">+ Add supplier</option>}
+                      </select>
+                    </div></div>
+                    <ExpenseCategorySelector
+                      className="flex-1"
+                      categories={categories}
+                      value={form.categoryId}
+                      onChange={v => setForm(p => ({...p, categoryId: v}))}
+                      label="Category"
+                      placeholder="Use supplier/default logic"
+                      onAddNew={canManageCategories ? () => setAddCategoryOpen(true) : undefined}
+                      addNewLabel="Add category"
+                    />
                     <div><Label>Description</Label><Input value={form.description} onChange={e => setForm(p => ({...p, description: e.target.value}))} required /></div>
                     <div className="grid grid-cols-2 gap-3">
                       <div><Label>Bill Number <span className="text-[#8D8A87] font-normal">(optional)</span></Label><Input value={form.billNumber} onChange={e => setForm(p => ({...p, billNumber: e.target.value}))} placeholder="Auto: BILL-0001" /></div>
@@ -479,7 +521,7 @@ export function Bills() {
                   <div className="grid grid-cols-4 gap-2 items-end">
                     <div><Label className="text-xs">Qty</Label><Input type="number" step="0.001" value={itemForm.quantity} onChange={e => setItemForm(p => ({...p, quantity: e.target.value}))} required /></div>
                     <div><Label className="text-xs">Unit Price</Label><Input type="number" step="0.01" value={itemForm.unitPrice} onChange={e => setItemForm(p => ({...p, unitPrice: e.target.value}))} required /></div>
-                    <div><ExpenseCategorySelector categories={categories} value={itemForm.categoryId} onChange={v => setItemForm(p => ({...p, categoryId: v}))} label={<span className="text-xs">Category</span>} placeholder="Select" /></div>
+                    <div><ExpenseCategorySelector categories={categories} value={itemForm.categoryId} onChange={v => setItemForm(p => ({...p, categoryId: v}))} label={<span className="text-xs">Category</span>} placeholder="Select" onAddNew={canManageCategories ? () => setAddCategoryOpen(true) : undefined} addNewLabel="Add category" /></div>
                     <Button type="submit" className="bg-[#C73E1D]" disabled={addItem.isPending}><Plus className="h-4 w-4"/></Button>
                   </div>
                   {matchedMasterItem && (
@@ -491,6 +533,28 @@ export function Bills() {
           </Card>
         )}
       </div>
+
+      {canManageCategories && (
+        <QuickCategoryDialog
+          businessId={user?.currentBusinessId ?? 0}
+          open={addCategoryOpen}
+          onOpenChange={setAddCategoryOpen}
+          onCreated={(id) => {
+            if (form.categoryId === "") setForm(p => ({ ...p, categoryId: String(id) }));
+            if (recForm.categoryId === "") setRecForm(p => ({ ...p, categoryId: String(id) }));
+            if (itemForm.categoryId === "") setItemForm(p => ({ ...p, categoryId: String(id) }));
+          }}
+        />
+      )}
+      {canManageSuppliers && (
+        <QuickSupplierDialog
+          open={addSupplierOpen}
+          onOpenChange={setAddSupplierOpen}
+          onCreated={(id) => {
+            if (form.supplierId === "") setForm(p => ({ ...p, supplierId: String(id) }));
+          }}
+        />
+      )}
     </Layout>
   );
 }

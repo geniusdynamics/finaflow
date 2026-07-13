@@ -115,6 +115,9 @@ export function Users() {
       setEditOpen(null);
       utils.permissions.listUsers.invalidate();
       if (variables.role) utils.permissions.verifyRoleSync.invalidate({ userId: variables.id });
+      if ("locationIds" in variables && variables.locationIds !== undefined) {
+        utils.localAuth.me.invalidate();
+      }
     },
     onError: (err) => toast.error(err.message || "Failed to update user"),
   });
@@ -166,6 +169,7 @@ export function Users() {
       toast.success("Locations updated");
       utils.permissions.listUsers.invalidate();
       utils.users.getUserLocations.invalidate();
+      utils.localAuth.me.invalidate();
     },
     onError: (err) => toast.error(err.message || "Failed to update locations"),
   });

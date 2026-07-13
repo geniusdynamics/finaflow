@@ -9,6 +9,7 @@ import { notFutureDateString } from "./lib/future-date";
 import { toLocalDateKey } from "./lib/date-key";
 import { ensureSystemAccount } from "./lib/accounting-accounts";
 import { validateOperationalAccountClassification } from "./lib/accounting-validation";
+import { triggerCoaUpdated } from "./lib/webhook-triggers";
 import type { AccountType } from "@db/schema";
 
 type Db = ReturnType<typeof getDb>;
@@ -259,6 +260,12 @@ export const accountsRouter = createRouter({
         },
       });
 
+      void triggerCoaUpdated(businessId, {
+        accountId: result.id,
+        name: result.name,
+        accountCode: result.accountCode ?? null,
+      });
+
       return { id: result.id, success: true };
     }),
 
@@ -298,6 +305,14 @@ export const accountsRouter = createRouter({
         resourceId: id,
         details: updates,
       });
+
+      if (existing.businessId) {
+        void triggerCoaUpdated(existing.businessId, {
+          accountId: id,
+          name: input.name ?? existing.name,
+          accountCode: (input.accountCode ?? existing.accountCode) ?? null,
+        });
+      }
 
       return { success: true };
     }),

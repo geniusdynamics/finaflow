@@ -1,5 +1,5 @@
 // ABOUTME: Vite configuration with React, Hono dev server, path aliases, and build output settings.
-// ABOUTME: Dev server runs on PORT env var (default 3000) with the Hono backend wired in.
+// ABOUTME: Dev server runs on PORT env var (default 3200) with the Hono backend wired in.
 import devServer from "@hono/vite-dev-server"
 import path from "path"
 const __dirname = import.meta.dirname
@@ -35,7 +35,7 @@ export default defineConfig({
       : []),
   ],
   server: {
-    port: Number.isFinite(Number(process.env.PORT)) ? Number(process.env.PORT) : 3000,
+    port: Number.isFinite(Number(process.env.PORT)) ? Number(process.env.PORT) : 3200,
   },
   resolve: {
     alias: {

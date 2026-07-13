@@ -1,10 +1,12 @@
+// ABOUTME: Main dashboard page — assembles the new dashboard feature sub-components.
+// ABOUTME: Reads from trpc.dashboard.summary, alerts, and cashflowTrend and lays out the cards top-down.
 import { useState } from "react";
 import { Link } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
-import { formatDate, getLocalDateString, formatKES } from "@/lib/utils";
-import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
+import { formatKES, getLocalDateString } from "@/lib/utils";
+import { hasAnyPermission, hasPermission, PERMISSIONS } from "@/lib/permissions";
 import {
   TrendingUp,
   TrendingDown,
@@ -18,6 +20,14 @@ import {
   ArrowDownRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  CashPositionCard,
+  CashflowTrendCard,
+  MobileWalletSummaryCard,
+  TrendKpiCard,
+  BillsPipelineCard,
+  TodayStrip,
+} from "@/features/dashboard";
 
 export function Dashboard() {
   const { user } = useAuth();
@@ -29,6 +39,8 @@ export function Dashboard() {
   const canBills = hasAnyPermission(permContext, [PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE]);
   const canWallet = hasAnyPermission(permContext, [PERMISSIONS.WALLET_VIEW, PERMISSIONS.WALLET_IMPORT]);
   const canPayroll = hasAnyPermission(permContext, [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_PROCESS]);
+  const canAccounts = hasAnyPermission(permContext, [PERMISSIONS.ACCOUNTS_VIEW, PERMISSIONS.ACCOUNTS_MANAGE]);
+  const canViewBills = hasPermission(permContext, PERMISSIONS.BILLS_VIEW);
 
   const [dateRange, setDateRange] = useState(() => ({
     from: getLocalDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
@@ -39,10 +51,28 @@ export function Dashboard() {
     dateFrom: dateRange.from,
     dateTo: dateRange.to,
   });
-
   const { data: alerts } = trpc.dashboard.alerts.useQuery();
+  const { data: cashflowTrend } = trpc.dashboard.cashflowTrend.useQuery({
+    dateFrom: dateRange.from,
+    dateTo: dateRange.to,
+  });
 
-  const netCashflow = summary ? parseFloat(summary.totalSales) - parseFloat(summary.totalExpenses) : 0;
+  const netCashflow = summary ? parseFloat(summary.netCashflow) : 0;
+  const previousSales = summary ? parseFloat(summary.previousPeriodTotals?.totalSales ?? "0") : 0;
+  const currentSales = summary ? parseFloat(summary.totalSales) : 0;
+  const previousExpenses = summary ? parseFloat(summary.previousPeriodTotals?.totalExpenses ?? "0") : 0;
+  const currentExpenses = summary ? parseFloat(summary.totalExpenses) : 0;
+
+  const safePct = (current: number, previous: number): number | null => {
+    if (!Number.isFinite(previous) || previous === 0) {
+      if (current === 0) return 0;
+      return null;
+    }
+    return ((current - previous) / Math.abs(previous)) * 100;
+  };
+
+  const salesTrend = safePct(currentSales, previousSales);
+  const expensesTrend = safePct(currentExpenses, previousExpenses);
 
   return (
     <Layout>
@@ -74,49 +104,57 @@ export function Dashboard() {
           </div>
         </div>
 
-        {/* KPI Cards */}
+        {/* Featured Cash Position */}
+        {canAccounts && <CashPositionCard position={summary?.cashPosition} />}
+
+        {/* KPI row with trend % */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard
+          <TrendKpiCard
+            testId="kpi-total-sales"
             title="Total Sales"
             value={summary?.totalSales ?? "0"}
-            icon={<TrendingUp className="h-5 w-5 text-[#2E7D32]" />}
-            trend="positive"
+            icon={TrendingUp}
             subtitle="Revenue in period"
+            trendPercent={salesTrend}
+            positiveIsGood
           />
-          <KpiCard
+          <TrendKpiCard
+            testId="kpi-total-expenses"
             title="Total Expenses"
             value={summary?.totalExpenses ?? "0"}
-            icon={<TrendingDown className="h-5 w-5 text-[#D32F2F]" />}
-            trend="negative"
+            icon={TrendingDown}
             subtitle="Costs in period"
+            trendPercent={expensesTrend}
+            positiveIsGood={false}
           />
-          <KpiCard
+          <TrendKpiCard
+            testId="kpi-net-cashflow"
             title="Net Cashflow"
             value={Math.abs(netCashflow).toFixed(2)}
-            icon={
-              netCashflow >= 0 ? (
-                <ArrowUpRight className="h-5 w-5 text-[#2E7D32]" />
-              ) : (
-                <ArrowDownRight className="h-5 w-5 text-[#D32F2F]" />
-              )
-            }
-            trend={netCashflow >= 0 ? "positive" : "negative"}
+            icon={netCashflow >= 0 ? ArrowUpRight : ArrowDownRight}
             subtitle={netCashflow >= 0 ? "Profit" : "Loss"}
+            trendPercent={safePct(netCashflow, currentSales - currentExpenses - (netCashflow))}
+            positiveIsGood
           />
-          <KpiCard
+          <TrendKpiCard
+            testId="kpi-bills-due"
             title="Bills Due"
             value={summary?.totalBillsDue ?? "0"}
-            icon={<AlertTriangle className="h-5 w-5 text-[#ED6C02]" />}
-            trend="neutral"
+            icon={AlertTriangle}
             subtitle="Outstanding payables"
+            trendPercent={null}
+            trendColor="neutral"
           />
-          <KpiCard
-            title="Unpaid Sales"
-            value={summary?.totalUnpaidSales ?? "0"}
-            icon={<Receipt className="h-5 w-5 text-[#D4A854]" />}
-            trend="neutral"
-            subtitle="Credit sales not yet collected"
-          />
+        </div>
+
+        {/* Today strip + 30-day cashflow trend */}
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-1">
+            <TodayStrip />
+          </div>
+          <div className="lg:col-span-2">
+            <CashflowTrendCard days={cashflowTrend?.days} />
+          </div>
         </div>
 
         {/* Account Balances & Quick Actions */}
@@ -199,154 +237,53 @@ export function Dashboard() {
           </Card>
         </div>
 
-        {/* Alerts Section */}
-        {alerts && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Overdue Bills */}
-            {alerts.overdueBills.length > 0 && (
-              <Card className="border-[#D32F2F]/30 bg-[#D32F2F]/5">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 font-serif text-lg text-[#D32F2F]">
-                    <AlertTriangle className="h-5 w-5" />
-                    Overdue Bills ({alerts.overdueBills.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {alerts.overdueBills.slice(0, 5).map((bill) => (
-                      <div
-                        key={bill.id}
-                        className="flex items-center justify-between rounded-lg bg-white p-3"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-[#2D2A26]">
-                            {bill.description}
-                          </p>
-                          <p className="text-xs text-[#8D8A87]">
-                            Due: {formatDate(bill.dueDate)}
-                          </p>
-                        </div>
-                        <span className="font-mono text-sm font-semibold text-[#D32F2F]">
-                          {formatKES(bill.balanceDue)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Upcoming Bills */}
-            {alerts.upcomingBills7.length > 0 && (
-              <Card className="border-[#ED6C02]/30 bg-[#ED6C02]/5">
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 font-serif text-lg text-[#ED6C02]">
-                    <AlertTriangle className="h-5 w-5" />
-                    Due Within 7 Days ({alerts.upcomingBills7.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {alerts.upcomingBills7.slice(0, 5).map((bill) => (
-                      <div
-                        key={bill.id}
-                        className="flex items-center justify-between rounded-lg bg-white p-3"
-                      >
-                        <div>
-                          <p className="text-sm font-medium text-[#2D2A26]">
-                            {bill.description}
-                          </p>
-                          <p className="text-xs text-[#8D8A87]">
-                            Due: {formatDate(bill.dueDate)}
-                          </p>
-                        </div>
-                        <span className="font-mono text-sm font-semibold text-[#ED6C02]">
-                          {formatKES(bill.balanceDue)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+        {/* Unified bills pipeline */}
+        {canViewBills && (
+          <BillsPipelineCard
+            overdue={alerts?.overdueBills ?? []}
+            upcoming7={alerts?.upcomingBills7 ?? []}
+            upcoming30={alerts?.upcomingBills30 ?? []}
+          />
         )}
 
-        {/* M-PESA Summary */}
-        {summary?.mpesa && (
-          <Card className="border-[#E8E0D8] bg-white">
-            <CardHeader className="pb-3">
-              <CardTitle className="font-serif text-lg text-[#2D2A26]">
-                M-PESA Summary
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="rounded-lg bg-[#2E7D32]/5 p-4">
-                  <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Inflows</p>
-                  <p className="mt-1 font-mono text-lg font-semibold text-[#2E7D32]">
-                    {formatKES(summary.mpesa.totalIn)}
-                  </p>
+        {/* M-PESA + Mobile Wallet summaries (symmetric pair) */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {summary?.mpesa && (
+            <Card className="border-[#E8E0D8] bg-white">
+              <CardHeader className="pb-3">
+                <CardTitle className="font-serif text-lg text-[#2D2A26]">
+                  M-PESA Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="rounded-lg bg-gradient-to-br from-[#2E7D32]/5 to-[#2E7D32]/10 p-4">
+                    <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Inflows</p>
+                    <p className="mt-1 font-mono text-lg font-semibold text-[#2E7D32]">
+                      {formatKES(summary.mpesa.totalIn)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-gradient-to-br from-[#D32F2F]/5 to-[#D32F2F]/10 p-4">
+                    <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Outflows</p>
+                    <p className="mt-1 font-mono text-lg font-semibold text-[#D32F2F]">
+                      {formatKES(summary.mpesa.totalOut)}
+                    </p>
+                  </div>
+                  <div className="rounded-lg bg-gradient-to-br from-[#D4A854]/5 to-[#D4A854]/10 p-4">
+                    <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Transaction Fees</p>
+                    <p className="mt-1 font-mono text-lg font-semibold text-[#D4A854]">
+                      {formatKES(summary.mpesa.totalFees)}
+                    </p>
+                  </div>
                 </div>
-                <div className="rounded-lg bg-[#D32F2F]/5 p-4">
-                  <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Outflows</p>
-                  <p className="mt-1 font-mono text-lg font-semibold text-[#D32F2F]">
-                    {formatKES(summary.mpesa.totalOut)}
-                  </p>
-                </div>
-                <div className="rounded-lg bg-[#D4A854]/5 p-4">
-                  <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Transaction Fees</p>
-                  <p className="mt-1 font-mono text-lg font-semibold text-[#D4A854]">
-                    {formatKES(summary.mpesa.totalFees)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+              </CardContent>
+            </Card>
+          )}
+
+          {canWallet && <MobileWalletSummaryCard wallet={summary?.wallet} />}
+        </div>
       </div>
     </Layout>
-  );
-}
-
-function KpiCard({
-  title,
-  value,
-  icon,
-  trend,
-  subtitle,
-}: {
-  title: string;
-  value: string;
-  icon: React.ReactNode;
-  trend: "positive" | "negative" | "neutral";
-  subtitle: string;
-}) {
-  return (
-    <Card className="border-[#E8E0D8] bg-white">
-      <CardContent className="p-3 sm:p-5">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1.5 sm:space-y-3">
-            <p className="text-[10px] sm:text-xs uppercase tracking-wider text-[#8D8A87]">
-              {title}
-            </p>
-            <p
-              className={`font-mono text-base sm:text-2xl font-bold ${
-                trend === "positive"
-                  ? "text-[#2E7D32]"
-                  : trend === "negative"
-                  ? "text-[#D32F2F]"
-                  : "text-[#2D2A26]"
-              }`}
-            >
-              {formatKES(value)}
-            </p>
-            <p className="text-[10px] sm:text-xs text-[#8D8A87]">{subtitle}</p>
-          </div>
-          <div className="rounded-lg bg-[#F5EDE6] p-1.5 sm:p-2 shrink-0">{icon}</div>
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 

@@ -20,7 +20,7 @@ export interface CreateJournalEntryInput {
   sourceType?: string;
   sourceId?: number;
   lines: JournalLineInput[];
-  createdBy: number;
+  createdBy?: number | null;
   postImmediately?: boolean;
 }
 
@@ -132,7 +132,7 @@ export async function createJournalEntry(input: CreateJournalEntryInput) {
 
 export async function postJournalEntry(
   entryId: number,
-  postedBy: number,
+  postedBy?: number | null,
   tx?: DbClient
 ) {
   const db = tx || getDb();

@@ -1,10 +1,11 @@
 // ABOUTME: Exposes partner APIs for commissions and owner-partner allocation invite lifecycle operations.
 // ABOUTME: Keeps invite generation, claim, revoke, and allocation listings consistent with business access rows.
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createRouter, authedQuery, ownerQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { allocationInvites, businesses, partnerAllocations, partnerCommissions, userBusinesses, users } from "@db/schema";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { logAudit } from "./lib/audit";
 import { RIGHTS_PROFILES, generateAllocationCode } from "./lib/partner-allocations";
 
@@ -21,10 +22,21 @@ export const revokeAllocationInputSchema = z.object({
   allocationId: z.number().int().positive(),
 });
 
+function canManageAllocations(user: { role?: string; isSuperAdmin?: unknown }) {
+  return user.role === "owner" || user.role === "admin" || Boolean(user.isSuperAdmin);
+}
+
+function canUsePartnerAllocationUi(user: { role?: string; userType?: unknown; isSuperAdmin?: unknown }) {
+  return user.userType === "partner" || user.role === "admin" || Boolean(user.isSuperAdmin);
+}
+
 export const partnerRouter = createRouter({
-  generateInvite: ownerQuery
+  generateInvite: authedQuery
     .input(generateAllocationInviteInputSchema)
     .mutation(async ({ input, ctx }) => {
+      if (!canManageAllocations(ctx.user ?? {})) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Owner or admin access required" });
+      }
       const db = getDb();
       const ownerAccountId = ctx.user?.accountRefId ?? ctx.user?.currentBusiness?.accountRefId;
       if (!ownerAccountId) {
@@ -73,6 +85,9 @@ export const partnerRouter = createRouter({
   claimInvite: authedQuery
     .input(claimAllocationInviteInputSchema)
     .mutation(async ({ input, ctx }) => {
+      if (!canUsePartnerAllocationUi(ctx.user ?? {})) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Partner or admin access required" });
+      }
       const db = getDb();
       const partnerAccountId = ctx.user?.accountRefId ?? ctx.user?.currentBusiness?.accountRefId;
       if (!partnerAccountId) {
@@ -153,9 +168,12 @@ export const partnerRouter = createRouter({
       return { success: true, allocationId: result.id };
     }),
 
-  revoke: ownerQuery
+  revoke: authedQuery
     .input(revokeAllocationInputSchema)
     .mutation(async ({ input, ctx }) => {
+      if (!canManageAllocations(ctx.user ?? {})) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Owner or admin access required" });
+      }
       const db = getDb();
       const ownerAccountId = ctx.user?.accountRefId ?? ctx.user?.currentBusiness?.accountRefId;
       if (!ownerAccountId) {
@@ -206,7 +224,10 @@ export const partnerRouter = createRouter({
       return { success: true };
     }),
 
-  listOwnerAllocations: ownerQuery.query(async ({ ctx }) => {
+  listOwnerAllocations: authedQuery.query(async ({ ctx }) => {
+    if (!canManageAllocations(ctx.user ?? {})) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Owner or admin access required" });
+    }
     const db = getDb();
     const ownerAccountId = ctx.user?.accountRefId ?? ctx.user?.currentBusiness?.accountRefId;
     if (!ownerAccountId) {
@@ -240,6 +261,9 @@ export const partnerRouter = createRouter({
   }),
 
   listPartnerAllocations: authedQuery.query(async ({ ctx }) => {
+    if (!canUsePartnerAllocationUi(ctx.user ?? {})) {
+      throw new TRPCError({ code: "FORBIDDEN", message: "Partner or admin access required" });
+    }
     const db = getDb();
     const partnerAccountId = ctx.user?.accountRefId ?? ctx.user?.currentBusiness?.accountRefId;
     if (!partnerAccountId) {
@@ -275,9 +299,18 @@ export const partnerRouter = createRouter({
   clients: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     const userId = ctx.user!.id;
-    // Find businesses where this user is marked as partner
-    const clientBiz = await db.select().from(businesses).where(and(eq(businesses.partnerId, userId), isNull(businesses.deletedAt))).orderBy(sql`businesses.createdAt DESC`);
-    return clientBiz;
+    // Include businesses where this user is the assigned partner OR the referring user
+    const clientBiz = await db.select().from(businesses).where(and(
+      or(eq(businesses.partnerId, userId), eq(businesses.referredByUserId, userId)),
+      isNull(businesses.deletedAt),
+    )).orderBy(sql`businesses.createdAt DESC`);
+    // Deduplicate in case both conditions match
+    const seen = new Set<number>();
+    return clientBiz.filter((b) => {
+      if (seen.has(b.id)) return false;
+      seen.add(b.id);
+      return true;
+    });
   }),
 
   // Commission report for a period
@@ -299,9 +332,12 @@ export const partnerRouter = createRouter({
     }),
 
   // Calculate commissions for a period
-  calculate: ownerQuery
+  calculate: authedQuery
     .input(z.object({ year: z.number(), month: z.number() }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
+      if (!canManageAllocations(ctx.user ?? {})) {
+        throw new TRPCError({ code: "FORBIDDEN", message: "Owner or admin access required" });
+      }
       const db = getDb();
       // Find all partner-linked businesses
       const partnerBizs = await db.select().from(businesses).where(and(sql`${businesses.partnerId} IS NOT NULL`, isNull(businesses.deletedAt)));
@@ -333,7 +369,6 @@ export const partnerRouter = createRouter({
             subscriptionAmount: subAmount.toFixed(2),
             commissionPercent: revShare.toFixed(2),
             commissionAmount: commission.toFixed(2),
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
           } as any).returning();
           created++;
         }

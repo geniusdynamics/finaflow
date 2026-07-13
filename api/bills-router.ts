@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, billQuery, billAccess, billCreate, billPay, getCurrentBusinessLocationIds, getRolePermissionsWithCache, requireAuthorizedLocation, requireAuthorizedEntity, PERMISSIONS } from "./middleware";
 import { getDb } from "./queries/connection";
 import { bills, billPayments, billItems, masterItems, suppliers, accounts, ledgerEntries, recurringBillTemplates, attachments, locations, expenseCategories, debts } from "@db/schema";
-import { eq, and, isNull, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, or, isNull, desc, sql, inArray } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { notFutureDateString } from "./lib/future-date";
 import { ensureSystemAccount } from "./lib/accounting-accounts";
@@ -10,6 +10,7 @@ import { getExpenseAccountSubType } from "./lib/accounting-maps";
 import { reverseLedgerEntriesForTransaction } from "./lib/accounting-reversal";
 import { payBill } from "./lib/bill-payment";
 import { clearNotificationsForBill } from "./lib/notification-clearance";
+import { triggerBillPaid } from "./lib/webhook-triggers";
 import type { DbClient } from "./lib/account-subscriptions";
 
 type Db = ReturnType<typeof getDb>;
@@ -371,6 +372,12 @@ export const billsRouter = createRouter({
         return payResult;
       });
 
+      void triggerBillPaid(bill.businessId!, {
+        billId: input.billId,
+        amount: input.amount,
+        paymentId: result.paymentId,
+      });
+
       return { id: result.paymentId, newBalanceDue: result.newBalanceDue, status: result.status, success: true };
     }),
 
@@ -378,18 +385,45 @@ export const billsRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      await requireAuthorizedEntity(ctx, bills, input.id);
+      const bill = await requireAuthorizedEntity(ctx, bills, input.id);
+const billLedgerTypes = or(
+        eq(ledgerEntries.transactionType, "expense" as any),
+        eq(ledgerEntries.transactionType, "bill_payment" as any),
+      );
+      const billLedgerFilter = and(
+        eq(ledgerEntries.transactionId, input.id),
+        billLedgerTypes,
+        isNull(ledgerEntries.deletedAt),
+      );
       const existingLedger = await db
         .select({ id: ledgerEntries.id })
         .from(ledgerEntries)
-        .where(eq(ledgerEntries.transactionId, input.id))
+        .where(billLedgerFilter)
         .limit(1);
 
-      if (existingLedger[0]) {
+      if (existingLedger[0] && !bill.reversedAt) {
         throw new Error("Posted bills cannot be deleted. Reverse the posted entry instead.");
       }
 
-      await db.update(bills).set({ deletedAt: new Date() }).where(eq(bills.id, input.id));
+      await db.transaction(async (tx) => {
+        await tx
+          .update(ledgerEntries)
+          .set({ deletedAt: new Date() })
+          .where(
+            and(
+              eq(ledgerEntries.transactionId, input.id),
+              or(
+                eq(ledgerEntries.transactionType, "expense" as any),
+                eq(ledgerEntries.transactionType, "bill_payment" as any),
+              ),
+            ),
+          );
+        await tx
+          .update(billItems)
+          .set({ deletedAt: new Date() })
+          .where(eq(billItems.billId, input.id));
+        await tx.update(bills).set({ deletedAt: new Date() }).where(eq(bills.id, input.id));
+      });
       return { success: true };
     }),
 
@@ -414,12 +448,13 @@ export const billsRouter = createRouter({
       }
 
       await db.transaction(async (tx) => {
-        await reverseLedgerEntriesForTransaction({
+await reverseLedgerEntriesForTransaction({
           db: tx,
           transactionId: input.id,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
           userId: (ctx as any).user?.id ?? 1,
           reason: input.reason,
+          transactionTypes: ["expense", "bill_payment"],
         });
 
         await tx

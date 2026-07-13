@@ -1,9 +1,15 @@
 import { z } from "zod";
-import { createRouter, accountManage, getCurrentBusinessLocationIds } from "./middleware";
+import {
+  createRouter,
+  accountManage,
+  accountManageOrApiKey,
+  getCurrentBusinessLocationIds,
+} from "./middleware";
 import { getDb } from "./queries/connection";
 import { journalEntries, journalLines, accounts, locations, userBusinesses } from "@db/schema";
 import { and, asc, eq, isNull, isNotNull } from "drizzle-orm";
 import { logAudit } from "./lib/audit";
+import { dispatchWebhook } from "./lib/webhook-dispatcher";
 import type { JournalLineInput } from "./lib/journal";
 import {
   createJournalEntry,
@@ -82,7 +88,7 @@ export const journalRouter = createRouter({
       return getJournalEntryWithLines(input.id);
     }),
 
-  create: accountManage
+  create: accountManageOrApiKey
     .input(
       z.object({
         businessId: z.number(),
@@ -105,7 +111,11 @@ export const journalRouter = createRouter({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      
+      // Machine keys may only write within their own business tenant.
+      if (ctx.apiKey && !ctx.user && input.businessId !== ctx.apiKey.businessId) {
+        throw new Error("API key cannot create journal entries for another business");
+      }
+      const businessId = ctx.apiKey && !ctx.user ? ctx.apiKey.businessId : input.businessId;
 
       const lines: JournalLineInput[] = input.lines.map((line) => ({
         accountId: line.accountId,
@@ -115,21 +125,21 @@ export const journalRouter = createRouter({
       }));
 
       const entry = await createJournalEntry({
-        businessId: input.businessId,
+        businessId,
         entryDate: input.entryDate,
         description: input.description,
         reference: input.reference,
         sourceType: input.sourceType,
         sourceId: input.sourceId,
         lines,
-        createdBy: ctx.user.id,
+        createdBy: ctx.user?.id ?? null,
         postImmediately: input.postImmediately,
       });
 
       // ABOUTME: Audit trail for manual journal entries — tracks user, CoA IDs, and account IDs
       await logAudit({
-        userId: ctx.user.id,
-        businessId: input.businessId,
+        userId: ctx.user?.id ?? ctx.apiKey?.id ?? null,
+        businessId,
         action: "CREATE",
         resource: "journal_entries",
         resourceId: entry.id,
@@ -139,7 +149,15 @@ export const journalRouter = createRouter({
           accountIds: lines.map((l) => l.accountId),
           postImmediately: input.postImmediately,
           sourceType: input.sourceType || "manual",
+          authMethod: ctx.apiKey ? "api_key" : "user",
         },
+      });
+
+      void dispatchWebhook(businessId, "journal.created", {
+        journalEntryId: entry.id,
+        businessId,
+        description: input.description,
+        reference: input.reference,
       });
 
       return entry;

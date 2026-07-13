@@ -113,6 +113,34 @@
       "when": 1782820850477,
       "tag": "0023_notification_priority_and_links",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1783600000000,
+      "tag": "0025_integration_connections_and_channel_maps",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1783721390493,
+      "tag": "0017_steep_tarantula",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783722181447,
+      "tag": "0018_bent_hellcat",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783872000000,
+      "tag": "0029_partner_leads",
+      "breakpoints": true
     }
   ]
 }

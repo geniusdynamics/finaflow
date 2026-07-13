@@ -1,5 +1,6 @@
 // ABOUTME: Defines the PostgreSQL schema and typed Drizzle table models used by the API.
 // ABOUTME: Keeps database structure, constraints, and inferred TypeScript types in one shared module.
+import { sql } from "drizzle-orm";
 import {
   pgTable,
   pgEnum,
@@ -40,6 +41,7 @@ export const billStatusEnum = pgEnum("billStatus", ["pending", "partial", "paid"
 export const payrollStatusEnum = pgEnum("payrollStatus", ["open", "processing", "paid", "cancelled"]);
 export const advanceStatusEnum = pgEnum("advanceStatus", ["pending", "approved", "partially_repaid", "repaid", "cancelled"]);
 export const leadStatusEnum = pgEnum("leadStatus", ["new", "contacted", "converted", "declined"]);
+export const leadCommissionStatusEnum = pgEnum("lead_commission_status", ["pending", "eligible", "info_only", "ineligible"]);
 export const orderStatusEnum = pgEnum("orderStatus", ["draft", "sent", "delivered", "billed", "cancelled"]);
 export const allocationRightsEnum = pgEnum("allocation_rights", ["view_only", "create_view", "manage"]);
 export const allocationInviteStatusEnum = pgEnum("allocation_invite_status", ["active", "consumed", "revoked", "expired"]);
@@ -52,6 +54,7 @@ export const emailLogTypeEnum = pgEnum("email_log_type", [
   "password_reset",
   "owner_broadcast",
   "smtp_test",
+  "lead_invitation",
 ]);
 export const emailStatusEnum = pgEnum("email_status", ["pending", "sent", "failed", "skipped"]);
 
@@ -159,6 +162,7 @@ export const users = pgTable("users", {
   userIsActiveIdx: index("idx_users_isActive").on(table.isActive),
   userCurrentBusinessIdx: index("idx_users_currentBusinessId").on(table.currentBusinessId),
   userUsernameAccountIdIdx: uniqueIndex("idx_users_username_accountId").on(table.username, table.accountId),
+  idx_users_account: index("idx_users_account").on(table.accountId),
 }));
 
 export type User = typeof users.$inferSelect;
@@ -201,7 +205,9 @@ export const locations = pgTable("locations", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  idx_locations_business_deleted: index("idx_locations_business_deleted").on(table.businessId, table.deletedAt).where(sql`${table.deletedAt} IS NULL`),
+}));
 
 export type Location = typeof locations.$inferSelect;
 
@@ -238,6 +244,7 @@ export const accounts = pgTable("accounts", {
   businessIdx: index("idx_accounts_business").on(table.businessId),
   systemKeyIdx: uniqueIndex("uq_accounts_business_system_key").on(table.businessId, table.systemKey),
   coaIdx: index("idx_accounts_coa").on(table.coaId),
+  idx_accounts_location_deleted: index("idx_accounts_location_deleted").on(table.locationId, table.deletedAt).where(sql`${table.deletedAt} IS NULL`),
 }));
 
 // ABOUTME: Reference table for Chart of Accounts sub-types with wallet support flag.
@@ -275,15 +282,19 @@ export const ledgerEntries = pgTable("ledger_entries", {
   createdBy: bigint("createdBy", { mode: "number" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  idx_ledger_entries_account_date: index("idx_ledger_entries_account_date").on(table.accountId, table.entryDate, table.deletedAt).where(sql`${table.deletedAt} IS NULL`),
+  idx_ledger_entries_transaction: index("idx_ledger_entries_transaction").on(table.transactionType, table.transactionId),
+}));
 
 export type LedgerEntry = typeof ledgerEntries.$inferSelect;
 
 // Daily sales
 export const dailySales = pgTable("daily_sales", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }).notNull().references(() => locations.id, { onDelete: "no action" }),
   saleDate: date("saleDate").notNull(),
+  sourceBatchId: varchar("source_batch_id", { length: 255 }),
   cashTotal: numeric("cashTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
   cardTotal: numeric("cardTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
   mpesaTotal: numeric("mpesaTotal", { precision: 15, scale: 2 }).default("0.00").notNull(),
@@ -308,9 +319,30 @@ export const dailySales = pgTable("daily_sales", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  idx_daily_sales_location_date: index("idx_daily_sales_location_date").on(table.locationId, table.saleDate),
+  idx_daily_sales_deleted: index("idx_daily_sales_deleted").on(table.deletedAt).where(sql`${table.deletedAt} IS NULL`),
+  idx_daily_sales_source_batch: index("idx_daily_sales_source_batch").on(table.sourceBatchId),
+}));
 
 export type DailySale = typeof dailySales.$inferSelect;
+
+// External channel mappings for daily sales ingestion from integrated systems
+export const externalChannelMappings = pgTable("external_channel_mappings", {
+  id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  sourceSystem: varchar("sourceSystem", { length: 50 }).notNull(),
+  channelKey: varchar("channelKey", { length: 100 }).notNull(),
+  channelLabel: varchar("channelLabel", { length: 255 }),
+  paymentMethodId: bigint("paymentMethodId", { mode: "number" }),
+  accountId: bigint("accountId", { mode: "number" }),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+});
+
+export type ExternalChannelMapping = typeof externalChannelMappings.$inferSelect;
 
 // Expense categories
 export const expenseCategories = pgTable("expense_categories", {
@@ -340,10 +372,10 @@ export const expenses = pgTable("expenses", {
   id: serial("id").primaryKey(),
   locationId: bigint("locationId", { mode: "number" }).notNull(),
   businessId: bigint("businessId", { mode: "number" }),
-  categoryId: bigint("categoryId", { mode: "number" }).notNull(),
-  supplierId: bigint("supplierId", { mode: "number" }),
+  categoryId: bigint("categoryId", { mode: "number" }).notNull().references(() => expenseCategories.id, { onDelete: "no action" }),
+  supplierId: bigint("supplierId", { mode: "number" }).references(() => suppliers.id, { onDelete: "no action" }),
   expenseNumber: varchar("expenseNumber", { length: 50 }),
-  billId: bigint("billId", { mode: "number" }),
+  billId: bigint("billId", { mode: "number" }).references(() => bills.id, { onDelete: "no action" }),
   refNo: varchar("refNo", { length: 50 }),
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
   description: text("description").notNull(),
@@ -356,30 +388,39 @@ export const expenses = pgTable("expenses", {
   isReimbursable: boolean("isReimbursable").default(false),
   reimbursedTo: bigint("reimbursedTo", { mode: "number" }),
   isFixedAsset: boolean("isFixedAsset").default(false),
-  fixedAssetItemId: bigint("fixedAssetItemId", { mode: "number" }),
+  fixedAssetItemId: bigint("fixedAssetItemId", { mode: "number" }).references(() => items.id, { onDelete: "no action" }),
   usefulLifeMonths: integer("usefulLifeMonths"),
   depreciationMethod: depreciationMethodEnum("depreciationMethod"),
   salvageValue: numeric("salvageValue", { precision: 15, scale: 2 }),
-  journalEntryId: bigint("journalEntryId", { mode: "number" }),
+  journalEntryId: bigint("journalEntryId", { mode: "number" }).references(() => journalEntries.id, { onDelete: "no action" }),
   reversedAt: timestamp("reversedAt"),
   reversedBy: bigint("reversedBy", { mode: "number" }),
-  enteredBy: bigint("enteredBy", { mode: "number" }).notNull(),
+  enteredBy: bigint("enteredBy", { mode: "number" }).notNull().references(() => users.id, { onDelete: "no action" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  idx_expenses_location_deleted: index("idx_expenses_location_deleted").on(table.locationId, table.deletedAt).where(sql`${table.deletedAt} IS NULL`),
+  idx_expenses_business_deleted: index("idx_expenses_business_deleted").on(table.businessId, table.deletedAt).where(sql`${table.deletedAt} IS NULL`),
+  idx_expenses_category_date: index("idx_expenses_category_date").on(table.categoryId, table.expenseDate),
+  idx_expenses_supplier: index("idx_expenses_supplier").on(table.supplierId),
+  idx_expenses_bill: index("idx_expenses_bill").on(table.billId),
+  idx_expenses_journal_entry: index("idx_expenses_journal_entry").on(table.journalEntryId),
+  idx_expenses_fixed_asset: index("idx_expenses_fixed_asset").on(table.fixedAssetItemId),
+  idx_expenses_entered_by: index("idx_expenses_entered_by").on(table.enteredBy),
+}));
 
 export type Expense = typeof expenses.$inferSelect;
 
 // Expense line items - for expenses with multiple categories
 export const expenseItems = pgTable("expense_items", {
   id: serial("id").primaryKey(),
-  expenseId: bigint("expenseId", { mode: "number" }).notNull(),
+  expenseId: bigint("expenseId", { mode: "number" }).notNull().references(() => expenses.id, { onDelete: "no action" }),
   itemName: varchar("itemName", { length: 255 }).notNull(),
   quantity: numeric("quantity", { precision: 10, scale: 3 }).default("1.000").notNull(),
   unitPrice: numeric("unitPrice", { precision: 15, scale: 2 }).notNull(),
   totalPrice: numeric("totalPrice", { precision: 15, scale: 2 }).notNull(),
-  categoryId: bigint("categoryId", { mode: "number" }).notNull(),
+  categoryId: bigint("categoryId", { mode: "number" }).notNull().references(() => expenseCategories.id, { onDelete: "no action" }),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -421,8 +462,8 @@ export const bills = pgTable("bills", {
   id: serial("id").primaryKey(),
   locationId: bigint("locationId", { mode: "number" }).notNull(),
   businessId: bigint("businessId", { mode: "number" }),
-  supplierId: bigint("supplierId", { mode: "number" }),
-  categoryId: bigint("categoryId", { mode: "number" }),
+  supplierId: bigint("supplierId", { mode: "number" }).references(() => suppliers.id, { onDelete: "no action" }),
+  categoryId: bigint("categoryId", { mode: "number" }).references(() => expenseCategories.id, { onDelete: "no action" }),
   billNumber: varchar("billNumber", { length: 100 }),
   description: text("description").notNull(),
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
@@ -431,27 +472,35 @@ export const bills = pgTable("bills", {
   issueDate: date("issueDate").notNull(),
   dueDate: date("dueDate").notNull(),
   status: billStatusEnum("status").default("pending").notNull(),
-  journalEntryId: bigint("journalEntryId", { mode: "number" }),
-  debtId: bigint("debtId", { mode: "number" }),
+  journalEntryId: bigint("journalEntryId", { mode: "number" }).references(() => journalEntries.id, { onDelete: "no action" }),
+  debtId: bigint("debtId", { mode: "number" }).references(() => debts.id, { onDelete: "no action" }),
   reversedAt: timestamp("reversedAt"),
   reversedBy: bigint("reversedBy", { mode: "number" }),
-  enteredBy: bigint("enteredBy", { mode: "number" }),
+  enteredBy: bigint("enteredBy", { mode: "number" }).references(() => users.id, { onDelete: "no action" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  idx_bills_location_deleted: index("idx_bills_location_deleted").on(table.locationId, table.deletedAt).where(sql`${table.deletedAt} IS NULL`),
+  idx_bills_business_deleted: index("idx_bills_business_deleted").on(table.businessId, table.deletedAt).where(sql`${table.deletedAt} IS NULL`),
+  idx_bills_status_due_date: index("idx_bills_status_due_date").on(table.status, table.dueDate),
+  idx_bills_supplier: index("idx_bills_supplier").on(table.supplierId),
+  idx_bills_journal_entry: index("idx_bills_journal_entry").on(table.journalEntryId),
+  idx_bills_debt: index("idx_bills_debt").on(table.debtId),
+  idx_bills_entered_by: index("idx_bills_entered_by").on(table.enteredBy),
+}));
 
 export type Bill = typeof bills.$inferSelect;
 
 // Bill line items
 export const billItems = pgTable("bill_items", {
   id: serial("id").primaryKey(),
-  billId: bigint("billId", { mode: "number" }).notNull(),
+  billId: bigint("billId", { mode: "number" }).notNull().references(() => bills.id, { onDelete: "no action" }),
   itemName: varchar("itemName", { length: 255 }).notNull(),
   quantity: numeric("quantity", { precision: 10, scale: 3 }).default("1.000").notNull(),
   unitPrice: numeric("unitPrice", { precision: 15, scale: 2 }).notNull(),
   totalPrice: numeric("totalPrice", { precision: 15, scale: 2 }).notNull(),
-  categoryId: bigint("categoryId", { mode: "number" }),
+  categoryId: bigint("categoryId", { mode: "number" }).references(() => expenseCategories.id, { onDelete: "no action" }),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -478,19 +527,22 @@ export type MasterItem = typeof masterItems.$inferSelect;
 // Bill payments
 export const billPayments = pgTable("bill_payments", {
   id: serial("id").primaryKey(),
-  billId: bigint("billId", { mode: "number" }).notNull(),
+  billId: bigint("billId", { mode: "number" }).notNull().references(() => bills.id, { onDelete: "no action" }),
   paymentMethod: paymentMethod2Enum("paymentMethod").notNull(),
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
   paymentDate: date("paymentDate").notNull(),
   reference: varchar("reference", { length: 100 }),
   notes: text("notes"),
   accountId: bigint("accountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
-  journalEntryId: bigint("journalEntryId", { mode: "number" }),
-  enteredBy: bigint("enteredBy", { mode: "number" }).notNull(),
+  journalEntryId: bigint("journalEntryId", { mode: "number" }).references(() => journalEntries.id, { onDelete: "no action" }),
+  enteredBy: bigint("enteredBy", { mode: "number" }).notNull().references(() => users.id, { onDelete: "no action" }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  idx_bill_payments_bill: index("idx_bill_payments_bill").on(table.billId),
+  idx_bill_payments_journal_entry: index("idx_bill_payments_journal_entry").on(table.journalEntryId),
+}));
 
 export type BillPayment = typeof billPayments.$inferSelect;
 
@@ -513,15 +565,17 @@ export const recurringBillTemplates = pgTable("recurring_bill_templates", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  idx_recurring_bills_location_next: index("idx_recurring_bills_location_next").on(table.locationId, table.nextDueDate, table.isActive, table.deletedAt).where(sql`${table.deletedAt} IS NULL`),
+}));
 
 export type RecurringBillTemplate = typeof recurringBillTemplates.$inferSelect;
 
 // Employees
 export const employees = pgTable("employees", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number" }).notNull(),
-  userId: bigint("userId", { mode: "number" }),
+  locationId: bigint("locationId", { mode: "number" }).notNull().references(() => locations.id, { onDelete: "no action" }),
+  userId: bigint("userId", { mode: "number" }).references(() => users.id, { onDelete: "no action" }),
   fullName: varchar("fullName", { length: 255 }).notNull(),
   phone: varchar("phone", { length: 20 }).notNull(),
   idNumber: varchar("idNumber", { length: 20 }),
@@ -563,8 +617,8 @@ export type PayrollPeriod = typeof payrollPeriods.$inferSelect;
 
 export const payrollEntries = pgTable("payroll_entries", {
   id: serial("id").primaryKey(),
-  periodId: bigint("periodId", { mode: "number" }).notNull(),
-  employeeId: bigint("employeeId", { mode: "number" }).notNull(),
+  periodId: bigint("periodId", { mode: "number" }).notNull().references(() => payrollPeriods.id, { onDelete: "no action" }),
+  employeeId: bigint("employeeId", { mode: "number" }).notNull().references(() => employees.id, { onDelete: "no action" }),
   basicPay: numeric("basicPay", { precision: 15, scale: 2 }).notNull(),
   advancesDeducted: numeric("advancesDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
   deductions: numeric("deductions", { precision: 15, scale: 2 }).default("0.00").notNull(),
@@ -585,14 +639,14 @@ export type PayrollEntry = typeof payrollEntries.$inferSelect;
 
 export const payrollAdvances = pgTable("payroll_advances", {
   id: serial("id").primaryKey(),
-  employeeId: bigint("employeeId", { mode: "number" }).notNull(),
-  payrollPeriodId: bigint("payrollPeriodId", { mode: "number" }),
+  employeeId: bigint("employeeId", { mode: "number" }).notNull().references(() => employees.id, { onDelete: "no action" }),
+  payrollPeriodId: bigint("payrollPeriodId", { mode: "number" }).references(() => payrollPeriods.id, { onDelete: "no action" }),
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
   balanceRemaining: numeric("balanceRemaining", { precision: 15, scale: 2 }).notNull(),
   requestDate: date("requestDate").notNull(),
   repaymentPeriods: integer("repaymentPeriods").default(1),
   status: advanceStatusEnum("status").default("pending").notNull(),
-  approvedBy: bigint("approvedBy", { mode: "number" }),
+  approvedBy: bigint("approvedBy", { mode: "number" }).references(() => users.id, { onDelete: "no action" }),
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -604,7 +658,7 @@ export type PayrollAdvance = typeof payrollAdvances.$inferSelect;
 // M-PESA transactions
 export const mpesaTransactions = pgTable("mpesa_transactions", {
   id: serial("id").primaryKey(),
-  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }).notNull().references(() => locations.id, { onDelete: "no action" }),
   txnId: varchar("txnId", { length: 20 }).notNull().unique(),
   txnDate: date("txnDate").notNull(),
   txnTime: varchar("txnTime", { length: 10 }),
@@ -625,7 +679,13 @@ export const mpesaTransactions = pgTable("mpesa_transactions", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  idx_mpesa_location_date: index("idx_mpesa_location_date").on(table.locationId, table.txnDate),
+  idx_mpesa_source_account: index("idx_mpesa_source_account").on(table.sourceAccountId),
+  idx_mpesa_destination_account: index("idx_mpesa_destination_account").on(table.destinationAccountId),
+  idx_mpesa_linked_expense: index("idx_mpesa_linked_expense").on(table.linkedExpenseId),
+  idx_mpesa_linked_bill: index("idx_mpesa_linked_bill").on(table.linkedBillId),
+}));
 
 export type MpesaTransaction = typeof mpesaTransactions.$inferSelect;
 
@@ -662,7 +722,10 @@ export const auditLog = pgTable("audit_log", {
   ipAddress: varchar("ipAddress", { length: 45 }),
   userAgent: text("userAgent"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  idx_audit_log_table_record: index("idx_audit_log_table_record").on(table.tableName, table.recordId),
+  idx_audit_log_created_at: index("idx_audit_log_created_at").on(table.createdAt),
+}));
 
 export type AuditLog = typeof auditLog.$inferSelect;
 
@@ -747,7 +810,9 @@ export const businesses = pgTable("businesses", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  idx_businesses_account_deleted: index("idx_businesses_account_deleted").on(table.accountId, table.deletedAt).where(sql`${table.deletedAt} IS NULL`),
+}));
 
 export type Business = typeof businesses.$inferSelect;
 
@@ -957,7 +1022,7 @@ export type LocationPaymentMethod = typeof locationPaymentMethods.$inferSelect;
 // Daily sale payments (child records linking daily sales to payment methods)
 export const dailySalePayments = pgTable("daily_sale_payments", {
   id: serial("id").primaryKey(),
-  dailySaleId: bigint("dailySaleId", { mode: "number" }).notNull(),
+  dailySaleId: bigint("dailySaleId", { mode: "number" }).notNull().references(() => dailySales.id, { onDelete: "no action" }),
   paymentMethodId: bigint("paymentMethodId", { mode: "number" }).notNull(),
   amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -980,6 +1045,49 @@ export const businessInquiries = pgTable("business_inquiries", {
 });
 
 export type BusinessInquiry = typeof businessInquiries.$inferSelect;
+export type LeadCommissionStatus = typeof leadCommissionStatusEnum.enumValues[number];
+
+export const leads = pgTable("leads", {
+  id: serial("id").primaryKey(),
+  creatorUserId: bigint("creatorUserId", { mode: "number" }).notNull().references(() => users.id, { onDelete: "no action" }),
+  creatorAccountRefId: bigint("creatorAccountRefId", { mode: "number" }).references(() => customerAccounts.id, { onDelete: "no action" }),
+  creatorBusinessId: bigint("creatorBusinessId", { mode: "number" }).references(() => businesses.id, { onDelete: "no action" }),
+  businessName: varchar("businessName", { length: 255 }).notNull(),
+  contactName: varchar("contactName", { length: 255 }).notNull(),
+  email: varchar("email", { length: 320 }),
+  normalizedEmail: varchar("normalizedEmail", { length: 320 }),
+  phone: varchar("phone", { length: 20 }),
+  normalizedPhone: varchar("normalizedPhone", { length: 20 }),
+  status: leadStatusEnum("status").default("new").notNull(),
+  matchedUserId: bigint("matchedUserId", { mode: "number" }).references(() => users.id, { onDelete: "no action" }),
+  matchedAccountRefId: bigint("matchedAccountRefId", { mode: "number" }).references(() => customerAccounts.id, { onDelete: "no action" }),
+  matchedBusinessId: bigint("matchedBusinessId", { mode: "number" }).references(() => businesses.id, { onDelete: "no action" }),
+  joinedAt: timestamp("joinedAt"),
+  joinedViaReferral: boolean("joinedViaReferral").default(false).notNull(),
+  referralCodeUsed: varchar("referralCodeUsed", { length: 50 }),
+  referredByBusinessId: bigint("referredByBusinessId", { mode: "number" }).references(() => businesses.id, { onDelete: "no action" }),
+  referredByUserId: bigint("referredByUserId", { mode: "number" }).references(() => users.id, { onDelete: "no action" }),
+  commissionStatus: leadCommissionStatusEnum("commissionStatus").default("pending").notNull(),
+  commissionEligible: boolean("commissionEligible").default(false).notNull(),
+  emailInvitedAt: timestamp("emailInvitedAt"),
+  smsPreparedAt: timestamp("smsPreparedAt"),
+  lastInvitationChannel: varchar("lastInvitationChannel", { length: 20 }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  creatorUserIdx: index("idx_leads_creator_user").on(table.creatorUserId),
+  creatorAccountIdx: index("idx_leads_creator_account").on(table.creatorAccountRefId),
+  creatorBusinessIdx: index("idx_leads_creator_business").on(table.creatorBusinessId),
+  normalizedEmailIdx: index("idx_leads_normalized_email").on(table.normalizedEmail),
+  normalizedPhoneIdx: index("idx_leads_normalized_phone").on(table.normalizedPhone),
+  statusIdx: index("idx_leads_status").on(table.status),
+  matchedAccountIdx: index("idx_leads_matched_account").on(table.matchedAccountRefId),
+  deletedAtIdx: index("idx_leads_deleted_at").on(table.deletedAt),
+}));
+
+export type Lead = typeof leads.$inferSelect;
+export type InsertLead = typeof leads.$inferInsert;
 
 // Budgets per category per location per month
 export const budgets = pgTable("budgets", {
@@ -1088,7 +1196,11 @@ export const debts = pgTable("debts", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  idx_debts_business_deleted: index("idx_debts_business_deleted").on(table.businessId, table.deletedAt).where(sql`${table.deletedAt} IS NULL`),
+  idx_debts_location_deleted: index("idx_debts_location_deleted").on(table.locationId, table.deletedAt).where(sql`${table.deletedAt} IS NULL`),
+  idx_debts_status: index("idx_debts_status").on(table.status),
+}));
 
 export type Debt = typeof debts.$inferSelect;
 
@@ -1360,12 +1472,86 @@ export const apiKeys = pgTable("api_keys", {
   keyPrefix: varchar("keyPrefix", { length: 20 }).notNull(),
   scopes: json("scopes"),
   lastUsedAt: timestamp("lastUsedAt"),
+  expiresAt: timestamp("expiresAt"),
   isActive: boolean("isActive").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   deletedAt: timestamp("deletedAt"),
-});
+}, (table) => ({
+  idx_api_keys_business: index("idx_api_keys_business").on(table.businessId),
+  idx_api_keys_key_hash: index("idx_api_keys_key_hash").on(table.keyHash),
+}));
 
 export type ApiKey = typeof apiKeys.$inferSelect;
+
+// Integration connections (incoming webhook secrets, OAuth tokens for external systems)
+export const integrationConnections = pgTable(
+  "integration_connections",
+  {
+    id: serial("id").primaryKey(),
+    businessId: bigint("businessId", { mode: "number" })
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    targetSystem: varchar("targetSystem", { length: 50 }).notNull(),
+    authMode: varchar("authMode", { length: 20 }).default("api_key"),
+    authData: json("authData"),
+    webhookSecret: text("webhookSecret"),
+    isActive: boolean("isActive").default(true).notNull(),
+    targetBusinessId: bigint("targetBusinessId", { mode: "number" }),
+    targetBusinessName: varchar("targetBusinessName", { length: 255 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+    deletedAt: timestamp("deletedAt"),
+  },
+  (table) => ({
+    businessTargetIdx: uniqueIndex("idx_integration_connections_business_target").on(
+      table.businessId,
+      table.targetSystem
+    ),
+  })
+);
+
+export type IntegrationConnection = typeof integrationConnections.$inferSelect;
+export type InsertIntegrationConnection = typeof integrationConnections.$inferInsert;
+
+// ABOUTME: Short-lived first-party pairing sessions between Fina apps (FinaFlow <-> FinaBill).
+// ABOUTME: Stores hashed pairing/authorization codes and mutual-connect payload state.
+export const integrationConnectSessions = pgTable(
+  "integration_connect_sessions",
+  {
+    id: serial("id").primaryKey(),
+    sessionPublicId: varchar("sessionPublicId", { length: 64 }).notNull(),
+    initiatorSystem: varchar("initiatorSystem", { length: 50 }).notNull(),
+    partnerSystem: varchar("partnerSystem", { length: 50 }).notNull(),
+    initiatorBusinessId: bigint("initiatorBusinessId", { mode: "number" }),
+    partnerBusinessId: bigint("partnerBusinessId", { mode: "number" }),
+    codeHash: varchar("codeHash", { length: 255 }).notNull(),
+    codePrefix: varchar("codePrefix", { length: 20 }).notNull(),
+    state: varchar("state", { length: 128 }).notNull(),
+    codeChallenge: varchar("codeChallenge", { length: 128 }),
+    redirectUri: varchar("redirectUri", { length: 500 }),
+    scopes: json("scopes"),
+    status: varchar("status", { length: 20 }).default("pending").notNull(),
+    initiatorApiUrl: varchar("initiatorApiUrl", { length: 500 }),
+    initiatorAppUrl: varchar("initiatorAppUrl", { length: 500 }),
+    partnerApiUrl: varchar("partnerApiUrl", { length: 500 }),
+    partnerAppUrl: varchar("partnerAppUrl", { length: 500 }),
+    exchangePayload: json("exchangePayload"),
+    createdByUserId: bigint("createdByUserId", { mode: "number" }),
+    approvedByUserId: bigint("approvedByUserId", { mode: "number" }),
+    expiresAt: timestamp("expiresAt").notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  },
+  (table) => ({
+    publicIdIdx: uniqueIndex("idx_connect_sessions_public_id").on(table.sessionPublicId),
+    codePrefixIdx: index("idx_connect_sessions_code_prefix").on(table.codePrefix),
+    stateIdx: index("idx_connect_sessions_state").on(table.state),
+    statusIdx: index("idx_connect_sessions_status").on(table.status, table.expiresAt),
+  })
+);
+
+export type IntegrationConnectSession = typeof integrationConnectSessions.$inferSelect;
+export type InsertIntegrationConnectSession = typeof integrationConnectSessions.$inferInsert;
 
 // Webhooks
 export const webhooks = pgTable("webhooks", {
@@ -1424,7 +1610,9 @@ export const exchangeRates = pgTable("exchange_rates", {
   validFrom: timestamp("valid_from").notNull().defaultNow(),
   validUntil: timestamp("valid_until"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  idx_exchange_rates_pair_valid: index("idx_exchange_rates_pair_valid").on(table.fromCurrency, table.toCurrency, table.validFrom),
+}));
 
 export type ExchangeRate = typeof exchangeRates.$inferSelect;
 export type InsertExchangeRate = typeof exchangeRates.$inferInsert;
@@ -1533,6 +1721,8 @@ export type InsertMobileWalletDailyLedger = typeof mobileWalletDailyLedger.$infe
 
 export const mobileWalletReconciliation = pgTable("mobile_wallet_reconciliation", {
   id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }),
   provider: varchar("provider", { length: 20 }).notNull().references(() => mobileWalletProviders.code, { onDelete: "no action" }),
   txnDate: date("txnDate").notNull(),
   orphanCount: integer("orphanCount").default(0),
@@ -1543,7 +1733,9 @@ export const mobileWalletReconciliation = pgTable("mobile_wallet_reconciliation"
   notes: text("notes"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   resolvedAt: timestamp("resolvedAt"),
-});
+}, (table) => ({
+  uniqueBusinessReconciliation: uniqueIndex("idx_wallet_reconciliation_business_provider_date").on(table.businessId, table.provider, table.txnDate),
+}));
 
 export type MobileWalletReconciliation = typeof mobileWalletReconciliation.$inferSelect;
 export type InsertMobileWalletReconciliation = typeof mobileWalletReconciliation.$inferInsert;

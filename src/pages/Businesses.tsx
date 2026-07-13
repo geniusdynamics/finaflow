@@ -52,6 +52,7 @@ export function Businesses() {
   const { user } = useAuth();
   const permContext = user?.permissions?.length ? user.permissions : (user?.role ?? "viewer");
   const canManage = hasPermission(permContext, PERMISSIONS.BUSINESS_MANAGE);
+  const canManagePartnerAllocations = canManage || user?.role === "admin" || Boolean(user?.isSuperAdmin);
   const utils = trpc.useUtils();
 
   const [tab, setTab] = useState<"businesses" | "allocations">("businesses");
@@ -195,9 +196,11 @@ export function Businesses() {
           <button onClick={() => setTab("businesses")} className={`px-4 py-2 text-sm font-medium ${tab === "businesses" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
             <Building2 className="mr-1 inline h-4 w-4"/>Businesses
           </button>
-          <button onClick={() => setTab("allocations")} className={`px-4 py-2 text-sm font-medium ${tab === "allocations" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
-            <Key className="mr-1 inline h-4 w-4"/>Partner Allocations
-          </button>
+          {canManagePartnerAllocations && (
+            <button onClick={() => setTab("allocations")} className={`px-4 py-2 text-sm font-medium ${tab === "allocations" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+              <Key className="mr-1 inline h-4 w-4"/>Partner Allocations
+            </button>
+          )}
         </div>
 
         {tab === "businesses" && (
@@ -508,7 +511,7 @@ export function Businesses() {
           </div>
         )}
 
-        {tab === "allocations" && <AllocationManagement />}
+        {tab === "allocations" && canManagePartnerAllocations && <AllocationManagement />}
       </div>
     </Layout>
   );

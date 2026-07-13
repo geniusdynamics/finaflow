@@ -56,6 +56,15 @@
 - Lazy loading (React.lazy + Suspense) for all routes
 - Audit logging for sensitive operations
 
+## Integrations
+- FinaFlow exposes integration endpoints under `api/integration/*` mounted in `api/boot.ts`.
+- Incoming webhooks are handled by `api/lib/webhook-handlers.ts` and verified in `api/boot.ts` using `X-Fina-Signature`.
+- Outgoing webhooks are dispatched by `api/lib/webhook-dispatcher.ts` and recorded in `webhookDeliveries`.
+- API-key auth for integration endpoints is implemented in `api/lib/api-key-auth.ts` and `api/lib/api-key-middleware.ts`.
+- To add a new incoming webhook provider: extend `handleProviderWebhook` in `api/lib/webhook-handlers.ts` and mount the route before the catch-all in `api/boot.ts`.
+- Run integration tests: `npx vitest run api/__tests__/webhook-dispatcher.test.ts api/__tests__/integration-finabill.test.ts`
+- Dev server: `npm run dev` (Portless) or `npm run dev:app` (no Portless).
+
 ## Changelog Convention
 - **CHANGELOG.md is append-only**: New entries are always added at the top of the file under `[Unreleased]`. Previous entries are never edited, reordered, or removed after they are written.
 - **Chronological ordering**: Newer changes go above older ones. Each section represents a logical batch of work.

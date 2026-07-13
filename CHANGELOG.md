@@ -1,5 +1,219 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.1.0] - 2026-07-12
+
+### Changed
+- **Version bump to 1.1.0** - Updated application version across package.json, version.ts, and CHANGELOG.md in preparation for deployment.
+
+## [Unreleased] - Dashboard Coherence: Featured Cash Position, 30-Day Cashflow Trend, and Mobile Wallet Mirror
+
+Made the main `/dashboard` page read top-down (position → trend → KPIs → details → alerts → summaries), added three new cards, and fixed the long-standing data-visibility gap where `summary.wallet` was returned by the backend but never rendered.
+
+### Added
+- **Featured Cash Position card** - new full-width hero card showing total cash on hand across all branches with a horizontal stacked bar breaking the total down by account type (Cash / Bank / Wallet / Other). Uses the `#2E7D32` gradient aesthetic from `Home.tsx` (`src/features/dashboard/CashPositionCard.tsx`, `src/features/dashboard/cash-position.ts`).
+- **30-Day Cashflow Trend chart** - new Recharts ComposedChart showing daily sales (area), expenses (bars), and net (line) over the selected period, with an empty-state fallback and a KES-denominated y-axis (`src/features/dashboard/CashflowTrendCard.tsx`, `src/features/dashboard/cashflow-trend-data.ts`).
+- **Mobile Wallet Summary card** - mirrors the existing M-PESA Summary block and reads from the previously-orphaned `summary.wallet` field. Falls back to a one-line empty state when no wallet activity exists (`src/features/dashboard/MobileWalletSummaryCard.tsx`).
+- **`dashboard.cashflowTrend` query** - new tRPC query that returns a dense per-day series of `{ date, sales, expenses, net }` for the requested date range, respecting the same `getCurrentBusinessLocationIds` filter as `summary` (`api/dashboard-router.ts`).
+- **`summary.previousPeriodTotals`** - the same-window total sales and total expenses for the period of equal length immediately preceding the current range, used to compute the trend % on each KPI card (`api/dashboard-router.ts`).
+- **`summary.cashPosition`** - aggregated cash position broken down by account type, returned alongside the existing `accounts` array (`api/dashboard-router.ts`).
+- **TrendKpiCard** - replacement for the in-page `KpiCard` helper. Adds a trend % badge in the corner (▲ green / ▼ red / — grey) computed from `previousPeriodTotals`, plus a gradient background that matches the Home page aesthetic (`src/features/dashboard/TrendKpiCard.tsx`).
+- **BillsPipelineCard** - unified card with three timeline sections (Overdue, Due in 7 Days, Due in 8–30 Days) that replaces the two separate alert cards and surfaces the previously-orphaned `alerts.upcomingBills30` data (`src/features/dashboard/BillsPipelineCard.tsx`).
+- **TodayStrip** - compact two-up row showing "Yesterday's Income" (from `dashboard.previousDayIncome`) and "Pending Today" (count + amount from `dashboard.dailyPayments`) to anchor the user in the right-now before they read the period view (`src/features/dashboard/TodayStrip.tsx`).
+
+### Changed
+- **Dashboard layout reshuffled** - new top-down order: header → Cash Position → 4 KPI cards (with trend %) → Today Strip + 30-day trend chart → Account Balances + Quick Actions → Bills Pipeline → M-PESA + Mobile Wallet pair (`src/pages/Dashboard.tsx`).
+- **KPI count reduced from 5 to 4** - "Unpaid Sales" was removed because it duplicates the Bills Pipeline. The remaining KPIs (Total Sales, Total Expenses, Net Cashflow, Bills Due) now fit cleanly on a 4-column grid at `lg:` and stack properly on mobile.
+- **M-PESA Summary retained inline** - the M-PESA block stays where it is; only a sibling Mobile Wallet card was added so the layout is now symmetric. The original M-PESA markup was untouched to avoid scope creep.
+- **Permission gating on new cards** - `CashPositionCard` and the KPI row gate on `ACCOUNTS_VIEW`; `MobileWalletSummaryCard` gates on `WALLET_VIEW`; `BillsPipelineCard` gates on `BILLS_VIEW`. `TodayStrip` and `CashflowTrendCard` always render.
+
+### Tests
+- Added unit coverage for the cash position aggregator and the cashflow trend chart helpers (`src/features/dashboard/__tests__/cash-position.test.ts`, `src/features/dashboard/__tests__/cashflow-trend-data.test.ts`).
+- Added source-level regression test asserting the new feature sub-components are wired into the Dashboard page and the in-page `KpiCard` helper is gone (`src/pages/__tests__/dashboard-coherence.test.ts`).
+- Added backend source-level regression test for the new `cashflowTrend` query, the `previousPeriodTotals` extension, and the `cashPosition` extension (`api/__tests__/dashboard-summary-extensions.test.ts`).
+
+## [Unreleased] - Partner Leads Engine, Settings Referral Attribution, and Allocation Visibility
+
+Implemented the partner leads engine foundation, added account-level post-signup referral attribution in Settings, added the new Partner Dashboard leads workspace, and corrected allocation visibility so business owners still keep their owner-side allocation management in Businesses while partner-only claim access stays restricted.
+
+### Added
+- **Leads engine backend** - added the `leads` table, migration `0029_partner_leads`, lead normalization/matching helpers, invitation templates, and the new `leads` API router for create/list/update/email/SMS invite flows (`db/schema.ts`, `db/migrations/0029_partner_leads.sql`, `api/lib/leads.ts`, `api/leads-router.ts`, `api/router.ts`, `api/lib/email-templates.ts`).
+- **Signup and Settings referral attribution** - signup now marks matching leads as converted, and Settings can now save an account-level `Referred By` code with commission-eligibility feedback (`api/local-auth-router.ts`, `api/account-subscriptions-router.ts`, `src/pages/Settings.tsx`).
+- **Partner Dashboard leads workspace** - added the `Leads` tab, lead metrics, lead management UI, and owner allocation management in the dashboard (`src/pages/PartnerDashboard.tsx`, `src/components/partner/LeadsTab.tsx`, `src/components/partner/LeadFormDialog.tsx`, `src/components/partner/LeadStatusBadge.tsx`).
+
+### Changed
+- **Allocation visibility corrected** - restored owner-side `Partner Allocations` management in `Businesses` for business managers/owners, while keeping the claim-side allocation surface gated in `AllocationsTab` for partner/admin users (`src/pages/Businesses.tsx`, `src/components/partner/AllocationsTab.tsx`, `api/partner-router.ts`).
+
+### Tests
+- Added backend coverage for leads router flows, account-level referral attribution, and allocation authorization (`api/__tests__/leads-router.test.ts`, `api/__tests__/account-subscription-referral.test.ts`, `api/__tests__/partner-allocation-authorization.test.ts`, `api/lib/__tests__/leads.test.ts`, `api/__tests__/local-auth-registration.test.ts`).
+- Added frontend regression coverage for Settings referral UI, Businesses allocation visibility, and Partner Dashboard tab wiring (`src/pages/__tests__/partner-dashboard-visibility.test.ts`).
+- Verified the corrected owner allocation behavior with `npx vitest run api/__tests__/partner-allocation-authorization.test.ts src/pages/__tests__/partner-dashboard-visibility.test.ts`.
+
+## [Unreleased] — Fina Connect target-business visibility
+
+Show which sibling business each connected business is paired with, so users can tell at a glance which FinaBill/FinaFlow business they are linked to.
+
+### Added
+- **`targetBusinessId` and `targetBusinessName` columns** on `integration_connections` to store the paired business identity from the sibling app (`db/schema.ts`, `db/migrations/0027_fina_connect_target_business.sql`).
+- **Backend target-business plumbing** — `connect-service` stores the partner business ID and name during connect, passes them through the `partner-approve` and `complete` machine-to-machine calls, and returns them from `listBusinessConnectionStates` (`api/lib/integrations/connect-service.ts`, `api/boot.ts`).
+- **Multi-business connection status panel** on the FinaBill card now shows the connected sibling business name and a “Switch” action per business (`src/components/FinabillIntegrationCard.tsx`).
+
+### Changed
+- The connected-state message now includes the sibling business name: e.g. “This business is connected to FinaBill (Acme Invoicing)”.
+- Pairing codes remain copyable with a clear “Continue to partner” button; duplicate-business guards are still enforced.
+
+### Tests
+- Targeted ESLint on the changed FinaFlow and FinaBill files returns no new errors.
+- FinaFlow `npm run typecheck` passes.
+- FinaBill `npm run typecheck` still reports pre-existing, unrelated errors in `pdf.test.ts`, `payments/collection-service.ts`, `events.ts`, and `PaymentFiscalSettings.tsx`.
+
+## [Unreleased] — Payment Method Assignment Refresh & Location Permission Sync
+
+Fixed the payment-method-to-branch assignment UI not refreshing after a successful add, and removed the stale-location-assignment block in daily sales entry by keeping the auth profile cache current.
+
+### Fixed
+- **Payment method branch assignment now refreshes immediately** — `assignToLocation` success in `src/pages/Accounts.tsx` now awaits targeted invalidation of `paymentMethods.byLocation` and explicitly refetches the location-specific assignment list, so the newly added method appears right after the toast.
+- **Daily sales no longer blocks on stale assigned locations** — `useAuth` in `src/hooks/useAuth.ts` sets `staleTime: 0` on `localAuth.me`, ensuring `assignedLocationIds` is re-fetched whenever the hook is observed. `src/pages/Users.tsx` also invalidates `localAuth.me` after `setUserLocations` and `users.update` change location assignments, so the LocationSelector enforces the most current set.
+
+### Tests
+- Added frontend-regression assertions in `api/__tests__/frontend-regressions.test.ts` guarding the refetch pattern, the auth stale-time setting, and the `localAuth.me` invalidation after location updates.
+- `api/__tests__/user-location-enforcement.test.ts`, `e2e/__tests__/user-multi-location-flow.test.ts`, `api/__tests__/journal-and-sales.test.ts`, `e2e/__tests__/sales-cycle.test.ts`, and `api/__tests__/users-create-values.test.ts` remain green.
+- `npm run check` passes.
+
+## [Unreleased] — Inline Supplier & Category Creation in Bills and Expenses
+
+Replaced the side-by-side "New" buttons next to supplier and category fields with a compact "+ Add …" option at the bottom of each combobox, freeing horizontal space and removing mobile scroll.
+
+### Changed
+- **Bills page inline creation** — supplier and category selects now show `+ Add supplier` / `+ Add category` as the last option in the dropdown. Selecting them opens the existing quick-create dialogs without leaving the form (`src/pages/Bills.tsx`).
+- **Expenses page inline creation** — same inline add-new behavior for suppliers and categories (`src/pages/Expenses.tsx`).
+- **Quick-create dialogs are now fully controlled** — `QuickCategoryDialog` and `QuickSupplierDialog` accept optional `open` / `onOpenChange` and an optional `trigger`; when no trigger is provided they render only the dialog content and are opened via the parent (`src/components/QuickCategoryDialog.tsx`, `src/components/QuickSupplierDialog.tsx`).
+- **ExpenseCategorySelector supports add-new option** — added optional `onAddNew` / `addNewLabel` props that render a final `+ Add category` option and intercept it without changing the controlled value (`src/components/ExpenseCategorySelector.tsx`).
+
+### Tests
+- `npm run check` passes.
+
+## [Unreleased] — Database Performance & Integrity
+
+Added production-safe indexes and foreign keys to high-volume financial tables, plus tooling to keep future schema changes safe.
+
+### Added
+- **Core performance indexes** — 40 new partial/composite indexes on `bills`, `expenses`, `daily_sales`, `ledger_entries`, `bill_payments`, `recurring_bill_templates`, `debts`, `mpesa_transactions`, `api_keys`, `locations`, `businesses`, `users`, `accounts`, `audit_log`, and `exchange_rates` (`db/schema.ts`, `db/migrations/0017_steep_tarantula.sql`).
+- **Core foreign keys** — 25 `NO ACTION` FKs on financial tables (e.g. `bills.supplierId`, `expenses.billId`, `bill_payments.billId`) added with `NOT VALID` + `VALIDATE CONSTRAINT` to avoid long locks (`db/schema.ts`, `db/migrations/0018_bent_hellcat.sql`).
+- **Migration safety check script** — read-only diagnostic that reports table row counts, missing indexes, and orphan rows for proposed FKs (`scripts/migration-safety-check.ts`).
+- **Database migration runbook** — documents backup, `CONCURRENTLY`, `NOT VALID`/`VALIDATE`, rollback, and validation steps (`docs/database-migrations.md`).
+
+### Changed
+- **Schema indexes/FKs** — `db/schema.ts` now declares the new indexes and foreign keys as the source of truth.
+
+### Tests
+- Ran `scripts/migration-safety-check.ts` against the dev database: zero orphan rows found.
+- Applied `0017` and `0018` manually to the dev database; all `CREATE INDEX CONCURRENTLY` builds and FK validations succeeded.
+- `npm run check` passes.
+
+## [Unreleased] — Production Risk Hardening for Integrations
+
+Hardened uncommitted integration/migration work before commit: fixed migration collisions, tenant isolation, machine-auth scopes, and ledger soft-delete filters.
+
+### Added
+- **Additive migration `0025_integration_connections_and_channel_maps`** — creates `integration_connections` and `external_channel_mappings`, adds `api_keys.expiresAt` and `daily_sales.source_batch_id`, and installs FK/index guards with `IF NOT EXISTS` (`db/migrations/0025_integration_connections_and_channel_maps.sql`).
+- **Scoped machine auth** — Hono API-key middleware accepts a required scope (`sales:write`, etc.); daily-sales ingest requires `sales:write` (`api/lib/api-key-middleware.ts`, `api/boot.ts`).
+- **Integration user role allowlist** — Finabill `upsertUser` requires `users:write` and only allows non-privileged roles (`manager`, `employee`, `accountant`, `viewer`, `cashier`) with location ownership checks (`api/integration-finabill-router.ts`).
+
+### Changed
+- **Daily sales ingest requires `locationId` + `sourceBatchId`** — no longer picks the first active location for a business (`api/lib/daily-sales-ingestion.ts`, `api/boot.ts`).
+- **CSRF allowlist** — machine routes under `/api/integration/` are exempt alongside webhooks/tRPC (`api/lib/csrf.ts`).
+- **Journal create tenant binding** — API-key callers are forced to their key's `businessId` (`api/journal-router.ts`).
+- **Webhook master-data updates** — `coa.updated` / `supplier.updated` require `externalId` (no name-only matching) (`api/lib/webhook-handlers.ts`).
+
+### Fixed
+- **Removed colliding migrations** — deleted unsafe `0016_fresh_impossible_man`, `0018_silent_lorna_dane`, `0024_api_keys_expires_at`, and phantom journal tags that could break production migrators.
+- **Ledger soft-delete filters** — bill/expense deletes now filter by `transactionType` (`expense` / `bill_payment`) so unrelated ledger rows with the same `transactionId` are not soft-deleted (`api/bills-router.ts`, `api/expenses-router.ts`).
+
+### Tests
+- Updated Finabill integration tests for required `locationId` and scoped middleware (`api/__tests__/integration-finabill.test.ts`).
+- `npm run check` and targeted integration/delete-guard tests.
+
+## [Unreleased] — Partner & Referral Improvements
+
+Fixed the broken referral-code landing flow, made partner pages usable on mobile, and ensured referred businesses show up in the partner client list.
+
+### Added
+- **Referral code prefill** — visiting `/login?ref=FINA…` now opens the Sign Up tab and prefills the referral code field automatically (`src/pages/Login.tsx`).
+
+### Changed
+- **Partner Dashboard mobile layout** — the referral link, referred-business list, client list, and commission history now render as stacked cards on small screens while keeping desktop tables. The "Calculate Commissions" button remains above "Generate Code" and both are full-width on mobile (`src/pages/PartnerDashboard.tsx`).
+- **Allocation management mobile layout** — business/right selectors, generated code/link display, and the allocations list now stack cleanly on mobile (`src/components/partner/AllocationManagement.tsx`).
+- **Allocations tab mobile layout** — the claim code input/button stack vertically on mobile and allocated businesses render as cards (`src/components/partner/AllocationsTab.tsx`).
+
+### Fixed
+- **Partner client list now includes referred businesses** — `partnerRouter.clients` now returns businesses where the user is either the assigned partner or the referring user (`api/partner-router.ts`).
+
+### Tests
+- `npm run check` passes.
+- `api/__tests__/partner-allocations-contract.test.ts`, `api/__tests__/partner-allocations-rights.test.ts`, and `api/__tests__/local-auth-registration.test.ts` remain green.
+
+## [Unreleased] — Partner Dashboard Mobile Layout
+
+Fixed the Partner Dashboard header on mobile so the action buttons no longer overflow the screen.
+
+### Changed
+- **Partner header actions** — the "Calculate Commissions" and "Generate Code" buttons now stack vertically on mobile, with "Calculate Commissions" on top as requested. On desktop they remain side-by-side. Both buttons are full-width on small screens (`src/pages/PartnerDashboard.tsx`).
+
+## [Unreleased] — Journal Entries Mobile Usability
+
+Made the Journal Entries page usable on mobile devices by fixing the Chart-of-Accounts account picker and reworking the line-item layout so it no longer relies on a cramped 12-column grid.
+
+### Changed
+- **Journal line-item layout** — each line is now a self-contained card on mobile with the account picker, debit/credit/memo fields stacked clearly. On larger screens the same card collapses into a compact horizontal row (`src/pages/JournalEntries.tsx`).
+- **Journal entry details dialog** — replaced the rigid three-column table with a stacked list of lines that fits narrow screens (`src/pages/JournalEntries.tsx`).
+- **CoA account picker popover** — the picker now opens wide enough for mobile (`w-[calc(100vw-2rem)] max-w-sm`) and stays anchored below the trigger, with a larger touch-friendly search input and scrollable grouped account list (`src/components/CoAJournalAccountPicker.tsx`).
+
+### Tests
+- `npm run check` passes and `api/__tests__/journal-and-sales.test.ts` remains green.
+
+## [Unreleased] — Expense Category UX, Inline Supplier/Category Creation, Delete-After-Revert Fixes
+
+Improved expense-category management on mobile, added permission-gated inline supplier/category creation during expense and bill entry, and fixed the inability to delete bills and expenses after they had been reversed.
+
+### Added
+- **Inline supplier creation** — a "New Supplier" button next to the supplier select in the Add Expense, Add Bill, and Add Recurring Bill forms lets users with `SUPPLIERS_MANAGE` create a supplier on the fly and immediately select it (`src/components/QuickSupplierDialog.tsx`, `src/pages/Expenses.tsx`, `src/pages/Bills.tsx`).
+- **Inline expense-category creation** — a "New Category" button next to the category selector in the same forms lets users with `EXPENSE_CATEGORIES_MANAGE` add a category without leaving the form (`src/components/QuickCategoryDialog.tsx`, `src/pages/Expenses.tsx`, `src/pages/Bills.tsx`).
+
+### Changed
+- **Expense category editor UI** — the Categories tab now displays categories as responsive cards with always-visible edit/delete actions, color dots, classification badges, and account-mode labels. Editing opens a full dialog with name, description, color, classification, accounting mode, and default account instead of tiny inline hover controls (`src/pages/Expenses.tsx`).
+- **Expense-category permissions** — category create/update/delete mutations now consistently require `EXPENSE_CATEGORIES_MANAGE` on the backend, and the manager role includes that permission so managers can keep managing categories (`api/expenses-router.ts`, `api/middleware.ts`, `src/lib/permissions.ts`).
+
+### Fixed
+- **Delete after reverse for expenses** — reversing an expense creates reversal ledger entries, which previously blocked deletion. The delete guard now allows deletion when the record is already reversed and soft-deletes the associated ledger entries and expense items (`api/expenses-router.ts`).
+- **Delete after reverse for bills** — the same fix applies to bills: reversed bills can now be deleted, and their ledger entries and bill items are soft-deleted (`api/bills-router.ts`).
+
+### Tests
+- Added `posted-delete-guards` test cases verifying that reversed expenses and bills can be deleted and that their ledger entries (and bill items) are soft-deleted (`api/__tests__/posted-delete-guards.test.ts`).
+- Marked the `posted record delete guards` suite as sequential to avoid concurrency-related database interference.
+
+## [Unreleased] — Logout & Payment Method Branch Linking
+
+Fixed logout not clearing the session cookie, and tightened the "Tag to Branches" payment-method/account linking UI so only valid branch-level or business-level accounts can be selected.
+
+### Fixed
+- **Logout redirect / session clearing** — `useAuth().logout` now calls the `localAuth.logout` tRPC mutation so the server clears the `finaflow_token`, `csrf_token`, and session cookies before resetting client state and redirecting to `/login` (`src/hooks/useAuth.ts`, `src/components/AuthLayout.tsx`). The logout mutations now mirror the original cookie `SameSite`/`Secure` attributes and always clear cookies even if the database session/refresh-token cleanup fails (`api/local-auth-router.ts`).
+- **Payment method account linking inconsistency** — the "Tag to Branches" dialog now only shows accounts that belong to the selected branch or are business-level (`locationId` is `null`). This prevents the backend validation error that occurred when users picked an account from a different branch (`src/pages/Accounts.tsx`).
+
+### Changed
+- **Branch dropdown in Tag to Branches** — owners and admins now see every branch; other users still see only their assigned branches when location enforcement is enabled (`src/pages/Accounts.tsx`).
+
+## [Unreleased] — tRPC Route Fix & Default Port 3200
+
+Fixed a dev-server routing issue that caused tRPC batch requests to fall through to the 404 handler, and changed the default development port to 3200.
+
+### Fixed
+- **tRPC batch route matching** — changed the Hono route patterns in `api/boot.ts` from `/api/trpc*` to `/api/trpc/*` so tRPC batch requests (`/api/trpc/localAuth.lookupAccount?batch=1`) are handled correctly instead of returning a plain `{"error":"Not Found"}` response that the tRPC client could not transform (`api/boot.ts`).
+
+### Changed
+- **Default dev server port** — Vite, the standalone backend, and the `APP_URL` fallback now default to port `3200` instead of `3000`/`5173`. The `.env.example` and README have been updated to match (`vite.config.ts`, `api/boot.ts`, `api/lib/env.ts`, `.env.example`, `README.md`).
+
 ## [1.0.6]
 
 Release 1.0.6 bundles the admin dashboard, password reset, email logging, owner broadcasts, and notification improvements delivered since 1.0.5.

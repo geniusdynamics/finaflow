@@ -12,7 +12,13 @@ export const csrfProtection = async (c: Context, next: Next) => {
 
   const path = c.req.path;
 
-  if (path.startsWith("/api/trpc")) {
+  // Machine-to-machine routes authenticate via API key / webhook signature, not browser CSRF cookies.
+  if (
+    path.startsWith("/api/trpc") ||
+    path.startsWith("/api/webhooks") ||
+    path.startsWith("/api/integration/") ||
+    path.startsWith("/api/connect")
+  ) {
     return next();
   }
 

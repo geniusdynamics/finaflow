@@ -24,6 +24,8 @@ import { alertsRouter } from "./alerts-router";
 import { payrollSettingsRouter } from "./payroll-settings-router";
 import { poRouter } from "./po-router";
 import { integrationsRouter } from "./integrations-router";
+import { integrationFinabillRouter } from "./integration-finabill-router";
+import { connectRouter } from "./connect-router";
 import { partnerRouter } from "./partner-router";
 import { notificationsRouter } from "./notifications-router";
 import { supplierPricesRouter } from "./supplier-prices-router";
@@ -35,6 +37,7 @@ import { walletRouter } from "./wallet-router";
 import { walletManagementRouter } from "./wallet-management-router";
 import { debtsRouter } from "./debts-router";
 import { adminRouter } from "./admin-router";
+import { leadsRouter } from "./leads-router";
 import { createRouter, publicQuery } from "./middleware";
 
 export const appRouter = createRouter({
@@ -66,6 +69,8 @@ export const appRouter = createRouter({
   payrollSettings: payrollSettingsRouter,
   po: poRouter,
   integrations: integrationsRouter,
+  integrationFinabill: integrationFinabillRouter,
+  connect: connectRouter,
   partner: partnerRouter,
   notifications: notificationsRouter,
   supplierPrices: supplierPricesRouter,
@@ -76,6 +81,7 @@ export const appRouter = createRouter({
   wallet: walletRouter,
   walletManagement: walletManagementRouter,
   debts: debtsRouter,
+  leads: leadsRouter,
   budgets: budgetsRouter,
 });
 

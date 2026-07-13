@@ -31,6 +31,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_TRIAL_DAYS, getPlanConfig } from "./lib/subscriptions";
 import { provisionBusiness, seedBusinessAccounting } from "./lib/business-provisioning";
+import { markLeadConverted } from "./lib/leads";
 
 const JWT_ALG = "HS256";
 const JWT_SECRET = new TextEncoder().encode(env.appSecret);
@@ -733,6 +734,21 @@ export const localAuthRouter = createRouter({
         );
       }
 
+      try {
+        await markLeadConverted(db, {
+          email: input.email,
+          phone: input.phone || null,
+          matchedUserId: userId,
+          matchedAccountRefId: accountRefId,
+          matchedBusinessId: businessId,
+          referredByBusinessId,
+          referredByUserId,
+          referralCodeUsed: input.referralCode?.trim().toUpperCase() || null,
+        });
+      } catch (error) {
+        console.error("[register] lead attribution failed", error);
+      }
+
       const token = await signLocalToken({ userId, username: input.username });
       const csrfToken = generateCsrfToken();
       setAuthCookies(ctx, token, csrfToken);
@@ -1172,13 +1188,18 @@ export const localAuthRouter = createRouter({
     const refreshToken = cookies["finaflow_refresh_token"];
     const sessionId = cookies["finaflow_session_id"];
     const db = getDb();
-    if (refreshToken) {
-      await db.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.tokenHash, refreshToken));
+    try {
+      if (refreshToken) {
+        await db.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.tokenHash, refreshToken));
+      }
+      if (sessionId) {
+        await closeSessionById(db, parseInt(sessionId, 10));
+      }
+    } catch (err) {
+      // Non-fatal: still clear the auth cookies so the user is logged out client-side.
+      console.error("[logout] session/refresh cleanup failed", err);
     }
-    if (sessionId) {
-      await closeSessionById(db, parseInt(sessionId, 10));
-    }
-    clearAuthCookies(ctx.resHeaders);
+    clearAuthCookies(ctx.req, ctx.resHeaders);
     return { success: true };
   }),
 
@@ -1186,14 +1207,18 @@ export const localAuthRouter = createRouter({
     const cookies = parseCookie(ctx.req.headers.get("cookie") || "");
     const token = cookies["finaflow_token"] || ctx.req.headers.get("authorization")?.slice(7);
     const db = getDb();
-    if (token) {
-      const claim = await verifyLocalToken(token);
-      if (claim) {
-        await db.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.userId, claim.userId));
-        await closeUserSessions(db, claim.userId);
+    try {
+      if (token) {
+        const claim = await verifyLocalToken(token);
+        if (claim) {
+          await db.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.userId, claim.userId));
+          await closeUserSessions(db, claim.userId);
+        }
       }
+    } catch (err) {
+      console.error("[logoutAll] session/refresh cleanup failed", err);
     }
-    clearAuthCookies(ctx.resHeaders);
+    clearAuthCookies(ctx.req, ctx.resHeaders);
     return { success: true };
   }),
 });
@@ -1234,11 +1259,20 @@ async function closeUserSessions(db: ReturnType<typeof getDb>, userId: number): 
   }
 }
 
-function clearAuthCookies(resHeaders: Headers): void {
-  resHeaders.append("Set-Cookie", serialize("finaflow_token", "", { httpOnly: true, path: "/", maxAge: 0 }));
-  resHeaders.append("Set-Cookie", serialize("csrf_token", "", { httpOnly: false, path: "/", maxAge: 0 }));
-  resHeaders.append("Set-Cookie", serialize("finaflow_refresh_token", "", { httpOnly: true, path: "/", maxAge: 0 }));
-  resHeaders.append("Set-Cookie", serialize("finaflow_session_id", "", { httpOnly: false, path: "/", maxAge: 0 }));
+function isLocalHost(host: string): boolean {
+  return host.startsWith("localhost:") || host.startsWith("127.0.0.1:") ||
+    host.endsWith(".localhost") || host.includes(".localhost:") ||
+    host.endsWith(".local") || host.includes(".local:");
+}
+
+function clearAuthCookies(req: Request, resHeaders: Headers): void {
+  const host = req.headers.get("host") || "";
+  const secure = !isLocalHost(host);
+  const cookieOpts = { path: "/", maxAge: 0, sameSite: "lax" as const, secure };
+  resHeaders.append("Set-Cookie", serialize("finaflow_token", "", { ...cookieOpts, httpOnly: true }));
+  resHeaders.append("Set-Cookie", serialize("csrf_token", "", { ...cookieOpts, httpOnly: false }));
+  resHeaders.append("Set-Cookie", serialize("finaflow_refresh_token", "", { ...cookieOpts, httpOnly: true }));
+  resHeaders.append("Set-Cookie", serialize("finaflow_session_id", "", { ...cookieOpts, httpOnly: false }));
 }
 
 function parseCookie(cookieHeader: string): Record<string, string> {

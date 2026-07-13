@@ -144,7 +144,7 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
               entries.map((entry: any) => (
                 <Card key={entry.id} className="border-[#E8E0D8] hover:border-[#C73E1D]/30 transition-colors">
                   <CardContent className="p-4">
-                    <div className="flex items-start justify-between">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3">
                           <span className="font-mono text-sm font-semibold">{entry.entryNumber}</span>
@@ -267,31 +267,25 @@ export function JournalEntries({ embedded }: { embedded?: boolean }) {
 
                 <div className="border-t pt-4">
                   <h4 className="mb-2 font-semibold">Journal Lines</h4>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2">Account</th>
-                        <th className="text-right py-2">Debit</th>
-                        <th className="text-right py-2">Credit</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                      {selectedEntryQuery.data?.lines?.map((line: any, idx: number) => (
-                        <tr key={idx} className="border-b">
-                          <td className="py-2">
-                            <div className="font-medium">{line.accountName || `Account #${line.accountId}`}</div>
-                            {line.accountCode && <div className="text-xs text-[#8D8A87]">{line.accountCode}</div>}
-                          </td>
-                          <td className="text-right font-mono py-2">
-                            {parseFloat(line.debit) > 0 ? formatKES(line.debit) : ""}
-                          </td>
-                          <td className="text-right font-mono py-2">
-                            {parseFloat(line.credit) > 0 ? formatKES(line.credit) : ""}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="space-y-2">
+                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                    {selectedEntryQuery.data?.lines?.map((line: any, idx: number) => (
+                      <div key={idx} className="flex items-center justify-between rounded-md border border-[#E8E0D8] p-2.5 text-sm">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-[#2D2A26]">{line.accountName || `Account #${line.accountId}`}</div>
+                          {line.accountCode && <div className="text-xs text-[#8D8A87]">{line.accountCode}</div>}
+                        </div>
+                        <div className="ml-3 text-right font-mono">
+                          {parseFloat(line.debit) > 0 ? (
+                            <div className="text-[#D32F2F]">{formatKES(line.debit)} Dr</div>
+                          ) : null}
+                          {parseFloat(line.credit) > 0 ? (
+                            <div className="text-[#2E7D32]">{formatKES(line.credit)} Cr</div>
+                          ) : null}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             </DialogContent>
@@ -443,99 +437,105 @@ function JournalEntryForm({ onSuccess, businessId }: { onSuccess: () => void; bu
           </Button>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           {lines.map((line, idx) => (
             <div
               key={idx}
-              className="grid grid-cols-12 items-end gap-2 rounded-lg border border-[#E8E0D8] bg-white p-2"
+              className="rounded-lg border border-[#E8E0D8] bg-white p-3"
             >
-              <div className="col-span-6">
-                <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8D8A87]">
-                  Account
-                </label>
-                <CoAJournalAccountPicker
-                  value={line.accountId}
-                  onChange={(v) => updateLine(idx, "accountId", v)}
-                  excludeIds={lines
-                    .map((l, i) => (i !== idx && l.accountId ? parseInt(l.accountId) : null))
-                    .filter((id): id is number => id !== null)}
-                  businessId={businessId}
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8D8A87]">
-                  Debit
-                </label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[#8D8A87]">
-                    KES
-                  </span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={line.debit}
-                    onChange={(e) => {
-                      updateLine(idx, "debit", e.target.value);
-                      if (e.target.value) updateLine(idx, "credit", "");
-                    }}
-                    placeholder="0.00"
-                    className="h-[34px] w-full rounded-md border border-[#E8E0D8] bg-white px-2 pl-9 text-right text-sm font-mono focus:border-[#C73E1D] focus:outline-none focus:ring-1 focus:ring-[#C73E1D]"
-                  />
-                </div>
-              </div>
-              <div className="col-span-2">
-                <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8D8A87]">
-                  Credit
-                </label>
-                <div className="relative">
-                  <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[#8D8A87]">
-                    KES
-                  </span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={line.credit}
-                    onChange={(e) => {
-                      updateLine(idx, "credit", e.target.value);
-                      if (e.target.value) updateLine(idx, "debit", "");
-                    }}
-                    placeholder="0.00"
-                    className="h-[34px] w-full rounded-md border border-[#E8E0D8] bg-white px-2 pl-9 text-right text-sm font-mono focus:border-[#C73E1D] focus:outline-none focus:ring-1 focus:ring-[#C73E1D]"
-                  />
-                </div>
-              </div>
-              <div className="col-span-1">
-                <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8D8A87]">
-                  Memo
-                </label>
-                <Input
-                  value={line.description}
-                  onChange={(e) => updateLine(idx, "description", e.target.value)}
-                  placeholder="Memo"
-                  className="h-[34px] text-xs"
-                />
-              </div>
-              <div className="col-span-1 flex justify-end">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium text-[#8D8A87]">Line {idx + 1}</span>
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
                   onClick={() => removeLine(idx)}
                   disabled={lines.length <= 2}
-                  className="h-[34px] w-[34px] p-0"
+                  className="h-7 w-7 p-0"
                   title="Remove line"
                 >
                   <Trash2 className="h-3.5 w-3.5 text-[#D32F2F]" />
                 </Button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-end">
+                <div className="sm:col-span-5">
+                  <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8D8A87]">
+                    Account
+                  </label>
+                  <CoAJournalAccountPicker
+                    value={line.accountId}
+                    onChange={(v) => updateLine(idx, "accountId", v)}
+                    excludeIds={lines
+                      .map((l, i) => (i !== idx && l.accountId ? parseInt(l.accountId) : null))
+                      .filter((id): id is number => id !== null)}
+                    businessId={businessId}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2 sm:col-span-7 sm:flex sm:items-end sm:gap-2">
+                  <div className="sm:w-[22%]">
+                    <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8D8A87]">
+                      Debit
+                    </label>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[#8D8A87]">
+                        KES
+                      </span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={line.debit}
+                        onChange={(e) => {
+                          updateLine(idx, "debit", e.target.value);
+                          if (e.target.value) updateLine(idx, "credit", "");
+                        }}
+                        placeholder="0.00"
+                        className="h-[38px] w-full rounded-md border border-[#E8E0D8] bg-white px-2 pl-9 text-right text-base font-mono focus:border-[#C73E1D] focus:outline-none focus:ring-1 focus:ring-[#C73E1D] sm:h-[34px] sm:text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="sm:w-[22%]">
+                    <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8D8A87]">
+                      Credit
+                    </label>
+                    <div className="relative">
+                      <span className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-[#8D8A87]">
+                        KES
+                      </span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={line.credit}
+                        onChange={(e) => {
+                          updateLine(idx, "credit", e.target.value);
+                          if (e.target.value) updateLine(idx, "debit", "");
+                        }}
+                        placeholder="0.00"
+                        className="h-[38px] w-full rounded-md border border-[#E8E0D8] bg-white px-2 pl-9 text-right text-base font-mono focus:border-[#C73E1D] focus:outline-none focus:ring-1 focus:ring-[#C73E1D] sm:h-[34px] sm:text-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="sm:flex-1">
+                    <label className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-[#8D8A87]">
+                      Memo
+                    </label>
+                    <Input
+                      value={line.description}
+                      onChange={(e) => updateLine(idx, "description", e.target.value)}
+                      placeholder="Memo"
+                      className="h-[38px] text-sm sm:h-[34px]"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           ))}
         </div>
 
         {/* Balance validation summary */}
-        <div className="mt-3 flex items-center justify-between rounded-md bg-[#F5EDE6] px-3 py-2 text-sm">
+        <div className="mt-3 flex flex-col gap-2 rounded-md bg-[#F5EDE6] px-3 py-2 text-sm sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <span className="text-[#8D8A87]">
               Total Debit: <span className="font-mono font-semibold text-[#2D2A26]">{formatKES(totalDebit.toString())}</span>

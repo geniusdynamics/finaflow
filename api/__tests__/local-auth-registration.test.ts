@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appRouter } from "../router";
 import { getDb } from "../queries/connection";
-import { accounts, businesses, customerAccounts, expenseCategories, locations, refreshTokens, userBusinesses, users } from "@db/schema";
+import { accounts, businesses, customerAccounts, expenseCategories, leads, locations, refreshTokens, userBusinesses, users } from "@db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 
 const baseInput = {
@@ -39,6 +39,8 @@ async function cleanupAccount(accountId: string, email?: string, username?: stri
   for (const user of matchingUsers) {
     await db.delete(refreshTokens).where(eq(refreshTokens.userId, user.id));
     await db.delete(userBusinesses).where(eq(userBusinesses.userId, user.id));
+    await db.delete(leads).where(eq(leads.creatorUserId, user.id));
+    await db.delete(leads).where(eq(leads.matchedUserId, user.id));
   }
 
   const matchingBusinesses = await db.select().from(businesses).where(eq(businesses.accountId, accountId));
@@ -73,6 +75,7 @@ describe("Local Auth Registration", () => {
     await cleanupAccount("ALICEVENTURES", baseInput.email, baseInput.username);
     await cleanupAccount("ROLLBACKCO", "rollback@example.com", "rollback-user");
     await cleanupAccount("DUPLICATECO", "duplicate@example.com", "duplicate-user");
+    await cleanupAccount("REFERRERCO", "referrer@example.com", "referrer-user");
   });
 
   it("registers, creates linked rows, and issues auth cookies", async () => {
@@ -109,7 +112,10 @@ describe("Local Auth Registration", () => {
     expect(junctionRows).toHaveLength(1);
     expect(junctionRows[0].businessId).toBe(businessRows[0].id);
 
-    const locationRows = await db.select().from(locations).where(eq(locations.businessId, businessRows[0].id));
+    const locationRows = await db.select().from(locations).where(and(
+      eq(locations.businessId, businessRows[0].id),
+      isNull(locations.deletedAt)
+    ));
     expect(locationRows).toHaveLength(1);
 
     const accountRows = await db.select().from(accounts).where(eq(accounts.locationId, locationRows[0].id));
@@ -222,5 +228,84 @@ describe("Local Auth Registration", () => {
 
     expect(rolledBackUsers).toHaveLength(0);
     expect(rolledBackBusinesses).toHaveLength(0);
+  });
+
+  it("marks the latest matching lead as converted during signup", async () => {
+    const db = getDb();
+    const [{ id: refAccountRefId }] = await db.insert(customerAccounts).values({
+      accountId: "REFERRERCO",
+      name: "Referrer Co",
+      plan: "partner",
+      maxBusinesses: 99,
+      maxUsers: 99,
+      maxTransactionsPerMonth: 999999,
+      subscriptionStatus: "active",
+      isActive: true,
+    }).returning({ id: customerAccounts.id });
+
+    const [{ id: refUserId }] = await db.insert(users).values({
+      username: "referrer-user",
+      name: "Referrer User",
+      email: "referrer@example.com",
+      role: "owner",
+      userType: "partner",
+      accountId: "REFERRERCO",
+      accountRefId: refAccountRefId,
+      isActive: true,
+    }).returning({ id: users.id });
+
+    const [{ id: refBusinessId, referralCode }] = await db.insert(businesses).values({
+      accountId: "REFERRERCO",
+      accountRefId: refAccountRefId,
+      name: "Referrer Business",
+      slug: "referrer-business",
+      plan: "partner",
+      subscriptionStatus: "active",
+      referralCode: "FINAREF1",
+      partnerId: refUserId,
+      isActive: true,
+    }).returning({ id: businesses.id, referralCode: businesses.referralCode });
+
+    await db.insert(leads).values({
+      creatorUserId: refUserId,
+      creatorAccountRefId: refAccountRefId,
+      creatorBusinessId: refBusinessId,
+      businessName: "Alice Ventures",
+      contactName: "Alice Owner",
+      email: baseInput.email,
+      normalizedEmail: baseInput.email,
+      phone: baseInput.phone,
+      normalizedPhone: "254700000001",
+      status: "contacted",
+    });
+
+    const newerLead = await db.insert(leads).values({
+      creatorUserId: refUserId,
+      creatorAccountRefId: refAccountRefId,
+      creatorBusinessId: refBusinessId,
+      businessName: "Alice Ventures Newer",
+      contactName: "Alice Owner",
+      email: baseInput.email,
+      normalizedEmail: baseInput.email,
+      phone: baseInput.phone,
+      normalizedPhone: "254700000001",
+      status: "contacted",
+    }).returning({ id: leads.id });
+
+    const ctx = {
+      req: new Request("http://localhost/api/trpc/localAuth.register"),
+      resHeaders: new Headers(),
+    };
+    const caller = appRouter.createCaller(ctx);
+    await caller.localAuth.register({ ...baseInput, referralCode: referralCode ?? undefined });
+
+    const updatedLeads = await db.select().from(leads).where(eq(leads.creatorUserId, refUserId));
+    const convertedLead = updatedLeads.find((lead) => lead.id === newerLead[0].id);
+    const olderLead = updatedLeads.find((lead) => lead.id !== newerLead[0].id);
+
+    expect(convertedLead?.status).toBe("converted");
+    expect(convertedLead?.joinedViaReferral).toBe(true);
+    expect(convertedLead?.commissionEligible).toBe(true);
+    expect(olderLead?.status).toBe("contacted");
   });
 });

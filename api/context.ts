@@ -1,5 +1,5 @@
-// ABOUTME: Creates the tRPC context by authenticating requests via cookie JWT (finaflow_token) or Bearer token fallback.
-// ABOUTME: Resolves user identity, business assignments, and partner allocation rights for authorisation downstream.
+// ABOUTME: Creates the tRPC context by authenticating requests via cookie JWT, Bearer token, or API key.
+// ABOUTME: Resolves user identity, business assignments, partner allocation rights, and machine-to-machine key scopes.
 import type { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 import type { User } from "@db/schema";
 import { verifyLocalToken } from "./local-auth-router";
@@ -8,6 +8,7 @@ import { users, businesses, userBusinesses, userLocations, appSettings, partnerA
 import { eq, and, isNull } from "drizzle-orm";
 import * as cookie from "cookie";
 import type { RightsProfile } from "./lib/partner-allocations";
+import { resolveApiKey, type ResolvedApiKey } from "./lib/api-key-auth";
 
 export type TrpcContext = {
   req: Request;
@@ -20,6 +21,11 @@ export type TrpcContext = {
     allocationRightsProfile?: RightsProfile | null;
     accessSource?: "owned" | "allocated";
   };
+  apiKey?: ResolvedApiKey;
+  // Machine-to-machine identity extracted from a resolved API key.
+  businessId?: number | null;
+  apiKeyId?: number;
+  apiKeyScopes?: string[];
 };
 
 async function resolveAllocationAccess(
@@ -78,95 +84,99 @@ async function loadEnforceUserLocation(businessId: number | null | undefined): P
   }
 }
 
+async function resolveUserContext(req: Request): Promise<TrpcContext["user"] | undefined> {
+  const cookies = cookie.parse(req.headers.get("cookie") || "");
+  const token = cookies["finaflow_token"];
+  if (!token) {
+    // Try Bearer token fallback for JWT
+    const authHeader = req.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) return undefined;
+    const bearerToken = authHeader.slice(7);
+    if (bearerToken.startsWith("fna_")) return undefined; // API keys handled separately
+
+    const claim = await verifyLocalToken(bearerToken);
+    if (!claim) return undefined;
+
+    const db = getDb();
+    const rows = await db.select().from(users).where(eq(users.id, claim.userId)).limit(1);
+    const user = rows[0];
+    if (!user || !user.isActive) return undefined;
+
+    return buildUserContext(user);
+  }
+
+  const claim = await verifyLocalToken(token);
+  if (!claim) return undefined;
+
+  const db = getDb();
+  const rows = await db.select().from(users).where(eq(users.id, claim.userId)).limit(1);
+  const user = rows[0];
+  if (!user || !user.isActive) return undefined;
+
+  return buildUserContext(user);
+}
+
+async function buildUserContext(user: User): Promise<TrpcContext["user"]> {
+  const db = getDb();
+  const junctions = await db.select().from(userBusinesses)
+    .where(and(eq(userBusinesses.userId, user.id), eq(userBusinesses.isActive, true)));
+  const bizIds = junctions.map(j => j.businessId);
+  let currentBusiness: typeof businesses.$inferSelect | null = null;
+  if (user.currentBusinessId) {
+    const biz = await db.select().from(businesses)
+      .where(and(eq(businesses.id, user.currentBusinessId), isNull(businesses.deletedAt))).limit(1);
+    currentBusiness = biz[0] ?? null;
+  } else if (bizIds.length > 0) {
+    const biz = await db.select().from(businesses)
+      .where(and(eq(businesses.id, bizIds[0]), isNull(businesses.deletedAt))).limit(1);
+    currentBusiness = biz[0] ?? null;
+  }
+  const allocationAccess = await resolveAllocationAccess(user.id, currentBusiness?.id ?? null);
+  const assignedLocationIds = await loadAssignedLocationIds(user.id);
+  const enforceUserLocation = await loadEnforceUserLocation(currentBusiness?.id ?? null);
+  return {
+    ...user,
+    currentBusiness,
+    businessIds: bizIds,
+    assignedLocationIds,
+    enforceUserLocation,
+    ...allocationAccess,
+  };
+}
+
 export async function createContext(
   opts: FetchCreateContextFnOptions,
 ): Promise<TrpcContext> {
   const ctx: TrpcContext = { req: opts.req, resHeaders: opts.resHeaders };
 
-  // Try cookie-based JWT first
   try {
-    const cookies = cookie.parse(opts.req.headers.get("cookie") || "");
-    const token = cookies["finaflow_token"];
-    if (token) {
-      const claim = await verifyLocalToken(token);
-      if (claim) {
-        const db = getDb();
-        const rows = await db.select().from(users).where(eq(users.id, claim.userId)).limit(1);
-        const user = rows[0];
-        if (user && user.isActive) {
-          const junctions = await db.select().from(userBusinesses)
-            .where(and(eq(userBusinesses.userId, user.id), eq(userBusinesses.isActive, true)));
-          const bizIds = junctions.map(j => j.businessId);
-          let currentBusiness: typeof businesses.$inferSelect | null = null;
-          if (user.currentBusinessId) {
-            const biz = await db.select().from(businesses)
-              .where(and(eq(businesses.id, user.currentBusinessId), isNull(businesses.deletedAt))).limit(1);
-            currentBusiness = biz[0] ?? null;
-          } else if (bizIds.length > 0) {
-            const biz = await db.select().from(businesses)
-              .where(and(eq(businesses.id, bizIds[0]), isNull(businesses.deletedAt))).limit(1);
-            currentBusiness = biz[0] ?? null;
-          }
-          const allocationAccess = await resolveAllocationAccess(user.id, currentBusiness?.id ?? null);
-          const assignedLocationIds = await loadAssignedLocationIds(user.id);
-          const enforceUserLocation = await loadEnforceUserLocation(currentBusiness?.id ?? null);
-          ctx.user = {
-            ...user,
-            currentBusiness,
-            businessIds: bizIds,
-            assignedLocationIds,
-            enforceUserLocation,
-            ...allocationAccess,
-          };
-          return ctx;
-        }
-      }
+    ctx.user = await resolveUserContext(opts.req);
+    if (ctx.user?.currentBusiness) {
+      ctx.businessId = ctx.user.currentBusiness.id;
     }
   } catch {
-    // Cookie auth failed, try Bearer token fallback
+    // ignore user auth errors
   }
 
-  // Try Bearer token fallback
+  // API-key auth is attempted even if user auth succeeded; callers decide which
+  // identity to enforce. This allows integration endpoints to be called by either
+  // a logged-in user or a machine-to-machine key.
   try {
     const authHeader = opts.req.headers.get("authorization");
     if (authHeader?.startsWith("Bearer ")) {
-      const token = authHeader.slice(7);
-      const claim = await verifyLocalToken(token);
-      if (claim) {
-        const db = getDb();
-        const rows = await db.select().from(users).where(eq(users.id, claim.userId)).limit(1);
-        const user = rows[0];
-        if (user && user.isActive) {
-          const junctions = await db.select().from(userBusinesses)
-            .where(and(eq(userBusinesses.userId, user.id), eq(userBusinesses.isActive, true)));
-          const bizIds = junctions.map(j => j.businessId);
-          let currentBusiness: typeof businesses.$inferSelect | null = null;
-          if (user.currentBusinessId) {
-            const biz = await db.select().from(businesses)
-              .where(and(eq(businesses.id, user.currentBusinessId), isNull(businesses.deletedAt))).limit(1);
-            currentBusiness = biz[0] ?? null;
-          } else if (bizIds.length > 0) {
-            const biz = await db.select().from(businesses)
-              .where(and(eq(businesses.id, bizIds[0]), isNull(businesses.deletedAt))).limit(1);
-            currentBusiness = biz[0] ?? null;
-          }
-          const allocationAccess = await resolveAllocationAccess(user.id, currentBusiness?.id ?? null);
-          const assignedLocationIds = await loadAssignedLocationIds(user.id);
-          const enforceUserLocation = await loadEnforceUserLocation(currentBusiness?.id ?? null);
-          ctx.user = {
-            ...user,
-            currentBusiness,
-            businessIds: bizIds,
-            assignedLocationIds,
-            enforceUserLocation,
-            ...allocationAccess,
-          };
-          return ctx;
+      const rawKey = authHeader.slice(7).trim();
+      if (rawKey.startsWith("fna_")) {
+        const resolved = await resolveApiKey(rawKey);
+        if (resolved) {
+          ctx.apiKey = resolved;
+          ctx.businessId = resolved.businessId;
+          ctx.apiKeyId = resolved.id;
+          ctx.apiKeyScopes = resolved.scopes;
         }
       }
     }
   } catch {
-    // Bearer auth failed
+    // ignore api key auth errors
   }
 
   return ctx;
