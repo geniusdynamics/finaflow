@@ -48,7 +48,7 @@ export function CashPositionCard({ position }: CashPositionCardProps) {
             </p>
             <p
               data-testid="cash-position-total"
-              className={`mt-1 font-mono text-3xl font-bold sm:text-4xl ${
+              className={`mt-1 font-mono text-2xl font-bold sm:text-4xl ${
                 isNegative ? "text-[#D32F2F]" : "text-[#2D2A26]"
               }`}
             >
