@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -572,14 +573,10 @@ export default function Login() {
                   </div>
                   <div>
                     <Label htmlFor="signup-phone" className="text-xs text-[#8D8A87]">Phone <span className="font-normal">(optional)</span></Label>
-                    <Input
+                    <PhoneInput
                       id="signup-phone"
-                      name="phone"
-                      type="tel"
-                      autoComplete="tel"
-                      inputMode="tel"
                       value={signupForm.phone}
-                      onChange={e => setSignupForm(p => ({ ...p, phone: e.target.value }))}
+                      onChange={value => setSignupForm(p => ({ ...p, phone: value }))}
                       placeholder="+254 7XX XXX XXX"
                     />
                   </div>

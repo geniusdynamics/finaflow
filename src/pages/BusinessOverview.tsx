@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -599,7 +600,7 @@ export function BusinessOverview() {
                       </div>
                       <div className="space-y-2"><Label>Address</Label><Input value={locForm.address} onChange={(e) => setLocForm((p) => ({ ...p, address: e.target.value }))} placeholder="Physical address" /></div>
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-2"><Label>Phone</Label><Input value={locForm.phone} onChange={(e) => setLocForm((p) => ({ ...p, phone: e.target.value }))} placeholder="07xx xxx xxx" /></div>
+                        <div className="space-y-2"><Label>Phone</Label><PhoneInput value={locForm.phone} onChange={(value) => setLocForm((p) => ({ ...p, phone: value }))} placeholder="07xx xxx xxx" /></div>
                         <div className="space-y-2"><Label>Email</Label><Input type="email" value={locForm.email} onChange={(e) => setLocForm((p) => ({ ...p, email: e.target.value }))} /></div>
                       </div>
                       <Button type="submit" className="w-full bg-[#C73E1D]" disabled={createLoc.isPending}>
@@ -654,7 +655,7 @@ export function BusinessOverview() {
                           <Input value={editLocForm.slug} onChange={(e) => setEditLocForm((p) => ({ ...p, slug: e.target.value }))} placeholder="Slug" className="text-sm" />
                           <Input value={editLocForm.address} onChange={(e) => setEditLocForm((p) => ({ ...p, address: e.target.value }))} placeholder="Address" className="text-sm" />
                           <div className="grid grid-cols-2 gap-2">
-                            <Input value={editLocForm.phone} onChange={(e) => setEditLocForm((p) => ({ ...p, phone: e.target.value }))} placeholder="Phone" className="text-sm" />
+                            <PhoneInput value={editLocForm.phone} onChange={(value) => setEditLocForm((p) => ({ ...p, phone: value }))} placeholder="Phone" className="text-sm" />
                             <Input value={editLocForm.email} onChange={(e) => setEditLocForm((p) => ({ ...p, email: e.target.value }))} placeholder="Email" className="text-sm" />
                           </div>
                           <div className="space-y-1">

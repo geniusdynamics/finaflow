@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, Users, Phone, Mail, CreditCard, TrendingDown, AlertTriangle, FileText, TrendingUp, Search, Trash2, Target, Package, CheckCircle, OctagonX } from "lucide-react";
@@ -221,7 +222,7 @@ export function Suppliers() {
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="space-y-2"><Label>Name *</Label><Input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} required /></div>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2"><Label>Phone</Label><Input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} /></div>
+                    <div className="space-y-2"><Label>Phone</Label><PhoneInput value={form.phone} onChange={(value) => setForm((p) => ({ ...p, phone: value }))} /></div>
                     <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} /></div>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">

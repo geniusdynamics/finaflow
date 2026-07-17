@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { UserCircle, Mail, Phone, Key, Lock, Calendar, Clock, Shield, Save, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
@@ -131,11 +132,11 @@ export function Profile() {
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="pf-phone" className="text-xs text-[#8D8A87]">Phone</Label>
-                    <Input
+                    <PhoneInput
                       id="pf-phone"
                       placeholder="+254..."
-                      defaultValue={currentUser?.phone ?? ""}
-                      onChange={(e) => { setEditForm(p => ({ ...p, phone: e.target.value })); setFormDirty(true); }}
+                      value={currentUser?.phone ?? ""}
+                      onChange={(value) => { setEditForm(p => ({ ...p, phone: value })); setFormDirty(true); }}
                     />
                   </div>
                 </div>

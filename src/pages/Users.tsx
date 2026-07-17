@@ -8,6 +8,7 @@ import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -344,7 +345,7 @@ export function Users() {
                   <div className="space-y-2"><Label>Full Name</Label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="John Doe" required /></div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} placeholder="john@example.com" /></div>
-                    <div className="space-y-2"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="+254..." /></div>
+                    <div className="space-y-2"><Label>Phone</Label><PhoneInput value={form.phone} onChange={value => setForm(p => ({ ...p, phone: value }))} placeholder="+254..." /></div>
                   </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2"><Label>Role</Label>
@@ -450,7 +451,7 @@ export function Users() {
                                         <div className="space-y-2"><Label>Name</Label><Input value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} required /></div>
                                         <div className="grid grid-cols-2 gap-3">
                                           <div className="space-y-2"><Label>Email</Label><Input type="email" value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} /></div>
-                                          <div className="space-y-2"><Label>Phone</Label><Input value={editForm.phone} onChange={e => setEditForm(p => ({ ...p, phone: e.target.value }))} /></div>
+                                          <div className="space-y-2"><Label>Phone</Label><PhoneInput value={editForm.phone} onChange={value => setEditForm(p => ({ ...p, phone: value }))} /></div>
                                         </div>
                                         <div className="grid grid-cols-2 gap-3">
                                           <div className="space-y-2"><Label>Role</Label>

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 
 type LeadStatus = "new" | "contacted" | "converted" | "declined";
@@ -106,10 +107,10 @@ export function LeadFormDialog({
             </div>
             <div>
               <Label htmlFor="lead-phone">Phone</Label>
-              <Input
+              <PhoneInput
                 id="lead-phone"
                 value={values.phone}
-                onChange={(event) => updateField("phone", event.target.value)}
+                onChange={(value) => updateField("phone", value)}
                 placeholder="+2547..."
               />
             </div>
