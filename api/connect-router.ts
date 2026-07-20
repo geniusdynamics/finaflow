@@ -11,8 +11,8 @@ import {
   approveAsPartner,
   resolvePairingCodeOnInitiator,
   listBusinessConnectionStates,
-  DEFAULT_CONNECT_SCOPES,
 } from "./lib/integrations/connect-service";
+import { DEFAULT_CONNECT_SCOPES } from "./lib/api-scopes";
 import { env } from "./lib/env";
 
 function requireBusinessId(ctx: {
