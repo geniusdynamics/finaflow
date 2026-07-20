@@ -8,6 +8,7 @@ vi.mock("@/providers/trpc", () => ({
   trpc: {
     useUtils: () => ({ invalidate: vi.fn() }),
     localAuth: {
+      me: { useQuery: () => ({ data: undefined, isLoading: false }) },
       checkAccountAvailability: { useMutation: () => ({ mutateAsync: vi.fn() }) },
       lookupAccount: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
       login: { useMutation: () => ({ mutate: vi.fn(), isPending: false }) },
