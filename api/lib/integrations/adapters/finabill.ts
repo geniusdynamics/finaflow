@@ -44,7 +44,9 @@ export const finabillAdapter: IntegrationAdapter = {
     }
 
     try {
-      const res = await fetch(`${url.replace(/\/$/, "")}/api/health`, {
+      // FinaBill exposes health at /health (not /api/health).
+      const base = url.replace(/\/$/, "");
+      const res = await fetch(`${base}/health`, {
         headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
       });
       if (!res.ok) {
