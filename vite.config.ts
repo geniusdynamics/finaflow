@@ -14,7 +14,7 @@ const releaseName = process.env.npm_package_version
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    devServer({ entry: "api/boot.ts", exclude: [/^\/(?!(api\/|health)).*$/] }),
+    devServer({ entry: "api/boot.ts", exclude: [/^\/(?!(api\/|health|docs|openapi\.yaml$)).*$/] }),
     react(),
     ...(process.env.SENTRY_AUTH_TOKEN
       ? [sentryVitePlugin({

@@ -48,7 +48,7 @@
 - All multi-step financial operations use db.transaction()
 - JWT stored in httpOnly cookies (not localStorage)
 - CSRF protection on all mutation endpoints
-- Rate limiting on all endpoints (login: 10/min, API: 100/min)
+- Rate limiting on all endpoints (login: 10/min, API: 500/min, integration: 100/min, connect: 30/min)
 - All list endpoints filter by location/business context
 - All tables have indexes on locationId, businessId, userId, deletedAt, status
 - Error boundaries wrap every route in App.tsx
@@ -57,11 +57,17 @@
 - Audit logging for sensitive operations
 
 ## Integrations
-- FinaFlow exposes integration endpoints under `api/integration/*` mounted in `api/boot.ts`.
-- Incoming webhooks are handled by `api/lib/webhook-handlers.ts` and verified in `api/boot.ts` using `X-Fina-Signature`.
+- External REST API lives under `/api/v1/` (versioned). All routes use API key auth (`Authorization: Bearer fna_...`).
+- Unified response envelope: `{ data, meta: { requestId } }` for success, `{ error: { code, message }, meta: { requestId } }` for errors.
+- API key scopes are defined in `api/lib/api-scopes.ts`. Shared business logic lives in `api/lib/integration-service.ts`.
+- v1 routes are mounted in `api/routes/v1/index.ts` and wired in `api/boot.ts` via `app.route("/api/v1", v1)`.
+- Incoming webhooks are handled by `api/routes/v1/webhooks.ts` (FinaBill) and `api/lib/webhook-handlers.ts` (providers), verified using `X-Fina-Signature`.
 - Outgoing webhooks are dispatched by `api/lib/webhook-dispatcher.ts` and recorded in `webhookDeliveries`.
 - API-key auth for integration endpoints is implemented in `api/lib/api-key-auth.ts` and `api/lib/api-key-middleware.ts`.
-- To add a new incoming webhook provider: extend `handleProviderWebhook` in `api/lib/webhook-handlers.ts` and mount the route before the catch-all in `api/boot.ts`.
+- Legacy tRPC integration endpoints (`integrationFinabill.*`) are thin wrappers over `integration-service.ts` — kept for backward compat.
+- Old paths `/api/integration/daily-sales` and `/api/webhooks/finabill` redirect to v1 with deprecation headers.
+- Fina Connect pairing endpoints (`/api/connect/*`) remain in `boot.ts` — they're M2M protocol, not CRUD.
+- To add a new incoming webhook provider: extend `handleProviderWebhook` in `api/lib/webhook-handlers.ts` and mount the route in `api/routes/v1/webhooks.ts`.
 - Run integration tests: `npx vitest run api/__tests__/webhook-dispatcher.test.ts api/__tests__/integration-finabill.test.ts`
 - Dev server: `npm run dev` (Portless) or `npm run dev:app` (no Portless).
 

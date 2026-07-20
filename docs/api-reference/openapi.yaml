@@ -1,0 +1,1001 @@
+openapi: 3.1.0
+info:
+  title: FinaFlow Integration API
+  description: |
+    REST API for external integrators. All endpoints require an API key
+    (`Authorization: Bearer fna_...`) unless noted otherwise.
+
+    **Response envelope** — every response uses:
+    - Success: `{ "data": <payload>, "meta": { "requestId": "req_..." } }`
+    - Error: `{ "error": { "code": "ERROR_CODE", "message": "Human text" }, "meta": { "requestId": "req_..." } }`
+
+    **Pagination** — list endpoints accept `?offset=0&limit=20` (max 100).
+    Responses include `meta.pagination: { page, limit, total, totalPages }`.
+
+    **Rate limits** — 100 requests/minute per IP. Headers: `X-RateLimit-Limit`,
+    `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `Retry-After`.
+  version: 1.0.0
+  contact:
+    name: FinaFlow Support
+
+servers:
+  - url: /api/v1
+    description: v1 API (relative to host)
+
+security:
+  - BearerAuth: []
+
+tags:
+  - name: Verify
+    description: API key verification
+  - name: Accounts
+    description: Chart of accounts
+  - name: Suppliers
+    description: Supplier management
+  - name: Categories
+    description: Expense categories
+  - name: Business
+    description: Business profile
+  - name: Locations
+    description: Branches / locations
+  - name: Users
+    description: User management and roles
+  - name: Daily Sales
+    description: Sales ingestion
+  - name: Webhooks
+    description: Incoming webhook receivers
+
+paths:
+  /verify:
+    get:
+      operationId: verifyApiKey
+      summary: Verify API key
+      description: Returns the business identity for the authenticated API key.
+      tags: [Verify]
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Key is valid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyResponse"
+
+  /accounts:
+    get:
+      operationId: listAccounts
+      summary: List accounts
+      description: List all accounts for the authenticated business.
+      tags: [Accounts]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["accounts:read"]
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - name: accountType
+          in: query
+          schema:
+            type: string
+          description: Filter by account type (e.g. asset, liability, revenue, expense)
+      responses:
+        "200":
+          description: Paginated list of accounts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountListResponse"
+
+  /suppliers:
+    get:
+      operationId: listSuppliers
+      summary: List suppliers
+      tags: [Suppliers]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["suppliers:read"]
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of suppliers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupplierListResponse"
+    post:
+      operationId: upsertSupplier
+      summary: Create or update a supplier
+      description: |
+        If `externalId` is provided and matches an existing supplier, it is updated.
+        Otherwise a new supplier is created.
+      tags: [Suppliers]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["suppliers:write"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertSupplierInput"
+      responses:
+        "200":
+          description: Supplier updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpsertResult"
+        "201":
+          description: Supplier created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpsertResult"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /categories:
+    get:
+      operationId: listCategories
+      summary: List expense categories
+      tags: [Categories]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["categories:read"]
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of expense categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryListResponse"
+
+  /business/profile:
+    get:
+      operationId: getBusinessProfile
+      summary: Get business profile
+      tags: [Business]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["business:read"]
+      responses:
+        "200":
+          description: Business profile
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    $ref: "#/components/schemas/BusinessProfile"
+                  meta:
+                    $ref: "#/components/schemas/Meta"
+
+  /locations:
+    get:
+      operationId: listLocations
+      summary: List locations / branches
+      tags: [Locations]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["locations:read"]
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of locations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationListResponse"
+
+  /users:
+    get:
+      operationId: listUsers
+      summary: List users
+      description: List all users assigned to the business, including role and location assignments.
+      tags: [Users]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["users:read"]
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+    post:
+      operationId: upsertUser
+      summary: Create or update a user
+      description: |
+        If `externalId` is provided and matches an existing user, it is updated.
+        Otherwise a new user is created with a random password (the user must
+        reset it via the normal flow).
+      tags: [Users]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["users:write"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertUserInput"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpsertResult"
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpsertResult"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /roles:
+    get:
+      operationId: listRoleTemplates
+      summary: List role templates
+      description: List all active role templates with their permission sets.
+      tags: [Users]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["users:read"]
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Paginated list of role templates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        role:
+                          type: string
+                        permissions:
+                          type: array
+                          items:
+                            type: string
+                  meta:
+                    $ref: "#/components/schemas/PaginatedMeta"
+
+  /daily-sales:
+    post:
+      operationId: ingestDailySales
+      summary: Ingest a daily sales batch
+      description: |
+        Idempotent by `sourceBatchId`. Re-submitting the same batch returns
+        the existing record without creating a duplicate.
+      tags: [Daily Sales]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["sales:write"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DailySalesInput"
+      responses:
+        "200":
+          description: Sales batch created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailySalesResult"
+        "202":
+          description: Sales batch created with warnings (unmapped channels)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailySalesResult"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /webhooks/finabill:
+    post:
+      operationId: receiveFinabillWebhook
+      summary: Receive a FinaBill webhook
+      description: |
+        Incoming webhook from FinaBill. The request body must be signed with
+        `X-Fina-Signature: sha256=<hex>` (HMAC-SHA256 of the raw body using
+        the shared webhook secret).
+      tags: [Webhooks]
+      security: []
+      parameters:
+        - name: X-Fina-Signature
+          in: header
+          required: true
+          schema:
+            type: string
+          description: "HMAC-SHA256 signature: `sha256=<hex>`"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinabillWebhookPayload"
+      responses:
+        "200":
+          description: Webhook processed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookAck"
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /wallet-webhooks/{provider}:
+    post:
+      operationId: receiveWalletWebhook
+      summary: Receive a mobile wallet webhook
+      description: |
+        Incoming webhook for mobile wallet providers (mpesa, airtel_money, sasapay).
+        Routes the raw request to the registered provider's handler.
+      tags: [Webhooks]
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [mpesa, airtel_money, sasapay]
+      responses:
+        "200":
+          description: Webhook processed
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+        "404":
+          description: Unknown provider
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: "API key prefixed with `fna_`. Pass as `Authorization: Bearer fna_...`"
+    ScopeAuth:
+      type: oauth2
+      description: "Scopes required for this operation. Granted when the API key is created."
+      flows:
+        implicit:
+          authorizationUrl: "about:blank"
+          scopes:
+            "accounts:read": Read accounts
+            "suppliers:read": Read suppliers
+            "suppliers:write": Create/update suppliers
+            "categories:read": Read expense categories
+            "business:read": Read business profile
+            "locations:read": Read locations
+            "users:read": Read users and roles
+            "users:write": Create/update users
+            "sales:write": Ingest daily sales
+            "journal:write": Create/post journal entries
+            "webhooks": Manage webhooks
+
+  parameters:
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: Number of items to skip
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Maximum items to return
+
+  responses:
+    ValidationError:
+      description: Validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    ErrorResponse:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    Meta:
+      type: object
+      properties:
+        requestId:
+          type: string
+          example: req_abc123
+
+    PaginatedMeta:
+      allOf:
+        - $ref: "#/components/schemas/Meta"
+        - type: object
+          properties:
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                limit:
+                  type: integer
+                total:
+                  type: integer
+                totalPages:
+                  type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: VALIDATION_ERROR
+            message:
+              type: string
+              example: "locationId is required"
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    VerifyResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            ok:
+              type: boolean
+            businessId:
+              type: integer
+            authMethod:
+              type: string
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    Account:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        accountCode:
+          type: string
+          nullable: true
+        accountType:
+          type: string
+          nullable: true
+        accountSubType:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+
+    AccountListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Account"
+        meta:
+          $ref: "#/components/schemas/PaginatedMeta"
+
+    Supplier:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        taxId:
+          type: string
+          nullable: true
+
+    SupplierListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Supplier"
+        meta:
+          $ref: "#/components/schemas/PaginatedMeta"
+
+    UpsertSupplierInput:
+      type: object
+      required: [name]
+      properties:
+        externalId:
+          type: string
+          description: Match existing supplier by ID for update
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        taxId:
+          type: string
+          nullable: true
+
+    UpsertResult:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id:
+              type: integer
+            created:
+              type: boolean
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        categoryType:
+          type: string
+        defaultAccountId:
+          type: integer
+          nullable: true
+        externalAccountCode:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+
+    CategoryListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+        meta:
+          $ref: "#/components/schemas/PaginatedMeta"
+
+    BusinessProfile:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+        fiscalYearStartMonth:
+          type: integer
+          nullable: true
+        registrationNumber:
+          type: string
+          nullable: true
+        taxId:
+          type: string
+          nullable: true
+
+    Location:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+        address:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+
+    LocationListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Location"
+        meta:
+          $ref: "#/components/schemas/PaginatedMeta"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+          nullable: true
+        role:
+          type: string
+        isActive:
+          type: boolean
+        assignedLocationIds:
+          type: array
+          items:
+            type: integer
+
+    UserListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        meta:
+          $ref: "#/components/schemas/PaginatedMeta"
+
+    UpsertUserInput:
+      type: object
+      required: [name, email, role]
+      properties:
+        externalId:
+          type: string
+        name:
+          type: string
+          minLength: 1
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          nullable: true
+        role:
+          type: string
+          minLength: 1
+          description: "One of: manager, employee, accountant, viewer, cashier"
+        isActive:
+          type: boolean
+          default: true
+        locationIds:
+          type: array
+          items:
+            type: integer
+          default: []
+
+    DailySalesInput:
+      type: object
+      required: [locationId, sourceBatchId]
+      properties:
+        locationId:
+          type: integer
+        saleDate:
+          type: string
+          format: date
+          description: Defaults to today if omitted
+        sourceSystem:
+          type: string
+          default: finabill
+        sourceBatchId:
+          type: string
+          minLength: 1
+          description: Idempotency key — same batch ID won't create duplicates
+        payments:
+          type: array
+          items:
+            type: object
+            properties:
+              channel:
+                type: string
+              amount:
+                type: string
+                description: Decimal string (e.g. "12500.00")
+        discountAmount:
+          type: string
+        voidAmount:
+          type: string
+        unpaidAmount:
+          type: string
+        ticketCount:
+          type: integer
+        orderCount:
+          type: integer
+        notes:
+          type: string
+
+    DailySalesResult:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            dailySaleId:
+              type: integer
+            netSales:
+              type: string
+            warnings:
+              type: array
+              items:
+                type: string
+            created:
+              type: boolean
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    FinabillWebhookPayload:
+      type: object
+      required: [event, businessId, data]
+      properties:
+        event:
+          type: string
+          enum: [coa.updated, supplier.updated]
+        businessId:
+          type: integer
+        data:
+          type: object
+
+    WebhookAck:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            received:
+              type: boolean
+            event:
+              type: string
+
+    WebhookEventCatalog:
+      description: |
+        **Outgoing webhook events** (dispatched by FinaFlow to subscriber URLs):
+
+        | Event | Description | Data fields |
+        |---|---|---|
+        | `sale.recorded` | Daily sales batch created | `dailySaleId`, `saleDate`, `netSales` |
+        | `expense.created` | Expense recorded | `expenseId`, `amount`, `accountId` |
+        | `bill.paid` | Bill payment recorded | `billId`, `paymentId`, `amount` |
+        | `coa.updated` | Chart of accounts entry synced | `name`, `externalId`, `accountCode`, `accountType` |
+        | `supplier.updated` | Supplier record synced | `name`, `externalId`, `email`, `phone`, `taxId` |
+        | `journal.created` | Journal entry posted | `journalEntryId`, `entryDate`, `totalDebit`, `totalCredit` |
+
+        **Signature**: Each delivery includes `X-Fina-Signature: sha256=<hex>`
+        (HMAC-SHA256 of the raw JSON body using the webhook secret).
+
+        **Retry policy**: Up to 3 attempts with exponential backoff (1s, 2s).
+        All attempts recorded in `webhookDeliveries`.
+
+webhooks:
+  saleRecorded:
+    description: Fired when a daily sales batch is recorded
+    post:
+      summary: sale.recorded
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event:
+                  const: sale.recorded
+                timestamp:
+                  type: string
+                  format: date-time
+                data:
+                  type: object
+                  properties:
+                    dailySaleId:
+                      type: integer
+                    saleDate:
+                      type: string
+                    netSales:
+                      type: string
+      responses:
+        "200":
+          description: Acknowledged
+  expenseCreated:
+    description: Fired when an expense is recorded
+    post:
+      summary: expense.created
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event:
+                  const: expense.created
+                timestamp:
+                  type: string
+                  format: date-time
+                data:
+                  type: object
+                  properties:
+                    expenseId:
+                      type: integer
+                    amount:
+                      type: string
+                    accountId:
+                      type: integer
+                      nullable: true
+      responses:
+        "200":
+          description: Acknowledged
+  billPaid:
+    description: Fired when a bill payment is recorded
+    post:
+      summary: bill.paid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event:
+                  const: bill.paid
+                timestamp:
+                  type: string
+                  format: date-time
+                data:
+                  type: object
+                  properties:
+                    billId:
+                      type: integer
+                    paymentId:
+                      type: integer
+                    amount:
+                      type: string
+      responses:
+        "200":
+          description: Acknowledged
+  coaUpdated:
+    description: Fired when a chart of accounts entry is synced from FinaBill
+    post:
+      summary: coa.updated
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event:
+                  const: coa.updated
+                timestamp:
+                  type: string
+                  format: date-time
+                data:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    externalId:
+                      type: string
+                    accountCode:
+                      type: string
+                    accountType:
+                      type: string
+      responses:
+        "200":
+          description: Acknowledged
+  supplierUpdated:
+    description: Fired when a supplier record is synced from FinaBill
+    post:
+      summary: supplier.updated
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event:
+                  const: supplier.updated
+                timestamp:
+                  type: string
+                  format: date-time
+                data:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    externalId:
+                      type: string
+                    email:
+                      type: string
+                    phone:
+                      type: string
+                    taxId:
+                      type: string
+      responses:
+        "200":
+          description: Acknowledged
+  journalCreated:
+    description: Fired when a journal entry is posted
+    post:
+      summary: journal.created
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event:
+                  const: journal.created
+                timestamp:
+                  type: string
+                  format: date-time
+                data:
+                  type: object
+                  properties:
+                    journalEntryId:
+                      type: integer
+                    entryDate:
+                      type: string
+                    totalDebit:
+                      type: string
+                    totalCredit:
+                      type: string
+      responses:
+        "200":
+          description: Acknowledged

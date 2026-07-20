@@ -3,12 +3,13 @@
 import { TRPCError, initTRPC } from "@trpc/server";
 import { ZodError } from "zod";
 import SuperJSON from "superjson";
-import { Sentry } from "./instrument";
 import { getDb } from "./queries/connection";
 import { businesses, locations, users, userBusinesses, userLocations, appSettings, rolePermissions, type Business } from "@db/schema";
 import { eq, and, sql, isNull, type AnyColumn, type AnyTable } from "drizzle-orm";
 import type { RightsProfile } from "./lib/partner-allocations";
 import type { ResolvedApiKey } from "./lib/api-key-auth";
+import { hasScope } from "./lib/api-scopes";
+import type { ApiScope } from "./lib/api-scopes";
 import { env } from "./lib/env";
 
 export const ErrorMessages = {
@@ -282,7 +283,7 @@ const requireAuth = t.middleware(async (opts) => {
   return opts.next({ ctx: { ...opts.ctx, user } });
 });
 
-export const requireApiKey = (scope?: string) =>
+export const requireApiKey = (scope?: ApiScope) =>
   t.middleware(async (opts) => {
     const apiKey = opts.ctx.apiKey;
     if (!apiKey) {
@@ -291,7 +292,7 @@ export const requireApiKey = (scope?: string) =>
         message: "Valid API key required",
       });
     }
-    if (scope && !apiKey.scopes.includes(scope) && !apiKey.scopes.includes("admin")) {
+    if (scope && !hasScope(apiKey.scopes, scope)) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: `API key missing required scope: ${scope}`,
@@ -442,7 +443,7 @@ const requireAccountManageOrApiKey = t.middleware(async (opts) => {
   }
   if (
     opts.ctx.apiKey &&
-    (opts.ctx.apiKey.scopes.includes("journal:write") || opts.ctx.apiKey.scopes.includes("admin"))
+    hasScope(opts.ctx.apiKey.scopes, "journal:write")
   ) {
     return opts.next({ ctx: opts.ctx });
   }

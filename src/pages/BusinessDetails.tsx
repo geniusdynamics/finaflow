@@ -12,6 +12,9 @@ import { buildPrintGeneratedLabel, formatFileSize } from "@/features/business-pr
 import { isAllowedLogoType, optimizeLogoFile, validateLogoFileSizeBytes } from "@/features/business-profile/logo-utils";
 import { toast } from "sonner";
 import { Building, Check, ChevronLeft, ChevronRight, FileText, Globe, Landmark, Loader2, Save, Shield, Store, Upload, X } from "lucide-react";
+import { CountryCombobox } from "@/components/ui/country-combobox";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { COUNTRIES, getDefaultCurrencyForCountry } from "@/lib/countries";
 
 const BUSINESS_TYPES = [
   "Sole Proprietorship", "Partnership", "Limited Liability Company (LLC)",
@@ -415,7 +418,12 @@ export function BusinessDetails() {
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
                     <Label className="text-xs text-[#8D8A87]">Business Mobile Number</Label>
-                    <Input type="tel" value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="+254 7XX XXX XXX" />
+                    <PhoneInput
+                      value={form.phone}
+                      onChange={(val) => setForm(p => ({ ...p, phone: val }))}
+                      countryCode={COUNTRIES.find(c => c.name === form.country)?.code ?? ""}
+                      placeholder="712 244 244"
+                    />
                   </div>
                   <div>
                     <Label className="text-xs text-[#8D8A87]">Business Email Address</Label>
@@ -431,7 +439,22 @@ export function BusinessDetails() {
                 <div><h2 className="font-serif text-lg font-semibold text-[#2D2A26]">Address Information</h2><p className="text-xs text-[#8D8A87]">Business physical location details</p></div>
                 <div>
                   <Label className="text-xs text-[#8D8A87]">Country</Label>
-                  <Input value={form.country} onChange={e => setForm(p => ({ ...p, country: e.target.value }))} placeholder="Kenya" />
+                  <CountryCombobox
+                    value={COUNTRIES.find(c => c.name === form.country)?.code ?? ""}
+                    onValueChange={(code) => {
+                      const country = COUNTRIES.find(c => c.code === code);
+                      if (country) {
+                        setForm(p => ({ ...p, country: country.name }));
+                      }
+                    }}
+                    onSelect={(country) => {
+                      const currency = getDefaultCurrencyForCountry(country.code);
+                      if (currency) {
+                        // Currency auto-detected: ready for future form.currency field
+                      }
+                    }}
+                    placeholder="Select country..."
+                  />
                 </div>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>

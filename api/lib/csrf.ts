@@ -17,7 +17,8 @@ export const csrfProtection = async (c: Context, next: Next) => {
     path.startsWith("/api/trpc") ||
     path.startsWith("/api/webhooks") ||
     path.startsWith("/api/integration/") ||
-    path.startsWith("/api/connect")
+    path.startsWith("/api/connect") ||
+    path.startsWith("/api/v1")
   ) {
     return next();
   }

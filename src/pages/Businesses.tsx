@@ -15,19 +15,9 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, Building2, Trash2, CheckCircle, RotateCcw, MapPin, Edit3, Save, X, Key, AlertTriangle, Shield, Database, Clock, DollarSign } from "lucide-react";
 import { AllocationManagement } from "@/components/partner/AllocationManagement";
 import { toast } from "sonner";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { CurrencyCombobox } from "@/components/ui/currency-combobox";
 
-const CURRENCIES = [
-  { code: "KES", name: "Kenyan Shilling" },
-  { code: "USD", name: "US Dollar" },
-  { code: "UGX", name: "Ugandan Shilling" },
-  { code: "TZS", name: "Tanzanian Shilling" },
-  { code: "EUR", name: "Euro" },
-  { code: "GBP", name: "British Pound" },
-  { code: "ZAR", name: "South African Rand" },
-  { code: "MWK", name: "Malawian Kwacha" },
-  { code: "ZMW", name: "Zambian Kwacha" },
-  { code: "RWF", name: "Rwandan Franc" },
-];
 
 function DefaultCurrencySelect({ businessId }: { businessId: number }) {
   const { data: currentCurrency } = trpc.settings.get.useQuery({ key: "defaultCurrency", businessId }, { initialData: "KES" });
@@ -35,15 +25,13 @@ function DefaultCurrencySelect({ businessId }: { businessId: number }) {
     onSuccess: () => toast.success("Default currency updated"),
   });
   return (
-    <select
+    <CurrencyCombobox
       value={currentCurrency || "KES"}
-      onChange={(e) => setCurrency.mutate({ key: "defaultCurrency", value: e.target.value, businessId })}
-      className="w-full bg-transparent text-sm text-[#2D2A26] outline-none"
-    >
-      {CURRENCIES.map((c) => (
-        <option key={c.code} value={c.code}>{c.code} - {c.name}</option>
-      ))}
-    </select>
+      onValueChange={(code) => setCurrency.mutate({ key: "defaultCurrency", value: code, businessId })}
+      multiCurrency={true}
+      placeholder="Select currency..."
+      className="border-0 shadow-none"
+    />
   );
 }
 
@@ -175,7 +163,7 @@ export function Businesses() {
                   <div><Label>Slug (unique ID)</Label><Input value={form.slug} onChange={e => setForm(p => ({ ...p, slug: e.target.value.toLowerCase().replace(/\s+/g, "-") }))} /></div>
                   <div><Label>Address</Label><Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><Label>Phone</Label><Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} /></div>
+                    <div><Label>Phone</Label><PhoneInput value={form.phone} onChange={(val) => setForm(p => ({ ...p, phone: val }))} placeholder="712 244 244" /></div>
                     <div><Label>Email</Label><Input value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -233,11 +221,11 @@ export function Businesses() {
                         <Input value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} placeholder="Name" className="text-sm" />
                         <Input value={editForm.address} onChange={e => setEditForm(p => ({ ...p, address: e.target.value }))} placeholder="Address" className="text-sm" />
                         <div className="grid grid-cols-2 gap-2">
-                          <Input value={editForm.phone} onChange={e => setEditForm(p => ({ ...p, phone: e.target.value }))} placeholder="Phone" className="text-sm" />
+                          <PhoneInput value={editForm.phone} onChange={(val) => setEditForm(p => ({ ...p, phone: val }))} placeholder="Phone" className="text-sm" />
                           <Input value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} placeholder="Email" className="text-sm" />
                         </div>
-                        <div className="flex items-center gap-2 rounded-lg border border-[#E8E0D8] px-3 py-2">
-                          <DollarSign className="h-4 w-4 text-[#8D8A87]" />
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-[#8D8A87] shrink-0" />
                           <DefaultCurrencySelect businessId={b.id} />
                         </div>
                         <Button size="sm" className="w-full bg-[#2E7D32]" onClick={() => saveEdit(b.id)} disabled={updateBiz.isPending}>

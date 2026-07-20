@@ -5,6 +5,7 @@ import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Plus, MapPin, Pencil, Trash2, Building2, Wallet, ChevronLeft, Shield } from "lucide-react";
@@ -67,7 +68,7 @@ export function Locations() {
                 </div>
                 <div className="space-y-2"><Label>Address</Label><Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} placeholder="Physical address" /></div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2"><Label>Phone</Label><Input value={form.phone} onChange={e => setForm(p => ({ ...p, phone: e.target.value }))} placeholder="07xx xxx xxx" /></div>
+                  <div className="space-y-2"><Label>Phone</Label><PhoneInput value={form.phone} onChange={value => setForm(p => ({ ...p, phone: value }))} placeholder="07xx xxx xxx" /></div>
                   <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
                 </div>
                 <Button type="submit" className="w-full bg-[#C73E1D]" disabled={createLoc.isPending}>{createLoc.isPending ? "Creating..." : "Add Branch"}</Button>
@@ -140,7 +141,7 @@ export function Locations() {
                           <form onSubmit={e => { e.preventDefault(); updateLoc.mutate({ id: loc.id, ...editForm, defaultMpesaAccountId: editForm.defaultMpesaAccountId ? +editForm.defaultMpesaAccountId : undefined, defaultCashAccountId: editForm.defaultCashAccountId ? +editForm.defaultCashAccountId : undefined }); }} className="space-y-3">
                             <div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label>Name</Label><Input value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} required /></div><div className="space-y-2"><Label>Slug</Label><Input value={editForm.slug} onChange={e => setEditForm(p => ({ ...p, slug: e.target.value }))} required /></div></div>
                             <div className="space-y-2"><Label>Address</Label><Input value={editForm.address} onChange={e => setEditForm(p => ({ ...p, address: e.target.value }))} /></div>
-                            <div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label>Phone</Label><Input value={editForm.phone} onChange={e => setEditForm(p => ({ ...p, phone: e.target.value }))} /></div><div className="space-y-2"><Label>Email</Label><Input value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} /></div></div>
+                            <div className="grid grid-cols-2 gap-3"><div className="space-y-2"><Label>Phone</Label><PhoneInput value={editForm.phone} onChange={value => setEditForm(p => ({ ...p, phone: value }))} /></div><div className="space-y-2"><Label>Email</Label><Input value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} /></div></div>
                             <div className="space-y-2"><Label>Default Wallet</Label>
                               <select value={editForm.defaultMpesaAccountId} onChange={e => setEditForm(p => ({ ...p, defaultMpesaAccountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm">
                                 <option value="">Select wallet</option>

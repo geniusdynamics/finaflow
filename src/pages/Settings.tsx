@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Settings as SettingsIcon, Camera, Briefcase, Shield, Crown, Award, ArrowUpCircle, ArrowDownCircle, Users, MapPin, Gift, Clock, Key, Trash2, Plus, Copy, CheckCircle, Webhook, AlertCircle, Plug, MessageSquare, Eye, RefreshCw, DollarSign, Wallet, Smartphone, Activity, AlertCircle as AlertCircleIcon, CheckCircle2, ChevronRight, CalendarDays } from "lucide-react";
 import { toast } from "sonner";
+import { CurrencyCombobox } from "@/components/ui/currency-combobox";
 
 const PLAN_DETAILS: Record<string, { label: string; price: string; businesses: number; branches: number; users: number; transactions: string; payroll: string; support: string; color: string; features: string[] }> = {
   free: { label: "Free", price: "KES 0/mo", businesses: 1, branches: 1, users: 1, transactions: "100 / month", payroll: "No", support: "Community", color: "text-[#8D8A87]", features: ["1 business", "1 branch", "1 user", "Basic sales & expenses", "M-PESA import"] },
@@ -751,15 +752,21 @@ export function Settings() {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <Label className="text-xs text-[#8D8A87]">From Currency</Label>
-                        <select value={rateForm.fromCurrency} onChange={(e) => setRateForm(f => ({ ...f, fromCurrency: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm">
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                          {currencies?.map((c: any) => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
-                        </select>
+                        <CurrencyCombobox
+                          value={rateForm.fromCurrency}
+                          onValueChange={(code) => setRateForm(f => ({ ...f, fromCurrency: code }))}
+                          multiCurrency={true}
+                          placeholder="Select currency..."
+                        />
                       </div>
                       <div className="space-y-1">
                         <Label className="text-xs text-[#8D8A87]">To Currency</Label>
-                        <select value={rateForm.toCurrency} onChange={(e) => setRateForm(f => ({ ...f, toCurrency: e.target.value }))} className="w-full rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm">
-{/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}                          {currencies?.map((c: any) => <option key={c.code} value={c.code}>{c.code} - {c.name}</option>)}
-                        </select>
+                        <CurrencyCombobox
+                          value={rateForm.toCurrency}
+                          onValueChange={(code) => setRateForm(f => ({ ...f, toCurrency: code }))}
+                          multiCurrency={true}
+                          placeholder="Select currency..."
+                        />
                       </div>
                     </div>
                     <div className="space-y-1 mt-3">
@@ -850,7 +857,26 @@ export function Settings() {
 
         {tab === "integrations" && (
           <>
-            {/* API Keys */}
+            {/* API Documentation */}
+            <Card className="border-[#E8E0D8]">
+              <CardContent className="py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C73E1D]/10">
+                    <Activity className="h-5 w-5 text-[#C73E1D]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#2D2A26]">API Documentation</p>
+                    <p className="text-xs text-[#8D8A87]">Interactive reference for the external REST API</p>
+                  </div>
+                </div>
+                <a href="/docs/api" target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" size="sm" className="border-[#E8E0D8]">
+                    Open Docs <ChevronRight className="ml-1 h-3 w-3" />
+                  </Button>
+                </a>
+              </CardContent>
+            </Card>
+
             <Card className="border-[#E8E0D8]"><CardHeader className="pb-3 flex flex-row items-center justify-between">
               <CardTitle className="font-serif text-lg flex items-center gap-2"><Key className="h-5 w-5 text-[#D4A854]"/> API Keys</CardTitle>
               <Dialog open={keyOpen} onOpenChange={setKeyOpen}><DialogTrigger asChild><Button size="sm" className="bg-[#C73E1D]"><Plus className="mr-1 h-3 w-3" />New Key</Button></DialogTrigger>
