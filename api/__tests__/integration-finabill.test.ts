@@ -300,7 +300,7 @@ describe("integration API key authentication", () => {
       caller.integrationFinabill.upsertSupplier({
         name: "Test Supplier",
       })
-    ).rejects.toThrow(/API key missing required scope: write/);
+    ).rejects.toThrow(/API key missing required scope: suppliers:write/);
   });
 
   it("rejects expired API keys", async () => {

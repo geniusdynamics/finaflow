@@ -1,22 +1,24 @@
 import { createMiddleware } from "hono/factory";
 import type { ResolvedApiKey } from "./api-key-auth";
 import { resolveApiKey } from "./api-key-auth";
+import { hasScope, type ApiScope } from "./api-scopes";
 
 export type ApiKeyVariables = {
   apiKey: ResolvedApiKey;
 };
 
-function hasRequiredScope(apiKey: ResolvedApiKey, scope?: string): boolean {
+function hasRequiredScope(apiKey: ResolvedApiKey, scope?: ApiScope): boolean {
   if (!scope) return true;
-  return apiKey.scopes.includes(scope) || apiKey.scopes.includes("admin");
+  return hasScope(apiKey.scopes, scope);
 }
 
 /**
  * Hono middleware that resolves a Fina API key from the Authorization header
  * and stores the resolved key on the Hono context under "apiKey".
  * Pass `scope` to require a specific capability (admin always satisfies).
+ * Supports legacy coarse scopes (read, write) via scope aliases in api-scopes.ts.
  */
-export function resolveApiKeyMiddleware(scope?: string) {
+export function resolveApiKeyMiddleware(scope?: ApiScope) {
   return createMiddleware<{ Variables: ApiKeyVariables }>(async (c, next) => {
     const authHeader = c.req.header("authorization");
     if (!authHeader?.startsWith("Bearer ")) {

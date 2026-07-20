@@ -34,7 +34,7 @@ export function decryptString(ciphertext: string): string {
     throw new Error("Invalid encrypted value");
   }
 
-  const salt = combined.subarray(0, SALT_LENGTH);
+  const _salt = combined.subarray(0, SALT_LENGTH);
   const iv = combined.subarray(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
   const authTag = combined.subarray(
     SALT_LENGTH + IV_LENGTH,
@@ -53,6 +53,16 @@ export function looksEncrypted(value: string): boolean {
   try {
     const buf = Buffer.from(value, "base64");
     return buf.length >= SALT_LENGTH + IV_LENGTH + AUTH_TAG_LENGTH;
+  } catch {
+    return false;
+  }
+}
+
+/** Timing-safe string comparison — prevents timing attacks on webhook signatures. */
+export function constantTimeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(a, "utf8"), Buffer.from(b, "utf8"));
   } catch {
     return false;
   }

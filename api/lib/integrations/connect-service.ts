@@ -14,17 +14,7 @@ import {
 import { env } from "../env";
 import { encryptString, decryptString } from "../crypto";
 import { generateApiKey, getKeyPrefix, hashApiKey } from "../api-key-auth";
-
-export const DEFAULT_CONNECT_SCOPES = [
-  "read",
-  "write",
-  "journal:write",
-  "coa:read",
-  "supplier:read",
-  "webhooks",
-  "admin",
-  "sales:write",
-] as const;
+import { DEFAULT_CONNECT_SCOPES } from "../api-scopes";
 
 const SESSION_TTL_MS = 10 * 60 * 1000;
 const SYSTEM = "finaflow" as const;

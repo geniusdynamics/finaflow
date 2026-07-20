@@ -45,6 +45,18 @@ function switchIntent(
 export default function Login() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+
+  // If already authenticated, redirect to dashboard
+  const { data: currentUser, isLoading: authLoading } = trpc.localAuth.me.useQuery(undefined, {
+    retry: false,
+    staleTime: 0,
+  });
+  useEffect(() => {
+    if (currentUser && !authLoading) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [currentUser, authLoading, navigate]);
+
   const preselectedType = searchParams.get("type");
   const referralCodeFromUrl = searchParams.get("ref");
   const initialIntent: Intent =

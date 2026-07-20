@@ -2,6 +2,49 @@
 
 ## [Unreleased]
 
+### Added
+- **Unified REST API v1** (`/api/v1/`) — all external integration endpoints are now available as standard REST routes with a consistent `{ data, meta }` / `{ error, meta }` response envelope. No more tRPC wire format required for external consumers.
+  - `GET /api/v1/verify` — verify API key
+  - `GET /api/v1/accounts` — list accounts (scope: `accounts:read`)
+  - `GET /api/v1/suppliers` — list suppliers (scope: `suppliers:read`)
+  - `POST /api/v1/suppliers` — upsert supplier (scope: `suppliers:write`)
+  - `GET /api/v1/categories` — list expense categories (scope: `categories:read`)
+  - `GET /api/v1/business/profile` — get business profile (scope: `business:read`)
+  - `GET /api/v1/locations` — list locations (scope: `locations:read`)
+  - `GET /api/v1/users` — list users (scope: `users:read`)
+  - `POST /api/v1/users` — upsert user (scope: `users:write`)
+  - `GET /api/v1/roles` — list role templates (scope: `users:read`)
+  - `POST /api/v1/daily-sales` — ingest daily sales (scope: `sales:write`)
+  - `POST /api/v1/webhooks/finabill` — incoming FinaBill webhook with HMAC verification
+  - `POST /api/v1/wallet-webhooks/:provider` — incoming mobile wallet webhook (mpesa, airtel_money, sasapay)
+- **API documentation at `/docs`** — Scalar-powered interactive API reference served from the Hono app, reading from `docs/api-reference/openapi.yaml`.
+- **OpenAPI 3.1 spec** (`docs/api-reference/openapi.yaml`) — covers all 12 v1 endpoints, 6 outgoing webhook events, authentication, scopes, pagination, and error contracts.
+- **Documentation pages** — `docs/authentication.md` (API keys, scopes, rate limits, error codes) and `docs/webhooks.md` (incoming/outgoing webhook contract, signature verification, retry policy, event catalog).
+- **Request ID tracing** — every v1 response includes `X-Request-Id` header and `meta.requestId` in the JSON body.
+- **Centralized scope registry** (`api/lib/api-scopes.ts`) — granular `resource:action` scopes with legacy alias resolution so existing `read`/`write` keys keep working.
+- **Shared zod schemas** (`api/schemas/index.ts`) — single source of truth for request validation, webhook payload schemas, and pagination. Includes all 6 outgoing webhook event payload schemas.
+- **Pagination on all v1 list endpoints** — `?offset=0&limit=20` query params with `{ page, limit, total, totalPages }` in response meta.
+- **Service layer** (`api/lib/integration-service.ts`) — shared business logic extracted from the tRPC router, used by both REST and tRPC paths.
+- **Rate limiting on connect endpoints** — `/api/connect/*` endpoints now have a 30 req/min limiter to prevent brute-force pairing attacks.
+- **Rate limiting on integration endpoints** — all `/api/v1/` routes have a 100 req/min limiter.
+- **tRPC `.meta()` descriptions** on all `integrationFinabill` router procedures for future doc generation.
+
+### Changed
+- **Granular API scopes** — scopes now follow `resource:action` naming: `accounts:read`, `suppliers:read`, `suppliers:write`, `categories:read`, `business:read`, `locations:read`, `users:read`, `users:write`, `sales:write`, `journal:write`, `webhooks`. Legacy `read`/`write` scopes still work via alias resolution.
+- **`DEFAULT_CONNECT_SCOPES` tightened** — removed `admin` (overly broad), `coa:read` and `supplier:read` (redundant). Now uses the shared registry from `api-scopes.ts`.
+- **`integrationFinabillRouter` refactored** — tRPC router is now a thin wrapper over `integration-service.ts`. All business logic lives in the service layer.
+- **`boot.ts` cleaned up** — inline webhook handler, `constantTimeCompare`, and daily-sales handler removed. All moved to proper modules.
+- **`/debug-sentry` gated** — only available when `NODE_ENV !== "production"`.
+- **`constantTimeCompare` moved** to `api/lib/crypto.ts` alongside other crypto utilities.
+- **Old paths deprecated** — `/api/integration/daily-sales` and `/api/webhooks/finabill` now return `307` redirects to their v1 equivalents with `Deprecation: true` header.
+- **AGENTS.md Integrations section** updated to reflect the new v1 API surface, scope model, and architecture.
+- **Removed unused `Sentry` import** from `api/middleware.ts`.
+
+### Fixed
+- **Webhook catch-all parses body** — `/api/webhooks/:provider` now actually reads the request body instead of passing an empty `{}`.
+- **CSRF exemption for v1** — `/api/v1` routes are properly exempted from CSRF (machine-to-machine via API key).
+- **AGENTS.md rate limits corrected** — updated from stale 100/min to actual 500/min, with integration (100/min) and connect (30/min) limits documented.
+
 ## [1.1.1] - 2026-07-11
 
 ### Changed

@@ -857,7 +857,26 @@ export function Settings() {
 
         {tab === "integrations" && (
           <>
-            {/* API Keys */}
+            {/* API Documentation */}
+            <Card className="border-[#E8E0D8]">
+              <CardContent className="py-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#C73E1D]/10">
+                    <Activity className="h-5 w-5 text-[#C73E1D]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#2D2A26]">API Documentation</p>
+                    <p className="text-xs text-[#8D8A87]">Interactive reference for the external REST API</p>
+                  </div>
+                </div>
+                <a href="/docs/api" target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" size="sm" className="border-[#E8E0D8]">
+                    Open Docs <ChevronRight className="ml-1 h-3 w-3" />
+                  </Button>
+                </a>
+              </CardContent>
+            </Card>
+
             <Card className="border-[#E8E0D8]"><CardHeader className="pb-3 flex flex-row items-center justify-between">
               <CardTitle className="font-serif text-lg flex items-center gap-2"><Key className="h-5 w-5 text-[#D4A854]"/> API Keys</CardTitle>
               <Dialog open={keyOpen} onOpenChange={setKeyOpen}><DialogTrigger asChild><Button size="sm" className="bg-[#C73E1D]"><Plus className="mr-1 h-3 w-3" />New Key</Button></DialogTrigger>

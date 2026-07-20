@@ -172,7 +172,7 @@ describe("incoming FinaBill webhook route", () => {
 
     const app = await loadApp();
     const res = await app.fetch(
-      new Request("http://localhost/api/webhooks/finabill", {
+      new Request("http://localhost/api/v1/webhooks/finabill", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -184,8 +184,8 @@ describe("incoming FinaBill webhook route", () => {
 
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json.received).toBe(true);
-    expect(json.event).toBe("supplier.updated");
+    expect(json.data.received).toBe(true);
+    expect(json.data.event).toBe("supplier.updated");
   }, 120_000);
 
   it("rejects an invalid X-Fina-Signature", async () => {
@@ -207,7 +207,7 @@ describe("incoming FinaBill webhook route", () => {
 
     const app = await loadApp();
     const res = await app.fetch(
-      new Request("http://localhost/api/webhooks/finabill", {
+      new Request("http://localhost/api/v1/webhooks/finabill", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -219,7 +219,7 @@ describe("incoming FinaBill webhook route", () => {
 
     expect(res.status).toBe(401);
     const json = await res.json();
-    expect(json.error).toMatch(/Invalid signature/);
+    expect(json.error.message).toMatch(/Invalid signature/);
   });
 
   it("returns 501 for unimplemented providers", async () => {

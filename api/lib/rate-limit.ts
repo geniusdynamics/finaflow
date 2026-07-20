@@ -72,6 +72,12 @@ export const loginLimiter = createRateLimiter(60 * 1000, 10);
 export const apiLimiter = createRateLimiter(60 * 1000, 500);
 export const lookupAccountLimiter = createEndpointRateLimiter("lookupAccount", { windowMs: 60 * 1000, max: 120 });
 
+/** Rate limiter for the external /api/v1/ integration endpoints (100 req/min per IP). */
+export const integrationLimiter = createEndpointRateLimiter("integration", { windowMs: 60 * 1000, max: 100 });
+
+/** Rate limiter for Fina Connect pairing endpoints (30 req/min per IP — prevents brute-force). */
+export const connectLimiter = createEndpointRateLimiter("connect", { windowMs: 60 * 1000, max: 30 });
+
 export function clearRateLimitStore(): void {
   globalStore.clear();
   endpointStores.clear();
