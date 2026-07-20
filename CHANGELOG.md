@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Fixed
+- **CI integration test isolation** — Vitest 4 no longer honors `singleFork`, so API suites were running files in parallel against one Postgres DB. Test bootstrap also truncated `locations` and dropped budget plan tables on every setup pass, which raced with seeded data and produced `budget_plan_buckets does not exist`, `Location not found for business or inactive`, and missing location counters after business reset. Forced `fileParallelism: false` + `maxWorkers: 1`, made bootstrap once-only and non-destructive, and verified migration 0014 tables exist after apply (`vitest.config.ts`, `api/test/setup.ts`, `api/__tests__/budgets-router.test.ts`).
+
 ### Added
 - **Unified REST API v1** (`/api/v1/`) — all external integration endpoints are now available as standard REST routes with a consistent `{ data, meta }` / `{ error, meta }` response envelope. No more tRPC wire format required for external consumers.
   - `GET /api/v1/verify` — verify API key

@@ -39,6 +39,19 @@ describe("Budgets Router", () => {
 
   const slugPrefix = "BGT_";
 
+  async function cleanupBudgetPlansForBusiness(businessId: number) {
+    // Budget plan tables come from migration 0014. If bootstrap is incomplete,
+    // skip plan cleanup rather than failing the whole suite setup/teardown.
+    try {
+      await db.delete(bbl).where(sql`${bbl.bucketId} IN (SELECT id FROM ${bpb} WHERE ${bpb.planId} IN (SELECT id FROM ${bp} WHERE ${bp.locationId} IN (SELECT id FROM ${locations} WHERE ${locations.businessId} = ${businessId})))`);
+      await db.delete(bpb).where(sql`${bpb.planId} IN (SELECT id FROM ${bp} WHERE ${bp.locationId} IN (SELECT id FROM ${locations} WHERE ${locations.businessId} = ${businessId}))`);
+      await db.delete(bp).where(sql`${bp.locationId} IN (SELECT id FROM ${locations} WHERE ${locations.businessId} = ${businessId})`);
+    } catch (error: unknown) {
+      const msg = String((error as { message?: string })?.message ?? error);
+      if (!/relation .* does not exist/i.test(msg)) throw error;
+    }
+  }
+
   beforeAll(async () => {
     db = getDb();
 
@@ -46,9 +59,7 @@ describe("Budgets Router", () => {
     const existingBiz = await db.select({ id: businesses.id }).from(businesses)
       .where(sql`${businesses.slug} LIKE ${slugPrefix + "%"}`);
     for (const b of existingBiz) {
-      await db.delete(bbl).where(sql`${bbl.bucketId} IN (SELECT id FROM ${bpb} WHERE ${bpb.planId} IN (SELECT id FROM ${bp} WHERE ${bp.locationId} IN (SELECT id FROM ${locations} WHERE ${locations.businessId} = ${b.id})))`);
-      await db.delete(bpb).where(sql`${bpb.planId} IN (SELECT id FROM ${bp} WHERE ${bp.locationId} IN (SELECT id FROM ${locations} WHERE ${locations.businessId} = ${b.id}))`);
-      await db.delete(bp).where(sql`${bp.locationId} IN (SELECT id FROM ${locations} WHERE ${locations.businessId} = ${b.id})`);
+      await cleanupBudgetPlansForBusiness(b.id);
       await db.delete(expenseCategories).where(eq(expenseCategories.businessId, b.id));
       const locs = await db.select({ id: locations.id }).from(locations).where(eq(locations.businessId, b.id));
       for (const l of locs) {
@@ -129,12 +140,10 @@ describe("Budgets Router", () => {
 
   afterAll(async () => {
     if (!biz) return;
-    await db.delete(bbl).where(sql`${bbl.bucketId} IN (SELECT id FROM ${bpb} WHERE ${bpb.planId} IN (SELECT id FROM ${bp} WHERE ${bp.locationId} IN (SELECT id FROM ${locations} WHERE ${locations.businessId} = ${biz.id})))`);
-    await db.delete(bpb).where(sql`${bpb.planId} IN (SELECT id FROM ${bp} WHERE ${bp.locationId} IN (SELECT id FROM ${locations} WHERE ${locations.businessId} = ${biz.id}))`);
-    await db.delete(bp).where(sql`${bp.locationId} IN (SELECT id FROM ${locations} WHERE ${locations.businessId} = ${biz.id})`);
+    await cleanupBudgetPlansForBusiness(biz.id);
     await db.delete(expenseCategories).where(eq(expenseCategories.businessId, biz.id));
-    await db.delete(accounts).where(eq(accounts.locationId, loc.id));
-    await db.delete(locations).where(eq(locations.id, loc.id));
+    if (loc) await db.delete(accounts).where(eq(accounts.locationId, loc.id));
+    if (loc) await db.delete(locations).where(eq(locations.id, loc.id));
     await db.delete(userBusinesses).where(eq(userBusinesses.businessId, biz.id));
     await db.delete(businesses).where(eq(businesses.id, biz.id));
     if (user) await db.delete(users).where(eq(users.id, user.id));

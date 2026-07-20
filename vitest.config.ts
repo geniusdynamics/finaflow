@@ -20,14 +20,15 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    // Integration tests share a single PostgreSQL database. Running them in
-    // parallel causes lock contention, timeouts, and flake. The single fork
-    // pool gives us one test worker that runs test files sequentially while
-    // still parallelising cases inside a file.
+    // Integration tests share a single PostgreSQL database. Running files in
+    // parallel causes lock contention, truncated seed data, and missing-table
+    // races (setup used to DROP/TRUNCATE shared tables per file). Vitest 4 no
+    // longer honors singleFork — force one worker and disable file parallelism.
     pool: "forks",
-    singleFork: true,
+    fileParallelism: false,
+    maxWorkers: 1,
     testTimeout: 30_000,
-    hookTimeout: 60_000,
+    hookTimeout: 120_000,
     include: [
       "api/**/*.test.ts",
       "api/**/*.test.tsx",
