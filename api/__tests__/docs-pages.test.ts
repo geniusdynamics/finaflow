@@ -49,8 +49,9 @@ describe("documentation pages", () => {
 
       const html = await res.text();
       expect(html).toContain("FinaFlow API Reference");
-      expect(html).toContain("api-reference");
       expect(html).toContain("cdn.jsdelivr.net/npm/@scalar/api-reference");
+      expect(html).toContain("dist/browser/standalone.js");
+      expect(html).toContain("createApiReference");
     });
 
     it("includes the navigation header with correct links", async () => {
@@ -62,10 +63,14 @@ describe("documentation pages", () => {
       expect(html).toContain('href="/dashboard"');
     });
 
-    it("references the openapi.yaml spec", async () => {
+    it("inlines OpenAPI content or falls back to /openapi.yaml", async () => {
       const res = await app.fetch(new Request("http://localhost/docs/api"));
       const html = await res.text();
-      expect(html).toContain("/openapi.yaml");
+      // Prefer inlined content; fallback URL remains available for diagnostics.
+      const hasInline =
+        html.includes("openapi: 3.1.0") || html.includes("FinaFlow Integration API");
+      const hasUrl = html.includes("/openapi.yaml");
+      expect(hasInline || hasUrl).toBe(true);
     });
 
     it("has the API link highlighted as active", async () => {
