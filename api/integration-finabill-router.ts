@@ -69,6 +69,36 @@ export const integrationFinabillRouter = createRouter({
       return { data };
     }),
 
+  upsertCategory: apiKeyProcedure
+    .meta({
+      description:
+        "Create or update an expense category. Match by externalId (FinaBill category id) or name. Income categories are not supported yet.",
+    })
+    .use(requireApiKey("categories:write"))
+    .input(
+      z.object({
+        externalId: z.string().optional(),
+        name: z.string().min(1).max(100),
+        categoryType: z.enum(["expense", "income"]).optional().default("expense"),
+        defaultAccountId: z.number().int().positive().optional().nullable(),
+        description: z.string().optional().nullable(),
+        isActive: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const businessId = getBusinessId(ctx);
+      if (!businessId) {
+        integrationService.logIntegration(ctx, "finabill.upsertCategory", "failed", { error: "No active business" });
+        throw new Error("No active business");
+      }
+      const result = await integrationService.upsertCategory(businessId, input);
+      integrationService.logIntegration(ctx, "finabill.upsertCategory", "success", {
+        categoryId: result.id,
+        created: result.created,
+      });
+      return result;
+    }),
+
   upsertSupplier: apiKeyProcedure
     .meta({ description: "Create or update a supplier. Match by externalId if provided, otherwise create new." })
     .use(requireApiKey("suppliers:write"))

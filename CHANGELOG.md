@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+- **Expense category write API** — `POST /api/v1/categories` upserts expense categories (scope: `categories:write`). Matches by FinaBill `externalId` then by name; stores partner id on `externalAccountCode` / `externalSystem=finabill`. Income category type is rejected with a clear validation error until FF models income categories (map income via CoA revenue accounts).
+- **tRPC parity** — `integrationFinabill.upsertCategory` thin wrapper over the same service method.
+- **OpenAPI / Scalar** — POST `/categories`, `UpsertCategoryInput` / `UpsertCategoryResult`, and `categories:write` scope documented in `docs/api-reference/openapi.yaml` and `docs/authentication.md`.
+- **Connect scopes** — `categories:write` included in `DEFAULT_CONNECT_SCOPES` and legacy `write` alias.
+
 ### Fixed
 - **CI integration test isolation** — Vitest 4 no longer honors `singleFork`, so API suites were running files in parallel against one Postgres DB. Test bootstrap also truncated `locations` and dropped budget plan tables on every setup pass, which raced with seeded data and produced `budget_plan_buckets does not exist`, `Location not found for business or inactive`, and missing location counters after business reset. Forced `fileParallelism: false` + `maxWorkers: 1`, made bootstrap once-only and non-destructive, and verified migration 0014 tables exist after apply (`vitest.config.ts`, `api/test/setup.ts`, `api/__tests__/budgets-router.test.ts`).
 
@@ -12,6 +18,7 @@
   - `GET /api/v1/suppliers` — list suppliers (scope: `suppliers:read`)
   - `POST /api/v1/suppliers` — upsert supplier (scope: `suppliers:write`)
   - `GET /api/v1/categories` — list expense categories (scope: `categories:read`)
+  - `POST /api/v1/categories` — upsert expense category (scope: `categories:write`)
   - `GET /api/v1/business/profile` — get business profile (scope: `business:read`)
   - `GET /api/v1/locations` — list locations (scope: `locations:read`)
   - `GET /api/v1/users` — list users (scope: `users:read`)
@@ -33,7 +40,7 @@
 - **tRPC `.meta()` descriptions** on all `integrationFinabill` router procedures for future doc generation.
 
 ### Changed
-- **Granular API scopes** — scopes now follow `resource:action` naming: `accounts:read`, `suppliers:read`, `suppliers:write`, `categories:read`, `business:read`, `locations:read`, `users:read`, `users:write`, `sales:write`, `journal:write`, `webhooks`. Legacy `read`/`write` scopes still work via alias resolution.
+- **Granular API scopes** — scopes now follow `resource:action` naming: `accounts:read`, `suppliers:read`, `suppliers:write`, `categories:read`, `categories:write`, `business:read`, `locations:read`, `users:read`, `users:write`, `sales:write`, `journal:write`, `webhooks`. Legacy `read`/`write` scopes still work via alias resolution.
 - **`DEFAULT_CONNECT_SCOPES` tightened** — removed `admin` (overly broad), `coa:read` and `supplier:read` (redundant). Now uses the shared registry from `api-scopes.ts`.
 - **`integrationFinabillRouter` refactored** — tRPC router is now a thin wrapper over `integration-service.ts`. All business logic lives in the service layer.
 - **`boot.ts` cleaned up** — inline webhook handler, `constantTimeCompare`, and daily-sales handler removed. All moved to proper modules.
