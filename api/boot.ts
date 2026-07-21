@@ -5,7 +5,7 @@ import { Sentry } from "./instrument";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { bodyLimit } from "hono/body-limit";
-import { readFileSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { resolve } from "path";
 import type { HttpBindings } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
@@ -76,14 +76,52 @@ app.get("/health", async (c) => {
 });
 
 // ── API Documentation ─────────────────────────────────────────────
-app.get("/openapi.yaml", (c) => {
-  try {
-    const specPath = resolve(process.cwd(), "docs/api-reference/openapi.yaml");
-    const spec = readFileSync(specPath, "utf-8");
-    return c.text(spec, 200, { "Content-Type": "text/yaml" });
-  } catch {
-    return c.text("OpenAPI spec not found", 404);
+// Resolve docs from container /app, monorepo root, or api/dist layout.
+const bootDir =
+  typeof import.meta.dirname === "string"
+    ? import.meta.dirname
+    : resolve(process.cwd(), "api");
+
+function resolveDocsPath(...segments: string[]): string | null {
+  const rel = ["docs", ...segments];
+  const candidates = [
+    resolve(process.cwd(), ...rel),
+    resolve(process.cwd(), "..", ...rel),
+    resolve(bootDir, "..", ...rel),
+    resolve(bootDir, "..", "..", ...rel),
+  ];
+  for (const p of candidates) {
+    try {
+      if (existsSync(p)) return p;
+    } catch {
+      // ignore
+    }
   }
+  return null;
+}
+
+function loadOpenApiSpec(): string | null {
+  const path = resolveDocsPath("api-reference", "openapi.yaml");
+  if (!path) return null;
+  try {
+    return readFileSync(path, "utf-8");
+  } catch {
+    return null;
+  }
+}
+
+app.get("/openapi.yaml", (c) => {
+  const spec = loadOpenApiSpec();
+  if (!spec) {
+    return c.text("OpenAPI spec not found", 404, {
+      "Content-Type": "text/plain; charset=utf-8",
+    });
+  }
+  return c.text(spec, 200, {
+    "Content-Type": "application/yaml; charset=utf-8",
+    "Cache-Control": "public, max-age=60",
+    "Access-Control-Allow-Origin": "*",
+  });
 });
 
 // Documentation hub — human-facing landing page
@@ -161,7 +199,11 @@ app.get("/docs", (c) => {
 // Serve markdown docs as styled HTML pages
 function renderDocPage(title: string, filename: string): string {
   try {
-    const md = readFileSync(resolve(process.cwd(), `docs/${filename}`), "utf-8");
+    const mdPath = resolveDocsPath(filename);
+    if (!mdPath) {
+      return `<!DOCTYPE html><html><body>${docsHeader}<div class="container" style="max-width:720px;margin:48px auto;padding:0 24px"><h1>${title}</h1><p>Documentation file not found (${filename}). Ensure docs/ is packaged in the image.</p><p><a href="/docs">Back to docs</a></p></div></body></html>`;
+    }
+    const md = readFileSync(mdPath, "utf-8");
     // Simple markdown → HTML: handle headings, bold, code, tables, lists, paragraphs
     const html = md
       .replace(/^### (.+)$/gm, '<h3>$1</h3>')
@@ -227,50 +269,128 @@ app.get("/docs/webhooks", (c) => {
   return c.html(renderDocPage("Webhooks", "webhooks.md"));
 });
 
-// Scalar docs need CDN scripts — relax CSP for this route only
-app.use("/docs/api", async (c, next) => {
+// Scalar docs need CDN scripts — relax CSP for docs routes
+const DOCS_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net",
+  "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com",
+  "img-src 'self' data: blob: https://cdn.jsdelivr.net",
+  "font-src 'self' data: https://cdn.jsdelivr.net https://fonts.gstatic.com https://fonts.scalar.com",
+  "connect-src 'self' https: https://cdn.jsdelivr.net",
+  "worker-src 'self' blob:",
+].join("; ");
+
+app.use("/docs/*", async (c, next) => {
   await next();
-  c.res.headers.set(
-    "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: blob: https://cdn.jsdelivr.net; font-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self' https: https://cdn.jsdelivr.net;",
-  );
+  c.res.headers.set("Content-Security-Policy", DOCS_CSP);
+});
+app.use("/docs", async (c, next) => {
+  await next();
+  c.res.headers.set("Content-Security-Policy", DOCS_CSP);
 });
 
-const scalarConfig = JSON.stringify({
-  spec: { url: "/openapi.yaml" },
-  theme: "kepler",
-  layout: "modern",
-  pageTitle: "FinaFlow API Reference",
-});
+// Pin browser standalone bundle (package root URL is not always a usable IIFE).
+const SCALAR_CDN =
+  "https://cdn.jsdelivr.net/npm/@scalar/api-reference@1.62.9/dist/browser/standalone.js";
 
 app.get("/docs/api", (c) => {
+  const inlineSpec = loadOpenApiSpec();
+  const config: Record<string, unknown> = {
+    theme: "kepler",
+    layout: "modern",
+    pageTitle: "FinaFlow API Reference",
+    hideModels: false,
+  };
+  if (inlineSpec) {
+    config.content = inlineSpec;
+  } else {
+    config.url = "/openapi.yaml";
+  }
+  const configJson = JSON.stringify(config).replace(/</g, "\\u003c");
+
   return c.html(`<!doctype html>
-<html>
-  <head>
-    <title>FinaFlow API Reference</title>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <style>
-      body { margin: 0; padding: 0; }
-    </style>
-  </head>
-  <body>
-    <nav style="background:#fff;border-bottom:1px solid #E8E0D8;padding:0 24px;height:48px;display:flex;align-items:center">
-      <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;width:100%">
-        <div style="display:flex;align-items:center;gap:24px">
-          <a href="/" style="font-family:Georgia,serif;font-size:16px;font-weight:700;color:#2D2A26;text-decoration:none">FinaFlow</a>
-          <div style="display:flex;gap:14px;font-size:13px">
-            <a href="/docs" style="color:#8D8A87;text-decoration:none">Docs</a>
-            <a href="/docs/api" style="color:#C73E1D;text-decoration:none;font-weight:500">API</a>
-          </div>
-        </div>
-        <div>
-          <a href="/dashboard" style="font-size:13px;color:#C73E1D;text-decoration:none;font-weight:500">Dashboard &rarr;</a>
+<html lang="en">
+<head>
+  <title>FinaFlow API Reference</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { margin: 0; padding: 0; }
+    #app { min-height: calc(100vh - 48px); }
+    #scalar-error {
+      display: none;
+      max-width: 640px;
+      margin: 48px auto;
+      padding: 24px;
+      font-family: system-ui, sans-serif;
+      color: #2D2A26;
+      border: 1px solid #E8E0D8;
+      border-radius: 12px;
+      background: #FAF9F7;
+    }
+  </style>
+</head>
+<body>
+  <nav style="background:#fff;border-bottom:1px solid #E8E0D8;padding:0 24px;height:48px;display:flex;align-items:center">
+    <div style="max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;width:100%">
+      <div style="display:flex;align-items:center;gap:24px">
+        <a href="/" style="font-family:Georgia,serif;font-size:16px;font-weight:700;color:#2D2A26;text-decoration:none">FinaFlow</a>
+        <div style="display:flex;gap:14px;font-size:13px">
+          <a href="/docs" style="color:#8D8A87;text-decoration:none">Docs</a>
+          <a href="/docs/api" style="color:#C73E1D;text-decoration:none;font-weight:500">API</a>
         </div>
       </div>
-    </nav>
-    <script id="api-reference" data-configuration='${scalarConfig.replace(/'/g, "&#39;")}' src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
-  </body>
+      <div>
+        <a href="/dashboard" style="font-size:13px;color:#C73E1D;text-decoration:none;font-weight:500">Dashboard &rarr;</a>
+      </div>
+    </div>
+  </nav>
+  <div id="app"></div>
+  <div id="scalar-error">
+    <h2 style="margin:0 0 8px;font-family:Georgia,serif">API Reference could not be loaded</h2>
+    <p style="margin:0 0 12px;color:#8D8A87;font-size:14px">
+      The OpenAPI document was missing or the Scalar script failed to load.
+      Ensure <code>docs/api-reference/openapi.yaml</code> is packaged in the image.
+    </p>
+    <p style="margin:0;font-size:13px"><a href="/openapi.yaml">Open /openapi.yaml</a> · <a href="/docs">Back to docs</a></p>
+  </div>
+  <script src="${SCALAR_CDN}"></script>
+  <script>
+    (function () {
+      var config = ${configJson};
+      var errEl = document.getElementById('scalar-error');
+      function showError(msg) {
+        if (errEl) {
+          errEl.style.display = 'block';
+          if (msg) {
+            var p = document.createElement('p');
+            p.style.cssText = 'margin:12px 0 0;font-size:12px;color:#b91c1c';
+            p.textContent = String(msg);
+            errEl.appendChild(p);
+          }
+        }
+      }
+      try {
+        if (typeof Scalar !== 'undefined' && typeof Scalar.createApiReference === 'function') {
+          Scalar.createApiReference('#app', config);
+        } else {
+          showError('Scalar global was not defined after loading the CDN script.');
+        }
+      } catch (e) {
+        showError(e && e.message ? e.message : e);
+      }
+      if (!config.content) {
+        fetch('/openapi.yaml', { method: 'GET' })
+          .then(function (r) {
+            if (!r.ok) showError('GET /openapi.yaml returned HTTP ' + r.status);
+          })
+          .catch(function (e) {
+            showError('Failed to fetch /openapi.yaml: ' + (e && e.message ? e.message : e));
+          });
+      }
+    })();
+  </script>
+</body>
 </html>`);
 });
 
