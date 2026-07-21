@@ -141,6 +141,9 @@ paths:
     get:
       operationId: listCategories
       summary: List expense categories
+      description: |
+        Returns expense categories for the authenticated business.
+        When a category was upserted from FinaBill, `externalId` is the FinaBill category id.
       tags: [Categories]
       security:
         - BearerAuth: []
@@ -155,6 +158,45 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CategoryListResponse"
+    post:
+      operationId: upsertCategory
+      summary: Create or update an expense category
+      description: |
+        Upsert an expense category for the authenticated business.
+
+        Matching order:
+        1. `externalId` + external system correspondence (FinaBill category id)
+        2. Exact `name` within the business
+
+        If neither matches, a new category is created.
+
+        **Note:** `categoryType` currently supports `expense` only. Income mapping should use
+        chart-of-accounts revenue accounts until FinaFlow income categories ship.
+      tags: [Categories]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["categories:write"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertCategoryInput"
+      responses:
+        "200":
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpsertCategoryResult"
+        "201":
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UpsertCategoryResult"
+        "400":
+          $ref: "#/components/responses/ValidationError"
 
   /business/profile:
     get:
@@ -391,6 +433,7 @@ components:
             "suppliers:read": Read suppliers
             "suppliers:write": Create/update suppliers
             "categories:read": Read expense categories
+            "categories:write": Create/update expense categories
             "business:read": Read business profile
             "locations:read": Read locations
             "users:read": Read users and roles
@@ -586,12 +629,19 @@ components:
           type: string
         categoryType:
           type: string
+          enum: [expense]
+          description: Currently always expense on FinaFlow
         defaultAccountId:
           type: integer
           nullable: true
+          description: Chart-of-accounts expense account used when posting
         externalAccountCode:
           type: string
           nullable: true
+        externalId:
+          type: string
+          nullable: true
+          description: Partner system category id when synced from FinaBill
         isActive:
           type: boolean
 
@@ -604,6 +654,53 @@ components:
             $ref: "#/components/schemas/Category"
         meta:
           $ref: "#/components/schemas/PaginatedMeta"
+
+    UpsertCategoryInput:
+      type: object
+      required: [name]
+      properties:
+        externalId:
+          type: string
+          description: Partner category id (e.g. FinaBill expense_categories.id)
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        categoryType:
+          type: string
+          enum: [expense, income]
+          default: expense
+          description: Only expense is accepted today
+        defaultAccountId:
+          type: integer
+          nullable: true
+          description: FinaFlow chart-of-accounts account id
+        description:
+          type: string
+          nullable: true
+        isActive:
+          type: boolean
+
+    UpsertCategoryResult:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id:
+              type: integer
+            created:
+              type: boolean
+            categoryType:
+              type: string
+              enum: [expense]
+            name:
+              type: string
+            defaultAccountId:
+              type: integer
+              nullable: true
+        meta:
+          $ref: "#/components/schemas/Meta"
 
     BusinessProfile:
       type: object

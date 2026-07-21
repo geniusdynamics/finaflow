@@ -56,7 +56,7 @@ export function logIntegration(
   }
 }
 
-// ── Read operations ────────────────────────────────────────────────
+// â”€â”€ Read operations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function listAccounts(businessId: number, accountType?: string) {
   const db = getDb();
@@ -102,12 +102,24 @@ export async function listCategories(businessId: number) {
       categoryType: expenseCategories.accountingClass,
       defaultAccountId: expenseCategories.defaultAccountId,
       externalAccountCode: expenseCategories.externalAccountCode,
+      externalSystem: expenseCategories.externalSystem,
       isActive: expenseCategories.isActive,
     })
     .from(expenseCategories)
     .where(and(eq(expenseCategories.businessId, businessId), isNull(expenseCategories.deletedAt)))
     .orderBy(expenseCategories.name);
-  return data.map((c) => ({ ...c, categoryType: "expense" as const }));
+  return data.map((c) => ({
+    id: c.id,
+    name: c.name,
+    categoryType: "expense" as const,
+    defaultAccountId: c.defaultAccountId,
+    externalAccountCode: c.externalAccountCode,
+    externalId:
+      c.externalSystem === "finabill" && c.externalAccountCode
+        ? c.externalAccountCode
+        : null,
+    isActive: c.isActive,
+  }));
 }
 
 export async function getBusinessProfile(businessId: number) {
@@ -221,7 +233,7 @@ export async function listRoleTemplates() {
     .where(eq(rolePermissions.isActive, true));
 }
 
-// ── Write operations ───────────────────────────────────────────────
+// â”€â”€ Write operations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function upsertSupplier(
   businessId: number,
@@ -395,4 +407,124 @@ export async function upsertUser(
   }
 
   return { id: created.id, created: true };
+}
+
+export async function upsertCategory(
+  businessId: number,
+  input: {
+    externalId?: string;
+    name: string;
+    categoryType?: "expense" | "income";
+    defaultAccountId?: number | null;
+    description?: string | null;
+    isActive?: boolean;
+  },
+) {
+  const db = getDb();
+  const categoryType = input.categoryType ?? "expense";
+  if (categoryType !== "expense") {
+    // FinaFlow currently models operational categories as expense_categories only.
+    // Income classification lives on the chart of accounts / revenue accounts.
+    throw new Error(
+      'categoryType "income" is not supported on FinaFlow yet. Map income via chart-of-accounts revenue accounts.',
+    );
+  }
+
+  if (input.defaultAccountId != null) {
+    const [account] = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.id, input.defaultAccountId),
+          eq(accounts.businessId, businessId),
+          isNull(accounts.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!account) {
+      throw new Error("defaultAccountId must belong to this business");
+    }
+  }
+
+  const externalId = input.externalId?.trim() || null;
+
+  let existing =
+    externalId
+      ? await db
+          .select()
+          .from(expenseCategories)
+          .where(
+            and(
+              eq(expenseCategories.businessId, businessId),
+              eq(expenseCategories.externalSystem, "finabill"),
+              eq(expenseCategories.externalAccountCode, externalId),
+              isNull(expenseCategories.deletedAt),
+            ),
+          )
+          .limit(1)
+      : [];
+
+  if (!existing[0]) {
+    existing = await db
+      .select()
+      .from(expenseCategories)
+      .where(
+        and(
+          eq(expenseCategories.businessId, businessId),
+          eq(expenseCategories.name, input.name),
+          isNull(expenseCategories.deletedAt),
+        ),
+      )
+      .limit(1);
+  }
+
+  if (existing[0]) {
+    const [updated] = await db
+      .update(expenseCategories)
+      .set({
+        name: input.name,
+        description: input.description ?? existing[0].description,
+        defaultAccountId:
+          input.defaultAccountId !== undefined
+            ? input.defaultAccountId
+            : existing[0].defaultAccountId,
+        externalSystem: externalId ? "finabill" : existing[0].externalSystem,
+        externalAccountCode: externalId ?? existing[0].externalAccountCode,
+        isActive: input.isActive ?? existing[0].isActive,
+        updatedAt: new Date(),
+        deletedAt: null,
+      })
+      .where(eq(expenseCategories.id, existing[0].id))
+      .returning();
+    return {
+      id: updated.id,
+      created: false,
+      categoryType: "expense" as const,
+      name: updated.name,
+      defaultAccountId: updated.defaultAccountId,
+    };
+  }
+
+  const [created] = await db
+    .insert(expenseCategories)
+    .values({
+      businessId,
+      name: input.name,
+      description: input.description ?? null,
+      defaultAccountId: input.defaultAccountId ?? null,
+      externalSystem: externalId ? "finabill" : null,
+      externalAccountCode: externalId,
+      accountingClass: "operating_expense",
+      isActive: input.isActive ?? true,
+    })
+    .returning();
+
+  return {
+    id: created.id,
+    created: true,
+    categoryType: "expense" as const,
+    name: created.name,
+    defaultAccountId: created.defaultAccountId,
+  };
 }

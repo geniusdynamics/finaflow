@@ -28,6 +28,17 @@ export const upsertSupplierSchema = z.object({
   taxId: z.string().optional().nullable(),
 });
 
+// ── Integration: Categories ────────────────────────────────────────
+
+export const upsertCategorySchema = z.object({
+  externalId: z.string().optional(),
+  name: z.string().min(1).max(100),
+  categoryType: z.enum(["expense", "income"]).optional().default("expense"),
+  defaultAccountId: z.number().int().positive().optional().nullable(),
+  description: z.string().optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
 // ── Integration: Users ──────────────────────────────────────────────
 
 export const upsertUserSchema = z.object({
