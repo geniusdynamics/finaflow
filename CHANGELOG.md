@@ -2,11 +2,16 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-07-21
+
 ### Added
 - **Expense category write API** — `POST /api/v1/categories` upserts expense categories (scope: `categories:write`). Matches by FinaBill `externalId` then by name; stores partner id on `externalAccountCode` / `externalSystem=finabill`. Income category type is rejected with a clear validation error until FF models income categories (map income via CoA revenue accounts).
 - **tRPC parity** — `integrationFinabill.upsertCategory` thin wrapper over the same service method.
 - **OpenAPI / Scalar** — POST `/categories`, `UpsertCategoryInput` / `UpsertCategoryResult`, and `categories:write` scope documented in `docs/api-reference/openapi.yaml` and `docs/authentication.md`.
 - **Connect scopes** — `categories:write` included in `DEFAULT_CONNECT_SCOPES` and legacy `write` alias.
+
+### Changed
+- **Version bump to 1.1.2** — `package.json` and `src/lib/version.ts`.
 
 ### Fixed
 - **CI integration test isolation** — Vitest 4 no longer honors `singleFork`, so API suites were running files in parallel against one Postgres DB. Test bootstrap also truncated `locations` and dropped budget plan tables on every setup pass, which raced with seeded data and produced `budget_plan_buckets does not exist`, `Location not found for business or inactive`, and missing location counters after business reset. Forced `fileParallelism: false` + `maxWorkers: 1`, made bootstrap once-only and non-destructive, and verified migration 0014 tables exist after apply (`vitest.config.ts`, `api/test/setup.ts`, `api/__tests__/budgets-router.test.ts`).
