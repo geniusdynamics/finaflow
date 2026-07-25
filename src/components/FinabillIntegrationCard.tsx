@@ -20,7 +20,19 @@ import {
   KeyRound,
   Building2,
   ExternalLink,
+  Unplug,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const TARGET_SYSTEM = "finabill";
 
@@ -101,6 +113,16 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
     onError: (err) => toast.error(err.message),
   });
 
+  const disconnect = trpc.integrations.disconnect.useMutation({
+    onSuccess: (res) => {
+      toast.success(res.message);
+      utils.integrations.getConnection.reset({ targetSystem: TARGET_SYSTEM });
+      utils.integrations.status.invalidate({ targetSystem: TARGET_SYSTEM });
+      utils.connect.listBusinessConnectionStates.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const switchBusiness = trpc.localAuth.switchBusiness.useMutation({
     onSuccess: () => {
       toast.success("Switched business");
@@ -171,18 +193,51 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
               </div>
 
               {connection?.isActive ? (
-                <div className="rounded-md border border-green-200 bg-green-50/80 p-3 text-sm text-green-900">
-                  <span className="flex items-center gap-1 font-medium">
-                    <CheckCircle2 className="h-4 w-4" /> This business is connected to FinaBill
-                    {currentState?.targetBusinessName
-                      ? ` (${currentState.targetBusinessName})`
-                      : currentState?.targetBusinessId
-                      ? ` (${currentState.targetBusinessId})`
-                      : ""}
-                  </span>
-                  <p className="mt-1 text-green-700">
-                    Disconnect before connecting another FinaBill business.
-                  </p>
+                <div className="space-y-3">
+                  <div className="rounded-md border border-green-200 bg-green-50/80 p-3 text-sm text-green-900">
+                    <span className="flex items-center gap-1 font-medium">
+                      <CheckCircle2 className="h-4 w-4" /> This business is connected to FinaBill
+                      {currentState?.targetBusinessName
+                        ? ` (${currentState.targetBusinessName})`
+                        : currentState?.targetBusinessId
+                        ? ` (${currentState.targetBusinessId})`
+                        : ""}
+                    </span>
+                    <p className="mt-1 text-green-700">
+                      Disconnect to connect a different FinaBill business or revoke access.
+                    </p>
+                  </div>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        disabled={disconnect.isPending}
+                      >
+                        {disconnect.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                        <Unplug className="mr-2 h-3 w-3" /> Disconnect
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Disconnect FinaBill?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will revoke all API keys and remove the connection on both sides.
+                          You can re-connect at any time via Fina Connect.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => disconnect.mutate({ targetSystem: TARGET_SYSTEM })}
+                          className="bg-red-600 hover:bg-red-700"
+                        >
+                          Disconnect
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               ) : (
                 <>

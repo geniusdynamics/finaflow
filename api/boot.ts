@@ -33,7 +33,9 @@ import {
   completeReverseConnection,
   getConnectSessionPublic,
   resolvePairingCodeOnInitiator,
+  disconnectSibling,
 } from "./lib/integrations/connect-service";
+import { resolveApiKey } from "./lib/api-key-auth";
 import v1 from "./routes/v1";
 // import { ensureDatabaseReady } from "./lib/db-startup";
 
@@ -503,6 +505,37 @@ app.post("/api/connect/resolve-pairing", connectLimiter, async (c) => {
   } catch (err) {
     return c.json(
       { error: err instanceof Error ? err.message : "Resolve failed" },
+      400
+    );
+  }
+});
+
+// Partner-initiated disconnect: FinaBill calls this to revoke its side on FinaFlow
+app.post("/api/connect/disconnect", connectLimiter, async (c) => {
+  try {
+    // Authenticate via the API key FinaBill holds for this business
+    const authHeader = c.req.header("authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return c.json({ error: "Missing Authorization header" }, 401);
+    }
+    const rawKey = authHeader.slice(7).trim();
+    const apiKey = await resolveApiKey(rawKey);
+    if (!apiKey) {
+      return c.json({ error: "Invalid API key" }, 401);
+    }
+
+    const body = await c.req.json().catch(() => ({}));
+    const targetSystem = String(body.initiatorSystem ?? "finabill");
+
+    const result = await disconnectSibling({
+      businessId: apiKey.businessId,
+      targetSystem,
+      revokeInboundKeys: true,
+    });
+    return c.json(result);
+  } catch (err) {
+    return c.json(
+      { error: err instanceof Error ? err.message : "Disconnect failed" },
       400
     );
   }

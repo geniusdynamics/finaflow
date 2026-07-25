@@ -1,7 +1,7 @@
 // ABOUTME: First-party Fina Connect protocol for mutual app pairing (FinaFlow <-> FinaBill).
 // ABOUTME: Creates short-lived sessions, exchanges API keys, and upserts sibling connections.
 import crypto from "crypto";
-import { and, eq, isNull, inArray } from "drizzle-orm";
+import { and, eq, isNull, inArray, sql } from "drizzle-orm";
 import { getDb } from "../../queries/connection";
 import {
   apiKeys,
@@ -626,4 +626,58 @@ export async function resolvePairingCodeOnInitiator(pairingCode: string) {
     }
   }
   return null;
+}
+
+/**
+ * Disconnect a sibling integration. Called either:
+ * 1. Locally from the UI (user clicks Disconnect)
+ * 2. Remotely via /api/connect/disconnect (partner sends revocation request)
+ *
+ * Deletes the connection row, revokes inbound API keys for the partner, and returns success.
+ */
+export async function disconnectSibling(input: {
+  businessId: number;
+  targetSystem: string;
+  revokeInboundKeys?: boolean;
+}): Promise<{ success: boolean; message: string }> {
+  const db = getDb();
+  const { businessId, targetSystem, revokeInboundKeys = true } = input;
+
+  const [connection] = await db
+    .select()
+    .from(integrationConnections)
+    .where(
+      and(
+        eq(integrationConnections.businessId, businessId),
+        eq(integrationConnections.targetSystem, targetSystem),
+        isNull(integrationConnections.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (!connection) {
+    return { success: true, message: "No active connection found" };
+  }
+
+  // 1. Delete (hard-delete) the connection row to allow fresh re-connect
+  await db
+    .delete(integrationConnections)
+    .where(eq(integrationConnections.id, connection.id));
+
+  // 2. Revoke inbound API keys created for the partner (named like "FinaBill connect ...")
+  if (revokeInboundKeys) {
+    const partnerLabel = targetSystem === "finabill" ? "FinaBill" : targetSystem;
+    await db
+      .update(apiKeys)
+      .set({ isActive: false, deletedAt: new Date() })
+      .where(
+        and(
+          eq(apiKeys.businessId, businessId),
+          eq(apiKeys.isActive, true),
+          sql`${apiKeys.name} ILIKE ${"%" + partnerLabel + " connect%"}`
+        )
+      );
+  }
+
+  return { success: true, message: `Disconnected from ${targetSystem}` };
 }
