@@ -16,6 +16,7 @@ import { encryptString, decryptString, looksEncrypted } from "./lib/crypto";
 import { generateApiKey, getKeyPrefix, hashApiKey } from "./lib/api-key-auth";
 import { env } from "./lib/env";
 import { getAdapter, listAdapters } from "./lib/integrations";
+import { disconnectSibling } from "./lib/integrations/connect-service";
 
 function encryptSecret(secret: string | undefined | null): string | null {
   if (!secret) return null;
@@ -260,6 +261,49 @@ export const integrationsRouter = createRouter({
 
         return { success: true, targetSystem: input.targetSystem, isActive: updated.isActive };
       });
+    }),
+
+  disconnect: integrationsManage
+    .input(z.object({ targetSystem: z.string().min(1).max(50) }))
+    .mutation(async ({ input, ctx }) => {
+      const businessId = requireBusinessId(ctx);
+      const { targetSystem } = input;
+
+      // Get the connection to extract credentials for notifying the partner
+      const db = getDb();
+      const connection = await getConnectionByTarget(db, businessId, targetSystem);
+      if (!connection) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Integration connection not found" });
+      }
+
+      // Try to notify the partner system to revoke its side
+      const authData = connection.authData as Record<string, unknown> | null;
+      const targetUrl = authData?.url as string | undefined;
+      const encApiKey = authData?.apiKey as string | undefined;
+      if (targetUrl && encApiKey) {
+        try {
+          const partnerApiKey = looksEncrypted(encApiKey) ? decryptString(encApiKey) : encApiKey;
+          await fetch(`${targetUrl.replace(/\/$/, "")}/api/connect/disconnect`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${partnerApiKey}`,
+            },
+            body: JSON.stringify({ initiatorSystem: "finaflow" }),
+          }).catch(() => {}); // Best-effort; don't fail if partner unreachable
+        } catch {
+          // Ignore network errors during partner notification
+        }
+      }
+
+      // Disconnect locally
+      const result = await disconnectSibling({
+        businessId,
+        targetSystem,
+        revokeInboundKeys: true,
+      });
+
+      return result;
     }),
 
   // API Keys
