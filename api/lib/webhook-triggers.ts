@@ -12,14 +12,27 @@ export async function triggerSaleRecorded(
 
 export async function triggerExpenseCreated(
   businessId: number,
-  payload: { expenseId: number; amount: string; accountId: number | null }
+  payload: {
+    expenseId: number;
+    amount: string;
+    accountId: number | null;
+    billId?: number | null;
+    billExternalId?: string | null;
+  }
 ): Promise<void> {
   await dispatchWebhook(businessId, "expense.created", payload);
 }
 
 export async function triggerBillPaid(
   businessId: number,
-  payload: { billId: number; amount: string; paymentId: number }
+  payload: {
+    billId: number;
+    amount: string;
+    paymentId: number;
+    externalId?: string | null;
+    externalSystem?: string | null;
+    expenseId?: number | null;
+  }
 ): Promise<void> {
   await dispatchWebhook(businessId, "bill.paid", payload);
 }

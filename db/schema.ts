@@ -21,7 +21,7 @@ import {
 
 export const roleEnum = pgEnum("role", ["owner", "admin", "manager", "employee", "viewer"]);
 export const userTypeEnum = pgEnum("user_type", ["standard", "partner"]);
-export const typeEnum = pgEnum("type", ["cash", "mpesa", "bank_account"]);
+export const typeEnum = pgEnum("type", ["cash", "mpesa", "bank_account", "wallet"]);
 export const transactionTypeEnum = pgEnum("transactionType", [
     "sale", "expense", "bill_payment", "supplier_payment",
     "payroll", "advance", "transfer", "opening_balance", "mpesa_topup",
@@ -446,6 +446,8 @@ export const suppliers = pgTable("suppliers", {
   totalPaid: numeric("totalPaid", { precision: 15, scale: 2 }).default("0.00").notNull(),
   notes: text("notes"),
   autoCategoryId: bigint("autoCategoryId", { mode: "number" }),
+  externalId: varchar("externalId", { length: 255 }),
+  externalSystem: varchar("externalSystem", { length: 50 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
   deletedAt: timestamp("deletedAt"),
@@ -453,6 +455,7 @@ export const suppliers = pgTable("suppliers", {
   businessIdx: index("business_idx").on(table.businessId),
   locationIdx: index("location_idx").on(table.locationId),
   deletedIdx: index("deleted_idx").on(table.deletedAt),
+  externalIdx: uniqueIndex("uq_suppliers_business_external").on(table.businessId, table.externalSystem, table.externalId).where(sql`${table.externalId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
 }));
 
 export type Supplier = typeof suppliers.$inferSelect;
@@ -474,6 +477,8 @@ export const bills = pgTable("bills", {
   status: billStatusEnum("status").default("pending").notNull(),
   journalEntryId: bigint("journalEntryId", { mode: "number" }).references(() => journalEntries.id, { onDelete: "no action" }),
   debtId: bigint("debtId", { mode: "number" }).references(() => debts.id, { onDelete: "no action" }),
+  externalId: varchar("externalId", { length: 255 }),
+  externalSystem: varchar("externalSystem", { length: 50 }),
   reversedAt: timestamp("reversedAt"),
   reversedBy: bigint("reversedBy", { mode: "number" }),
   enteredBy: bigint("enteredBy", { mode: "number" }).references(() => users.id, { onDelete: "no action" }),
@@ -488,6 +493,7 @@ export const bills = pgTable("bills", {
   idx_bills_journal_entry: index("idx_bills_journal_entry").on(table.journalEntryId),
   idx_bills_debt: index("idx_bills_debt").on(table.debtId),
   idx_bills_entered_by: index("idx_bills_entered_by").on(table.enteredBy),
+  idx_bills_external: uniqueIndex("uq_bills_business_external").on(table.businessId, table.externalSystem, table.externalId).where(sql`${table.externalId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
 }));
 
 export type Bill = typeof bills.$inferSelect;

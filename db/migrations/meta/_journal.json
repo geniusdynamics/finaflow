@@ -141,6 +141,13 @@
       "when": 1783872000000,
       "tag": "0029_partner_leads",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1785110400000,
+      "tag": "0030_finabill_sync_expansion",
+      "breakpoints": true
     }
   ]
 }

@@ -262,6 +262,7 @@ async function ensureTestDatabase(): Promise<void> {
       "0027_fina_connect_target_business.sql",
       "0028_wallet_reconciliation_tenant_scope.sql",
       "0029_partner_leads.sql",
+      "0030_finabill_sync_expansion.sql",
     ]) {
       const p = path.resolve(import.meta.dirname, `../../db/migrations/${file}`);
       if (fs.existsSync(p)) {

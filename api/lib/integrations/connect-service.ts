@@ -10,6 +10,7 @@ import {
   users,
   userBusinesses,
   businesses,
+  webhooks,
 } from "@db/schema";
 import { env } from "../env";
 import { encryptString, decryptString } from "../crypto";
@@ -34,6 +35,61 @@ function generatePairingCode(): string {
 
 function hashCode(raw: string): string {
   return crypto.createHash("sha256").update(raw).digest("hex");
+}
+
+/** Events FinaBill subscribes to via Fina Connect pairing. */
+const SIBLING_WEBHOOK_EVENTS = [
+  "bill.paid",
+  "expense.created",
+  "coa.updated",
+  "supplier.updated",
+];
+
+/**
+ * Register (or refresh) the outgoing webhook subscription that delivers
+ * FinaFlow events to the paired FinaBill instance. Idempotent by URL.
+ */
+export async function ensureSiblingWebhookSubscription(
+  businessId: number,
+  partnerApiUrl: string,
+  webhookSecret: string
+): Promise<void> {
+  const db = getDb();
+  const url = `${partnerApiUrl.replace(/\/$/, "")}/api/webhooks/finaflow`;
+  const [existing] = await db
+    .select({ id: webhooks.id })
+    .from(webhooks)
+    .where(
+      and(
+        eq(webhooks.businessId, businessId),
+        eq(webhooks.url, url),
+        isNull(webhooks.deletedAt)
+      )
+    )
+    .limit(1);
+
+  if (existing) {
+    await db
+      .update(webhooks)
+      .set({
+        events: SIBLING_WEBHOOK_EVENTS,
+        secret: encryptString(webhookSecret),
+        isActive: true,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any)
+      .where(eq(webhooks.id, existing.id));
+    return;
+  }
+
+  await db.insert(webhooks).values({
+    businessId,
+    name: "FinaBill (Fina Connect)",
+    url,
+    events: SIBLING_WEBHOOK_EVENTS,
+    secret: encryptString(webhookSecret),
+    isActive: true,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any);
 }
 
 async function createInboundApiKey(
@@ -421,6 +477,13 @@ export async function exchangeConnectSession(input: {
       typeof payload.partnerBusinessName === "string" ? payload.partnerBusinessName : null,
   });
 
+  // Deliver bill.paid/expense.created/coa.updated/supplier.updated to FinaBill.
+  try {
+    await ensureSiblingWebhookSubscription(input.businessId, partnerApiUrl, webhookSecret);
+  } catch (err) {
+    console.error("[connect] webhook subscription setup failed:", err);
+  }
+
   const completeRes = await fetch(`${partnerApiUrl}/api/connect/complete`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -486,6 +549,19 @@ export async function completeReverseConnection(input: {
     targetBusinessId: input.targetBusinessId,
     targetBusinessName: input.targetBusinessName,
   });
+
+  // FinaBill-initiated pairing: register the outgoing event subscription too.
+  if (input.targetSystem === SIBLING) {
+    try {
+      await ensureSiblingWebhookSubscription(
+        input.businessId,
+        input.targetUrl,
+        input.webhookSecret
+      );
+    } catch (err) {
+      console.error("[connect] webhook subscription setup failed:", err);
+    }
+  }
   return { success: true, connectionId: connection.id };
 }
 

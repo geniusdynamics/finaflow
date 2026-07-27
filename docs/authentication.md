@@ -18,9 +18,13 @@ Each API key is granted a set of **scopes** that control which endpoints it can 
 
 | Scope | Description |
 |---|---|
-| `accounts:read` | Read accounts, chart of accounts |
+| `accounts:read` | Read accounts, chart of accounts, account ledger transactions |
+| `accounts:write` | Create and update chart-of-accounts entries |
 | `suppliers:read` | Read suppliers |
 | `suppliers:write` | Create and update suppliers |
+| `bills:read` | Read bills with line items |
+| `bills:write` | Create and update bills |
+| `expenses:read` | Read expenses |
 | `categories:read` | Read expense categories |
 | `categories:write` | Create and update expense categories |
 | `business:read` | Read business profile |
@@ -35,8 +39,8 @@ Each API key is granted a set of **scopes** that control which endpoints it can 
 
 Older API keys may use coarse scopes (`read`, `write`). These are automatically resolved to the granular equivalents:
 
-- `read` → `accounts:read`, `suppliers:read`, `categories:read`, `business:read`, `locations:read`, `users:read`
-- `write` → `suppliers:write`, `categories:write`
+- `read` → `accounts:read`, `suppliers:read`, `categories:read`, `business:read`, `locations:read`, `users:read`, `bills:read`, `expenses:read`
+- `write` → `suppliers:write`, `categories:write`, `accounts:write`, `bills:write`
 
 This ensures backward compatibility without requiring key rotation.
 

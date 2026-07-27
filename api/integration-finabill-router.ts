@@ -41,6 +41,147 @@ export const integrationFinabillRouter = createRouter({
       return { data };
     }),
 
+  listPaymentAccounts: apiKeyProcedure
+    .meta({ description: "List operational money/payment accounts (cash, mpesa, wallet, bank) with live balances." })
+    .use(requireApiKey("accounts:read"))
+    .query(async ({ ctx }) => {
+      const businessId = getBusinessId(ctx);
+      if (!businessId) {
+        integrationService.logIntegration(ctx, "finabill.listPaymentAccounts", "failed", { error: "No active business" });
+        return { data: [] };
+      }
+      const data = await integrationService.listPaymentAccounts(businessId);
+      integrationService.logIntegration(ctx, "finabill.listPaymentAccounts", "success", { count: data.length });
+      return { data };
+    }),
+
+  listAccountTransactions: apiKeyProcedure
+    .meta({ description: "List ledger entries for one money account, oldest first, cursor-paginated by entry id." })
+    .use(requireApiKey("accounts:read"))
+    .input(
+      z.object({
+        accountId: z.number().int().positive(),
+        sinceEntryId: z.number().int().positive().optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const businessId = getBusinessId(ctx);
+      if (!businessId) {
+        integrationService.logIntegration(ctx, "finabill.listAccountTransactions", "failed", { error: "No active business" });
+        return { data: [] };
+      }
+      const data = await integrationService.listAccountTransactions(businessId, input.accountId, {
+        sinceEntryId: input.sinceEntryId,
+        limit: input.limit,
+      });
+      integrationService.logIntegration(ctx, "finabill.listAccountTransactions", "success", { accountId: input.accountId, count: data.length });
+      return { data };
+    }),
+
+  upsertAccount: apiKeyProcedure
+    .meta({ description: "Create or update a Chart of Accounts entry pushed from FinaBill. Match by externalId, then accountType+code, then accountType+name." })
+    .use(requireApiKey("accounts:write"))
+    .input(
+      z.object({
+        externalId: z.string().min(1),
+        name: z.string().min(1).max(100),
+        accountCode: z.string().max(20).optional().nullable(),
+        accountType: z.enum(["asset", "liability", "equity", "revenue", "expense"]),
+        accountSubType: z.string().optional().nullable(),
+        description: z.string().optional().nullable(),
+        isActive: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const businessId = getBusinessId(ctx);
+      if (!businessId) {
+        integrationService.logIntegration(ctx, "finabill.upsertAccount", "failed", { error: "No active business" });
+        throw new Error("No active business");
+      }
+      const result = await integrationService.upsertAccount(businessId, input as Parameters<typeof integrationService.upsertAccount>[1]);
+      integrationService.logIntegration(ctx, "finabill.upsertAccount", "success", { accountId: result.id, created: result.created });
+      return result;
+    }),
+
+  listBills: apiKeyProcedure
+    .meta({ description: "List bills with line items and external linkage for pull sync." })
+    .use(requireApiKey("bills:read"))
+    .input(z.object({ updatedSince: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const businessId = getBusinessId(ctx);
+      if (!businessId) {
+        integrationService.logIntegration(ctx, "finabill.listBills", "failed", { error: "No active business" });
+        return { data: [] };
+      }
+      const data = await integrationService.listBills(businessId, { updatedSince: input?.updatedSince });
+      integrationService.logIntegration(ctx, "finabill.listBills", "success", { count: data.length });
+      return { data };
+    }),
+
+  upsertBill: apiKeyProcedure
+    .meta({ description: "Create or update a purchase bill pushed from FinaBill (matched by externalId). Resolves/creates the supplier." })
+    .use(requireApiKey("bills:write"))
+    .input(
+      z.object({
+        externalId: z.string().min(1),
+        billNumber: z.string().max(100).optional().nullable(),
+        description: z.string().min(1),
+        amount: z.string(),
+        amountPaid: z.string().optional().nullable(),
+        issueDate: z.string(),
+        dueDate: z.string(),
+        status: z.enum(["draft", "received", "partial", "paid", "void"]),
+        locationId: z.number().int().positive().optional().nullable(),
+        supplier: z
+          .object({
+            externalId: z.string().optional().nullable(),
+            name: z.string().min(1),
+            email: z.string().email().optional().nullable(),
+            phone: z.string().optional().nullable(),
+            taxId: z.string().optional().nullable(),
+          })
+          .optional()
+          .nullable(),
+        items: z
+          .array(
+            z.object({
+              itemName: z.string().min(1).max(255),
+              quantity: z.string().optional().nullable(),
+              unitPrice: z.string(),
+              totalPrice: z.string(),
+              notes: z.string().optional().nullable(),
+            }),
+          )
+          .optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const businessId = getBusinessId(ctx);
+      if (!businessId) {
+        integrationService.logIntegration(ctx, "finabill.upsertBill", "failed", { error: "No active business" });
+        throw new Error("No active business");
+      }
+      const result = await integrationService.upsertBill(businessId, input);
+      integrationService.logIntegration(ctx, "finabill.upsertBill", "success", { billId: result.id, created: result.created });
+      return result;
+    }),
+
+  listExpenses: apiKeyProcedure
+    .meta({ description: "List expenses (with category and bill linkage) for pull sync." })
+    .use(requireApiKey("expenses:read"))
+    .input(z.object({ updatedSince: z.string().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const businessId = getBusinessId(ctx);
+      if (!businessId) {
+        integrationService.logIntegration(ctx, "finabill.listExpenses", "failed", { error: "No active business" });
+        return { data: [] };
+      }
+      const data = await integrationService.listExpenses(businessId, { updatedSince: input?.updatedSince });
+      integrationService.logIntegration(ctx, "finabill.listExpenses", "success", { count: data.length });
+      return { data };
+    }),
+
   listSuppliers: apiKeyProcedure
     .meta({ description: "List all suppliers for the authenticated business." })
     .use(requireApiKey("suppliers:read"))
