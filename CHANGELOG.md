@@ -1,6 +1,26 @@
 # Changelog
 
+## [1.2.0] - 2026-07-27
+
+### Changed
+- **Version bump to 1.2.0** — `package.json`, `package-lock.json`, and `src/lib/version.ts`.
+
 ## [Unreleased]
+
+### Added
+- **`integrationFinabill.listPaymentAccounts`** — new tRPC query (scope: `accounts:read`) exposing money accounts (cash drawers, M-PESA tills, wallets, bank accounts — `accountType IS NULL`) with `type`, `currentBalance`, `currency`, and location name, so FinaBill can mirror real payment accounts and live balances instead of deriving them from the Chart of Accounts.
+- **`integrationFinabill.listAccountTransactions`** — new tRPC query (scope: `accounts:read`) returning ledger entries for one money account, oldest-first and cursor-paginated by entry id (`sinceEntryId`/`limit`), rejecting CoA/other-business accounts, so FinaBill can pull real transaction history and derive true opening balances.
+- **`integrationFinabill.upsertAccount`** — new tRPC mutation (scope: `accounts:write`) that creates/updates a Chart of Accounts entry pushed from FinaBill, matched by `externalId` → `accountType`+`code` → `accountType`+`name`, stamping `finabillAccountId`.
+- **Bills & expenses sync endpoints** — `integrationFinabill.listBills` (scope: `bills:read`), `integrationFinabill.upsertBill` (scope: `bills:write`, resolves/creates the supplier and replaces line items), and `integrationFinabill.listExpenses` (scope: `expenses:read`) for bidirectional bill/expense sync with FinaBill.
+- **Connect scopes** — `accounts:write`, `bills:read`, `bills:write`, and `expenses:read` added to `DEFAULT_CONNECT_SCOPES` (and the legacy `read`/`write` aliases) so newly-paired FinaBill connections can sync accounts, bills, and expenses.
+- **Suppliers & bills external linkage** — `suppliers.externalId` and `bills.externalId`/`externalSystem` columns (with a partial unique index on suppliers) let FinaBill-originated records round-trip without duplication (migration `0030_finabill_sync_expansion`).
+- **Extended webhook payloads** — `bill.paid` and `expense.created` outgoing webhooks now carry the full detail (supplier, line items, external linkage) FinaBill needs to materialize the matching expense/bill.
+
+### Changed
+- **`mpesa` merged into `wallet`** — M-PESA money accounts are represented via the `wallet` account type; the standalone `mpesa` type is no longer distinct in the account-type enum.
+
+### Fixed
+- **`upsertBill` wiped the supplier link on update** — an update that omitted supplier info previously set `supplierId` to null, orphaning the existing linkage. The supplier link is now only touched when the push carries supplier info.
 
 ## [1.1.2] - 2026-07-21
 
