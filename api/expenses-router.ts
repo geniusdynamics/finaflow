@@ -470,10 +470,18 @@ export const expensesRouter = createRouter({
 
       });
 
+      let billExternalId: string | null = null;
+      if (input.billId) {
+        const [linkedBill] = await db.select({ externalId: bills.externalId }).from(bills).where(eq(bills.id, input.billId)).limit(1);
+        billExternalId = linkedBill?.externalId ?? null;
+      }
+
       void triggerExpenseCreated(businessId, {
         expenseId,
         amount: input.amount,
         accountId: accountId ?? null,
+        billId: input.billId ?? null,
+        billExternalId,
       });
 
       return { id: expenseId, expenseNumber, success: true };

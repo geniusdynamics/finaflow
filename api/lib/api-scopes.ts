@@ -7,7 +7,8 @@
  * Naming convention: `resource:action` (aligned with RBAC permissions in middleware.ts).
  */
 export const API_SCOPES = {
-  "accounts:read": "Read accounts, chart of accounts",
+  "accounts:read": "Read accounts, chart of accounts, account transactions",
+  "accounts:write": "Create and update chart of accounts entries",
   "suppliers:read": "Read suppliers",
   "suppliers:write": "Create and update suppliers",
   "categories:read": "Read expense categories",
@@ -18,6 +19,9 @@ export const API_SCOPES = {
   "users:write": "Create and update users",
   "sales:write": "Ingest daily sales batches",
   "journal:write": "Create and post journal entries",
+  "bills:read": "Read bills and line items",
+  "bills:write": "Create and update bills",
+  "expenses:read": "Read expenses",
   "webhooks": "Manage webhook subscriptions",
 } as const;
 
@@ -26,6 +30,7 @@ export type ApiScope = keyof typeof API_SCOPES;
 /** Scopes granted by default during Fina Connect pairing. */
 export const DEFAULT_CONNECT_SCOPES: ApiScope[] = [
   "accounts:read",
+  "accounts:write",
   "suppliers:read",
   "suppliers:write",
   "categories:read",
@@ -36,6 +41,9 @@ export const DEFAULT_CONNECT_SCOPES: ApiScope[] = [
   "users:write",
   "sales:write",
   "journal:write",
+  "bills:read",
+  "bills:write",
+  "expenses:read",
   "webhooks",
 ];
 
@@ -49,8 +57,8 @@ export function isValidScope(scope: string): scope is ApiScope {
  * Used during migration to avoid breaking existing API keys.
  */
 export const SCOPE_ALIASES: Record<string, ApiScope[]> = {
-  read: ["accounts:read", "suppliers:read", "categories:read", "business:read", "locations:read", "users:read"],
-  write: ["suppliers:write", "categories:write"],
+  read: ["accounts:read", "suppliers:read", "categories:read", "business:read", "locations:read", "users:read", "bills:read", "expenses:read"],
+  write: ["suppliers:write", "categories:write", "accounts:write", "bills:write"],
 };
 
 /** Resolves a scope (including legacy aliases) to the set of granular scopes it grants. */

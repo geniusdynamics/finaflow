@@ -29,6 +29,7 @@ export interface PayBillResult {
   paymentId: number;
   newBalanceDue: string;
   status: "paid" | "partial";
+  expenseId: number | null;
 }
 
 export async function payBill(input: PayBillInput): Promise<PayBillResult> {
@@ -156,9 +157,10 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
     }
   }
 
+  let createdExpenseId: number | null = null;
   if (!skipExpenseCreation) {
     const expenseNumber = `EXP-BP-${String(paymentId).padStart(6, "0")}`;
-    await tx.insert(expenses).values({
+    const [createdExpense] = await tx.insert(expenses).values({
       locationId,
       businessId,
       categoryId,
@@ -173,7 +175,8 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
       enteredBy,
       refNo: billNumber ?? `BILL-${String(billId).padStart(4, "0")}`,
     } satisfies typeof expenses.$inferInsert).returning();
+    createdExpenseId = createdExpense?.id ?? null;
   }
 
-  return { paymentId, newBalanceDue: newBalance.toFixed(2), status };
+  return { paymentId, newBalanceDue: newBalance.toFixed(2), status, expenseId: createdExpenseId };
 }

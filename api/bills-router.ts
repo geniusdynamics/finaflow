@@ -376,6 +376,9 @@ export const billsRouter = createRouter({
         billId: input.billId,
         amount: input.amount,
         paymentId: result.paymentId,
+        externalId: bill.externalId ?? null,
+        externalSystem: bill.externalSystem ?? null,
+        expenseId: result.expenseId,
       });
 
       return { id: result.paymentId, newBalanceDue: result.newBalanceDue, status: result.status, success: true };

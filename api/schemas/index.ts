@@ -18,6 +18,61 @@ export const listAccountsQuerySchema = z.object({
   ...paginationQuerySchema.shape,
 });
 
+export const listAccountTransactionsQuerySchema = z.object({
+  sinceEntryId: z.coerce.number().int().positive().optional(),
+  limit: z.coerce.number().int().min(1).max(200).default(100),
+});
+
+export const upsertAccountSchema = z.object({
+  externalId: z.string().min(1),
+  name: z.string().min(1).max(100),
+  accountCode: z.string().max(20).optional().nullable(),
+  accountType: z.enum(["asset", "liability", "equity", "revenue", "expense"]),
+  accountSubType: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+// ── Integration: Bills & Expenses ───────────────────────────────
+
+export const updatedSinceQuerySchema = z.object({
+  updatedSince: z.string().optional(),
+  ...paginationQuerySchema.shape,
+});
+
+export const upsertBillSchema = z.object({
+  externalId: z.string().min(1),
+  billNumber: z.string().max(100).optional().nullable(),
+  description: z.string().min(1),
+  amount: z.string(),
+  amountPaid: z.string().optional().nullable(),
+  issueDate: z.string(),
+  dueDate: z.string(),
+  status: z.enum(["draft", "received", "partial", "paid", "void"]),
+  locationId: z.number().int().positive().optional().nullable(),
+  supplier: z
+    .object({
+      externalId: z.string().optional().nullable(),
+      name: z.string().min(1),
+      email: z.string().email().optional().nullable(),
+      phone: z.string().optional().nullable(),
+      taxId: z.string().optional().nullable(),
+    })
+    .optional()
+    .nullable(),
+  items: z
+    .array(
+      z.object({
+        itemName: z.string().min(1).max(255),
+        quantity: z.string().optional().nullable(),
+        unitPrice: z.string(),
+        totalPrice: z.string(),
+        notes: z.string().optional().nullable(),
+      }),
+    )
+    .optional(),
+});
+
 // ── Integration: Suppliers ──────────────────────────────────────────
 
 export const upsertSupplierSchema = z.object({

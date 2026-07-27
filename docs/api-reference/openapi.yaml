@@ -30,6 +30,10 @@ tags:
     description: API key verification
   - name: Accounts
     description: Chart of accounts
+  - name: Bills
+    description: Purchase bills sync
+  - name: Expenses
+    description: Expense listing for pull sync
   - name: Suppliers
     description: Supplier management
   - name: Categories
@@ -86,6 +90,172 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AccountListResponse"
+    post:
+      operationId: upsertAccount
+      summary: Create or update a chart-of-accounts entry
+      description: |
+        Upserts a CoA row by `(externalSystem='finabill', externalId)`, falling back to
+        `accountType` + `accountCode`/name matching. Returns the FinaFlow account id.
+      tags: [Accounts]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["accounts:write"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [externalId, name, accountType]
+              properties:
+                externalId: { type: string }
+                name: { type: string, maxLength: 100 }
+                accountCode: { type: string, maxLength: 20, nullable: true }
+                accountType: { type: string, enum: [asset, liability, equity, revenue, expense] }
+                accountSubType: { type: string, nullable: true }
+                description: { type: string, nullable: true }
+      responses:
+        "200":
+          description: Existing account updated
+        "201":
+          description: Account created
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /accounts/{id}/transactions:
+    get:
+      operationId: listAccountTransactions
+      summary: List ledger entries for a money account
+      description: |
+        Paginated ledger history for one operational (money) account. Cursor-based:
+        pass `sinceEntryId` to fetch entries with an id greater than the cursor.
+      tags: [Accounts]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["accounts:read"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: sinceEntryId
+          in: query
+          schema:
+            type: integer
+          description: Return only ledger entries with id greater than this value
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+      responses:
+        "200":
+          description: Ledger entries (id, entryType, amount, balanceAfter, transactionType, description, refNo, entryDate)
+        "404":
+          description: Account not found for this business
+
+  /bills:
+    get:
+      operationId: listBills
+      summary: List bills with items
+      description: Bills with line items, supplier reference, status, paid amounts, and externalId. Supports `updatedSince` cursor.
+      tags: [Bills]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["bills:read"]
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - name: updatedSince
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Only return bills updated after this timestamp
+      responses:
+        "200":
+          description: Paginated list of bills with items
+    post:
+      operationId: upsertBill
+      summary: Create or update a bill
+      description: |
+        Upserts a bill and its line items by `(externalSystem='finabill', externalId)`.
+        The supplier is resolved by its externalId (created if missing).
+        Status mapping: draft/received → pending, partial → partial, paid → paid, void → cancelled.
+      tags: [Bills]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["bills:write"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [externalId, description, amount, issueDate, dueDate, status]
+              properties:
+                externalId: { type: string }
+                billNumber: { type: string, maxLength: 100, nullable: true }
+                description: { type: string }
+                amount: { type: string }
+                amountPaid: { type: string, nullable: true }
+                issueDate: { type: string, format: date }
+                dueDate: { type: string, format: date }
+                status: { type: string, enum: [draft, received, partial, paid, void] }
+                locationId: { type: integer, nullable: true }
+                supplier:
+                  type: object
+                  nullable: true
+                  required: [name]
+                  properties:
+                    externalId: { type: string, nullable: true }
+                    name: { type: string }
+                    email: { type: string, nullable: true }
+                    phone: { type: string, nullable: true }
+                    taxId: { type: string, nullable: true }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required: [itemName, unitPrice, totalPrice]
+                    properties:
+                      itemName: { type: string, maxLength: 255 }
+                      quantity: { type: string, nullable: true }
+                      unitPrice: { type: string }
+                      totalPrice: { type: string }
+                      notes: { type: string, nullable: true }
+      responses:
+        "200":
+          description: Existing bill updated
+        "201":
+          description: Bill created
+        "400":
+          $ref: "#/components/responses/ErrorResponse"
+
+  /expenses:
+    get:
+      operationId: listExpenses
+      summary: List expenses
+      description: Expenses with category, account, and bill references. Supports `updatedSince` cursor.
+      tags: [Expenses]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["expenses:read"]
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - name: updatedSince
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Only return expenses updated after this timestamp
+      responses:
+        "200":
+          description: Paginated list of expenses
 
   /suppliers:
     get:
@@ -430,8 +600,12 @@ components:
           authorizationUrl: "about:blank"
           scopes:
             "accounts:read": Read accounts
+            "accounts:write": Create/update chart-of-accounts entries
             "suppliers:read": Read suppliers
             "suppliers:write": Create/update suppliers
+            "bills:read": Read bills with items
+            "bills:write": Create/update bills
+            "expenses:read": Read expenses
             "categories:read": Read expense categories
             "categories:write": Create/update expense categories
             "business:read": Read business profile
