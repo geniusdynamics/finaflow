@@ -23,11 +23,12 @@ import { env } from "./lib/env";
 import { hashPassword, verifyPassword } from "./lib/password";
 import { generateCsrfToken } from "./lib/csrf";
 import { logAudit } from "./lib/audit";
-import { isEmailConfigured } from "./lib/email";
+import { isEmailConfiguredAsync } from "./lib/email";
 import { sendLoggedEmail } from "./lib/logged-email";
 import { welcomeEmailHtml, welcomeEmailText, newSignupNotificationHtml, newSignupNotificationText, passwordResetHtml, passwordResetText } from "./lib/email-templates";
+import { createPasswordResetForUser } from "./lib/password-reset";
 import { serialize } from "cookie";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash } from "node:crypto";
 import { TRPCError } from "@trpc/server";
 import { DEFAULT_TRIAL_DAYS, getPlanConfig } from "./lib/subscriptions";
 import { provisionBusiness, seedBusinessAccounting } from "./lib/business-provisioning";
@@ -775,7 +776,7 @@ export const localAuthRouter = createRouter({
 
       // Send welcome email to the new user and notify the super admin.
       try {
-        if (input.email && isEmailConfigured()) {
+        if (input.email && (await isEmailConfiguredAsync())) {
           const loginUrl = env.appUrl;
           await sendLoggedEmail("welcome", {
             to: input.email,
@@ -801,7 +802,7 @@ export const localAuthRouter = createRouter({
           }
 
           // Email notification to the first super admin with an email address.
-          if (isEmailConfigured()) {
+          if (await isEmailConfiguredAsync()) {
             const notifyEmail = superAdminUsers.find((sa) => sa.email)?.email;
             if (notifyEmail) {
               await sendLoggedEmail("new_signup_notification", {
@@ -1096,18 +1097,9 @@ export const localAuthRouter = createRouter({
       const user = userRows[0];
 
       if (user) {
-        const plainToken = randomBytes(32).toString("hex");
-        const tokenHash = createHash("sha256").update(plainToken).digest("hex");
-        const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+        const { resetUrl } = await createPasswordResetForUser(db, user);
 
-        await db.insert(passwordResetTokens).values({
-          userId: user.id,
-          tokenHash,
-          expiresAt,
-        } as typeof passwordResetTokens.$inferInsert);
-
-        if (isEmailConfigured()) {
-          const resetUrl = `${env.appUrl}/reset-password?token=${plainToken}`;
+        if (await isEmailConfiguredAsync()) {
           await sendLoggedEmail("password_reset", {
             to: user.email || normalizedEmail,
             subject: "Reset your Finaflow password",
