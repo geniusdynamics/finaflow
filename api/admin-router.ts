@@ -3,13 +3,15 @@
 import { z } from "zod";
 import { createRouter, adminProcedure } from "./middleware";
 import { getDb } from "./queries/connection";
-import { users, customerAccounts, userSessions, notifications, emailLogs, ownerBroadcasts, businesses } from "@db/schema";
+import { users, customerAccounts, userSessions, notifications, emailLogs, ownerBroadcasts, businesses, userBusinesses } from "@db/schema";
 import { eq, and, or, sql, isNull, desc, gte, lte, type SQL } from "drizzle-orm";
-import { isEmailConfigured } from "./lib/email";
+import { isEmailConfiguredAsync } from "./lib/email";
 import { sendLoggedEmail } from "./lib/logged-email";
 import { ownerBroadcastHtml, ownerBroadcastText } from "./lib/email-templates";
-import { updateEnvVar } from "./lib/update-env";
+import { getSmtpConfig, saveSmtpConfig } from "./lib/smtp-config";
+import { sendPasswordResetEmail } from "./lib/password-reset";
 import { env } from "./lib/env";
+import { TRPCError } from "@trpc/server";
 
 const dateRangeInput = z.object({
   from: z.string().optional(),
@@ -271,14 +273,148 @@ export const adminRouter = createRouter({
       }));
     }),
 
-  getSmtpConfig: adminProcedure.query(() => ({
-    host: env.smtpHost,
-    port: env.smtpPort,
-    user: env.smtpUser,
-    from: env.smtpFrom,
-    hasPassword: !!process.env.SMTP_PASS,
-    isConfigured: isEmailConfigured(),
-  })),
+  getAccountDetail: adminProcedure
+    .input(z.object({ accountId: z.string().min(1).max(100) }))
+    .query(async ({ input }) => {
+      const db = getDb();
+
+      const accountRows = await db.select().from(customerAccounts)
+        .where(and(eq(customerAccounts.accountId, input.accountId), isNull(customerAccounts.deletedAt)))
+        .limit(1);
+      const account = accountRows[0] ?? null;
+
+      if (!account) {
+        return { account: null, businesses: [], users: [] };
+      }
+
+      // Businesses for this account with per-business user counts.
+      const businessRows = await db.select().from(businesses)
+        .where(and(eq(businesses.accountId, input.accountId), isNull(businesses.deletedAt)))
+        .orderBy(desc(businesses.createdAt));
+
+      const businessIds = businessRows.map((b) => b.id);
+      const userCountRows = businessIds.length > 0
+        ? await db.select({
+            businessId: userBusinesses.businessId,
+            count: sql<number>`COUNT(*)::int`,
+          }).from(userBusinesses)
+            .innerJoin(users, eq(userBusinesses.userId, users.id))
+            .where(and(
+              sql`${userBusinesses.businessId} IN (${sql.join(businessIds.map(id => sql`${id}`), sql`, `)})`,
+              eq(userBusinesses.isActive, true),
+              isNull(users.deletedAt),
+            ))
+            .groupBy(userBusinesses.businessId)
+        : [];
+      const userCountMap = new Map(userCountRows.map((row) => [row.businessId, row.count]));
+
+      const businessesData = businessRows.map((b) => ({
+        id: b.id,
+        name: b.name,
+        slug: b.slug,
+        plan: b.plan,
+        subscriptionStatus: b.subscriptionStatus,
+        isActive: b.isActive,
+        createdAt: b.createdAt,
+        userCount: userCountMap.get(b.id) ?? 0,
+      }));
+
+      // All users in the account (by accountId or accountRefId), not deleted.
+      const userRows = await db.select().from(users)
+        .where(and(
+          or(
+            eq(users.accountId, input.accountId),
+            eq(users.accountRefId, account.id),
+          ),
+          isNull(users.deletedAt),
+        ))
+        .orderBy(desc(users.createdAt));
+
+      const userIds = userRows.map((u) => u.id);
+      const membershipRows = userIds.length > 0
+        ? await db.select({
+            userId: userBusinesses.userId,
+            businessId: userBusinesses.businessId,
+            role: userBusinesses.role,
+            businessName: businesses.name,
+          }).from(userBusinesses)
+            .innerJoin(businesses, eq(userBusinesses.businessId, businesses.id))
+            .where(and(
+              sql`${userBusinesses.userId} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`,
+              eq(userBusinesses.isActive, true),
+              isNull(businesses.deletedAt),
+            ))
+        : [];
+
+      const usersData = userRows.map((u) => {
+        const memberships = membershipRows.filter((m) => m.userId === u.id);
+        return {
+          id: u.id,
+          name: u.name,
+          username: u.username,
+          email: u.email,
+          role: u.role,
+          isActive: u.isActive,
+          lastSignInAt: u.lastSignInAt,
+          createdAt: u.createdAt,
+          businessIds: memberships.map((m) => m.businessId),
+          businesses: memberships.map((m) => ({
+            id: m.businessId,
+            name: m.businessName,
+            role: m.role,
+          })),
+        };
+      });
+
+      return {
+        account: {
+          ...account,
+          userCount: usersData.length,
+          businessCount: businessesData.length,
+        },
+        businesses: businessesData,
+        users: usersData,
+      };
+    }),
+
+  sendPasswordReset: adminProcedure
+    .input(z.object({ userId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const rows = await db.select({
+        id: users.id,
+        name: users.name,
+        username: users.username,
+        email: users.email,
+      }).from(users)
+        .where(and(eq(users.id, input.userId), isNull(users.deletedAt)))
+        .limit(1);
+
+      const user = rows[0];
+      if (!user) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "User not found" });
+      }
+
+      return sendPasswordResetEmail({
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        email: user.email,
+      });
+    }),
+
+  getSmtpConfig: adminProcedure.query(async () => {
+    const config = await getSmtpConfig();
+    return {
+      host: config.host,
+      port: config.port,
+      user: config.user,
+      from: config.from,
+      hasPassword: config.hasPassword,
+      isConfigured: config.isConfigured,
+      source: config.source,
+    };
+  }),
 
   updateSmtpConfig: adminProcedure
     .input(z.object({
@@ -286,27 +422,41 @@ export const adminRouter = createRouter({
       port: z.string().min(1).optional(),
       user: z.string().min(1).optional(),
       pass: z.string().min(1).optional(),
-      from: z.string().email().optional(),
+      // Accept either "name@example.com" or display-name "Name <name@example.com>".
+      from: z.string().min(3).max(320).refine(
+        (v) => /^[^<>]*<[^<>@\s]+@[^<>\s]+\.[^<>\s]+>$/.test(v) || /^[^<>@\s]+@[^<>\s]+\.[^<>\s]+$/.test(v),
+        "Invalid from address — expected name@example.com or \"Name <name@example.com>\"",
+      ).optional(),
     }))
     .mutation(async ({ input }) => {
-      if (input.host !== undefined) updateEnvVar("SMTP_HOST", input.host);
-      if (input.port !== undefined) updateEnvVar("SMTP_PORT", input.port);
-      if (input.user !== undefined) updateEnvVar("SMTP_USER", input.user);
-      if (input.pass !== undefined) updateEnvVar("SMTP_PASS", input.pass);
-      if (input.from !== undefined) updateEnvVar("SMTP_FROM", input.from);
-      return { success: true };
+      const result = await saveSmtpConfig({
+        host: input.host,
+        port: input.port,
+        user: input.user,
+        pass: input.pass,
+        from: input.from,
+      });
+      return result;
     }),
 
   sendTestEmail: adminProcedure
     .input(z.object({ to: z.string().email() }))
     .mutation(async ({ input }) => {
+      if (!(await isEmailConfiguredAsync())) {
+        return { delivered: false, skipped: true, error: "SMTP is not configured", logId: null };
+      }
       const result = await sendLoggedEmail("smtp_test", {
         to: input.to,
         subject: "Finaflow SMTP Test",
         text: "This is a test email from your Finaflow admin dashboard.",
         html: "<p>This is a test email from your Finaflow admin dashboard.</p>",
       });
-      return result;
+      return {
+        delivered: result.delivered,
+        skipped: result.skipped,
+        error: result.error,
+        logId: result.logId,
+      };
     }),
 
   getEmailStats: adminProcedure
@@ -373,6 +523,7 @@ export const adminRouter = createRouter({
         status: emailLogs.status,
         createdAt: emailLogs.createdAt,
         sentAt: emailLogs.sentAt,
+        errorMessage: emailLogs.errorMessage,
       }).from(emailLogs)
         .orderBy(desc(emailLogs.createdAt))
         .limit(input?.limit ?? 50)

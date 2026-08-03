@@ -52,5 +52,11 @@ export default defineConfig({
       statements: 80,
     },
     setupFiles: ["api/test/setup.ts"],
+    // Deterministic super-admin account for admin router tests. Set at worker
+    // bootstrap (before setup files and module graph load), because env.ts
+    // snapshots SUPER_ADMIN_ACCOUNT at import time.
+    env: {
+      SUPER_ADMIN_ACCOUNT: "SUPERADMIN-TEST-ACCOUNT",
+    },
   },
 });

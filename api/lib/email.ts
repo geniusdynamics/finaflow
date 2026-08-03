@@ -1,6 +1,8 @@
-// ABOUTME: Sends transactional emails through an SMTP transport configured by environment variables.
+// ABOUTME: Sends transactional emails through an SMTP transport configured by the database
+// ABOUTME: (app_settings, via smtp-config) or, as a fallback, environment variables.
 // ABOUTME: Keeps email delivery optional in development while using real SMTP in configured environments.
 import nodemailer from "nodemailer";
+import { getSmtpConfig, getSmtpPassword, type SmtpConfigInfo } from "./smtp-config";
 
 export type EmailPayload = {
   to: string;
@@ -11,33 +13,62 @@ export type EmailPayload = {
 
 let transporterPromise: Promise<nodemailer.Transporter> | null = null;
 
-function getEmailConfig() {
-  const host = process.env.SMTP_HOST;
-  const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : undefined;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  const from = process.env.SMTP_FROM;
+/**
+ * Legacy synchronous check based purely on environment variables.
+ * Prefer `isEmailConfiguredAsync` in code paths that can await — it also
+ * accounts for database-backed SMTP configuration.
+ */
+export function isEmailConfigured(): boolean {
+  return !!(
+    process.env.SMTP_HOST &&
+    process.env.SMTP_PORT &&
+    process.env.SMTP_USER &&
+    process.env.SMTP_PASS &&
+    process.env.SMTP_FROM
+  );
+}
 
-  if (!host || !port || !user || !pass || !from) {
+export async function isEmailConfiguredAsync(): Promise<boolean> {
+  const config = await getSmtpConfig();
+  return config.isConfigured;
+}
+
+async function getEmailConfig(): Promise<{
+  host: string;
+  port: number;
+  user: string;
+  pass: string;
+  from: string;
+  secure: boolean;
+} | null> {
+  let cfg: SmtpConfigInfo;
+  try {
+    cfg = await getSmtpConfig();
+  } catch (error) {
+    console.warn("[email] failed to resolve SMTP config:", (error as Error).message);
+    cfg = { host: "", port: "", user: "", from: "", hasPassword: false, isConfigured: false, source: "env" };
+  }
+
+  if (!cfg.isConfigured) {
     return null;
   }
 
-  return {
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
-    from,
-  };
-}
+  const port = parseInt(cfg.port, 10) || 587;
+  const pass = cfg.hasPassword ? (await getSmtpPassword()) ?? "" : "";
 
-export function isEmailConfigured(): boolean {
-  return getEmailConfig() !== null;
+  return {
+    host: cfg.host,
+    port,
+    user: cfg.user,
+    pass,
+    from: cfg.from,
+    secure: port === 465,
+  };
 }
 
 async function getTransporter(): Promise<nodemailer.Transporter> {
   if (!transporterPromise) {
-    const config = getEmailConfig();
+    const config = await getEmailConfig();
     if (!config) {
       throw new Error("SMTP is not configured");
     }
@@ -48,7 +79,7 @@ async function getTransporter(): Promise<nodemailer.Transporter> {
         host: config.host,
         port: config.port,
         secure: config.secure,
-        auth: config.auth,
+        auth: { user: config.user, pass: config.pass },
       }),
     );
   }
@@ -56,8 +87,16 @@ async function getTransporter(): Promise<nodemailer.Transporter> {
   return transporterPromise;
 }
 
+/**
+ * Invalidates the cached transporter so the next send picks up fresh SMTP
+ * configuration. Called by the admin SMTP save flow after persisting changes.
+ */
+export function resetEmailTransporter(): void {
+  transporterPromise = null;
+}
+
 export async function sendEmail(payload: EmailPayload): Promise<{ delivered: boolean; skipped: boolean }> {
-  const config = getEmailConfig();
+  const config = await getEmailConfig();
   if (!config) {
     console.warn("[email] SMTP not configured; skipping outbound email", { to: payload.to, subject: payload.subject });
     return { delivered: false, skipped: true };

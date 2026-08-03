@@ -9,12 +9,16 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
 import {
   Users, Building, Mail, TrendingUp, Activity, Search, Send, ShieldCheck, Megaphone,
+  ChevronRight, Pencil, KeyRound, Loader2, AlertCircle, Copy, Check,
 } from "lucide-react";
 
 const COLORS = ["#C73E1D", "#D4A854", "#0288D1", "#2E7D32", "#7B1FA2"];
@@ -54,6 +58,68 @@ function statusColor(status: string): string {
   }
 }
 
+// Account drill-down shapes — mirror the admin.getAccountDetail contract
+// (api/admin-router.ts). The backend worker adds these in parallel.
+type SelectedAccountInfo = {
+  id: number;
+  name: string;
+  accountId: string;
+  plan: string | null;
+  subscriptionStatus: string | null;
+  createdAt: string | Date | null;
+  userCount: number;
+  businessCount: number;
+};
+
+type AccountDetailBusiness = {
+  id: number;
+  name: string;
+  slug: string;
+  plan: string | null;
+  subscriptionStatus: string | null;
+  isActive: boolean;
+  createdAt: string;
+  userCount: number;
+};
+
+type AccountDetailUser = {
+  id: number;
+  name: string | null;
+  username: string;
+  email: string | null;
+  role: string;
+  isActive: boolean;
+  lastSignInAt: string | null;
+  createdAt: string;
+  businessIds: number[];
+  businesses: Array<{ id: number; name: string; role: string | null }>;
+};
+
+type AccountDetailResult = {
+  account: {
+    id: number;
+    accountId: string;
+    name: string;
+    plan: string;
+    maxBusinesses: number;
+    maxUsers: number;
+    maxTransactionsPerMonth: number;
+    features: unknown;
+    subscriptionStatus: string;
+    subscriptionExpiry: string | null;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+    deletedAt: string | null;
+    userCount: number;
+    businessCount: number;
+  } | null;
+  businesses: AccountDetailBusiness[];
+  users: AccountDetailUser[];
+};
+
+type ResetConfirmUser = { id: number; username: string; name: string | null; email: string | null };
+
 export default function Admin() {
   const [dateRange, setDateRange] = useState({ from: "", to: "" });
   const [search, setSearch] = useState("");
@@ -76,23 +142,69 @@ export default function Admin() {
   const { data: notificationAnalytics, isLoading: analyticsLoading } = trpc.admin.getNotificationAnalytics.useQuery();
 
   const updateSmtp = trpc.admin.updateSmtpConfig.useMutation({
-    onSuccess: () => {
-      toast.success("SMTP configuration updated");
+    onSuccess: (res) => {
+      toast.success(`SMTP configuration saved to ${res.source === "database" ? "database" : "environment"}`);
+      setSmtpWarnings(res.warnings ?? []);
       utils.admin.getSmtpConfig.invalidate();
     },
     onError: (err) => toast.error(err.message),
   });
   const sendTestEmail = trpc.admin.sendTestEmail.useMutation({
     onSuccess: (res) => {
-      if (res.delivered) toast.success("Test email sent");
-      else toast.warning(res.skipped ? "Email skipped — SMTP not configured" : "Test email failed");
+      utils.admin.getEmailLogs.invalidate();
+      if (res.delivered) {
+        setTestEmailError(null);
+        toast.success("Test email sent");
+      } else {
+        const title = res.skipped ? "SMTP is not configured" : "Test email failed";
+        const detail = res.error || (res.skipped
+          ? "SMTP is not configured. Save your SMTP settings above before sending a test email."
+          : "Test email failed. Check the SMTP host, port, and credentials, then try again.");
+        setTestEmailError({ title, detail });
+        toast.error(title);
+      }
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => {
+      setTestEmailError({ title: "Test email failed", detail: err.message });
+      toast.error(err.message);
+    },
+  });
+  const sendPasswordReset = trpc.admin.sendPasswordReset.useMutation({
+    onSuccess: (res) => {
+      setPendingResetUserId(null);
+      setResetConfirmUser(null);
+      if (res.delivered) {
+        setResetResult(null);
+        toast.success("Password reset email sent");
+      } else if (res.success) {
+        setResetResult({
+          error: res.error || "Email was not delivered (SMTP may not be configured).",
+          resetUrl: res.resetUrl ?? "",
+        });
+        toast.warning("Reset link created — deliver it manually");
+      } else {
+        setResetResult(null);
+        toast.error(res.error || "Could not send password reset");
+      }
+    },
+    onError: (err) => {
+      setPendingResetUserId(null);
+      setResetConfirmUser(null);
+      toast.error(err.message);
+    },
   });
   const utils = trpc.useUtils();
 
   const [smtpForm, setSmtpForm] = useState({ host: "", port: "", user: "", pass: "", from: "" });
   const [testTo, setTestTo] = useState("");
+  const [smtpWarnings, setSmtpWarnings] = useState<string[]>([]);
+  const [testEmailError, setTestEmailError] = useState<{ title: string; detail: string } | null>(null);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<SelectedAccountInfo | null>(null);
+  const [resetConfirmUser, setResetConfirmUser] = useState<ResetConfirmUser | null>(null);
+  const [pendingResetUserId, setPendingResetUserId] = useState<number | null>(null);
+  const [resetResult, setResetResult] = useState<{ error: string; resetUrl: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [broadcast, setBroadcast] = useState({
     title: "",
     message: "",
@@ -101,7 +213,46 @@ export default function Admin() {
     linkLabel: "",
   });
 
+  const accountDetailQuery = trpc.admin.getAccountDetail.useQuery(
+    { accountId: selectedAccountId ?? "" },
+    { enabled: selectedAccountId !== null },
+  );
+  const accountDetail = accountDetailQuery.data as AccountDetailResult | undefined;
+
   const isSmtpDirty = smtpForm.host || smtpForm.port || smtpForm.user || smtpForm.pass || smtpForm.from;
+
+  function openAccountDetail(account: SelectedAccountInfo) {
+    setSelectedAccount(account);
+    setSelectedAccountId(account.accountId);
+  }
+
+  function closeAccountDetail() {
+    setSelectedAccountId(null);
+    setSelectedAccount(null);
+    setResetResult(null);
+  }
+
+  function editSmtpConfig() {
+    setSmtpForm({
+      host: smtpConfig?.host ?? "",
+      port: smtpConfig?.port ?? "",
+      user: smtpConfig?.user ?? "",
+      pass: "",
+      from: smtpConfig?.from ?? "",
+    });
+  }
+
+  async function copyResetLink() {
+    if (!resetResult?.resetUrl) return;
+    try {
+      await navigator.clipboard.writeText(resetResult.resetUrl);
+      setCopied(true);
+      toast.success("Reset link copied");
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy link — select and copy manually");
+    }
+  }
 
   const sendBroadcast = trpc.admin.sendOwnerBroadcast.useMutation({
     onSuccess: (res) => {
@@ -283,24 +434,42 @@ export default function Admin() {
                       <TableHead>Businesses</TableHead>
                       <TableHead>Users</TableHead>
                       <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {(accountList ?? []).map((a) => (
                       <TableRow key={a.id}>
                         <TableCell>
-                          <div className="font-medium">{a.name ?? a.accountId}</div>
-                          <div className="text-xs text-[#8D8A87]">{a.accountId}</div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openAccountDetail(a)}
+                              className="rounded p-1 text-[#8D8A87] transition-colors hover:bg-[#F5EDE6] hover:text-[#C73E1D]"
+                              title="View details"
+                            >
+                              <ChevronRight className="h-4 w-4" />
+                            </button>
+                            <div>
+                              <div className="font-medium">{a.name ?? a.accountId}</div>
+                              <div className="text-xs text-[#8D8A87]">{a.accountId}</div>
+                            </div>
+                          </div>
                         </TableCell>
                         <TableCell><Badge variant="outline" className="capitalize">{a.plan}</Badge></TableCell>
                         <TableCell><Badge variant="outline" className="capitalize">{a.subscriptionStatus}</Badge></TableCell>
                         <TableCell>{a.businessCount}</TableCell>
                         <TableCell>{a.userCount}</TableCell>
                         <TableCell>{formatDate(a.createdAt)}</TableCell>
+                        <TableCell className="text-right">
+                          <Button variant="outline" size="sm" className="border-[#E8E0D8]" onClick={() => openAccountDetail(a)}>
+                            Details
+                          </Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                     {!accountListLoading && (accountList ?? []).length === 0 && (
-                      <TableRow><TableCell colSpan={6} className="text-center text-[#8D8A87]">No accounts found</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="text-center text-[#8D8A87]">No accounts found</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -439,6 +608,7 @@ export default function Admin() {
                     <TableRow>
                       <TableHead>Type</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Error</TableHead>
                       <TableHead>Time</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -451,11 +621,20 @@ export default function Admin() {
                             {log.status}
                           </Badge>
                         </TableCell>
+                        <TableCell>
+                          {log.status === "failed" && log.errorMessage ? (
+                            <span title={log.errorMessage} className="block max-w-[240px] truncate text-xs text-red-700">
+                              {log.errorMessage}
+                            </span>
+                          ) : (
+                            <span className="text-[#8D8A87]">—</span>
+                          )}
+                        </TableCell>
                         <TableCell>{timeAgo(log.sentAt ?? log.createdAt)}</TableCell>
                       </TableRow>
                     ))}
                     {!emailLogsLoading && (emailLogs ?? []).length === 0 && (
-                      <TableRow><TableCell colSpan={3} className="text-center text-[#8D8A87]">No email logs yet</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={4} className="text-center text-[#8D8A87]">No email logs yet</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -673,6 +852,34 @@ export default function Admin() {
                     <div className="text-xs text-[#8D8A87]">From Address</div>
                     <div className="font-medium">{smtpConfig?.from || "—"}</div>
                   </div>
+                  <div className="rounded-lg bg-[#F5EDE6] p-4">
+                    <div className="text-xs text-[#8D8A87]">Username</div>
+                    <div className="font-medium">{smtpConfig?.user || "—"}</div>
+                  </div>
+                  <div className="rounded-lg bg-[#F5EDE6] p-4">
+                    <div className="text-xs text-[#8D8A87]">Password</div>
+                    <div className="font-medium">{smtpConfig?.hasPassword ? "Set (••••••••)" : "Not set"}</div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-[#F5EDE6] p-4">
+                  <div className="flex items-center gap-2">
+                    <div className="text-xs text-[#8D8A87]">Config Source</div>
+                    <Badge
+                      variant="outline"
+                      className={
+                        smtpConfig?.source === "database"
+                          ? "border-green-200 bg-green-100 text-green-800"
+                          : "border-gray-200 bg-gray-100 text-gray-700"
+                      }
+                    >
+                      {smtpConfig?.source === "database" ? "Database" : "Environment (.env)"}
+                    </Badge>
+                  </div>
+                  <Button variant="outline" size="sm" className="border-[#E8E0D8]" onClick={editSmtpConfig}>
+                    <Pencil className="mr-1 h-4 w-4" />
+                    Edit Configuration
+                  </Button>
                 </div>
 
                 <form onSubmit={saveSmtp} className="space-y-4 rounded-lg border border-[#E8E0D8] p-4">
@@ -692,7 +899,12 @@ export default function Admin() {
                     </div>
                     <div>
                       <Label>Password</Label>
-                      <Input type="password" value={smtpForm.pass} onChange={(e) => setSmtpForm((f) => ({ ...f, pass: e.target.value }))} placeholder={smtpConfig?.hasPassword ? "••••••••" : "Enter password"} />
+                      <Input
+                        type="password"
+                        value={smtpForm.pass}
+                        onChange={(e) => setSmtpForm((f) => ({ ...f, pass: e.target.value }))}
+                        placeholder={smtpConfig?.hasPassword ? "Leave blank to keep current password" : "Enter password"}
+                      />
                     </div>
                     <div className="md:col-span-2">
                       <Label>From Email</Label>
@@ -702,9 +914,20 @@ export default function Admin() {
                   <Button type="submit" disabled={!isSmtpDirty || updateSmtp.isPending} className="bg-[#C73E1D] hover:bg-[#C73E1D]/90">
                     Save SMTP Settings
                   </Button>
+                  {smtpWarnings.length > 0 && (
+                    <Alert className="border-amber-200 bg-amber-50 text-amber-900">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>Saved, but with warnings</AlertTitle>
+                      <AlertDescription>
+                        <ul className="list-inside list-disc space-y-1">
+                          {smtpWarnings.map((warning, index) => <li key={index}>{warning}</li>)}
+                        </ul>
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </form>
 
-                <div className="space-y-2 rounded-lg border border-[#E8E0D8] p-4">
+                <div className="space-y-3 rounded-lg border border-[#E8E0D8] p-4">
                   <h3 className="font-medium">Send Test Email</h3>
                   <div className="flex items-center gap-2">
                     <Input
@@ -715,7 +938,10 @@ export default function Admin() {
                       className="max-w-sm"
                     />
                     <Button
-                      onClick={() => testTo && sendTestEmail.mutate({ to: testTo })}
+                      onClick={() => {
+                        setTestEmailError(null);
+                        if (testTo) sendTestEmail.mutate({ to: testTo });
+                      }}
                       disabled={!testTo || sendTestEmail.isPending}
                       variant="outline"
                       className="border-[#E8E0D8]"
@@ -724,11 +950,203 @@ export default function Admin() {
                       Send
                     </Button>
                   </div>
+                  {testEmailError && (
+                    <Alert variant="destructive" className="border-red-200 bg-red-50 text-red-800">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertTitle>{testEmailError.title}</AlertTitle>
+                      <AlertDescription>{testEmailError.detail}</AlertDescription>
+                    </Alert>
+                  )}
                 </div>
               </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
+
+        <Dialog open={selectedAccountId !== null} onOpenChange={(open) => { if (!open) closeAccountDetail(); }}>
+          <DialogContent className="bg-white max-h-[90vh] overflow-y-auto sm:max-w-4xl">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold text-[#2D2A26]">{selectedAccount?.name ?? "Account Details"}</DialogTitle>
+              <DialogDescription>
+                <span className="font-mono text-sm text-[#8D8A87]">{selectedAccount?.accountId ?? ""}</span>
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-[#E8E0D8] bg-[#F5EDE6] p-4">
+              <div>
+                <div className="text-sm font-semibold text-[#2D2A26]">
+                  {accountDetail?.account?.name ?? selectedAccount?.name ?? "—"}
+                </div>
+                <div className="font-mono text-xs text-[#8D8A87]">
+                  {accountDetail?.account?.accountId ?? selectedAccount?.accountId}
+                </div>
+              </div>
+              <Badge variant="outline" className="capitalize">{accountDetail?.account?.plan ?? selectedAccount?.plan ?? "—"}</Badge>
+              <Badge variant="outline" className="capitalize">{accountDetail?.account?.subscriptionStatus ?? selectedAccount?.subscriptionStatus ?? "—"}</Badge>
+              <div className="text-xs text-[#8D8A87]">
+                Created {formatDate(accountDetail?.account?.createdAt ?? selectedAccount?.createdAt)}
+              </div>
+              <div className="text-xs text-[#8D8A87]">
+                {accountDetail?.account?.userCount ?? selectedAccount?.userCount ?? 0} users ·{" "}
+                {accountDetail?.account?.businessCount ?? selectedAccount?.businessCount ?? 0} businesses
+              </div>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-[#2D2A26]">Businesses</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Plan</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Users</TableHead>
+                    <TableHead>Created</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(accountDetail?.businesses ?? []).map((b) => (
+                    <TableRow key={b.id}>
+                      <TableCell>
+                        <div className="font-medium">{b.name}</div>
+                        <div className="text-xs text-[#8D8A87]">{b.slug}</div>
+                      </TableCell>
+                      <TableCell><Badge variant="outline" className="capitalize">{b.plan ?? "—"}</Badge></TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={b.isActive ? "border-green-200 bg-green-100 text-green-800" : "border-red-200 bg-red-100 text-red-800"}>
+                          {b.isActive ? "Active" : "Disabled"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{b.userCount}</TableCell>
+                      <TableCell>{formatDate(b.createdAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {!accountDetailQuery.isLoading && (accountDetail?.businesses ?? []).length === 0 && (
+                    <TableRow><TableCell colSpan={5} className="text-center text-[#8D8A87]">No businesses</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-[#2D2A26]">Users</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Businesses</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Last Login</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(accountDetail?.users ?? []).map((u) => (
+                    <TableRow key={u.id}>
+                      <TableCell>
+                        <div className="font-medium">{u.name ?? u.username}</div>
+                        <div className="text-xs text-[#8D8A87]">@{u.username}</div>
+                      </TableCell>
+                      <TableCell>
+                        {u.email ? (
+                          <span className="text-[#2D2A26]">{u.email}</span>
+                        ) : (
+                          <Badge variant="outline" className="border-amber-200 bg-amber-100 text-amber-800">NO EMAIL</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="capitalize">{u.role}</TableCell>
+                      <TableCell>
+                        {u.businesses.length > 0 ? u.businesses.map((b) => b.name).join(", ") : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={u.isActive ? "border-green-200 bg-green-100 text-green-800" : "border-gray-200 bg-gray-100 text-gray-700"}>
+                          {u.isActive ? "Active" : "Disabled"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{timeAgo(u.lastSignInAt)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-[#E8E0D8]"
+                          disabled={!u.email || pendingResetUserId !== null}
+                          title={u.email ? undefined : "User has no email address"}
+                          onClick={() => setResetConfirmUser({ id: u.id, username: u.username, name: u.name, email: u.email })}
+                        >
+                          {pendingResetUserId === u.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <KeyRound className="h-4 w-4" />
+                          )}
+                          Send Password Reset
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!accountDetailQuery.isLoading && (accountDetail?.users ?? []).length === 0 && (
+                    <TableRow><TableCell colSpan={7} className="text-center text-[#8D8A87]">No users</TableCell></TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {resetResult && (
+              <Alert variant="destructive" className="border-amber-200 bg-amber-50 text-amber-900">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Password reset not delivered by email</AlertTitle>
+                <AlertDescription className="space-y-2">
+                  <p>{resetResult.error}</p>
+                  {resetResult.resetUrl && (
+                    <div className="flex items-center gap-2">
+                      <Input readOnly value={resetResult.resetUrl} className="font-mono text-xs" />
+                      <Button type="button" variant="outline" size="sm" className="shrink-0 border-[#E8E0D8]" onClick={copyResetLink}>
+                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                        {copied ? "Copied" : "Copy Link"}
+                      </Button>
+                    </div>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" className="border-[#E8E0D8]" onClick={closeAccountDetail}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={resetConfirmUser !== null} onOpenChange={(open) => { if (!open) setResetConfirmUser(null); }}>
+          <AlertDialogContent className="bg-white">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Send Password Reset</AlertDialogTitle>
+              <AlertDialogDescription>
+                Send a password reset to {resetConfirmUser?.name || resetConfirmUser?.username}
+                {resetConfirmUser?.email ? ` (${resetConfirmUser.email})` : ""}? The reset link expires in 60 minutes.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-[#C73E1D] hover:bg-[#C73E1D]/90"
+                disabled={sendPasswordReset.isPending}
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (resetConfirmUser) {
+                    setPendingResetUserId(resetConfirmUser.id);
+                    sendPasswordReset.mutate({ userId: resetConfirmUser.id });
+                  }
+                }}
+              >
+                {sendPasswordReset.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                Send
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </Layout>
   );
