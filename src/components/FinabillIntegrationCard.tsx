@@ -34,7 +34,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
-const TARGET_SYSTEM = "finabill";
+const DEFAULT_TARGET_SYSTEM = "finabill";
 
 function formatDate(value: string | Date | null | undefined): string {
   if (!value) return "Never";
@@ -42,16 +42,23 @@ function formatDate(value: string | Date | null | undefined): string {
   return d.toLocaleString();
 }
 
-export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
+export function FinabillIntegrationCard({
+  canManage,
+  targetSystem = DEFAULT_TARGET_SYSTEM,
+}: {
+  canManage: boolean;
+  /** Which peer the card manages ("finabill" default, "glomish" supported). */
+  targetSystem?: string;
+}) {
   const utils = trpc.useUtils();
   const webhookUrl = useMemo(() => getFinabillWebhookUrl(), []);
 
   const { data: adapters } = trpc.integrations.listAdapters.useQuery();
   const { data: status, isLoading: statusLoading } =
-    trpc.integrations.status.useQuery({ targetSystem: TARGET_SYSTEM });
+    trpc.integrations.status.useQuery({ targetSystem });
   const { data: connection, isLoading: connectionLoading } =
     trpc.integrations.getConnection.useQuery(
-      { targetSystem: TARGET_SYSTEM },
+      { targetSystem },
       { retry: false }
     );
 
@@ -63,7 +70,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [authorizeUrl, setAuthorizeUrl] = useState<string | null>(null);
   const { data: businessStates } = trpc.connect.listBusinessConnectionStates.useQuery(
-    { targetSystem: TARGET_SYSTEM },
+    { targetSystem },
     { enabled: canManage }
   );
   const currentState = businessStates?.states.find(
@@ -75,7 +82,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
       sessionStorage.setItem(`fina_connect_verifier_${res.sessionPublicId}`, res.codeVerifier);
       setPairingCode(res.pairingCode);
       setAuthorizeUrl(res.authorizeUrl);
-      toast.success("Pairing ready. Copy the code or continue to FinaBill.");
+      toast.success("Pairing ready. Copy the code or continue to the partner app.");
     },
     onError: (err) => toast.error(err.message),
   });
@@ -90,9 +97,9 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
 
   const save = trpc.integrations.saveConnection.useMutation({
     onSuccess: () => {
-      toast.success("FinaBill connection saved");
-      utils.integrations.status.invalidate({ targetSystem: TARGET_SYSTEM });
-      utils.integrations.getConnection.invalidate({ targetSystem: TARGET_SYSTEM });
+      toast.success(`${displayName} connection saved`);
+      utils.integrations.status.invalidate({ targetSystem });
+      utils.integrations.getConnection.invalidate({ targetSystem });
       setApiKey("");
       setWebhookSecret("");
     },
@@ -106,9 +113,9 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
 
   const toggle = trpc.integrations.toggleConnection.useMutation({
     onSuccess: (res) => {
-      toast.success(`FinaBill sync ${res.isActive ? "enabled" : "disabled"}`);
-      utils.integrations.status.invalidate({ targetSystem: TARGET_SYSTEM });
-      utils.integrations.getConnection.invalidate({ targetSystem: TARGET_SYSTEM });
+      toast.success(`${displayName} sync ${res.isActive ? "enabled" : "disabled"}`);
+      utils.integrations.status.invalidate({ targetSystem });
+      utils.integrations.getConnection.invalidate({ targetSystem });
     },
     onError: (err) => toast.error(err.message),
   });
@@ -116,8 +123,8 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
   const disconnect = trpc.integrations.disconnect.useMutation({
     onSuccess: (res) => {
       toast.success(res.message);
-      utils.integrations.getConnection.reset({ targetSystem: TARGET_SYSTEM });
-      utils.integrations.status.invalidate({ targetSystem: TARGET_SYSTEM });
+      utils.integrations.getConnection.reset({ targetSystem });
+      utils.integrations.status.invalidate({ targetSystem });
       utils.connect.listBusinessConnectionStates.invalidate();
     },
     onError: (err) => toast.error(err.message),
@@ -131,13 +138,14 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
     onError: (err) => toast.error(err.message),
   });
 
-  const adapter = adapters?.find((a) => a.targetSystem === TARGET_SYSTEM);
+  const adapter = adapters?.find((a) => a.targetSystem === targetSystem);
+  const displayName = adapter?.name ?? (targetSystem === "finabill" ? "FinaBill" : "Glomish");
   const isLoading = statusLoading || connectionLoading;
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     save.mutate({
-      targetSystem: TARGET_SYSTEM,
+      targetSystem,
       targetUrl: targetUrl.trim() || undefined,
       apiKey: apiKey.trim() || undefined,
       webhookSecret: webhookSecret.trim() || undefined,
@@ -158,7 +166,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
     <Card className="border-[#E8E0D8]">
       <CardHeader className="pb-3 flex flex-row items-center justify-between">
         <CardTitle className="font-serif text-lg flex items-center gap-2">
-          <Plug className="h-5 w-5 text-[#C73E1D]" /> FinaBill
+          <Plug className="h-5 w-5 text-[#C73E1D]" /> {displayName}
         </CardTitle>
         {isLoading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -178,7 +186,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-[#8D8A87]">
-          {adapter?.description ?? "Receive daily sales, suppliers, and journal entries from FinaBill."}
+          {adapter?.description ?? `Connect with ${displayName} (daily sales, suppliers, journal).`}
         </p>
 
           {canManage && (
@@ -188,7 +196,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
                   <Plug className="h-4 w-4 text-[#C73E1D]" /> Fina Connect
                 </p>
                 <p className="text-xs text-[#8D8A87]">
-                  Connect FinaBill without pasting API keys. Approve in FinaBill, then both apps store credentials automatically.
+                  Connect {displayName} without pasting API keys. Approve in the other app, then both apps store credentials automatically.
                 </p>
               </div>
 
@@ -196,7 +204,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
                 <div className="space-y-3">
                   <div className="rounded-md border border-green-200 bg-green-50/80 p-3 text-sm text-green-900">
                     <span className="flex items-center gap-1 font-medium">
-                      <CheckCircle2 className="h-4 w-4" /> This business is connected to FinaBill
+                      <CheckCircle2 className="h-4 w-4" /> This business is connected to {displayName}
                       {currentState?.targetBusinessName
                         ? ` (${currentState.targetBusinessName})`
                         : currentState?.targetBusinessId
@@ -204,7 +212,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
                         : ""}
                     </span>
                     <p className="mt-1 text-green-700">
-                      Disconnect to connect a different FinaBill business or revoke access.
+                      Disconnect to connect a different {displayName} business or revoke access.
                     </p>
                   </div>
                   <AlertDialog>
@@ -221,7 +229,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Disconnect FinaBill?</AlertDialogTitle>
+                        <AlertDialogTitle>Disconnect {displayName}?</AlertDialogTitle>
                         <AlertDialogDescription>
                           This will revoke all API keys and remove the connection on both sides.
                           You can re-connect at any time via Fina Connect.
@@ -230,7 +238,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
-                          onClick={() => disconnect.mutate({ targetSystem: TARGET_SYSTEM })}
+                          onClick={() => disconnect.mutate({ targetSystem })}
                           className="bg-red-600 hover:bg-red-700"
                         >
                           Disconnect
@@ -246,10 +254,10 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
                       type="button"
                       className="bg-[#C73E1D]"
                       disabled={createSession.isPending}
-                      onClick={() => createSession.mutate({ mode: "pairing" })}
+                      onClick={() => createSession.mutate({ mode: "pairing", targetSystem })}
                     >
                       {createSession.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      <Plug className="mr-2 h-4 w-4" /> Connect FinaBill
+                      <Plug className="mr-2 h-4 w-4" /> Connect {displayName}
                     </Button>
                     <Button
                       type="button"
@@ -282,7 +290,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
                         </Button>
                       </div>
                       <p className="text-xs text-amber-700">
-                        Copy this code or continue to FinaBill to approve the connection.
+                        Copy this code or continue to {displayName} to approve the connection.
                       </p>
                       <Button
                         type="button"
@@ -292,7 +300,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
                           if (authorizeUrl) window.location.href = authorizeUrl;
                         }}
                       >
-                        <ExternalLink className="mr-2 h-4 w-4" /> Continue to FinaBill
+                        <ExternalLink className="mr-2 h-4 w-4" /> Continue to {displayName}
                       </Button>
                     </div>
                   )}
@@ -317,7 +325,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
                             {s.isConnected ? (
                               <Badge className="gap-1 bg-[#2E7D32]/10 text-[#2E7D32]">
                                 <CheckCircle2 className="h-3 w-3" /> Connected
-                                {s.targetBusinessName ? ` to FinaBill — ${s.targetBusinessName}` : " to FinaBill"}
+                                {s.targetBusinessName ? ` to ${displayName} — ${s.targetBusinessName}` : ` to ${displayName}`}
                               </Badge>
                             ) : (
                               <Badge variant="outline" className="gap-1">
@@ -358,12 +366,12 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
               </Button>
             </div>
             <p className="text-xs text-[#8D8A87]">
-              Paste this URL into FinaBill&apos;s FinaFlow integration settings.
+              Paste this URL into {displayName}&apos;s integration settings.
             </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="finabill-target-url">FinaBill base URL</Label>
+            <Label htmlFor="finabill-target-url">{displayName} base URL</Label>
             <Input
               id="finabill-target-url"
               type="url"
@@ -377,19 +385,19 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
           <div className="space-y-2">
             <Label htmlFor="finabill-api-key">
               <span className="flex items-center gap-1">
-                <KeyRound className="h-3 w-3" /> FinaBill API key
+                <KeyRound className="h-3 w-3" /> {displayName} API key
               </span>
             </Label>
             <Input
               id="finabill-api-key"
               type="password"
-              placeholder={connection ? "Leave unchanged" : "Paste FinaBill API key"}
+              placeholder={connection ? "Leave unchanged" : `Paste ${displayName} API key`}
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               disabled={!canManage}
             />
             <p className="text-xs text-[#8D8A87]">
-              Optional. Create an API key in FinaBill and paste it here to test the outbound connection.
+              Optional. Create an API key in {displayName} and paste it here to test the outbound connection.
             </p>
           </div>
 
@@ -421,7 +429,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
               </Label>
             </div>
             <p className="text-xs text-[#8D8A87]">
-              Copy this secret into FinaBill so it can sign inbound webhooks.
+              Copy this secret into {displayName} so it can sign inbound webhooks.
             </p>
           </div>
 
@@ -435,7 +443,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
                 type="button"
                 variant="outline"
                 disabled={test.isPending || !connection}
-                onClick={() => test.mutate({ targetSystem: TARGET_SYSTEM })}
+                onClick={() => test.mutate({ targetSystem })}
               >
                 {test.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 <RefreshCw className="mr-2 h-4 w-4" /> Test connection
@@ -452,7 +460,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
               variant="outline"
               size="sm"
               disabled={test.isPending}
-              onClick={() => test.mutate({ targetSystem: TARGET_SYSTEM })}
+              onClick={() => test.mutate({ targetSystem })}
             >
               {test.isPending && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
               <RefreshCw className="mr-2 h-3 w-3" /> Test connection
@@ -474,7 +482,7 @@ export function FinabillIntegrationCard({ canManage }: { canManage: boolean }) {
                   id="finabill-toggle"
                   checked={connection.isActive}
                   disabled={toggle.isPending}
-                  onCheckedChange={() => toggle.mutate({ targetSystem: TARGET_SYSTEM })}
+                  onCheckedChange={() => toggle.mutate({ targetSystem })}
                 />
                 <Label htmlFor="finabill-toggle" className="text-sm">
                   {connection.isActive ? "Sync enabled" : "Sync disabled"}

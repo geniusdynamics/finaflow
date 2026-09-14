@@ -20,6 +20,10 @@ export const env = {
   apiUrl: process.env.API_URL || process.env.VITE_API_URL || "http://localhost:3200",
   finabillAppUrl: process.env.FINABILL_APP_URL || "http://localhost:5174",
   finabillApiUrl: process.env.FINABILL_API_URL || "http://localhost:3100",
+  // Glomish peer (salon/beauty-store platform) — Fina Connect sibling
+  glomishAppUrl: process.env.GLOMISH_APP_URL || "http://localhost:3000",
+  glomishApiUrl:
+    process.env.GLOMISH_API_URL || process.env.GLOMISH_APP_URL || "http://localhost:3000",
   systemName: "finaflow" as const,
   bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || "12", 10),
   nhifRate: parseFloat(process.env.NHIF_RATE || "2.75"),

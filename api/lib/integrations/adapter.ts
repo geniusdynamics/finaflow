@@ -10,7 +10,8 @@ export type IntegrationFeature =
   | "daily_sales.ingest"
   | "supplier.push"
   | "journal.push"
-  | "webhook.incoming";
+  | "webhook.incoming"
+  | "fina_connect";
 
 export type IntegrationAdapterMetadata = {
   targetSystem: string;
