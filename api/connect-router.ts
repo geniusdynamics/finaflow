@@ -14,6 +14,7 @@ import {
 } from "./lib/integrations/connect-service";
 import { DEFAULT_CONNECT_SCOPES } from "./lib/api-scopes";
 import { env } from "./lib/env";
+import { assertSafeOutboundUrl } from "./lib/url-guard";
 
 function requireBusinessId(ctx: {
   user?: { currentBusiness?: { id: number } | null; currentBusinessId?: number | null };
@@ -41,6 +42,7 @@ export const connectRouter = createRouter({
         .object({
           scopes: z.array(z.string()).optional(),
           mode: z.enum(["redirect", "pairing"]).optional(),
+          targetSystem: z.string().min(2).max(50).optional(),
         })
         .optional()
     )
@@ -50,6 +52,7 @@ export const connectRouter = createRouter({
         businessId,
         userId: ctx.user!.id,
         scopes: input?.scopes,
+        targetSystem: input?.targetSystem,
       });
     }),
 
@@ -97,18 +100,25 @@ export const connectRouter = createRouter({
         sessionPublicId: z.string().min(8),
         state: z.string().min(8),
         scopes: z.array(z.string()).optional(),
+        initiatorSystem: z.string().min(2).max(50).optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
       const businessId = requireBusinessId(ctx);
       try {
+        // The server POSTs fresh admin-scoped credentials to this URL — never
+        // allow internal/private targets or cleartext http in prod.
+        const safeUrl = await assertSafeOutboundUrl(input.initiatorApiUrl, {
+          allowHttp: process.env.NODE_ENV !== "production",
+        });
         return await approveAsPartner({
-          initiatorApiUrl: input.initiatorApiUrl,
+          initiatorApiUrl: safeUrl.origin,
           sessionPublicId: input.sessionPublicId,
           state: input.state,
           businessId,
           userId: ctx.user!.id,
           scopes: input.scopes,
+          initiatorSystem: input.initiatorSystem,
         });
       } catch (err) {
         throw new TRPCError({

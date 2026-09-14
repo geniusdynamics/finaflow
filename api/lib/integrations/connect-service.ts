@@ -19,7 +19,6 @@ import { DEFAULT_CONNECT_SCOPES } from "../api-scopes";
 
 const SESSION_TTL_MS = 10 * 60 * 1000;
 const SYSTEM = "finaflow" as const;
-const SIBLING = "finabill" as const;
 
 function randomToken(bytes = 32): string {
   return crypto.randomBytes(bytes).toString("base64url");
@@ -181,12 +180,29 @@ export async function upsertSiblingConnection(input: {
   return { id: created.id };
 }
 
+/** Per-partner origin URLs for Fina Connect pairing sessions. */
+function partnerUrlsFor(targetSystem: string): { appUrl: string; apiUrl: string } {
+  if (targetSystem === "glomish") {
+    return {
+      appUrl: env.glomishAppUrl.replace(/\/$/, ""),
+      apiUrl: env.glomishApiUrl.replace(/\/$/, ""),
+    };
+  }
+  return {
+    appUrl: env.finabillAppUrl.replace(/\/$/, ""),
+    apiUrl: env.finabillApiUrl.replace(/\/$/, ""),
+  };
+}
+
 export async function createConnectSession(input: {
   businessId: number;
   userId: number;
   scopes?: string[];
+  /** Partner system to pair with ("finabill" default, "glomish" supported). */
+  targetSystem?: string;
 }) {
   const db = getDb();
+  const targetSystem = input.targetSystem ?? "finabill";
   const pairingCode = generatePairingCode();
   const sessionPublicId = randomToken(18);
   const state = randomToken(24);
@@ -195,8 +211,8 @@ export async function createConnectSession(input: {
   const scopes = input.scopes?.length ? input.scopes : [...DEFAULT_CONNECT_SCOPES];
   const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
 
-  const partnerAppUrl = env.finabillAppUrl.replace(/\/$/, "");
-  const partnerApiUrl = env.finabillApiUrl.replace(/\/$/, "");
+  const { appUrl: partnerAppUrl, apiUrl: partnerApiUrl } =
+    partnerUrlsFor(targetSystem);
   const initiatorAppUrl = env.appUrl.replace(/\/$/, "");
   const initiatorApiUrl = env.apiUrl.replace(/\/$/, "");
 
@@ -207,21 +223,21 @@ export async function createConnectSession(input: {
     .where(
       and(
         eq(integrationConnections.businessId, input.businessId),
-        eq(integrationConnections.targetSystem, SIBLING),
+        eq(integrationConnections.targetSystem, targetSystem),
         isNull(integrationConnections.deletedAt)
       )
     )
     .limit(1);
   if (existingConnection?.isActive) {
     throw new Error(
-      `This business is already connected to ${SIBLING}. Disconnect or switch businesses before connecting again.`
+      `This business is already connected to ${targetSystem}. Disconnect or switch businesses before connecting again.`
     );
   }
 
   await db.insert(integrationConnectSessions).values({
     sessionPublicId,
     initiatorSystem: SYSTEM,
-    partnerSystem: SIBLING,
+    partnerSystem: targetSystem,
     initiatorBusinessId: input.businessId,
     partnerBusinessId: null,
     codeHash: hashCode(pairingCode),
@@ -248,7 +264,7 @@ export async function createConnectSession(input: {
     `&initiator_api=${encodeURIComponent(initiatorApiUrl)}` +
     `&initiator_app=${encodeURIComponent(initiatorAppUrl)}` +
     `&initiator_system=${SYSTEM}` +
-    `&partner_system=${SIBLING}`;
+    `&partner_system=${encodeURIComponent(targetSystem)}`;
 
   return {
     sessionPublicId,
@@ -259,6 +275,7 @@ export async function createConnectSession(input: {
     expiresAt,
     partnerAppUrl,
     partnerApiUrl,
+    targetSystem,
   };
 }
 
@@ -290,9 +307,26 @@ export async function getConnectSessionPublic(sessionPublicId: string) {
     initiatorAppUrl: session.initiatorAppUrl,
     partnerApiUrl: session.partnerApiUrl,
     partnerAppUrl: session.partnerAppUrl,
-    state: session.state,
     codeChallenge: session.codeChallenge,
   };
+}
+
+/**
+ * Full session shape INCLUDING `state` — only for callers that have proven
+ * possession of the pairing code. The public session-id lookup must not leak
+ * it (partner-approve authenticates with sessionPublicId + state, so exposing
+ * state by id alone would collapse pairing security to the session id).
+ */
+export async function getConnectSessionWithState(sessionPublicId: string) {
+  const session = await getConnectSessionPublic(sessionPublicId);
+  if (!session) return null;
+  const db = getDb();
+  const [row] = await db
+    .select({ state: integrationConnectSessions.state })
+    .from(integrationConnectSessions)
+    .where(eq(integrationConnectSessions.sessionPublicId, sessionPublicId))
+    .limit(1);
+  return { ...session, state: row?.state ?? null };
 }
 
 export async function getConnectSessionStatus(sessionPublicId: string, businessId: number) {
@@ -443,18 +477,21 @@ export async function exchangeConnectSession(input: {
     ? (payload.partnerScopes as string[])
     : [...DEFAULT_CONNECT_SCOPES];
 
-  const partnerApiUrl = (session.partnerApiUrl || env.finabillApiUrl).replace(/\/$/, "");
+    const partnerSystem = session.partnerSystem;
+  const partnerApiUrl = (
+    session.partnerApiUrl || partnerUrlsFor(partnerSystem).apiUrl
+  ).replace(/\/$/, "");
   if (!partnerApiUrl) throw new Error("Partner API URL missing");
   const selfApi = env.apiUrl.replace(/\/$/, "");
   if (partnerApiUrl === selfApi) {
     throw new Error(
-      `Partner API URL points at this app (${partnerApiUrl}). Set FINABILL_API_URL on FinaFlow and API_URL on FinaBill to the backend origins.`
+      `Partner API URL points at this app (${partnerApiUrl}). Set the ${partnerSystem} API URL and this app's API_URL to the backend origins.`
     );
   }
 
   const inbound = await createInboundApiKey(
     input.businessId,
-    `FinaBill connect ${new Date().toISOString().slice(0, 10)}`,
+    `${partnerSystem === "finabill" ? "FinaBill" : partnerSystem} connect ${new Date().toISOString().slice(0, 10)}`,
     scopes
   );
 
@@ -467,7 +504,7 @@ export async function exchangeConnectSession(input: {
 
   const connection = await upsertSiblingConnection({
     businessId: input.businessId,
-    targetSystem: SIBLING,
+    targetSystem: partnerSystem,
     targetUrl: partnerApiUrl,
     apiKey: partnerApiKey,
     webhookSecret,
@@ -524,7 +561,7 @@ export async function exchangeConnectSession(input: {
   return {
     success: true,
     connectionId: connection.id,
-    targetSystem: SIBLING,
+    targetSystem: partnerSystem,
     bootstrap: { ok: true },
   };
 }
@@ -550,8 +587,9 @@ export async function completeReverseConnection(input: {
     targetBusinessName: input.targetBusinessName,
   });
 
-  // FinaBill-initiated pairing: register the outgoing event subscription too.
-  if (input.targetSystem === SIBLING) {
+  // Partner-initiated pairing: register the outgoing event subscription too
+  // (both FinaBill and Glomish expose a signed /api/webhooks/finaflow receiver).
+  if (input.targetSystem === "finabill" || input.targetSystem === "glomish") {
     try {
       await ensureSiblingWebhookSubscription(
         input.businessId,
@@ -575,9 +613,10 @@ export async function approveAsPartner(input: {
   scopes?: string[];
 }) {
   const scopes = input.scopes?.length ? input.scopes : [...DEFAULT_CONNECT_SCOPES];
+  const initiatorLabel = input.initiatorSystem ?? "finabill";
   const inbound = await createInboundApiKey(
     input.businessId,
-    `FinaBill connect ${new Date().toISOString().slice(0, 10)}`,
+    `${initiatorLabel === "finabill" ? "FinaBill" : initiatorLabel} connect ${new Date().toISOString().slice(0, 10)}`,
     scopes
   );
   const webhookSecret = randomToken(32);
@@ -698,7 +737,8 @@ export async function resolvePairingCodeOnInitiator(pairingCode: string) {
     if (session.status !== "pending") continue;
     if (session.expiresAt.getTime() < Date.now()) continue;
     if (hashCode(pairingCode) === session.codeHash) {
-      return getConnectSessionPublic(session.sessionPublicId);
+      // Pairing code proven — state is safe to expose now (partner-approve needs it).
+      return getConnectSessionWithState(session.sessionPublicId);
     }
   }
   return null;

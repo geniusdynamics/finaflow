@@ -987,6 +987,9 @@ export function Settings() {
             {/* FinaBill integration */}
             <FinabillIntegrationCard canManage={canManage} />
 
+            {/* Glomish integration */}
+            <FinabillIntegrationCard canManage={canManage} targetSystem="glomish" />
+
             {/* Currency Exchanges */}
             <Card className="border-[#E8E0D8]"><CardHeader className="pb-3">
               <CardTitle className="font-serif text-lg flex items-center gap-2"><DollarSign className="h-5 w-5 text-[#2E7D32]"/>Currency Exchanges</CardTitle>

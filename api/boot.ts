@@ -469,10 +469,16 @@ app.post("/api/connect/complete", connectLimiter, async (c) => {
       return c.json({ error: "partnerBusinessId required" }, 400);
     }
     const targetBusinessId = body.initiatorBusinessId ? Number(body.initiatorBusinessId) : null;
+    if (!body.initiatorSystem || typeof body.initiatorSystem !== "string") {
+      return c.json({ error: "initiatorSystem required" }, 400);
+    }
+    if (!body.initiatorApiUrl || typeof body.initiatorApiUrl !== "string") {
+      return c.json({ error: "initiatorApiUrl required" }, 400);
+    }
     const result = await completeReverseConnection({
       businessId,
-      targetSystem: String(body.initiatorSystem ?? "finabill"),
-      targetUrl: String(body.initiatorApiUrl ?? ""),
+      targetSystem: String(body.initiatorSystem),
+      targetUrl: String(body.initiatorApiUrl),
       apiKey: String(body.initiatorApiKey ?? ""),
       webhookSecret: String(body.webhookSecret ?? ""),
       scopes: Array.isArray(body.scopes) ? body.scopes : undefined,
