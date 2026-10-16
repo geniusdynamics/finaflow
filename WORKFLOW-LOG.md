@@ -77,3 +77,36 @@ Audited the `.trae/specs/subscription-management/` spec against the live codebas
 - `npm run lint`: clean for all touched files (repo-wide pre-existing errors in unrelated files unchanged).
 - `npm run build`: succeeds (vite + esbuild boot bundle).
 - Migration verified applied on the live test DB (tables, enums incl. `subscription_paid`, 10 indexes).
+
+---
+
+## 2026-10-16 — Subscription Management: dev-server + browser verification round
+
+### What was done
+Started the dev server (`npm run dev:app`, vite + Hono on :3200), seeded the demo account via `localAuth.seedDefaults` (account `DEMO` / `finaflow2024`), and walked the feature in the built-in browser with real data created through the live API. Fixes below came out of that pass.
+
+### Environment findings (not code defects, but worth knowing)
+- **The dev database had not applied migration 0031.** `api/boot.ts` has the runtime migration runner commented out (`// import { ensureDatabaseReady }`), so migrations are never auto-applied — not in dev, not in prod. Ran `npm run db:migrate:run` (the repo's `drizzle_schema` ledger runner) to apply it: `[APPLY] 0031_subscription_management.sql … 22 statement(s)`.
+- The pre-existing BILLS/sales calendar content is unbounded by the date range select (legacy behaviour, unchanged).
+
+### Fixes made from the browser pass
+| File | Fix |
+|---|---|
+| `src/pages/Calendar.tsx` | Subscription events now render in their own currency (`formatEventMoney`) — USD subs showed "KES 144.00" |
+| `api/subscriptions-router.ts` | New `monthStats` (per-month `dueCount` / base-currency `total` / payment-netted `amountDue` / `budget`) + new `overdue` list; `pausedCancelledCount` now counts one-time subs; `monthAfter()` replaces the invalid `-31` date bound (Postgres `22008`) |
+| `src/pages/Calendar.tsx` | Added the Wallos-parity **Statistics** panel (3 cards + over-budget warning); month strip now uses `monthStats` for both count and total (mixed-currency + count/total consistency) |
+| `src/features/dashboard/SubscriptionsCard.tsx`, `src/pages/Dashboard.tsx` | Dashboard card now surfaces overdue subscriptions ("1 overdue · Due this week: 0") instead of reporting zero while an overdue exists |
+| `api/__tests__/subscriptions-router.test.ts` | New test: calendar month statistics incl. payment-netted amount due |
+
+### Browser verification performed
+- Login (DEMO account) → dashboard loads; Subscriptions nav entry present.
+- `/subscriptions`: summary strip (KES 10,760/mo, yearly 129,120, due this month 2, overdue 1 — math verified against the data), filter bar, status pills, Cards / Table / Split / Stats views, CSV export buttons (no console errors).
+- Calendar: source toggle Subscriptions / Bills / Both (legend in Both, view+range controls return in Bills), `?section=subscriptions` locked preset, new Statistics panel (1 · KES 8,000.00 · KES 6,800.00 for October 2026), monthly strips with converted totals.
+- Real API actions: created 4 subscriptions, recorded a payment (`paymentId=1, expenseId=75` — expense posting appeared in the dashboard KPIs and as a calendar expense event, and advanced the schedule 20 Oct → 20 Nov), soft-deleted a duplicate, cancelled one with a reason.
+- `/subscriptions?highlight=1` deep link: verified the target card is scrolled into view mid-pulse.
+- Form validation: submitting "Whole business" + "Create expense" without a posting branch was blocked (native required-field error on **Post to branch**) — the rule holds in the UI.
+
+### Notes / not done
+- Native `<select>` elements cannot be driven by the built-in browser tool ("not a text field"), so form submission was completed through the API rather than by clicking through the modal; the modal itself was verified visually.
+- Over-budget warning path was not visually exercised (no active budget plan in the dev DB).
+

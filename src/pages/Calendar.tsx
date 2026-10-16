@@ -10,6 +10,14 @@ import { SegmentedToggle } from "@/components/ui/segmented-toggle";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 
+/** Money label for a calendar event — subscription events render in their own currency. */
+function formatEventMoney(amount: string, currency?: string): string {
+  if (!currency || currency === "KES") return formatKES(amount);
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return `${currency} ${amount}`;
+  return `${currency} ${value.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function Calendar() {
   const [searchParams, setSearchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");
@@ -71,6 +79,14 @@ export function Calendar() {
     {},
     { enabled: sourceMode !== "bills" && canViewSubscriptions },
   );
+
+  // Current-month statistics for the calendar Statistics panel (Wallos calendar-monthly-stats parity).
+  const currentMonthKey = today.slice(0, 7);
+  const currentMonthStat = subStats?.monthStats?.find((m) => m.month === currentMonthKey) ?? null;
+  const currentMonthLabel = new Date(`${currentMonthKey}-01`).toLocaleDateString("en-KE", { month: "long", year: "numeric" });
+  const currentMonthBudget = currentMonthStat?.budget != null ? Number(currentMonthStat.budget) : 0;
+  const currentMonthOverBudget = currentMonthBudget > 0 && Number(currentMonthStat?.total ?? "0") > currentMonthBudget;
+  const overBudgetAmount = (Number(currentMonthStat?.total ?? "0") - currentMonthBudget).toFixed(2);
 
   // Build events
   const billEvents = (billCalendar?.bills ?? []).map((b) => {
@@ -173,6 +189,36 @@ export function Calendar() {
           </div>
         )}
 
+        {/* Calendar statistics for the current month (Wallos calendar-monthly-stats parity) */}
+        {sourceMode !== "bills" && currentMonthStat && (
+          <div className="rounded-xl border border-[#E8E0D8] bg-white p-4" data-testid="calendar-statistics">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="font-serif text-lg font-semibold text-[#2D2A26]">Statistics</h2>
+              <span className="text-xs text-[#8D8A87]">{currentMonthLabel}</span>
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-lg bg-[#F5EDE6]/60 px-4 py-5 text-center">
+                <p className="font-mono text-2xl font-semibold text-[#C73E1D]">{currentMonthStat.dueCount}</p>
+                <p className="mt-1 text-xs font-medium text-[#8D8A87]">Active Subscriptions</p>
+              </div>
+              <div className="rounded-lg bg-[#F5EDE6]/60 px-4 py-5 text-center">
+                <p className="font-mono text-2xl font-semibold text-[#C73E1D]">{formatKES(currentMonthStat.total)}</p>
+                <p className="mt-1 text-xs font-medium text-[#8D8A87]">Total Cost</p>
+              </div>
+              <div className="rounded-lg bg-[#F5EDE6]/60 px-4 py-5 text-center">
+                <p className="font-mono text-2xl font-semibold text-[#C73E1D]">{formatKES(currentMonthStat.amountDue)}</p>
+                <p className="mt-1 text-xs font-medium text-[#8D8A87]">Amount due this month</p>
+              </div>
+            </div>
+            {currentMonthOverBudget && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#D32F2F]/30 bg-[#D32F2F]/5 px-3 py-2 text-sm font-medium text-[#D32F2F]">
+                <AlertTriangle className="h-4 w-4" />
+                Over budget warning ({formatKES(overBudgetAmount)})
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Alert Cards */}
         {sourceMode !== "subscriptions" && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -261,9 +307,14 @@ export function Calendar() {
             const monthIncome = monthEvents.filter(e => e.type === "sale").reduce((sum, e) => sum + parseFloat(e.amount || "0"), 0);
             const monthOutflow = monthEvents.filter(e => e.type === "expense" || e.type === "bill").reduce((sum, e) => sum + parseFloat(e.amount || "0"), 0);
             const monthSubs = monthEvents.filter((e) => e.type === "subscription");
-            const monthSubTotal = monthSubs.reduce((sum, e) => sum + parseFloat(e.amount || "0"), 0);
+            // Base-currency figures from the stats month breakdown (converts mixed currencies and
+            // nets off payments); fall back to the raw event sum outside the stats window.
+            const monthStat = subStats?.monthStats?.find((m) => m.month === monthKey);
+            const monthSubTotal = monthStat
+              ? Number(monthStat.total)
+              : monthSubs.reduce((sum, e) => sum + parseFloat(e.amount || "0"), 0);
             const monthBillTotal = monthEvents.filter((e) => e.type === "bill").reduce((sum, e) => sum + parseFloat(e.amount || "0"), 0);
-            const monthBudget = subStats?.projection.find((p) => p.month === monthKey)?.budget ?? null;
+            const monthBudget = monthStat?.budget ?? null;
             const overBudget = monthBudget !== null && Number(monthBudget) > 0 && monthSubTotal + monthBillTotal > Number(monthBudget);
             return (
             <div key={monthKey}>
@@ -279,7 +330,10 @@ export function Calendar() {
               {monthSubs.length > 0 && (
                 <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#6B4FA8]/20 bg-[#6B4FA8]/5 px-3 py-2 text-xs text-[#2D2A26]">
                   <Repeat className="h-3.5 w-3.5 text-[#6B4FA8]" />
-                  <span className="font-medium">{monthSubs.length} subscription{monthSubs.length === 1 ? "" : "s"} due</span>
+                  <span className="font-medium">
+                    {monthStat ? monthStat.dueCount : monthSubs.length} subscription
+                    {(monthStat ? monthStat.dueCount : monthSubs.length) === 1 ? "" : "s"} due
+                  </span>
                   <span className="text-[#8D8A87]">·</span>
                   <span>
                     <span className="font-mono">{formatKES(monthSubTotal.toFixed(2))}</span> subscriptions +{" "}
@@ -353,7 +407,7 @@ export function Calendar() {
                           event.type === "expense" ? "text-[#D32F2F]" :
                           isSubEvent ? subOverdue ? "text-[#D32F2F]" : "text-[#6B4FA8]" :
                           "text-[#ED6C02]"
-                        }`}>{formatKES(event.amount)}</span>
+                        }`}>{isSubEvent ? formatEventMoney(event.amount, (event as { currency?: string }).currency) : formatKES(event.amount)}</span>
                       )}
                     </CardContent>
                   </Card>

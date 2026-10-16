@@ -15,6 +15,7 @@ export type DueSubscription = {
 
 type SubscriptionsCardProps = {
   dueThisWeek: DueSubscription[];
+  overdue: DueSubscription[];
   activeCount: number;
   monthlyTotal: string;
   currency: string;
@@ -26,10 +27,11 @@ function formatMoney(amount: string, currency: string): string {
   return `${currency} ${formatted}`;
 }
 
-export function SubscriptionsCard({ dueThisWeek, activeCount, monthlyTotal, currency }: SubscriptionsCardProps) {
+export function SubscriptionsCard({ dueThisWeek, overdue, activeCount, monthlyTotal, currency }: SubscriptionsCardProps) {
   if (activeCount === 0) return null;
 
   const dueTotal = dueThisWeek.reduce((sum, s) => sum + Number(s.amount), 0);
+  const rows = [...overdue, ...dueThisWeek].slice(0, 3);
 
   return (
     <Card className="border-[#E8E0D8] bg-white" data-testid="subscriptions-card">
@@ -44,15 +46,21 @@ export function SubscriptionsCard({ dueThisWeek, activeCount, monthlyTotal, curr
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap items-center gap-2 text-sm text-[#2D2A26]" data-testid="subscriptions-due-this-week">
+          {overdue.length > 0 && (
+            <>
+              <span className="font-semibold text-[#D32F2F]">{overdue.length} overdue</span>
+              <span className="text-[#8D8A87]">·</span>
+            </>
+          )}
           <span className="font-medium">Due this week: {dueThisWeek.length}</span>
           <span className="text-[#8D8A87]">·</span>
           <span className="font-mono font-semibold text-[#6B4FA8]">{formatMoney(dueTotal.toFixed(2), currency)}</span>
           <span className="text-[#8D8A87]">·</span>
           <span className="text-xs text-[#8D8A87]">{activeCount} active · {formatMoney(monthlyTotal, currency)}/mo</span>
         </div>
-        {dueThisWeek.length > 0 ? (
+        {rows.length > 0 ? (
           <div className="mt-3 space-y-2">
-            {dueThisWeek.slice(0, 3).map((sub) => (
+            {rows.map((sub) => (
               <div
                 key={sub.id}
                 className={`flex items-center justify-between rounded-lg border p-2.5 ${

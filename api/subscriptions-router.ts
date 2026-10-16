@@ -25,7 +25,7 @@ import {
   suppliers,
   type Subscription,
 } from "@db/schema";
-import { and, asc, desc, eq, inArray, isNull, like, or, count, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, like, lt, or, count, type SQL } from "drizzle-orm";
 import { d, Decimal } from "./lib/decimal";
 import {
   advanceDueDate,
@@ -1045,6 +1045,14 @@ async function computeStats(rows: Subscription[], businessId: number, today: str
   const projection = projectMonths(schedule, 12, today);
 
   const budgetByMonth = await getSubscriptionBudgetByMonth(businessId, rows, projection.map((p) => p.month));
+  const monthStats = await buildMonthStats({
+    rows: decorated.filter((r) => r.status === "active"),
+    rates,
+    base,
+    months: projection.map((p) => p.month),
+    businessId,
+    budgetByMonth,
+  });
   const monthsOverBudget = projection.filter((p) => {
     const budget = budgetByMonth.get(p.month);
     return budget && budget.gt(0) && p.total.gt(budget);
@@ -1058,6 +1066,10 @@ async function computeStats(rows: Subscription[], businessId: number, today: str
     .filter((r) => r.daysUntilDue >= 0 && r.daysUntilDue <= 30)
     .sort((a, b) => a.daysUntilDue - b.daysUntilDue)
     .map((r) => ({ id: r.id, name: r.name, amount: r.amount, currency: r.currency, nextDueDate: r.nextDueDate, daysUntilDue: r.daysUntilDue }));
+  const overdue = active
+    .filter((r) => r.daysUntilDue < 0)
+    .sort((a, b) => a.daysUntilDue - b.daysUntilDue)
+    .map((r) => ({ id: r.id, name: r.name, amount: r.amount, currency: r.currency, nextDueDate: r.nextDueDate, daysUntilDue: r.daysUntilDue }));
   const upcomingCancellations = decorated
     .filter((r) => r.cancellationDate && r.status === "active" && daysBetween(r.cancellationDate, today) >= 0 && daysBetween(r.cancellationDate, today) <= 30)
     .map((r) => ({ id: r.id, name: r.name, cancellationDate: r.cancellationDate as string }));
@@ -1066,7 +1078,7 @@ async function computeStats(rows: Subscription[], businessId: number, today: str
     baseCurrency: base,
     kpis: {
       activeCount,
-      pausedCancelledCount: inactive.length,
+      pausedCancelledCount: decorated.filter((r) => r.status === "paused" || r.status === "cancelled").length,
       monthlyTotal: monthlyTotal.toFixed(2),
       yearlyTotal: yearlyTotal.toFixed(2),
       costPerDay: monthlyTotal.div(30).toFixed(2),
@@ -1096,12 +1108,94 @@ async function computeStats(rows: Subscription[], businessId: number, today: str
       total: p.total.toFixed(2),
       budget: budgetByMonth.get(p.month)?.toFixed(2) ?? null,
     })),
+    monthStats,
     heaviestMonth: heaviest ? { month: heaviest.month, total: heaviest.total.toFixed(2) } : null,
     monthsOverBudget,
     upcoming,
+    overdue,
     upcomingCancellations,
     conversionUnavailable: decorated.filter((r) => !r.isOneTime && r.convertedMonthly === null).length,
   };
+}
+
+/** First day of the month after the given YYYY-MM key (safe exclusive range bound). */
+function monthAfter(monthKey: string): string {
+  const year = Number(monthKey.slice(0, 4));
+  const month = Number(monthKey.slice(5, 7));
+  const next = month === 12 ? { y: year + 1, m: 1 } : { y: year, m: month + 1 };
+  return `${next.y}-${String(next.m).padStart(2, "0")}-01`;
+}
+
+/** Calendar month statistics (Wallos parity): subscriptions to pay, cost, amount still due, budget. */
+export interface CalendarMonthStat {
+  month: string;
+  dueCount: number;
+  total: string;
+  amountDue: string;
+  budget: string | null;
+}
+
+/**
+ * Per-month statistics for the calendar view, in base currency, for active subscriptions.
+ * `dueCount` counts every cycle due that month (one-time included, matching the calendar);
+ * `amountDue` nets off confirmed payments already recorded for that month.
+ */
+async function buildMonthStats(args: {
+  rows: (Subscription & ComputedRow)[];
+  rates: Map<string, Decimal | null>;
+  base: string;
+  months: string[];
+  businessId: number;
+  budgetByMonth: Map<string, Decimal>;
+}): Promise<CalendarMonthStat[]> {
+  const db = getDb();
+  const { rows, rates, months, businessId, budgetByMonth } = args;
+  if (months.length === 0) return [];
+
+  const payments = await db
+    .select({
+      cycleDueDate: subscriptionPayments.cycleDueDate,
+      amount: subscriptionPayments.amount,
+      currency: subscriptionPayments.currency,
+    })
+    .from(subscriptionPayments)
+    .where(
+      and(
+        eq(subscriptionPayments.businessId, businessId),
+        eq(subscriptionPayments.confirmed, true),
+        isNull(subscriptionPayments.deletedAt),
+        gte(subscriptionPayments.cycleDueDate, `${months[0]}-01`),
+        lt(subscriptionPayments.cycleDueDate, monthAfter(months[months.length - 1])),
+      ),
+    );
+  const paidByMonth = new Map<string, Decimal>();
+  for (const payment of payments) {
+    const converted = toBase(d(payment.amount), payment.currency, rates);
+    if (!converted) continue;
+    const key = payment.cycleDueDate.slice(0, 7);
+    paidByMonth.set(key, (paidByMonth.get(key) ?? d(0)).plus(converted));
+  }
+
+  return months.map((month) => {
+    let dueCount = 0;
+    let total = d(0);
+    for (const row of rows) {
+      const dates = occurrencesInRange(row, `${month}-01`, `${month}-31`);
+      const converted = toBase(d(row.amount), row.currency, rates);
+      if (!converted) continue;
+      dueCount += dates.length;
+      total = total.plus(converted.times(dates.length));
+    }
+    const paid = paidByMonth.get(month) ?? d(0);
+    const amountDue = Decimal.max(total.minus(paid), d(0));
+    return {
+      month,
+      dueCount,
+      total: total.toFixed(2),
+      amountDue: amountDue.toFixed(2),
+      budget: budgetByMonth.get(month)?.toFixed(2) ?? null,
+    };
+  });
 }
 
 /**

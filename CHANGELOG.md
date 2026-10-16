@@ -3,6 +3,19 @@
 ## [Unreleased]
 
 ### Added
+- **Calendar statistics panel (Wallos `calendar-monthly-stats` parity)** — the calendar view now shows a **Statistics** block with three cards for the current month (Active Subscriptions · Total Cost · Amount due this month) plus the over-budget warning bar when a `budgetPlans` budget exists. Backed by a new per-month `monthStats` block on `subscriptions.stats` (`month`, `dueCount`, base-currency `total`, payment-netted `amountDue`, `budget`). Files: `api/subscriptions-router.ts`, `src/pages/Calendar.tsx`.
+
+### Fixed
+- **Subscription amounts rendered as KES regardless of currency** — calendar event rows hard-coded `formatKES`, so a USD subscription showed "KES 144.00". Event rows now render in the subscription's own currency (`formatEventMoney`), e.g. "USD 144.00".
+- **Mixed-currency totals in the calendar month strip** — the strip summed raw event amounts across currencies (144 USD + 8,000 KES read as 9,344). It now uses the base-currency `monthStats` figures (real FX conversion), and the due count comes from the same source so the count and total always agree.
+- **Dashboard subscription card hid overdue renewals** — `subscriptions.stats.upcoming` only covers 0–30 days, so an overdue subscription showed as "Due this week: 0" while its OVERDUE badge styling sat unused. `stats` now returns a separate `overdue` list and the card surfaces it ("1 overdue · Due this week: 0"), listing overdue rows first.
+- **Stats KPI "paused/cancelled" count excluded one-time subs** — a cancelled one-time subscription showed as "0 paused/cancelled" next to a visible cancelled card; the count now includes them (savings still exclude one-time, which is correct).
+- **Invalid date literal in month statistics** — the stats query used a `-31` upper bound (`2027-02-31`), which Postgres rejects with `22008`; replaced with an exclusive next-month bound (`monthAfter`).
+
+### Tested (post-UI verification round)
+- Added `autoProvision`/month-statistics coverage in `api/__tests__/subscriptions-router.test.ts` (calendar month counts, converted totals, and payment-netted amount due). Subscription + calendar suites re-run green after the fixes; browser-verified end-to-end against a seeded demo account (cards/table/split/stats views, calendar source toggle, `?section=subscriptions` preset, deep-link pulse, dashboard card, real expense posting from a recorded payment).
+
+### Added
 - **Subscription Management module (P1–P4)** — first-class recurring-cost tracking for business accounts, Wallos-inspired but branch-scoped (no household model):
   - **Data layer** (`db/`): `subscription_cycle` / `subscription_status` / `subscription_posting` enums, `subscriptions` + `subscription_payments` tables (nullable `locationId` = whole business, `postingLocationId` for business-wide posting, unique `(subscriptionId, cycleDueDate)` idempotency guard), `subscription_paid` notification clear reason, `subscription_due_digest` email log type. Migration `db/migrations/0031_subscription_management.sql` (idempotent DDL + `role_permissions` merge so DB-backed role matrices gain the new permissions), registered in `api/test/setup.ts` and `db/migrations/meta/_journal.json`.
   - **Money math** (`api/lib/subscription-math.ts`): Wallos-parity `monthlyNormalized` / `yearlyNormalized`, `advanceDueDate` with month-end clamping, `cycleProgress`, real-due-date `projectMonths`, `parsePositiveAmount` — all decimal.js, 60 unit tests.

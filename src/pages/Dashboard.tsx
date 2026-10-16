@@ -265,6 +265,14 @@ export function Dashboard() {
                   daysUntilDue: s.daysUntilDue,
                 }))
             }
+            overdue={(subscriptionStats?.overdue ?? []).map((s): DueSubscription => ({
+              id: s.id,
+              name: s.name,
+              amount: s.amount,
+              currency: s.currency,
+              nextDueDate: s.nextDueDate,
+              daysUntilDue: s.daysUntilDue,
+            }))}
             activeCount={subscriptionStats?.kpis.activeCount ?? 0}
             monthlyTotal={subscriptionStats?.kpis.monthlyTotal ?? "0.00"}
             currency={subscriptionStats?.baseCurrency ?? "KES"}

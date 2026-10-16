@@ -509,6 +509,40 @@ describe("Subscriptions router", () => {
     expect(paused.rows.every((r) => r.status === "paused")).toBe(true);
   });
 
+  it("exposes calendar month statistics with counts, converted totals and payment-netted amount due", async () => {
+    const sub = await callerOwnerA.subscriptions.create({
+      ...baseSub,
+      name: "Month Stats Sub",
+      amount: "1000.00",
+      cycleUnit: "month",
+      cycleCount: 1,
+      locationId: locA1.id,
+      postingMode: "none",
+      nextDueDate: "2027-08-05",
+    });
+
+    const before = await callerOwnerA.subscriptions.stats({});
+    const aug = before.monthStats.find((m) => m.month === "2027-08");
+    expect(aug).toBeTruthy();
+    expect(aug!.dueCount).toBeGreaterThanOrEqual(1);
+    expect(Number(aug!.total)).toBeGreaterThanOrEqual(1000);
+    expect(Number(aug!.amountDue)).toBeLessThanOrEqual(Number(aug!.total));
+    expect(before.monthStats.length).toBeLessThanOrEqual(12);
+    expect(before.monthStats.every((m) => /^\d{4}-\d{2}$/.test(m.month))).toBe(true);
+
+    // Paying the cycle nets it off "amount due" but not "total".
+    await callerOwnerA.subscriptions.recordPayment({
+      subscriptionId: sub.id,
+      cycleDueDate: "2027-08-05",
+      paymentMethod: "cash",
+      advance: false,
+    });
+    const after = await callerOwnerA.subscriptions.stats({});
+    const augAfter = after.monthStats.find((m) => m.month === "2027-08")!;
+    expect(Number(augAfter.total)).toBeCloseTo(Number(aug!.total), 2);
+    expect(Number(augAfter.amountDue)).toBeCloseTo(Number(aug!.amountDue) - 1000, 2);
+  });
+
   it("auto-provisions budget lines for subscription categories on a draft plan only", async () => {
     const [plan] = await db.insert(budgetPlans).values({ locationId: locA1.id, fiscalYearStart: 2027, period: "monthly", status: "draft" } as never).returning();
     const [bucket] = await db
