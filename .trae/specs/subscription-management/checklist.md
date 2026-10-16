@@ -9,6 +9,8 @@ Run after each phase. Commands per repo conventions.
 - [ ] `npm run build` — succeeds
 - [ ] Migration applies on a fresh DB and on an existing dev DB (idempotent)
 - [ ] `scripts/verify-migrations.ts`-style check passes for the new migration
+- [ ] Migration number is the next free one (highest today `0030_finabill_sync_expansion.sql`) and does not repeat an existing number (repo already has duplicate `0017_`/`0018_`)
+- [ ] No tenant-billing files touched: `api/lib/subscriptions.ts`, `api/lib/account-subscriptions.ts`, `api/lib/subscription-enforcement.ts`, `api/account-subscriptions-router.ts`, `api/__tests__/subscriptions.test.ts`
 
 ## Automated tests
 
@@ -17,6 +19,7 @@ Run after each phase. Commands per repo conventions.
 - [ ] `npx vitest run api/__tests__/subscriptions-sweep.test.ts` — green (P2+)
 - [ ] `npm test` — full suite, no new failures
 - [ ] `db/__tests__/00XX_subscription_migration.test.ts` — green
+- [ ] Coverage thresholds hold (80% lines/functions/statements, 75% branches, api scope)
 
 ## Isolation & security
 
@@ -24,6 +27,8 @@ Run after each phase. Commands per repo conventions.
 - [ ] Branch A user (assigned only to branch A) cannot see or mutate branch B rows
 - [ ] Business-wide (`locationId=null`) rows visible to authorized users across branches, editable only with `subscriptions:manage`
 - [ ] Employee without `subscriptions:manage` gets permission error on create/update/delete (server-side, verified via direct tRPC call, not UI)
+- [ ] Roles with DB-backed `rolePermissions` overrides can be granted the new `subscriptions:*` permissions (merge verified on an existing business)
+- [ ] Sweep-created notifications only land on eligible users of the same business/branch scope — no rows for unrelated users
 - [ ] CSRF rejection verified on `subscriptions.create` without token
 - [ ] Rate limiter returns 429 past burst threshold
 - [ ] Audit rows written for create/update/delete/renew/payment with correct actor + business
@@ -36,6 +41,8 @@ Run after each phase. Commands per repo conventions.
 - [ ] Double payment for same cycle rejected by unique guard
 - [ ] Mixed-currency totals convert via `getRate` and match hand-computed values (mocked rate)
 - [ ] `postingMode='none'` creates no expense/bill
+- [ ] Business-wide subscription posts expense/bill to `postingLocationId`; branch-pinned subscription posts to `locationId`; both NOT NULL constraints on `expenses.locationId`/`bills.locationId` respected
+- [ ] Business-wide + `postingMode != "none"` without `postingLocationId` rejected at create/update
 
 ## Calendar toggle (headline)
 
@@ -48,17 +55,17 @@ Run after each phase. Commands per repo conventions.
 
 ## Notifications (P2+)
 
-- [ ] Due-soon notification fires exactly once per subscription per cycle (run sweep twice)
+- [ ] Due-soon notification fires exactly once per user per subscription per cycle (run sweep twice)
 - [ ] Due-today re-highlights the same row (no duplicate)
-- [ ] Overdue escalates info→warning→critical correctly at thresholds
-- [ ] Payment clears/archives pending notifications for that subscription
+- [ ] Overdue escalates `warning` → `critical` at 3 days (no info stage)
+- [ ] Payment clears/archives pending notifications for that subscription for all users
 - [ ] Unread badge counts include subscription notifications; banners respect existing rules
 
 ## UX / visual parity
 
 - [ ] KPI cards, donuts, and forecast chart match the Wallos reference screenshots in structure (values differ by data)
 - [ ] Cards/Table/Split views all render with 0, 1, and 50+ subscriptions (empty states included)
-- [ ] Forms validate and surface `toast` errors; "Whole business" persists `locationId=null`
+- [ ] Forms validate and surface `toast` errors; "Whole business" persists `locationId=null`; "Post to branch" shown and required when posting is enabled
 - [ ] Mobile: toggle row scrollable, 44px+ touch targets, tables degrade gracefully
 
 ## Docs
