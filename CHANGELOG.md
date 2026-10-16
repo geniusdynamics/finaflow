@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- **Subscription management spec** — detailed implementation spec for a business-oriented (non-household) subscription module inspired by Wallos: branch-scoped subscription registry with lifecycle (pause/cancel/replace), Wallos-parity cycle math (monthly normalization, progress, 12-month projection), calendar hub type toggle (Subscriptions/Bills/Both), payment history with transactional expense/bill posting, due-soon/overdue notification sweep, and stats (KPIs, category + branch donuts, forecast vs budget). Docs: `.trae/specs/subscription-management/{spec,tasks,checklist}.md`. No application code changed in this batch.
+
 ### Fixed
 - **Local-auth login bypass for passwordless users** — `localAuth.login` now rejects users with no `passwordHash` instead of skipping verification and logging them in with any password (`api/local-auth-router.ts`).
 - **Unauthenticated business PII exposure in `lookupAccount`** — the endpoint now returns only the minimal public fields (`id`, `accountId`, `name`) instead of the full business row (`kraPin`, `email`, `phone`, plan/limits) (`api/local-auth-router.ts`).
