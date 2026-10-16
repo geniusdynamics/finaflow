@@ -41,3 +41,6 @@ build/
 coverage/
 .nyc_output/
 .kilo/kilo.json
+
+# OpenChamber browser-tool artifacts (screenshots)
+.openchamber/
