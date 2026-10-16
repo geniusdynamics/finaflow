@@ -26,6 +26,8 @@ import {
   MobileWalletSummaryCard,
   TrendKpiCard,
   BillsPipelineCard,
+  SubscriptionsCard,
+  type DueSubscription,
   TodayStrip,
 } from "@/features/dashboard";
 
@@ -41,6 +43,7 @@ export function Dashboard() {
   const canPayroll = hasAnyPermission(permContext, [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_PROCESS]);
   const canAccounts = hasAnyPermission(permContext, [PERMISSIONS.ACCOUNTS_VIEW, PERMISSIONS.ACCOUNTS_MANAGE]);
   const canViewBills = hasPermission(permContext, PERMISSIONS.BILLS_VIEW);
+  const canViewSubscriptions = hasPermission(permContext, PERMISSIONS.SUBSCRIPTIONS_VIEW);
 
   const [dateRange, setDateRange] = useState(() => ({
     from: getLocalDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)),
@@ -52,6 +55,7 @@ export function Dashboard() {
     dateTo: dateRange.to,
   });
   const { data: alerts } = trpc.dashboard.alerts.useQuery();
+  const { data: subscriptionStats } = trpc.subscriptions.stats.useQuery({}, { enabled: canViewSubscriptions });
   const { data: cashflowTrend } = trpc.dashboard.cashflowTrend.useQuery({
     dateFrom: dateRange.from,
     dateTo: dateRange.to,
@@ -243,6 +247,27 @@ export function Dashboard() {
             overdue={alerts?.overdueBills ?? []}
             upcoming7={alerts?.upcomingBills7 ?? []}
             upcoming30={alerts?.upcomingBills30 ?? []}
+          />
+        )}
+
+        {/* Upcoming subscription renewals */}
+        {canViewSubscriptions && (
+          <SubscriptionsCard
+            dueThisWeek={
+              (subscriptionStats?.upcoming ?? [])
+                .filter((s) => s.daysUntilDue <= 7)
+                .map((s): DueSubscription => ({
+                  id: s.id,
+                  name: s.name,
+                  amount: s.amount,
+                  currency: s.currency,
+                  nextDueDate: s.nextDueDate,
+                  daysUntilDue: s.daysUntilDue,
+                }))
+            }
+            activeCount={subscriptionStats?.kpis.activeCount ?? 0}
+            monthlyTotal={subscriptionStats?.kpis.monthlyTotal ?? "0.00"}
+            currency={subscriptionStats?.baseCurrency ?? "KES"}
           />
         )}
 

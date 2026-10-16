@@ -34,6 +34,8 @@ tags:
     description: Purchase bills sync
   - name: Expenses
     description: Expense listing for pull sync
+  - name: Subscriptions
+    description: Subscription renewals and payment history
   - name: Suppliers
     description: Supplier management
   - name: Categories
@@ -256,6 +258,107 @@ paths:
       responses:
         "200":
           description: Paginated list of expenses
+
+  /subscriptions:
+    get:
+      operationId: listSubscriptions
+      summary: List subscriptions
+      description: Recurring subscriptions with cycle, due date, and lifecycle status. Supports `updatedSince` cursor.
+      tags: [Subscriptions]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["subscriptions:read"]
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - name: updatedSince
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Only return subscriptions updated after this timestamp
+      responses:
+        "200":
+          description: Paginated list of subscriptions
+
+  /subscriptions/payments:
+    get:
+      operationId: listSubscriptionPayments
+      summary: List subscription payments
+      description: Payment history for subscriptions (pending rows have `paidDate: null` and `confirmed: false`). Supports `updatedSince` cursor.
+      tags: [Subscriptions]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["subscriptions:read"]
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - name: updatedSince
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Only return payments updated after this timestamp
+      responses:
+        "200":
+          description: Paginated list of subscription payments
+
+  /subscriptions/{id}/payments:
+    post:
+      operationId: recordSubscriptionPayment
+      summary: Record a subscription payment
+      description: |
+        Records a payment for one subscription cycle (idempotent per `cycleDueDate`).
+        Posts to accounting per the subscription's `postingMode`. Repeats for the same
+        cycle return `409 CONFLICT`.
+      tags: [Subscriptions]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["subscriptions:write"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paymentMethod]
+              properties:
+                paymentMethod:
+                  type: string
+                  enum: [cash, wallet, bank_transfer, card]
+                amount:
+                  type: string
+                  description: "Payment amount as decimal string (defaults to the subscription amount)"
+                cycleDueDate:
+                  type: string
+                  format: date
+                  description: "Cycle being paid (defaults to the subscription's nextDueDate)"
+                paidDate:
+                  type: string
+                  format: date
+                accountId:
+                  type: integer
+                reference:
+                  type: string
+                notes:
+                  type: string
+                advance:
+                  type: boolean
+                  default: true
+                  description: Advance the subscription schedule one cycle when paying the current cycle
+      responses:
+        "201":
+          description: Payment recorded
+        "404":
+          $ref: "#/components/responses/ErrorResponse"
+        "409":
+          description: Payment for this cycle already recorded
 
   /suppliers:
     get:
@@ -614,6 +717,8 @@ components:
             "users:write": Create/update users
             "sales:write": Ingest daily sales
             "journal:write": Create/post journal entries
+            "subscriptions:read": Read subscriptions and payment history
+            "subscriptions:write": Record subscription payments
             "webhooks": Manage webhooks
 
   parameters:

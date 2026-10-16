@@ -22,6 +22,8 @@ export const API_SCOPES = {
   "bills:read": "Read bills and line items",
   "bills:write": "Create and update bills",
   "expenses:read": "Read expenses",
+  "subscriptions:read": "Read subscriptions and subscription payment history",
+  "subscriptions:write": "Record subscription payments",
   "webhooks": "Manage webhook subscriptions",
 } as const;
 

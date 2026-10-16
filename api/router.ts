@@ -19,6 +19,7 @@ import { feedbackRouter } from "./feedback-router";
 import { inquiryRouter } from "./inquiry-router";
 import { paymentMethodsRouter } from "./payment-methods-router";
 import { budgetsRouter } from "./budgets-router";
+import { subscriptionsRouter } from "./subscriptions-router";
 import { reportsRouter } from "./reports-router";
 import { alertsRouter } from "./alerts-router";
 import { payrollSettingsRouter } from "./payroll-settings-router";
@@ -83,6 +84,7 @@ export const appRouter = createRouter({
   debts: debtsRouter,
   leads: leadsRouter,
   budgets: budgetsRouter,
+  subscriptions: subscriptionsRouter,
 });
 
 export type AppRouter = typeof appRouter;

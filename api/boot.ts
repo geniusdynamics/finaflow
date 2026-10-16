@@ -14,10 +14,12 @@ import { createContext } from "./context";
 import { env } from "./lib/env";
 import { securityHeaders } from "./lib/security-headers";
 import { csrfProtection } from "./lib/csrf";
-import { apiLimiter, loginLimiter, lookupAccountLimiter, connectLimiter } from "./lib/rate-limit";
+import { apiLimiter, loginLimiter, lookupAccountLimiter, connectLimiter, subscriptionWriteLimiter } from "./lib/rate-limit";
 import { getDb, closePool } from "./queries/connection";
 import { sql } from "drizzle-orm";
 import { processTrialLifecycle, TRIAL_JOB_INTERVAL_MS } from "./lib/subscriptions";
+import { runSubscriptionSweep, SUBSCRIPTION_SWEEP_INTERVAL_MS } from "./lib/subscription-sweep";
+import { sendSubscriptionDigestEmails } from "./lib/subscription-digest";
 import { shouldStartStandaloneServer } from "./lib/server-runtime";
 import { walletRegistry } from "./lib/mobile-wallet/provider-registry";
 import { mpesaProvider } from "./lib/mobile-wallet/providers/mpesa-provider";
@@ -425,6 +427,21 @@ async function trpcRateLimiter(c: any, next: any) {
         if (paths.has("localAuth.lookupAccount")) {
           return lookupAccountLimiter(c, next);
         }
+        const subscriptionWrites = [
+          "subscriptions.create",
+          "subscriptions.update",
+          "subscriptions.delete",
+          "subscriptions.clone",
+          "subscriptions.pause",
+          "subscriptions.resume",
+          "subscriptions.cancel",
+          "subscriptions.renew",
+          "subscriptions.recordPayment",
+          "subscriptions.confirmPayment",
+        ];
+        if (subscriptionWrites.some((p) => paths.has(p))) {
+          return subscriptionWriteLimiter(c, next);
+        }
       }
     } catch {
       // body parse failed, fall through to general limiter
@@ -619,17 +636,38 @@ async function runTrialLifecycleJob() {
   }
 }
 
+async function runSubscriptionSweepJob() {
+  try {
+    const result = await runSubscriptionSweep(getDb());
+    const activity = Object.values(result).reduce((a, b) => a + b, 0);
+    if (activity > 0) {
+      console.log("[subscriptions] sweep processed", result);
+    }
+    await sendSubscriptionDigestEmails(getDb());
+  } catch (error) {
+    console.error("[subscriptions] sweep job failed", error);
+    Sentry.captureException(error);
+  }
+}
+
 const runStandaloneServer = shouldStartStandaloneServer({
   DEV: process.env.NODE_ENV === "development",
 });
 
 let trialLifecycleTimer: NodeJS.Timeout | null = null;
+let subscriptionSweepTimer: NodeJS.Timeout | null = null;
 if (runStandaloneServer) {
   trialLifecycleTimer = setInterval(() => {
     void runTrialLifecycleJob();
   }, TRIAL_JOB_INTERVAL_MS);
   trialLifecycleTimer.unref();
   void runTrialLifecycleJob();
+
+  subscriptionSweepTimer = setInterval(() => {
+    void runSubscriptionSweepJob();
+  }, SUBSCRIPTION_SWEEP_INTERVAL_MS);
+  subscriptionSweepTimer.unref();
+  void runSubscriptionSweepJob();
 }
 
 // ── Startup initialization ──────────────────────────────────────────
@@ -685,6 +723,9 @@ const shutdown = async (signal: string) => {
 
   if (trialLifecycleTimer) {
     clearInterval(trialLifecycleTimer);
+  }
+  if (subscriptionSweepTimer) {
+    clearInterval(subscriptionSweepTimer);
   }
 
   if (!server) {

@@ -72,6 +72,9 @@ export const loginLimiter = createRateLimiter(60 * 1000, 10);
 export const apiLimiter = createRateLimiter(60 * 1000, 500);
 export const lookupAccountLimiter = createEndpointRateLimiter("lookupAccount", { windowMs: 60 * 1000, max: 120 });
 
+/** Rate limiter for subscription write procedures (120 req/min per IP). */
+export const subscriptionWriteLimiter = createEndpointRateLimiter("subscription-write", { windowMs: 60 * 1000, max: 120 });
+
 /** Rate limiter for the external /api/v1/ integration endpoints (100 req/min per IP). */
 export const integrationLimiter = createEndpointRateLimiter("integration", { windowMs: 60 * 1000, max: 100 });
 

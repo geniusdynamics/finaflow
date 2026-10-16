@@ -206,7 +206,7 @@ New router mounted in `api/router.ts` as `subscriptions`.
 | `subscriptions.calendar` | query | `{ dateFrom, dateTo, locationId?, scope? }` → events `{ id, name, amount, currency, date, type: "subscription", isOverdue, branchName }`. Merged client-side with bill data: `dashboard.billCalendar` (`api/dashboard-router.ts:187-201`) returns raw rows `{ bills, recurring, today }` and the Calendar page builds event objects today — keep that split (subscription events pre-shaped is fine, but merge happens in `Calendar.tsx`, matching how `bills`/`recurring` are consumed at `Calendar.tsx:50-53`). |
 
 **Permissions:** add to `api/middleware.ts:27` (PERMISSIONS):
-`SUBSCRIPTIONS_VIEW: "subscriptions:view"`, `SUBSCRIPTIONS_MANAGE: "subscriptions:manage"`, `SUBSCRIPTIONS_PAY: "subscriptions:pay"`. Defaults: owner/admin/manager = all three; employee = view + pay; viewer = view. Mirror in `src/lib/permissions.ts` and add a "Subscriptions" group to `PERMISSION_GROUPS` in `src/pages/Users.tsx:67-89`.
+`SUBSCRIPTIONS_VIEW: "subscriptions:view"`, `SUBSCRIPTIONS_MANAGE: "subscriptions:manage"`, `SUBSCRIPTIONS_PAY: "subscriptions:pay"`. Defaults (**decision 2026-10-16, overrides the earlier draft**): owner/admin/manager = all three; **employee = none** (the repo's employee role is deliberately minimal — `ROLE_PERMISSIONS.employee` is only `sales:create`, "Sole permission" comment, `api/middleware.ts:121` — do not expand it); **viewer = `subscriptions:view` only**. Mirror in `src/lib/permissions.ts` and add a "Subscriptions" group to `PERMISSION_GROUPS` in `src/pages/Users.tsx:67-89`.
 
 ⚠️ **Role-permission DB overrides:** the hardcoded `ROLE_PERMISSIONS` in `api/middleware.ts:79-135` is only the fallback — real permissions can be stored per-business in the `rolePermissions` table (`db/schema.ts:172`, loaded via `loadRolePermissionsFromDb`, `api/middleware.ts:151`). The phase migration/rollout must **merge the three new permissions into existing `rolePermissions` rows** (or ship an admin-visible grant step); otherwise existing businesses with custom role config get zero subscription access. Frontend note: `src/lib/permissions.ts` currently has a frontend-only `budgets:view` asymmetry vs the backend — do not replicate that pattern; keep both sides identical.
 
@@ -371,3 +371,13 @@ Command set (repo conventions): `npm test`, `npx vitest run api/__tests__/subscr
 5. **`locationId=0` sentinel** for "whole business only" filter — **resolved by 2026-10-16 audit: no sentinel; explicit `scope: "all" | "main" | "branch"` param (§5).** Reopen only if API consumers prefer otherwise.
 6. **Notification fan-out recipients** — spec assumes users with `subscriptions:view` + branch assignment (+ `createdBy`). Alternative: notify only `createdBy` + owner/admins. Decide before P2 sweep work. (Note `subscriptions_default_notify_days` etc. are per-business, not per-user.)
 7. **Business-wide posting location** — spec assumes a required `postingLocationId` on the subscription. Alternative: prompt for the branch at "Mark paid" time. The column approach (recommended) keeps auto-renew confirmation one click.
+
+## 12. Bank-feed matching (design note — implementation deferred)
+
+Not implemented in this pass (P4 marks it design-only). Sketch for when it lands, on top of the existing integration plumbing (`api/lib/mobile-wallet/`, `api/lib/webhook-dispatcher.ts`, v1 REST):
+
+- **Sources**: imported wallet/M-PESA transactions (`mobileWalletTransactions`) today; bank statement lines later via the v1 ingestion path.
+- **Candidate set**: `subscriptionPayments` rows with `confirmed=false` (auto-renew pendings) plus active subscriptions whose `nextDueDate` falls within ±5 days of the transaction date.
+- **Scoring**: exact/near amount match (±1% or ±KES 50), currency match, date proximity, and reference/name similarity (transaction reference vs `subscriptions.name`/`vendorName`). Score ≥ threshold ⇒ auto-suggest; below ⇒ show in a "possible matches" strip only.
+- **Action**: a suggested match opens the existing `confirmPayment` flow (which posts per `postingMode` and clears notifications) — matching never writes to the ledger by itself.
+- **Schema (when built)**: `subscriptionPayments.matchConfidence` (numeric), `matchedTransactionId` (FK), `matchedAt` (timestamp) + a `subscription_payment_matched` webhook event via `webhook-dispatcher`.

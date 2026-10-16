@@ -37,6 +37,7 @@ const BusinessDetails = lazy(() => import("./pages/BusinessDetails").then(m => (
 const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard").then(m => ({ default: m.PartnerDashboard })));
 const Profile = lazy(() => import("./pages/Profile").then(m => ({ default: m.Profile })));
 const Budgets = lazy(() => import("./pages/Budgets"));
+const Subscriptions = lazy(() => import("./pages/Subscriptions").then(m => ({ default: m.Subscriptions })));
 const Admin = lazy(() => import("./pages/Admin"));
 
 function SuspendedPage({ children }: { children: React.ReactNode }) {
@@ -71,6 +72,7 @@ export default function App() {
         <Route path="/calendar" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="calendar:view"><Calendar /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/reports" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="reports:view"><Reports /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/budgets" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="budgets:view"><Budgets /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
+        <Route path="/subscriptions" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="subscriptions:view"><Subscriptions /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/journal-entries" element={<Navigate to="/accounts?section=journal-entries" replace />} />
         <Route path="/users" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="users:manage"><Users /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
         <Route path="/settings" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><Settings /></ProtectedPage></SuspendedPage></ErrorBoundary>} />

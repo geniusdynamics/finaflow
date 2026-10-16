@@ -38,6 +38,9 @@ export const actionEnum = pgEnum("action", ["CREATE", "UPDATE", "DELETE", "RESTO
 export const severityEnum = pgEnum("severity", ["info", "warning", "critical"]);
 export const paymentMethod2Enum = pgEnum("paymentMethod2", ["cash", "mpesa", "bank_transfer", "card", "wallet"]);
 export const billStatusEnum = pgEnum("billStatus", ["pending", "partial", "paid", "overdue", "cancelled"]);
+export const subscriptionCycleEnum = pgEnum("subscription_cycle", ["day", "week", "month", "year"]);
+export const subscriptionStatusEnum = pgEnum("subscription_status", ["active", "paused", "cancelled", "expired"]);
+export const subscriptionPostingEnum = pgEnum("subscription_posting", ["none", "expense", "bill"]);
 export const payrollStatusEnum = pgEnum("payrollStatus", ["open", "processing", "paid", "cancelled"]);
 export const advanceStatusEnum = pgEnum("advanceStatus", ["pending", "approved", "partially_repaid", "repaid", "cancelled"]);
 export const leadStatusEnum = pgEnum("leadStatus", ["new", "contacted", "converted", "declined"]);
@@ -55,6 +58,7 @@ export const emailLogTypeEnum = pgEnum("email_log_type", [
   "owner_broadcast",
   "smtp_test",
   "lead_invitation",
+  "subscription_due_digest",
 ]);
 export const emailStatusEnum = pgEnum("email_status", ["pending", "sent", "failed", "skipped"]);
 
@@ -551,6 +555,86 @@ export const billPayments = pgTable("bill_payments", {
 }));
 
 export type BillPayment = typeof billPayments.$inferSelect;
+
+// Subscriptions (recurring software/service costs, branch-scoped or business-wide)
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }).references(() => locations.id, { onDelete: "set null" }),
+  postingLocationId: bigint("postingLocationId", { mode: "number" }).references(() => locations.id, { onDelete: "set null" }),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: text("description"),
+  vendorId: bigint("vendorId", { mode: "number" }).references(() => suppliers.id, { onDelete: "set null" }),
+  categoryId: bigint("categoryId", { mode: "number" }).references(() => expenseCategories.id, { onDelete: "set null" }),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 3 }).default("KES").notNull(),
+  cycleUnit: subscriptionCycleEnum("cycleUnit").notNull(),
+  cycleCount: integer("cycleCount").default(1).notNull(),
+  isOneTime: boolean("isOneTime").default(false).notNull(),
+  startDate: date("startDate").notNull(),
+  nextDueDate: date("nextDueDate").notNull(),
+  autoRenew: boolean("autoRenew").default(false).notNull(),
+  status: subscriptionStatusEnum("status").default("active").notNull(),
+  cancellationDate: date("cancellationDate"),
+  cancelledAt: timestamp("cancelledAt"),
+  cancelReason: varchar("cancelReason", { length: 255 }),
+  replacedBySubscriptionId: bigint("replacedBySubscriptionId", { mode: "number" }),
+  trialEndsAt: date("trialEndsAt"),
+  defaultAccountId: bigint("defaultAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "set null" }),
+  postingMode: subscriptionPostingEnum("postingMode").default("expense").notNull(),
+  externalSystem: varchar("externalSystem", { length: 50 }),
+  externalId: varchar("externalId", { length: 100 }),
+  url: varchar("url", { length: 255 }),
+  logoUrl: text("logoUrl"),
+  notifyEnabled: boolean("notifyEnabled").default(true).notNull(),
+  notifyDaysBefore: integer("notifyDaysBefore"),
+  notes: text("notes"),
+  createdBy: bigint("createdBy", { mode: "number" }).references(() => users.id, { onDelete: "no action" }),
+  updatedBy: bigint("updatedBy", { mode: "number" }).references(() => users.id, { onDelete: "no action" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  idx_subscriptions_business_deleted: index("idx_subscriptions_business_deleted").on(table.businessId, table.deletedAt).where(sql`${table.deletedAt} IS NULL`),
+  idx_subscriptions_location_deleted: index("idx_subscriptions_location_deleted").on(table.locationId, table.deletedAt),
+  idx_subscriptions_next_due: index("idx_subscriptions_next_due").on(table.businessId, table.nextDueDate, table.status).where(sql`${table.deletedAt} IS NULL`),
+  idx_subscriptions_category: index("idx_subscriptions_category").on(table.categoryId),
+  uq_subscriptions_business_external: uniqueIndex("uq_subscriptions_business_external").on(table.businessId, table.externalSystem, table.externalId).where(sql`${table.externalId} IS NOT NULL AND ${table.deletedAt} IS NULL`),
+}));
+
+export type Subscription = typeof subscriptions.$inferSelect;
+export type InsertSubscription = typeof subscriptions.$inferInsert;
+
+// Subscription payment history (the "did we actually pay?" ledger)
+export const subscriptionPayments = pgTable("subscription_payments", {
+  id: serial("id").primaryKey(),
+  subscriptionId: bigint("subscriptionId", { mode: "number" }).notNull().references(() => subscriptions.id, { onDelete: "no action" }),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }),
+  cycleDueDate: date("cycleDueDate").notNull(),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  currency: varchar("currency", { length: 3 }).notNull(),
+  paidDate: date("paidDate"),
+  accountId: bigint("accountId", { mode: "number" }).references(() => accounts.id, { onDelete: "no action" }),
+  paymentMethod: paymentMethod2Enum("paymentMethod"),
+  reference: varchar("reference", { length: 100 }),
+  confirmed: boolean("confirmed").default(true).notNull(),
+  expenseId: bigint("expenseId", { mode: "number" }).references(() => expenses.id, { onDelete: "set null" }),
+  billId: bigint("billId", { mode: "number" }).references(() => bills.id, { onDelete: "set null" }),
+  journalEntryId: bigint("journalEntryId", { mode: "number" }).references(() => journalEntries.id, { onDelete: "set null" }),
+  notes: text("notes"),
+  recordedBy: bigint("recordedBy", { mode: "number" }).references(() => users.id, { onDelete: "no action" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  idx_sub_payments_subscription: index("idx_sub_payments_subscription").on(table.subscriptionId, table.cycleDueDate),
+  uq_sub_payments_cycle: uniqueIndex("uq_sub_payments_cycle").on(table.subscriptionId, table.cycleDueDate).where(sql`${table.deletedAt} IS NULL`),
+  idx_sub_payments_business_date: index("idx_sub_payments_business_date").on(table.businessId, table.paidDate),
+}));
+
+export type SubscriptionPayment = typeof subscriptionPayments.$inferSelect;
+export type InsertSubscriptionPayment = typeof subscriptionPayments.$inferInsert;
 
 // Recurring bill templates
 export const recurringBillTemplates = pgTable("recurring_bill_templates", {
@@ -1333,6 +1417,7 @@ export const notificationClearedReasonEnum = pgEnum("notification_cleared_reason
   "action_completed",
   "manual_clear_all",
   "system_resolved",
+  "subscription_paid",
 ]);
 
 export const notifications = pgTable(

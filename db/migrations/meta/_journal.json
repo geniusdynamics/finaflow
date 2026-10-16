@@ -148,6 +148,13 @@
       "when": 1785110400000,
       "tag": "0030_finabill_sync_expansion",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1786000000000,
+      "tag": "0031_subscription_management",
+      "breakpoints": true
     }
   ]
 }
