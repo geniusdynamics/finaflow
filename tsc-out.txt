@@ -1,3 +1,0 @@
-error TS5083: Cannot read file 'D:/DevCenter/abuilds/fina/finaflow/;/tsconfig.json'.
-error TS5083: Cannot read file 'D:/DevCenter/abuilds/fina/finaflow/echo/tsconfig.json'.
-error TS5083: Cannot read file 'D:/DevCenter/abuilds/fina/finaflow/"TSC_EXIT=$?"/tsconfig.json'.

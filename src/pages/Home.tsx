@@ -13,6 +13,7 @@ import {
   ChevronRight, Globe, Lock,
   RefreshCw, Building2, Percent, HeartHandshake,
   Github, Star, Plus, Sparkles, HelpCircle, BookOpen, LogIn, UserPlus,
+  Smartphone,
 } from "lucide-react";
 
 import cashflowDashImg from "/resources/cashflow dash.png";
@@ -252,6 +253,7 @@ export default function Home() {
             </Link>
             <div className="hidden items-center gap-5 text-sm text-[#2D2A26] lg:flex">
               <a href="#showcase" className="hover:text-[#C73E1D]">Product</a>
+              <a href="#solutions" className="hover:text-[#C73E1D]">Solutions</a>
               <a href="#features" className="hover:text-[#C73E1D]">Features</a>
               <a href="#how-it-works" className="hover:text-[#C73E1D]">How it works</a>
               <a href="#pricing" className="hover:text-[#C73E1D]">Pricing</a>
@@ -326,6 +328,7 @@ export default function Home() {
           {mobileMenuOpen && (
             <div className="border-t border-[#E8E0D8] px-4 py-3 lg:hidden space-y-2 text-sm">
               <a href="#showcase" onClick={() => setMobileMenuOpen(false)} className="block py-1">Product</a>
+              <a href="#solutions" onClick={() => setMobileMenuOpen(false)} className="block py-1">Solutions</a>
               <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block py-1">Features</a>
               <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="block py-1">How it works</a>
               <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="block py-1">Pricing</a>
@@ -611,6 +614,109 @@ export default function Home() {
           </div>
         </section>
 
+        {/* Solutions by audience */}
+        <section id="solutions" className="border-t border-[#E8E0D8] bg-white py-20 md:py-28">
+          <div className="mx-auto max-w-6xl px-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="mb-12 text-center"
+            >
+              <div className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-[#C73E1D]/20 bg-[#C73E1D]/5 px-3 py-1 text-xs font-medium text-[#C73E1D]">
+                <Sparkles className="h-3 w-3" /> Built for your kind of business
+              </div>
+              <h2 className="font-serif text-4xl font-bold text-[#2D2A26]">
+                Solutions by the way you work
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm text-[#8D8A87]">
+                One ledger underneath, shaped around how your business actually runs day to day.
+              </p>
+            </motion.div>
+            <div className="grid gap-5 md:grid-cols-3">
+              {[
+                {
+                  icon: Smartphone,
+                  badge: "Dedicated page",
+                  title: "Mobile Money Agents",
+                  desc: "Track cash position, e-money movement, daily wallet ledgers, deposits and outlet costs across every agent branch.",
+                  to: "/solutions/mobile-money-agents",
+                  external: false,
+                  testId: "solutions-mobile-money-agents",
+                  highlight: true,
+                },
+                {
+                  icon: Store,
+                  badge: null,
+                  title: "Retail & Multi-Branch Shops",
+                  desc: "Per-branch sales, expenses and reporting for shops, chains and franchises that need every till accounted for.",
+                  to: "#features",
+                  external: true,
+                  testId: "solutions-retail",
+                  highlight: false,
+                },
+                {
+                  icon: HeartHandshake,
+                  badge: null,
+                  title: "Accountants & Consultants",
+                  desc: "Run your clients' books in one place and earn 20% revenue share from every business you onboard.",
+                  to: "/login?type=partner",
+                  external: true,
+                  testId: "solutions-accountants",
+                  highlight: false,
+                },
+              ].map((sol, i) => {
+                const inner = (
+                  <>
+                    <div className="mb-4 flex items-start justify-between">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#C73E1D]/10 transition-colors group-hover:bg-[#C73E1D]/20">
+                        <sol.icon className="h-5 w-5 text-[#C73E1D]" />
+                      </div>
+                      {sol.badge && (
+                        <span className="rounded-full bg-[#C73E1D]/10 px-2 py-0.5 text-[10px] font-semibold text-[#C73E1D]">
+                          {sol.badge}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-serif text-lg font-bold text-[#2D2A26] transition-colors group-hover:text-[#C73E1D]">
+                      {sol.title}
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-[#8D8A87]">{sol.desc}</p>
+                    <span className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-[#C73E1D]">
+                      Learn more <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
+                    </span>
+                  </>
+                );
+                const cardClass = `group flex h-full flex-col rounded-2xl border bg-white p-6 transition-all duration-300 hover:shadow-lg hover:shadow-[#C73E1D]/10 ${
+                  sol.highlight ? "border-[#C73E1D]/30" : "border-[#E8E0D8] hover:border-[#C73E1D]/30"
+                }`;
+                return (
+                  <motion.div
+                    key={sol.title}
+                    initial={{ opacity: 0, y: 24 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-40px" }}
+                    transition={{ delay: i * 0.1, duration: 0.55, type: "spring", bounce: 0.25 }}
+                    whileHover={{ y: -4 }}
+                    className="h-full"
+                  >
+                    {sol.external ? (
+                      <a href={sol.to} className={cardClass} data-testid={sol.testId}>
+                        {inner}
+                      </a>
+                    ) : (
+                      <Link to={sol.to} className={cardClass} data-testid={sol.testId}>
+                        {inner}
+                      </Link>
+                    )}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
         {/* How it Works */}
         <section id="how-it-works" className="py-20 md:py-28">
           <div className="mx-auto max-w-6xl px-4">
@@ -644,7 +750,7 @@ export default function Home() {
                   step: "02",
                   icon: RefreshCw,
                   title: "Connect or import your data",
-                  desc: "Paste an M-Pesa SMS, upload a CSV, or start fresh with Demo Mode to explore the platform with realistic sample data.",
+                  desc: "Paste an M-Pesa SMS, log entries manually, or start fresh with Demo Mode to explore the platform with realistic sample data.",
                   detail: "Optional — guided tour included",
                 },
                 {
@@ -833,7 +939,7 @@ export default function Home() {
                 },
                 {
                   q: "Can I import my existing data?",
-                  a: "Yes. You can import sales, expenses, and account balances via CSV, or start with Demo Mode to explore the platform with realistic sample data first. Many users run a side-by-side comparison for a week before going live.",
+                  a: "Yes. You can record historical sales, expenses, and account opening balances manually, or start with Demo Mode to explore the platform with realistic sample data first. Many users run a side-by-side comparison for a week before going live.",
                 },
                 {
                   q: "Do you support multi-location businesses?",

@@ -37,7 +37,7 @@ export function MobileWalletSummaryCard({ wallet }: MobileWalletSummaryCardProps
         </CardHeader>
         <CardContent>
           <p className="text-sm text-[#8D8A87]">
-            No mobile wallet activity in the selected period. Import an Airtel or M-Pesa statement to see activity here.
+            No mobile wallet activity in the selected period. Paste Airtel or M-Pesa SMS messages on the Mobile Wallet page to see activity here.
           </p>
         </CardContent>
       </Card>

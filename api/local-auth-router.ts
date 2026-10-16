@@ -185,11 +185,8 @@ export const localAuthRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       const accountId = normalizeAccountId(input.accountId);
-      console.log(`[lookupAccount] input.accountId="${input.accountId}" normalized="${accountId}"`);
       const account = await findCustomerAccount(db, accountId);
-      console.log(`[lookupAccount] customerAccount found:`, account ? `id=${account.id}` : null);
       const biz = await findPrimaryBusinessForAccount(db, accountId, account?.id ?? null);
-      console.log(`[lookupAccount] business found:`, biz ? `id=${biz.id}, name="${biz.name}"` : null);
       if (!biz) throw new Error("Account not found");
 
       const usersInBiz = await db.select({
@@ -203,7 +200,15 @@ export const localAuthRouter = createRouter({
           eq(users.isActive, true),
         ));
 
-      return { business: biz, users: usersInBiz };
+      // Only expose the minimal public fields needed for the login UI.
+      // The full business row contains PII (kraPin, email, phone) and plan/limits.
+      const publicBusiness = {
+        id: biz.id,
+        accountId: biz.accountId,
+        name: biz.name,
+      };
+
+      return { business: publicBusiness, users: usersInBiz };
     }),
 
   checkAccountAvailability: publicQuery
@@ -233,11 +238,8 @@ export const localAuthRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const accountId = normalizeAccountId(input.accountId);
-      console.log(`[login] attempt accountId="${accountId}" username="${input.username}"`);
       const account = await findCustomerAccount(db, accountId);
-      console.log(`[login] customerAccount:`, account ? `id=${account.id}` : null);
       const accountBusiness = await findPrimaryBusinessForAccount(db, accountId, account?.id ?? null);
-      console.log(`[login] business:`, accountBusiness ? `id=${accountBusiness.id}` : null);
       if (!accountBusiness) throw new Error("Invalid account ID or credentials");
 
       const userRows = await db.select().from(users).where(and(
@@ -276,10 +278,11 @@ export const localAuthRouter = createRouter({
       if (!user) throw new Error("Invalid username or password");
       if (!user.isActive) throw new Error("Account is disabled");
 
-      if (user.passwordHash) {
-        const valid = await verifyPassword(input.password, user.passwordHash);
-        if (!valid) throw new Error("Invalid username or password");
-      }
+      // Users without a password hash (e.g. OAuth-only / never set a password)
+      // must not be able to log in with any password via local auth.
+      if (!user.passwordHash) throw new Error("Invalid username or password");
+      const valid = await verifyPassword(input.password, user.passwordHash);
+      if (!valid) throw new Error("Invalid username or password");
 
       const junctions = await db.select().from(userBusinesses)
         .where(and(eq(userBusinesses.userId, user.id), eq(userBusinesses.isActive, true)));

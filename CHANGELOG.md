@@ -1,5 +1,12 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+- **Local-auth login bypass for passwordless users** — `localAuth.login` now rejects users with no `passwordHash` instead of skipping verification and logging them in with any password (`api/local-auth-router.ts`).
+- **Unauthenticated business PII exposure in `lookupAccount`** — the endpoint now returns only the minimal public fields (`id`, `accountId`, `name`) instead of the full business row (`kraPin`, `email`, `phone`, plan/limits) (`api/local-auth-router.ts`).
+- **Noisy auth logging** — removed `console.log` of every `login`/`lookupAccount` attempt, including usernames (`api/local-auth-router.ts`).
+
 ## [1.2.0] - 2026-07-27
 
 ### Changed
@@ -8,6 +15,34 @@
 ## [Unreleased]
 
 ### Added
+- **Mobile Money Agents solution page** — new public marketing page at `/solutions/mobile-money-agents` (`src/pages/MobileMoneyAgents.tsx`, lazy-loaded route in `src/App.tsx`) aimed at mobile money agents and agent-outlet operators. It markets cash position across outlets, M-PESA/Airtel Money SMS import, e-money movement, the daily wallet ledger, deposits/drawings/transfers, location-tagged outlet expenses, per-outlet accounts, bill alerts and reporting. Every capability claimed on the page is backed by shipped code; the outlet-control features that do **not** exist yet (cash handover, open/close day, expected-vs-counted cash, shortage/surplus review, per-outlet e-float position) are confined to an explicitly labelled "Not available yet — being built" roadmap section, and the page states plainly that Finaflow does not process mobile money transactions.
+- **`MobileMoneyAgents` page tests** — `src/pages/__tests__/MobileMoneyAgents.test.tsx` covers the hero CTAs, shipped-capability content and in-page anchors, and adds an honesty guard that fails if any not-yet-shipped term (`handover`, `shortage`, `surplus`, `e-float`, `close day`, `salesbook`) appears *before* the roadmap section — so a future edit cannot quietly sell roadmap items as available. It also asserts no CSV or statement upload is advertised.
+
+### Changed
+- **Home page Solutions section** — new `#solutions` section on the landing page (`src/pages/Home.tsx`) with three audience cards: Mobile Money Agents (links to the new dedicated page), Retail & Multi-Branch Shops (`#features`) and Accountants & Consultants (partner signup). A matching "Solutions" entry was added to the desktop and mobile navigation.
+- **`src/pages/__tests__/Home.test.tsx`** — added coverage for the Solutions section links, the `#solutions` nav anchor and the non-agent card destinations.
+
+### Fixed
+- **False CSV-import claims in marketing copy** — the landing page told visitors they could "upload a CSV" during setup and "import sales, expenses, and account balances via CSV", and the dashboard's Mobile Wallet card referred to importing an "Airtel or M-Pesa statement". Only CSV *export* exists (`src/pages/Expenses.tsx`); wallet transactions are imported by pasting SMS (`wallet.transactions.importSms`). The copy now describes the real import path.
+
+### Added
+- **Admin SMTP configuration** — SMTP settings are now persisted to the database (`app_settings` key `smtp_config`, tenant-agnostic) with environment variables as a fallback source. `admin.updateSmtpConfig` no longer depends on a writable `.env`; any `.env` sync failure (e.g. `EACCES` in Docker) is collected as a warning instead of crashing the request. `admin.getSmtpConfig` now reports the effective `source` (`database`/`env`), and the Admin SMTP tab shows the current configuration (username, password state, source badge) with an "Edit" flow that prefills the form and leaves the password untouched when omitted. `from` accepts both `name@example.com` and `"Name <name@example.com>"` formats. `admin.updateSmtpConfig` no longer depends on a writable `.env`; any `.env` sync failure (e.g. `EACCES` in Docker) is collected as a warning instead of crashing the request. `admin.getSmtpConfig` now reports the effective `source` (`database`/`env`), and the Admin SMTP tab shows the current configuration (username, password state, source badge) with an "Edit" flow that prefills the form and leaves the password untouched when omitted. `from` accepts both `name@example.com` and `"Name <name@example.com>"` formats.
+- **Admin test-email error detail** — `admin.sendTestEmail` returns the underlying delivery error (and `logId`) instead of a generic "Test email failed"; the email logs table surfaces `errorMessage` on failed rows.
+- **Admin account drill-down** — `admin.getAccountDetail` returns an account's businesses (with per-business user counts) and users (username, email, role, status, last sign-in, business memberships), so support can see the email and username on file for each account. The Admin Accounts tab renders this in a detail dialog with a "NO EMAIL" badge for users missing an address.
+- **Admin-initiated password reset** — `admin.sendPasswordReset` creates a single-use 60-minute reset token for a user (sharing the existing local-auth token flow) and emails the reset link; if SMTP is not configured or delivery fails, the admin gets the copyable reset URL to share manually. Users without an email address are rejected with a clear error.
+- **Shared password-reset helpers** — new `api/lib/password-reset.ts` (`createPasswordResetForUser`, `sendPasswordResetEmail`) reused by the public forgot-password flow and the admin flow.
+- **`isEmailConfiguredAsync`** — DB-aware email configuration check used by registration, password change, and reset flows (previously env-only).
+
+### Changed
+- **`api/lib/email.ts`** — email configuration resolution is now asynchronous and DB-aware (`getSmtpConfig` + `getSmtpPassword`), with `resetEmailTransporter()` to pick up config changes; the legacy sync `isEmailConfigured` API is preserved.
+- **`api/lib/update-env.ts`** — added `updateEnvVarSafe`, a best-effort `.env` writer that never throws (`{ ok, warning }`); `updateEnvVar` keeps its throwing behavior for backward compatibility.
+- **`api/lib/logged-email.ts`** — delivery results now include `error: string | null`.
+
+### Fixed
+- **Admin SMTP save crash on read-only filesystems** — configuring SMTP in the admin UI previously threw `EACCES: permission denied, open '/app/.env'` in containerized deployments; configuration now persists to the database and succeeds with warnings.
+- **Test email failures were opaque** — the admin UI now shows the real delivery error instead of a generic failure message.
+
+
 - **`integrationFinabill.listPaymentAccounts`** — new tRPC query (scope: `accounts:read`) exposing money accounts (cash drawers, M-PESA tills, wallets, bank accounts — `accountType IS NULL`) with `type`, `currentBalance`, `currency`, and location name, so FinaBill can mirror real payment accounts and live balances instead of deriving them from the Chart of Accounts.
 - **`integrationFinabill.listAccountTransactions`** — new tRPC query (scope: `accounts:read`) returning ledger entries for one money account, oldest-first and cursor-paginated by entry id (`sinceEntryId`/`limit`), rejecting CoA/other-business accounts, so FinaBill can pull real transaction history and derive true opening balances.
 - **`integrationFinabill.upsertAccount`** — new tRPC mutation (scope: `accounts:write`) that creates/updates a Chart of Accounts entry pushed from FinaBill, matched by `externalId` → `accountType`+`code` → `accountType`+`name`, stamping `finabillAccountId`.

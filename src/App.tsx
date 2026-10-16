@@ -10,6 +10,7 @@ import { PageSkeleton } from "@/components/Skeleton";
 import type { Permission } from "@/lib/permissions";
 
 const Home = lazy(() => import("./pages/Home"));
+const MobileMoneyAgents = lazy(() => import("./pages/MobileMoneyAgents"));
 const Login = lazy(() => import("./pages/Login"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
@@ -51,6 +52,7 @@ export default function App() {
     <>
       <Routes>
         <Route path="/" element={<Suspense fallback={<PageSkeleton />}><Home /></Suspense>} />
+        <Route path="/solutions/mobile-money-agents" element={<Suspense fallback={<PageSkeleton />}><MobileMoneyAgents /></Suspense>} />
         <Route path="/login" element={<Suspense fallback={<PageSkeleton />}><Login /></Suspense>} />
         <Route path="/forgot-password" element={<Suspense fallback={<PageSkeleton />}><ForgotPassword /></Suspense>} />
         <Route path="/reset-password" element={<Suspense fallback={<PageSkeleton />}><ResetPassword /></Suspense>} />
