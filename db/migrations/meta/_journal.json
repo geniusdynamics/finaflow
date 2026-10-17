@@ -155,6 +155,13 @@
       "when": 1786000000000,
       "tag": "0031_subscription_management",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1786100000000,
+      "tag": "0032_subscription_posting_default_bill",
+      "breakpoints": true
     }
   ]
 }

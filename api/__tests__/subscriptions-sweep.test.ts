@@ -6,6 +6,8 @@ import { getDb } from "../queries/connection";
 import { runSubscriptionSweep } from "../lib/subscription-sweep";
 import {
   appSettings,
+  billPayments,
+  bills as billsTable,
   businesses,
   expenseCategories,
   locations,
@@ -65,6 +67,8 @@ describe("Subscription sweep", () => {
       for (const b of existingBiz) {
         await db.delete(subscriptionPayments).where(eq(subscriptionPayments.businessId, b.id));
         await db.delete(subscriptions).where(eq(subscriptions.businessId, b.id));
+        await db.delete(billPayments).where(sql`${billPayments.billId} IN (SELECT "id" FROM "bills" WHERE "businessId" = ${b.id})`);
+        await db.delete(billsTable).where(eq(billsTable.businessId, b.id));
         await db.delete(notifications).where(sql`${notifications.entityType} = 'subscription'`);
         await db.delete(expenseCategories).where(eq(expenseCategories.businessId, b.id));
         await db.delete(appSettings).where(eq(appSettings.businessId, b.id));
@@ -227,6 +231,47 @@ describe("Subscription sweep", () => {
     const rows = await notificationsFor(viewerA1.id, "subscription_trial_ending", sub.id);
     expect(rows).toHaveLength(1);
     expect(rows[0].severity).toBe("info");
+  });
+
+  it("materializes a pending bill for bill-mode subscriptions on the due date, idempotently", async () => {
+    const sub = await insertSub({
+      name: "Bill Mode Sweep",
+      nextDueDate: "2027-06-10",
+      postingMode: "bill",
+      locationId: locA1.id,
+      autoRenew: false,
+    });
+
+    const first = await runSubscriptionSweep(db, sweepDay(0));
+    expect(first.billsMaterialized).toBeGreaterThanOrEqual(1);
+
+    const billsForBiz = await db
+      .select()
+      .from(billsTable)
+      .where(and(eq(billsTable.businessId, bizA.id), eq(billsTable.externalSystem, "subscription")));
+    const bill = billsForBiz.find((b) => b.externalId === `${sub.id}:2027-06-10`);
+    expect(bill).toBeTruthy();
+    expect(bill!.status).toBe("pending");
+    expect(bill!.balanceDue).toBe("100.00");
+
+    const pending = await db
+      .select()
+      .from(subscriptionPayments)
+      .where(and(eq(subscriptionPayments.subscriptionId, sub.id), eq(subscriptionPayments.cycleDueDate, "2027-06-10")));
+    expect(pending).toHaveLength(1);
+    expect(pending[0].confirmed).toBe(false);
+    expect(pending[0].billId).toBe(bill!.id);
+
+    const [after] = await db.select().from(subscriptions).where(eq(subscriptions.id, sub.id));
+    expect(after.nextDueDate).toBe("2027-07-10");
+
+    // Replay-safe: no duplicate bill for the same cycle.
+    await runSubscriptionSweep(db, sweepDay(0));
+    const shelvesAgain = await db
+      .select()
+      .from(billsTable)
+      .where(and(eq(billsTable.businessId, bizA.id), eq(billsTable.externalSystem, "subscription")));
+    expect(shelvesAgain.filter((b) => b.externalId === `${sub.id}:2027-06-10`)).toHaveLength(1);
   });
 
   it("clears subscription notifications for all users when a payment is recorded", async () => {

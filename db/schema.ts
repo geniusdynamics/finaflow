@@ -581,7 +581,7 @@ export const subscriptions = pgTable("subscriptions", {
   replacedBySubscriptionId: bigint("replacedBySubscriptionId", { mode: "number" }),
   trialEndsAt: date("trialEndsAt"),
   defaultAccountId: bigint("defaultAccountId", { mode: "number" }).references(() => accounts.id, { onDelete: "set null" }),
-  postingMode: subscriptionPostingEnum("postingMode").default("expense").notNull(),
+  postingMode: subscriptionPostingEnum("postingMode").default("bill").notNull(),
   externalSystem: varchar("externalSystem", { length: 50 }),
   externalId: varchar("externalId", { length: 100 }),
   url: varchar("url", { length: 255 }),

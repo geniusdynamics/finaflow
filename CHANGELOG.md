@@ -3,6 +3,22 @@
 ## [Unreleased]
 
 ### Added
+- **Bill-mode subscriptions accrue on the due date (default posting mode)** — new subscriptions default to `postingMode = 'bill'`. The daily sweep now materializes, for each due cycle, a **pending bill** tagged `externalSystem='subscription'` / `externalId='<subscriptionId>:<cycleDueDate>'` plus the accrual ledger (expense debit / AP credit, mirroring `bills-router.create`), a `subscriptionPayments` row with `confirmed=false`, a "Bill created" notification, and advances the schedule. Marking paid **settles** that bill (AP debit / cash credit) instead of creating a second one; paying before the due date accrues and settles in one step. Migration `0032_subscription_posting_default_bill.sql`.
+- **Posting mode is explicit in the subscription popup** — the detail tile now reads "Posting mode" with the mode name (Create bill / Create expense / Reminder only) and a one-line explanation of what it does. Cards show **"Unpaid bill for <date>"** when a materialized cycle is outstanding.
+- **Bills vs subscriptions separation** — subscription-generated bills are tagged (`externalSystem='subscription'`) and excluded from the Calendar's bill stream (the subscription event already represents the charge), so "subscriptions + bills" totals never double count. They remain in Bills/AP, where they belong.
+
+### Fixed
+- **Bill-mode posting was not balanced** — it created a bill already marked paid at payment time, debiting AP without ever crediting it (and recognising no expense). Bills now accrue first (expense/AP) and settle later (AP/cash).
+- **Auto-detected payment accounts threw a 500** — `payBill` (and the expense auto-detect) filtered `accounts.type = 'bank'`, which is not a valid enum value (`bank_account` is); bank/card payments with "Auto-detect" failed. Both maps now use `bank_account` / `mpesa` / `wallet` correctly.
+- **Ledger balance signs ignored account nature** — subscription postings applied debit=+ blindly, which is wrong for liability accounts (an AP credit increased nothing); natural-balance rules are now applied (asset/expense debit-natural, liability/equity/revenue credit-natural).
+- **Settlement could target a different AP account than the accrual** (legacy duplicate AP rows) — settlement now passes the deterministic `ensureSystemAccount` AP id to `payBill`.
+- **Mark paid targeted the next cycle after materialization** — it now settles the outstanding pending cycle ("Settling the bill for cycle …") and only pays ahead when nothing is pending.
+- **Settlement without a resolvable funding account silently skipped the cash leg** — now rejected with "Select a funding source: no <method> account exists for this branch."
+
+### Tested
+- Subscription suites green after the change (**router 24, sweep 8, v1 5, digest 2, math 60, migration tests 19**), incl. new coverage for bill default + accrual entries, sweep materialization (pending bill, linked pending payment, schedule advance, replay-safe), calendar exclusion of subscription bills, and ledger/AP balance assertions. Browser-verified end-to-end: default bill mode → materialized pending bill (`BILL-SUB-0002`, 2,500) → "Unpaid bill for 17 Oct 2026" → settle → expense +2,500, AP net 0, cash −2,500, bill paid, card green with "Last paid".
+
+### Added
 - **Paid-state affordance on subscriptions** — "Mark paid" is now **green with a check** when a payment exists and the subscription isn't overdue, and **red** otherwise ("never paid or overdue"); the card and the detail popup both show `Last paid <date>` / `Not paid yet`. Backed by a new `lastPaidDate` field on `subscriptions.list`/`get`. Files: `src/pages/Subscriptions.tsx`, `api/subscriptions-router.ts`.
 - **Pay-ahead confirmation in the Mark-paid dialog** — the dialog now states exactly which cycle is being paid and requires an explicit **Pay early** tick when the cycle is further ahead than the pay-ahead window; the submit stays disabled until ticked.
 

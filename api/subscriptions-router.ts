@@ -40,9 +40,8 @@ import {
   type CycleUnit,
   type SubscriptionSchedule,
 } from "./lib/subscription-math";
-import { postSubscriptionPayment, type SubscriptionPaymentMethod } from "./lib/subscription-posting";
-import { recordPaymentInTx } from "./lib/subscription-service";
-import { clearNotificationsForSubscription } from "./lib/notification-clearance";
+import { type SubscriptionPaymentMethod } from "./lib/subscription-posting";
+import { recordPaymentInTx, settlePendingPaymentInTx } from "./lib/subscription-service";
 import { currencyConverter } from "./lib/currency-converter";
 import { logAudit } from "./lib/audit";
 
@@ -73,7 +72,7 @@ const subscriptionFields = {
   autoRenew: z.boolean().default(false),
   trialEndsAt: dateStr.nullable().optional(),
   defaultAccountId: z.number().nullable().optional(),
-  postingMode: postingMode.default("expense"),
+  postingMode: postingMode.default("bill"),
   externalSystem: z.string().max(50).nullable().optional(),
   externalId: z.string().max(100).nullable().optional(),
   url: z.string().max(255).nullable().optional(),
@@ -205,6 +204,7 @@ interface ComputedRow {
   categoryName: string | null;
   postingModeLabel: string;
   lastPaidDate: string | null;
+  pendingCycleDueDate: string | null;
 }
 
 /** Most recent confirmed payment date per subscription (for the "Last paid" card state). */
@@ -232,6 +232,31 @@ async function loadLastPaidDates(
   return new Map(rows.filter((r) => r.paidDate).map((r) => [r.subscriptionId, r.paidDate as string]));
 }
 
+/** Earliest unconfirmed (materialized / auto-renew) cycle per subscription, for "mark paid". */
+async function loadPendingCycles(
+  db: ReturnType<typeof getDb>,
+  businessId: number,
+  ids: number[],
+): Promise<Map<number, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({
+      subscriptionId: subscriptionPayments.subscriptionId,
+      cycle: sql<string | null>`min(${subscriptionPayments.cycleDueDate})`,
+    })
+    .from(subscriptionPayments)
+    .where(
+      and(
+        eq(subscriptionPayments.businessId, businessId),
+        eq(subscriptionPayments.confirmed, false),
+        isNull(subscriptionPayments.deletedAt),
+        inArray(subscriptionPayments.subscriptionId, ids),
+      ),
+    )
+    .groupBy(subscriptionPayments.subscriptionId);
+  return new Map(rows.filter((r) => r.cycle).map((r) => [r.subscriptionId, r.cycle as string]));
+}
+
 function decorateRow(
   row: Subscription,
   names: NameMaps,
@@ -239,6 +264,7 @@ function decorateRow(
   defaultNotifyDays: number,
   today: string,
   lastPaidDates: Map<number, string>,
+  pendingCycles: Map<number, string>,
 ): Subscription & ComputedRow {
   const monthly = row.isOneTime ? d(0) : monthlyNormalized(row.amount, row.cycleUnit as CycleUnit, row.cycleCount);
   const yearly = row.isOneTime ? d(0) : yearlyNormalized(row.amount, row.cycleUnit as CycleUnit, row.cycleCount);
@@ -261,6 +287,7 @@ function decorateRow(
     categoryName: row.categoryId ? (names.categoryNames.get(row.categoryId) ?? null) : null,
     postingModeLabel: postingModeLabel(row.postingMode),
     lastPaidDate: lastPaidDates.get(row.id) ?? null,
+    pendingCycleDueDate: pendingCycles.get(row.id) ?? null,
   };
 }
 
@@ -399,8 +426,9 @@ export const subscriptionsRouter = createRouter({
     const defaultNotifyDays = Number(defaultNotifyDaysRaw) || 7;
     const rates = await buildRateMap(rows.map((r) => r.currency), base);
     const lastPaidDates = await loadLastPaidDates(db, businessId, rows.map((r) => r.id));
+    const pendingCycles = await loadPendingCycles(db, businessId, rows.map((r) => r.id));
 
-    const decorated = rows.map((r) => decorateRow(r, names, rates, defaultNotifyDays, today, lastPaidDates));
+    const decorated = rows.map((r) => decorateRow(r, names, rates, defaultNotifyDays, today, lastPaidDates, pendingCycles));
     const totals = decorated.reduce(
       (acc, r) => {
         if (r.convertedMonthly) acc.monthly = acc.monthly.plus(d(r.convertedMonthly));
@@ -449,8 +477,9 @@ export const subscriptionsRouter = createRouter({
 
     const rates = await buildRateMap([row.currency], base);
     const lastPaidDates = await loadLastPaidDates(db, businessId, [row.id]);
+    const pendingCycles = await loadPendingCycles(db, businessId, [row.id]);
     return {
-      ...decorateRow(row, names, rates, Number(defaultNotifyDaysRaw) || 7, today, lastPaidDates),
+      ...decorateRow(row, names, rates, Number(defaultNotifyDaysRaw) || 7, today, lastPaidDates, pendingCycles),
       payments,
       paymentCount: payments.length,
       successorName: successor[0]?.name ?? null,
@@ -778,27 +807,19 @@ export const subscriptionsRouter = createRouter({
     const row = await getSubscriptionChecked(ctx, payment.subscriptionId);
     if (payment.confirmed) throw new Error("Payment is already confirmed");
 
-    const result = await db.transaction(async (tx) => {
-      const paidDate = payment.paidDate ?? todayStr();
-      const posted = await postSubscriptionPayment(tx, {
+    const result = await db.transaction((tx) =>
+      settlePendingPaymentInTx(tx, {
         subscription: row,
-        amount: payment.amount,
-        cycleDueDate: payment.cycleDueDate,
-        paidDate,
+        payment,
+        paidDate: payment.paidDate ?? todayStr(),
         accountId: payment.accountId,
         paymentMethod: normalizePaymentMethod(payment.paymentMethod),
         reference: payment.reference,
         notes: payment.notes,
         userId,
-      });
-      await tx
-        .update(subscriptionPayments)
-        .set({ confirmed: true, paidDate, expenseId: posted.expenseId, billId: posted.billId })
-        .where(eq(subscriptionPayments.id, payment.id));
-      return posted;
-    });
+      }),
+    );
 
-    await clearNotificationsForSubscription(db, { subscriptionId: row.id });
     await logAudit({
       userId,
       businessId,
@@ -1030,8 +1051,9 @@ async function computeStats(rows: Subscription[], businessId: number, today: str
   const defaultNotifyDays = Number(defaultNotifyDaysRaw) || 7;
   const rates = await buildRateMap(rows.map((r) => r.currency), base);
   const lastPaidDates = await loadLastPaidDates(db, businessId, rows.map((r) => r.id));
+  const pendingCycles = await loadPendingCycles(db, businessId, rows.map((r) => r.id));
 
-  const decorated = rows.map((r) => decorateRow(r, names, rates, defaultNotifyDays, today, lastPaidDates));
+  const decorated = rows.map((r) => decorateRow(r, names, rates, defaultNotifyDays, today, lastPaidDates, pendingCycles));
   const active = decorated.filter((r) => r.status === "active" && !r.isOneTime);
   const inactive = decorated.filter((r) => (r.status === "paused" || r.status === "cancelled") && !r.isOneTime);
 

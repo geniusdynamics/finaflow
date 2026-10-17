@@ -147,8 +147,9 @@ describe("0031 migration - wiring", () => {
     };
     const entry = journal.entries.find((e) => e.tag === "0031_subscription_management");
     expect(entry).toBeDefined();
-    const maxIdx = Math.max(...journal.entries.map((e) => e.idx));
-    expect(entry!.idx).toBe(maxIdx);
+    const previous = journal.entries.find((e) => e.tag === "0030_finabill_sync_expansion");
+    if (previous) expect(entry!.idx).toBeGreaterThan(previous.idx);
+    expect(journal.entries.filter((e) => e.idx === entry!.idx)).toHaveLength(1);
   });
 
   it("is applied by the API test bootstrap", () => {

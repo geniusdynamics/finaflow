@@ -89,7 +89,11 @@ export function Calendar() {
   const overBudgetAmount = (Number(currentMonthStat?.total ?? "0") - currentMonthBudget).toFixed(2);
 
   // Build events
-  const billEvents = (billCalendar?.bills ?? []).map((b) => {
+  // Subscription-sourced bills are excluded here: their charges are already shown as
+  // subscription events, so including them would double count this month's outflow.
+  const billEvents = (billCalendar?.bills ?? [])
+    .filter((b) => (b as { externalSystem?: string | null }).externalSystem !== "subscription")
+    .map((b) => {
     const daysUntil = Math.ceil((new Date(b.dueDate).getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24));
     const isOverdue = daysUntil < 0 || b.status === "overdue";
     const isDueSoon = daysUntil >= 0 && daysUntil <= 7;

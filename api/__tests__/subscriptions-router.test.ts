@@ -350,6 +350,42 @@ describe("Subscriptions router", () => {
     expect(listed.rows[0].lastPaidDate).toBe("2027-05-01");
   });
 
+  it("defaults new subscriptions to bill posting and accrues expense/AP when settled", async () => {
+    const { postingMode: _omitPostingMode, ...withoutPostingMode } = baseSub;
+    const created = await callerOwnerA.subscriptions.create({
+      ...withoutPostingMode,
+      name: "Bill Mode Default",
+      locationId: locA1.id,
+      categoryId: catA.id,
+      nextDueDate: "2027-09-01",
+    });
+    const row = await callerOwnerA.subscriptions.get({ id: created.id });
+    expect(row.postingMode).toBe("bill");
+
+    const result = await callerOwnerA.subscriptions.recordPayment({
+      subscriptionId: created.id,
+      accountId: cashA1.id,
+      paymentMethod: "cash",
+      allowEarly: true,
+    });
+    expect(result.billId).toBeGreaterThan(0);
+    expect(result.expenseId).toBeNull();
+
+    const [bill] = await db.select().from(bills).where(eq(bills.id, result.billId!));
+    expect(bill.externalSystem).toBe("subscription");
+    expect(bill.externalId).toBe(`${created.id}:2027-09-01`);
+    expect(bill.status).toBe("paid");
+
+    const payments = await db.select().from(billPayments).where(eq(billPayments.billId, bill.id));
+    expect(payments).toHaveLength(1);
+
+    // Accrual entries must exist (expense debit + AP credit), otherwise AP would be debited
+    // without ever being credited.
+    const entries = await db.select().from(ledgerEntries).where(eq(ledgerEntries.transactionId, bill.id));
+    expect(entries.some((e) => e.entryType === "debit")).toBe(true);
+    expect(entries.some((e) => e.entryType === "credit")).toBe(true);
+  });
+
   it("rolls back payment and expense together when posting fails mid-way", async () => {
     const sub = await callerOwnerA.subscriptions.create({
       ...baseSub,

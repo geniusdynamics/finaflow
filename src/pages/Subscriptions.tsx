@@ -140,6 +140,7 @@ interface SubscriptionRow {
   categoryName: string | null;
   postingModeLabel: string;
   lastPaidDate: string | null;
+  pendingCycleDueDate: string | null;
 }
 
 interface SubscriptionDetail extends SubscriptionRow {
@@ -190,9 +191,16 @@ function SubscriptionKpis({ row, baseCurrency }: { row: SubscriptionRow; baseCur
           {row.convertedMonthly != null ? fmtMoney(row.convertedMonthly, baseCurrency ?? "KES") : "Unavailable"}
         </p>
       </div>
-      <div className="rounded bg-[#FFF3E0] p-2">
-        <p className="text-xs text-[#8D8A87]">Posting</p>
+      <div className="rounded bg-[#FFF3E0] p-2" data-testid="posting-mode">
+        <p className="text-xs text-[#8D8A87]">Posting mode</p>
         <p className="text-sm font-semibold text-[#ED6C02]">{row.postingModeLabel}</p>
+        <p className="mt-0.5 text-[10px] leading-tight text-[#8D8A87]">
+          {row.postingMode === "bill"
+            ? "A bill is created on the due date and settled when you mark it paid"
+            : row.postingMode === "expense"
+              ? "Records an expense when you mark it paid"
+              : "Reminders only — no accounting entry"}
+        </p>
       </div>
     </div>
   );
@@ -285,11 +293,13 @@ function MarkPaidDialog({ row, onClose }: { row: SubscriptionRow; onClose: () =>
   });
   // Paying a cycle further ahead than the reminder window requires explicit "Pay early"
   // confirmation — this is what stops a second accidental payment in the same period.
+  // Settle the materialized (unpaid) cycle when one exists; otherwise pay the next cycle.
+  const targetCycle = row.pendingCycleDueDate ?? row.nextDueDate;
   const payAheadWindowDays = row.notifyDaysBefore ?? 7;
   const daysAhead = Math.round(
-    (new Date(row.nextDueDate).getTime() - new Date(payForm.paidDate).getTime()) / 86_400_000,
+    (new Date(targetCycle).getTime() - new Date(payForm.paidDate).getTime()) / 86_400_000,
   );
-  const needsEarlyConfirmation = daysAhead > payAheadWindowDays;
+  const needsEarlyConfirmation = row.pendingCycleDueDate == null && daysAhead > payAheadWindowDays;
   const canSubmit = !needsEarlyConfirmation || payEarly;
   const recordPayment = trpc.subscriptions.recordPayment.useMutation({
     onSuccess: () => {
@@ -310,7 +320,8 @@ function MarkPaidDialog({ row, onClose }: { row: SubscriptionRow; onClose: () =>
           <DialogTitle className="font-serif text-xl text-[#2D2A26]">Mark Paid — {row.name}</DialogTitle>
         </DialogHeader>
         <div className="rounded-lg border border-[#E8E0D8] bg-[#F5EDE6]/60 px-3 py-2 text-xs text-[#2D2A26]" data-testid="mark-paid-cycle">
-          Paying for cycle <strong>{formatDate(row.nextDueDate)}</strong> — {row.currency} {row.amount}
+          {row.pendingCycleDueDate ? "Settling the bill for cycle " : "Paying for cycle "}
+          <strong>{formatDate(targetCycle)}</strong> — {row.currency} {row.amount}
           {row.lastPaidDate && <> · last paid {formatDate(row.lastPaidDate)}</>}
         </div>
         <form
@@ -320,6 +331,7 @@ function MarkPaidDialog({ row, onClose }: { row: SubscriptionRow; onClose: () =>
             if (!canSubmit) return;
             recordPayment.mutate({
               subscriptionId: row.id,
+              cycleDueDate: targetCycle,
               amount: payForm.amount,
               paidDate: payForm.paidDate,
               paymentMethod: payForm.paymentMethod,
@@ -340,7 +352,7 @@ function MarkPaidDialog({ row, onClose }: { row: SubscriptionRow; onClose: () =>
                 data-testid="pay-early-checkbox"
               />
               <span>
-                This cycle isn't due until {formatDate(row.nextDueDate)} ({daysAhead} days away).
+                This cycle isn't due until {formatDate(targetCycle)} ({daysAhead} days away).
                 Tick <strong>Pay early</strong> to record it now.
               </span>
             </label>
@@ -512,7 +524,7 @@ function SubscriptionDetailBody({ detail, canPay, canManage, onMarkPaid }: { det
       </p>
       {canPay && detail.status !== "cancelled" && (() => {
         const hasPayment = detail.lastPaidDate != null || (detail.paymentCount ?? 0) > 0;
-        const paidUp = hasPayment && !detail.isOverdue;
+        const paidUp = hasPayment && !detail.isOverdue && !detail.pendingCycleDueDate;
         return (
           <Button
             className={paidUp ? "bg-[#2E7D32] hover:bg-[#2E7D32]/90" : "bg-[#C73E1D]"}
@@ -851,14 +863,14 @@ export function Subscriptions({ embedded }: { embedded?: boolean }) {
           <Button
             size="sm"
             className={
-              row.lastPaidDate && !row.isOverdue
+              row.lastPaidDate && !row.isOverdue && !row.pendingCycleDueDate
                 ? "bg-[#2E7D32] hover:bg-[#2E7D32]/90"
                 : "bg-[#C73E1D]"
             }
             onClick={() => setPayForId(row.id)}
             data-testid={`mark-paid-${row.id}`}
           >
-            {row.lastPaidDate && !row.isOverdue ? (
+            {row.lastPaidDate && !row.isOverdue && !row.pendingCycleDueDate ? (
               <CheckCircle className="mr-1 h-3 w-3" />
             ) : null}
             Mark paid
@@ -935,8 +947,12 @@ export function Subscriptions({ embedded }: { embedded?: boolean }) {
                 </div>
                 <Progress value={row.progress} className="h-2 bg-[#E8E0D8]" />
               </div>
-              <p className={`text-xs ${row.lastPaidDate ? "text-[#2E7D32]" : "text-[#8D8A87]"}`}>
-                {row.lastPaidDate ? `Last paid ${formatDate(row.lastPaidDate)}` : "Not paid yet"}
+              <p className={`text-xs ${row.pendingCycleDueDate ? "font-medium text-[#ED6C02]" : row.lastPaidDate ? "text-[#2E7D32]" : "text-[#8D8A87]"}`}>
+                {row.pendingCycleDueDate
+                  ? `Unpaid bill for ${formatDate(row.pendingCycleDueDate)}`
+                  : row.lastPaidDate
+                    ? `Last paid ${formatDate(row.lastPaidDate)}`
+                    : "Not paid yet"}
               </p>
               {cardActions(row)}
             </CardContent>

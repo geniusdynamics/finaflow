@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, expenseQuery, expenseViewOrCreate, expenseCreate, expenseManage, expenseCategoriesManage, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
 import { expenses, expenseItems, expenseCategories, accounts, ledgerEntries, suppliers, bills, attachments, locations } from "@db/schema";
-import { eq, and, isNull, desc, sql } from "drizzle-orm";
+import { eq, and, inArray, isNull, desc, sql } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { notFutureDateString, optionalNotFutureDateString } from "./lib/future-date";
 import { logAudit } from "./lib/audit";
@@ -337,15 +337,23 @@ export const expensesRouter = createRouter({
         }
 
         if (!accountId) {
-          const typeMap: Record<string, string> = { cash: "cash", wallet: "cash", bank_transfer: "bank", card: "bank" };
+          // accounts.type uses the typeEnum values ("cash" | "mpesa" | "bank_account" | "wallet").
+          const allowedTypes: Record<string, string[]> = {
+            cash: ["cash"],
+            wallet: ["mpesa", "wallet"],
+            bank_transfer: ["bank_account"],
+            card: ["bank_account"],
+          };
+          const typeValues = allowedTypes[input.paymentMethod] ?? ["cash"];
           // Prefer branch-specific account, fall back to business-level account
           let accts = await tx.select().from(accounts).where(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            and(eq(accounts.locationId, input.locationId), eq(accounts.type, typeMap[input.paymentMethod] as any), isNull(accounts.deletedAt))
+            and(eq(accounts.locationId, input.locationId), inArray(accounts.type, typeValues as any[]), isNull(accounts.deletedAt))
           ).limit(1);
           if (!accts[0]) {
             accts = await tx.select().from(accounts).where(
-              and(isNull(accounts.locationId), eq(accounts.type, typeMap[input.paymentMethod] as any), isNull(accounts.deletedAt))
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+              and(isNull(accounts.locationId), inArray(accounts.type, typeValues as any[]), isNull(accounts.deletedAt))
             ).limit(1);
           }
           if (accts[0]) accountId = accts[0].id;

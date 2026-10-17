@@ -31,6 +31,15 @@ const mockState = vi.hoisted(() => {
       balanceDue: "500.00",
       status: "pending",
     },
+    // A bill generated from a subscription cycle — must not appear as a separate bill event.
+    subBill: {
+      id: 99,
+      description: "Google Workspace — cycle bill",
+      dueDate: dayIn(4),
+      balanceDue: "1200.00",
+      status: "pending",
+      externalSystem: "subscription",
+    },
   };
 });
 
@@ -51,7 +60,7 @@ vi.mock("@/providers/trpc", () => ({
     payroll: { periods: { useQuery: () => ({ data: [] }) } },
     dashboard: {
       billCalendar: {
-        useQuery: () => ({ data: { bills: [mockState.bill], recurring: [], today: mockState.bill.dueDate } }),
+        useQuery: () => ({ data: { bills: [mockState.bill, mockState.subBill], recurring: [], today: mockState.bill.dueDate } }),
       },
     },
     subscriptions: {
@@ -130,6 +139,11 @@ describe("Calendar source toggle", () => {
     const html = renderCalendar();
     expect(html).toContain("Google Workspace");
     expect(html).toContain("Internet Bill");
+  });
+
+  it("does not render subscription-generated bills as separate bill events", () => {
+    const html = renderCalendar();
+    expect(html).not.toContain("Google Workspace — cycle bill");
   });
 
   it("renders the monthly subscription strip with the due count", () => {

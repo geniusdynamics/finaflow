@@ -13,6 +13,7 @@ import {
 } from "@db/schema";
 import { d } from "./decimal";
 import { advanceDueDate, daysBetween, type CycleUnit } from "./subscription-math";
+import { materializeSubscriptionBill } from "./subscription-posting";
 import { applyReHighlight } from "./notification-lifecycle";
 import { getRolePermissionsWithCache, loadRolePermissionsFromDb, PERMISSIONS } from "../middleware";
 import type { DbClient } from "./account-subscriptions";
@@ -28,6 +29,7 @@ export interface SweepResult {
   pendingPaymentsCreated: number;
   autoAdvanced: number;
   trialEnding: number;
+  billsMaterialized: number;
 }
 
 type Severity = "info" | "warning" | "critical";
@@ -240,6 +242,7 @@ export async function runSubscriptionSweep(db: DbClient, now: Date = new Date())
     pendingPaymentsCreated: 0,
     autoAdvanced: 0,
     trialEnding: 0,
+    billsMaterialized: 0,
   };
 
   const businessRows = await db
@@ -274,6 +277,12 @@ export async function runSubscriptionSweep(db: DbClient, now: Date = new Date())
 
       if (sub.status === "active" && !sub.isOneTime) {
         await handleScheduleEvents(db, sub, audience, today, defaultNotifyDays, now, result);
+      }
+      if (sub.status === "active" && sub.postingMode === "bill") {
+        // Bill mode accrues an AP obligation on the due date; the cycle's schedule advance
+        // happens here, so the auto-renew step is skipped for these subscriptions.
+        await handleBillMaterialization(db, sub, audience, today, now, result);
+      } else if (sub.status === "active") {
         await handleAutoRenew(db, sub, audience, today, now, result);
       }
       if (sub.status === "active" && sub.trialEndsAt && sub.trialEndsAt >= today && sub.trialEndsAt <= inThreeDays) {
@@ -384,6 +393,81 @@ async function escalateOverdueForUser(
     .limit(1);
   if (row && row.severity !== severity) {
     await escalateOverdue(db, row.id, severity, `${sub.name} renewal overdue by ${overdueDays} days`);
+  }
+}
+
+/**
+ * Bill-mode accrual: on/after each due date create the pending bill (with expense/AP ledger
+ * entries), a pending payment row to settle, and a "mark paid" notification. Bounded
+ * catch-up of up to 12 cycles per run; idempotent via the subscription bill external key.
+ */
+async function handleBillMaterialization(
+  db: DbClient,
+  sub: Subscription,
+  audience: EligibleUser[],
+  today: string,
+  now: Date,
+  result: SweepResult,
+): Promise<void> {
+  if (sub.nextDueDate > today) return;
+  let due = sub.nextDueDate;
+  let cycles = 0;
+  while (due <= today && cycles < 12) {
+    try {
+      const materialized = await materializeSubscriptionBill(db, {
+        subscription: { ...sub, nextDueDate: due },
+        cycleDueDate: due,
+        userId: sub.createdBy,
+      });
+      if (materialized.created) result.billsMaterialized += 1;
+
+      const [existingPayment] = await db
+        .select({ id: subscriptionPayments.id })
+        .from(subscriptionPayments)
+        .where(
+          and(
+            eq(subscriptionPayments.subscriptionId, sub.id),
+            eq(subscriptionPayments.cycleDueDate, due),
+            isNull(subscriptionPayments.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!existingPayment) {
+        await db.insert(subscriptionPayments).values({
+          subscriptionId: sub.id,
+          businessId: sub.businessId,
+          locationId: sub.locationId ?? sub.postingLocationId,
+          cycleDueDate: due,
+          amount: sub.amount,
+          currency: sub.currency,
+          paidDate: null,
+          accountId: sub.defaultAccountId,
+          confirmed: false,
+          recordedBy: sub.createdBy,
+          billId: materialized.billId,
+        } as typeof subscriptionPayments.$inferInsert);
+        result.pendingPaymentsCreated += 1;
+        for (const user of audience) {
+          await upsertNotification(db, {
+            userId: user.id,
+            subscription: sub,
+            type: "subscription_pending_payment",
+            severity: "warning",
+            title: `Bill created for ${sub.name}`,
+            message: `Bill ${materialized.billNumber} (${sub.currency} ${d(sub.amount).toFixed(2)}) was created for the ${due} cycle. Mark it paid to settle it.`,
+            now,
+          });
+        }
+      }
+      due = advanceDueDate(due, sub.cycleUnit as CycleUnit, sub.cycleCount);
+      cycles += 1;
+    } catch (error) {
+      console.error("[subscriptions] bill materialization failed", sub.id, due, error);
+      break;
+    }
+  }
+  if (cycles > 0) {
+    await db.update(subscriptions).set({ nextDueDate: due }).where(eq(subscriptions.id, sub.id));
   }
 }
 

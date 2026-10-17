@@ -135,4 +135,36 @@ Follow-up fixes from user feedback after the first browser pass.
 - 60 duplicate expense categories soft-deleted (6 copies of each of 12 names); 0 references repointed because all existing references pointed at the surviving rows (1 expense, 4 subscriptions).
 - Diagnosed the user-reported double payment: Figma Organization was marked paid twice on 2026-10-17 (10:13 and 10:14) — exactly the reported scenario; the schedule had jumped 2026 → 2029.
 
+---
+
+## 2026-10-17 (later) — Bill-mode accrual, posting-mode visibility, ledger correctness
+
+### What was done
+Implemented the requested accounting model: subscriptions default to **bill** posting, the AP obligation accrues **on the due date**, and "Mark paid" settles it. Also fixed three accounting bugs found while verifying it.
+
+### Files
+| File | Change |
+|---|---|
+| `api/lib/subscription-posting.ts` | `materializeSubscriptionBill` (pending bill + expense/AP accrual, idempotent external key), `settleSubscriptionBill` (AP/cash settlement on the accrual's AP account), natural-balance ledger signs, funding-source guard, `findSubscriptionBill` |
+| `api/lib/subscription-service.ts` | Settles pending (materialized) cycles via `settlePendingPaymentInTx`; shared by `recordPayment` and `confirmPayment`; pay-early guard only for non-pending cycles |
+| `api/lib/subscription-sweep.ts` | `handleBillMaterialization` (bounded catch-up, pending payment + notification, schedule advance); bill mode replaces auto-advance |
+| `api/subscriptions-router.ts` | Default `postingMode = 'bill'`; `lastPaidDate` and `pendingCycleDueDate` on rows; `confirmPayment` settles |
+| `api/lib/bill-payment.ts`, `api/expenses-router.ts` | Fixed `accounts.type` auto-detect (`bank` → `bank_account`, wallet → `mpesa`/`wallet`) |
+| `db/migrations/0032_subscription_posting_default_bill.sql` | `postingMode` default → `bill` (registered in setup.ts + journal) |
+| `db/__tests__/0032_subscription_posting_default.test.ts` | New migration test |
+| `scripts/run-subscription-sweep.ts` | Ops script to run one sweep (notifications, pendings, bill materialization) |
+| `src/pages/Subscriptions.tsx` | Posting-mode tile + explanation, "Unpaid bill for …" state, "Settling the bill for cycle …" dialog, pending-cycle targeting, paid/unpaid button colours |
+| `src/components/SubscriptionFormDialog.tsx` | Default posting mode = Create bill |
+| `src/pages/Calendar.tsx` | Excludes subscription-generated bills from bill events |
+| `api/__tests__/subscriptions-{router,sweep}.test.ts`, `src/pages/__tests__/{Subscriptions,Calendar-toggle}.test.tsx` | Coverage for default/accrual/materialization/settlement/exclusion |
+
+### Data notes (dev DB)
+- Repair script reversed the unbalanced postings created before the fix, removed the bad bill, then the fixed sweep re-materialized it.
+- Verified final state: bill 26 paid (2,500); ledger = expense debit 2,500 (Operating Expenses) · AP credit 2,500 + AP debit 2,500 (same AP account, net 0) · cash credit 2,500 (Cash Drawer, Malindi).
+
+### Browser verification
+- Card: "Unpaid bill for 17 Oct 2026" + red Mark paid → after settlement "Last paid 17 Oct 2026" + green Mark paid.
+- Popup: "Posting mode / Create bill / A bill is created on the due date and settled when you mark it paid", payment history pending → confirmed.
+
+
 
