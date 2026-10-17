@@ -110,3 +110,29 @@ Started the dev server (`npm run dev:app`, vite + Hono on :3200), seeded the dem
 - Native `<select>` elements cannot be driven by the built-in browser tool ("not a text field"), so form submission was completed through the API rather than by clicking through the modal; the modal itself was verified visually.
 - Over-budget warning path was not visually exercised (no active budget plan in the dev DB).
 
+---
+
+## 2026-10-17 — Subscription Management: paid-state + double-payment + category duplication round
+
+### What was done
+Follow-up fixes from user feedback after the first browser pass.
+
+### Fixes
+| File | Fix |
+|---|---|
+| `api/lib/subscription-service.ts` | `recordPayment` rejects a cycle further ahead than the pay-ahead window (7 days or the sub's notify window) unless `allowEarly`; renewals pass `allowEarly: true` |
+| `api/subscriptions-router.ts` | `recordPayment` accepts `allowEarly` + window from settings; `lastPaidDate` added to list/get rows (one grouped query per page) |
+| `api/routes/v1/subscriptions.ts` | `allowEarly` input on `POST /subscriptions/{id}/payments` |
+| `src/pages/Subscriptions.tsx` | Mark-paid dialog states the cycle and requires "Pay early"; green/red Mark-paid button on cards **and** the detail popup; "Last paid"/"Not paid yet" line |
+| `db/seed-accounting.ts` | Category seeding is idempotent (explicit existence check; `onConflictDoNothing` never fired without a unique constraint) |
+| `scripts/dedupe-expense-categories.ts` | New: dry-run by default, discovers FK columns to `expense_categories`, repoints then soft-deletes duplicates (`--apply`) |
+| `api/expenses-router.ts` | `categories` no longer returns colliding legacy global (businessId NULL) rows |
+| `src/pages/Calendar.tsx` | Compact calendar rows (smaller padding/icons) |
+| `api/__tests__/subscriptions-router.test.ts` | Pay-early guard test; existing future-cycle payment tests pass `allowEarly` |
+| `src/pages/__tests__/Subscriptions.test.tsx` | Paid/unpaid button colour + last-paid assertions |
+
+### Data cleanup performed (dev DB, business 1)
+- 60 duplicate expense categories soft-deleted (6 copies of each of 12 names); 0 references repointed because all existing references pointed at the surviving rows (1 expense, 4 subscriptions).
+- Diagnosed the user-reported double payment: Figma Organization was marked paid twice on 2026-10-17 (10:13 and 10:14) — exactly the reported scenario; the schedule had jumped 2026 → 2029.
+
+

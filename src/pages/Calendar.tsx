@@ -262,19 +262,19 @@ export function Calendar() {
                   const daysUntil = Math.ceil((new Date(event.date).getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24));
                   const billEvent = event as { isOverdue?: boolean; status?: string };
                   return (
-                    <div key={`bill-${event.id}`} className={`flex items-center gap-3 rounded-lg border p-3 ${
+                    <div key={`bill-${event.id}`} className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 ${
                       billEvent.isOverdue ? "border-[#D32F2F] bg-[#D32F2F]/5" :
                       event.priority === 2 ? "border-[#ED6C02] bg-[#ED6C02]/5" :
                       "border-[#E8E0D8] bg-white"
                     }`}>
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
                         billEvent.isOverdue ? "bg-[#D32F2F]/10" :
                         event.priority === 2 ? "bg-[#ED6C02]/10" :
                         "bg-[#8D8A87]/10"
                       }`}>
-                        {billEvent.isOverdue ? <AlertTriangle className="h-5 w-5 text-[#D32F2F]" /> :
-                         event.priority === 2 ? <Clock className="h-5 w-5 text-[#ED6C02]" /> :
-                         <FileText className="h-5 w-5 text-[#8D8A87]" />}
+                        {billEvent.isOverdue ? <AlertTriangle className="h-4 w-4 text-[#D32F2F]" /> :
+                         event.priority === 2 ? <Clock className="h-4 w-4 text-[#ED6C02]" /> :
+                         <FileText className="h-4 w-4 text-[#8D8A87]" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -363,19 +363,19 @@ export function Calendar() {
                     tabIndex={isSubEvent ? 0 : undefined}
                     onKeyDown={isSubEvent ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openSubscription?.(); } } : undefined}
                   >
-                    <CardContent className="flex items-center gap-4 p-4">
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                    <CardContent className="flex items-center gap-3 px-3 py-2">
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
                         event.type === "sale" ? "bg-[#2E7D32]/10" :
                         event.type === "expense" ? "bg-[#D32F2F]/10" :
                         event.type === "bill" ? billEvent.isOverdue ? "bg-[#D32F2F]/10" : event.priority >= 2 ? "bg-[#ED6C02]/10" : "bg-[#8D8A87]/10" :
                         isSubEvent ? subOverdue ? "bg-[#D32F2F]/10" : subDueToday ? "bg-[#6B4FA8]" : "bg-[#6B4FA8]/10" :
                         "bg-[#D4A854]/10"
                       }`}>
-                        {event.type === "sale" ? <Receipt className="h-5 w-5 text-[#2E7D32]" /> :
-                         event.type === "expense" ? <TrendingDown className="h-5 w-5 text-[#D32F2F]" /> :
-                         event.type === "bill" ? billEvent.isOverdue ? <AlertTriangle className="h-5 w-5 text-[#D32F2F]" /> : <FileText className="h-5 w-5 text-[#ED6C02]" /> :
-                         isSubEvent ? <Repeat className={`h-5 w-5 ${subOverdue ? "text-[#D32F2F]" : subDueToday ? "text-white" : "text-[#6B4FA8]"}`} /> :
-                         <Landmark className="h-5 w-5 text-[#D4A854]" />}
+                        {event.type === "sale" ? <Receipt className="h-4 w-4 text-[#2E7D32]" /> :
+                         event.type === "expense" ? <TrendingDown className="h-4 w-4 text-[#D32F2F]" /> :
+                         event.type === "bill" ? billEvent.isOverdue ? <AlertTriangle className="h-4 w-4 text-[#D32F2F]" /> : <FileText className="h-4 w-4 text-[#ED6C02]" /> :
+                         isSubEvent ? <Repeat className={`h-4 w-4 ${subOverdue ? "text-[#D32F2F]" : subDueToday ? "text-white" : "text-[#6B4FA8]"}`} /> :
+                         <Landmark className="h-4 w-4 text-[#D4A854]" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -396,13 +396,13 @@ export function Calendar() {
                           {event.priority === 2 && !billEvent.isOverdue && <span className="text-xs font-bold text-[#ED6C02]">DUE SOON</span>}
                           {billEvent.status === "partial" && !billEvent.isOverdue && event.priority !== 2 && <span className="text-xs font-bold text-[#D4A854]">PARTIAL</span>}
                         </div>
-                        <p className="mt-1 truncate text-sm font-medium text-[#2D2A26]">{event.title}</p>
+                        <p className="mt-0.5 truncate text-sm font-medium text-[#2D2A26]">{event.title}</p>
                         {isSubEvent && (event as { branchName?: string | null }).branchName !== undefined && (
-                          <p className="mt-0.5 truncate text-xs text-[#8D8A87]">{(event as { branchName?: string | null }).branchName ?? "Whole business"}</p>
+                          <p className="truncate text-[11px] text-[#8D8A87]">{(event as { branchName?: string | null }).branchName ?? "Whole business"}</p>
                         )}
                       </div>
                       {event.amount && (
-                        <span className={`shrink-0 font-mono text-sm font-semibold ${
+                        <span className={`shrink-0 font-mono text-xs font-semibold ${
                           event.type === "sale" ? "text-[#2E7D32]" :
                           event.type === "expense" ? "text-[#D32F2F]" :
                           isSubEvent ? subOverdue ? "text-[#D32F2F]" : "text-[#6B4FA8]" :

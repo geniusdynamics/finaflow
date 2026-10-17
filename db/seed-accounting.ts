@@ -1,6 +1,6 @@
 import { getDb } from "../api/queries/connection";
 import { accounts, expenseCategories } from "./schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 
 const defaultAccounts = [
   { accountCode: "1000", name: "Cash - Main", accountType: "asset", accountSubType: "cash", type: "cash" as const, openingBalance: "0.00" },
@@ -135,6 +135,22 @@ export async function seedAccountingData(businessId: number, locationId?: number
   for (const cat of defaultExpenseCategories) {
     const mapping = expenseCategoryMappings[cat.name];
     const account = mapping ? accountByCode.get(mapping.defaultAccountCode) : undefined;
+    // expense_categories has no unique (businessId, locationId, name) constraint, so
+    // ON CONFLICT DO NOTHING never fired and every seed run inserted a fresh set.
+    // Check explicitly before inserting to keep seeding idempotent.
+    const [existing] = await db
+      .select({ id: expenseCategories.id })
+      .from(expenseCategories)
+      .where(
+        and(
+          eq(expenseCategories.businessId, businessId),
+          locationId == null ? isNull(expenseCategories.locationId) : eq(expenseCategories.locationId, locationId),
+          eq(expenseCategories.name, cat.name),
+          isNull(expenseCategories.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (existing) continue;
     await db.insert(expenseCategories).values({
       ...cat,
       businessId,
@@ -143,7 +159,7 @@ export async function seedAccountingData(businessId: number, locationId?: number
       accountingClass: (mapping?.accountingClass || "operating_expense") as any,
       defaultAccountId: account?.id ?? null,
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any).onConflictDoNothing();
+    } as any);
   }
 
   // Re-derive the category→account mapping in case any categories were just created

@@ -139,6 +139,7 @@ interface SubscriptionRow {
   vendorName: string | null;
   categoryName: string | null;
   postingModeLabel: string;
+  lastPaidDate: string | null;
 }
 
 interface SubscriptionDetail extends SubscriptionRow {
@@ -273,6 +274,7 @@ function PaymentHistoryTable({ subscriptionId, canConfirm }: { subscriptionId: n
 function MarkPaidDialog({ row, onClose }: { row: SubscriptionRow; onClose: () => void }) {
   const utils = trpc.useUtils();
   const { data: accounts } = trpc.accounts.list.useQuery();
+  const [payEarly, setPayEarly] = useState(false);
   const [payForm, setPayForm] = useState({
     amount: row.amount,
     paidDate: getLocalDateString(),
@@ -281,6 +283,14 @@ function MarkPaidDialog({ row, onClose }: { row: SubscriptionRow; onClose: () =>
     reference: "",
     notes: "",
   });
+  // Paying a cycle further ahead than the reminder window requires explicit "Pay early"
+  // confirmation — this is what stops a second accidental payment in the same period.
+  const payAheadWindowDays = row.notifyDaysBefore ?? 7;
+  const daysAhead = Math.round(
+    (new Date(row.nextDueDate).getTime() - new Date(payForm.paidDate).getTime()) / 86_400_000,
+  );
+  const needsEarlyConfirmation = daysAhead > payAheadWindowDays;
+  const canSubmit = !needsEarlyConfirmation || payEarly;
   const recordPayment = trpc.subscriptions.recordPayment.useMutation({
     onSuccess: () => {
       toast.success("Payment recorded");
@@ -299,10 +309,15 @@ function MarkPaidDialog({ row, onClose }: { row: SubscriptionRow; onClose: () =>
         <DialogHeader>
           <DialogTitle className="font-serif text-xl text-[#2D2A26]">Mark Paid — {row.name}</DialogTitle>
         </DialogHeader>
+        <div className="rounded-lg border border-[#E8E0D8] bg-[#F5EDE6]/60 px-3 py-2 text-xs text-[#2D2A26]" data-testid="mark-paid-cycle">
+          Paying for cycle <strong>{formatDate(row.nextDueDate)}</strong> — {row.currency} {row.amount}
+          {row.lastPaidDate && <> · last paid {formatDate(row.lastPaidDate)}</>}
+        </div>
         <form
           className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
+            if (!canSubmit) return;
             recordPayment.mutate({
               subscriptionId: row.id,
               amount: payForm.amount,
@@ -311,9 +326,25 @@ function MarkPaidDialog({ row, onClose }: { row: SubscriptionRow; onClose: () =>
               accountId: payForm.accountId ? Number(payForm.accountId) : undefined,
               reference: payForm.reference || undefined,
               notes: payForm.notes || undefined,
+              allowEarly: payEarly,
             });
           }}
         >
+          {needsEarlyConfirmation && (
+            <label className="flex items-start gap-2 rounded-lg border border-[#ED6C02]/40 bg-[#ED6C02]/5 px-3 py-2 text-xs text-[#2D2A26]">
+              <input
+                type="checkbox"
+                checked={payEarly}
+                onChange={(e) => setPayEarly(e.target.checked)}
+                className="mt-0.5"
+                data-testid="pay-early-checkbox"
+              />
+              <span>
+                This cycle isn't due until {formatDate(row.nextDueDate)} ({daysAhead} days away).
+                Tick <strong>Pay early</strong> to record it now.
+              </span>
+            </label>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Amount</Label>
@@ -356,7 +387,7 @@ function MarkPaidDialog({ row, onClose }: { row: SubscriptionRow; onClose: () =>
             <Label>Reference</Label>
             <Input value={payForm.reference} onChange={(e) => setPayForm((p) => ({ ...p, reference: e.target.value }))} placeholder="Reference code" />
           </div>
-          <Button type="submit" className="w-full bg-[#C73E1D]" disabled={recordPayment.isPending}>
+          <Button type="submit" className="w-full bg-[#C73E1D]" disabled={recordPayment.isPending || !canSubmit}>
             {recordPayment.isPending ? "Recording..." : "Record Payment"}
           </Button>
         </form>
@@ -477,7 +508,17 @@ function SubscriptionDetailBody({ detail, canPay, canManage, onMarkPaid }: { det
       )}
       <p className="text-xs text-[#8D8A87]">Last updated {formatDate(detail.updatedAt)} · {detail.paymentCount} payment{detail.paymentCount === 1 ? "" : "s"} recorded</p>
       {canPay && detail.status !== "cancelled" && (
-        <Button className="bg-[#C73E1D]" onClick={onMarkPaid}>Mark Paid</Button>
+        <Button
+          className={
+            detail.lastPaidDate && !detail.isOverdue
+              ? "bg-[#2E7D32] hover:bg-[#2E7D32]/90"
+              : "bg-[#C73E1D]"
+          }
+          onClick={onMarkPaid}
+        >
+          {detail.lastPaidDate && !detail.isOverdue ? <CheckCircle className="mr-1 h-3 w-3" /> : null}
+          Mark Paid
+        </Button>
       )}
       {canManage && detail.status === "cancelled" && detail.cancelReason && (
         <p className="text-sm text-[#8D8A87]">Cancel reason: {detail.cancelReason}</p>
@@ -797,7 +838,19 @@ export function Subscriptions({ embedded }: { embedded?: boolean }) {
           >
             <RotateCcw className="h-3 w-3" /> Renew
           </Button>
-          <Button size="sm" className="bg-[#C73E1D]" onClick={() => setPayForId(row.id)}>
+          <Button
+            size="sm"
+            className={
+              row.lastPaidDate && !row.isOverdue
+                ? "bg-[#2E7D32] hover:bg-[#2E7D32]/90"
+                : "bg-[#C73E1D]"
+            }
+            onClick={() => setPayForId(row.id)}
+            data-testid={`mark-paid-${row.id}`}
+          >
+            {row.lastPaidDate && !row.isOverdue ? (
+              <CheckCircle className="mr-1 h-3 w-3" />
+            ) : null}
             Mark paid
           </Button>
         </>
@@ -872,6 +925,9 @@ export function Subscriptions({ embedded }: { embedded?: boolean }) {
                 </div>
                 <Progress value={row.progress} className="h-2 bg-[#E8E0D8]" />
               </div>
+              <p className={`text-xs ${row.lastPaidDate ? "text-[#2E7D32]" : "text-[#8D8A87]"}`}>
+                {row.lastPaidDate ? `Last paid ${formatDate(row.lastPaidDate)}` : "Not paid yet"}
+              </p>
               {cardActions(row)}
             </CardContent>
           </Card>

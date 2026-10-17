@@ -71,12 +71,25 @@ export const expensesRouter = createRouter({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
     if (!businessId) return [];
-    return db.select().from(expenseCategories)
+    const rows = await db.select().from(expenseCategories)
       .where(and(
         isNull(expenseCategories.deletedAt),
         sql`((${isNull(expenseCategories.businessId)}) OR (${eq(expenseCategories.businessId, businessId)}))`
       ))
       .orderBy(expenseCategories.name);
+
+    // Legacy global rows (businessId IS NULL) can share a name with a business-scoped row,
+    // which made the dropdown show the same category twice. Prefer the business-scoped row
+    // and keep globals only where the business has no row of its own.
+    const byName = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) {
+      const key = row.name.trim().toLowerCase();
+      const existing = byName.get(key);
+      if (!existing || (existing.businessId == null && row.businessId != null)) {
+        byName.set(key, row);
+      }
+    }
+    return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
   }),
 
   createCategory: expenseCategoriesManage

@@ -23,6 +23,7 @@ const paymentInput = z.object({
   reference: z.string().max(100).optional(),
   notes: z.string().optional(),
   advance: z.boolean().default(true),
+  allowEarly: z.boolean().default(false),
 });
 
 subscriptions.get("/", resolveApiKeyMiddleware("subscriptions:read"), async (c) => {
@@ -111,6 +112,7 @@ subscriptions.post("/:id/payments", resolveApiKeyMiddleware("subscriptions:write
         userId: actingUserId,
         businessId: apiKey.businessId,
         advance: input.advance && cycleDueDate === subscription.nextDueDate,
+        allowEarly: input.allowEarly,
       }),
     );
 

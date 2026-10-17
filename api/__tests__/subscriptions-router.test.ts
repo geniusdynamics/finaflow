@@ -304,10 +304,50 @@ describe("Subscriptions router", () => {
       postingMode: "none",
       nextDueDate: "2026-12-05",
     });
-    await callerOwnerA.subscriptions.recordPayment({ subscriptionId: sub.id, cycleDueDate: "2026-12-05", paymentMethod: "cash", advance: false });
+    await callerOwnerA.subscriptions.recordPayment({ subscriptionId: sub.id, cycleDueDate: "2026-12-05", paymentMethod: "cash", advance: false, allowEarly: true });
     await expect(
       callerOwnerA.subscriptions.recordPayment({ subscriptionId: sub.id, cycleDueDate: "2026-12-05", paymentMethod: "cash", advance: false }),
     ).rejects.toThrow(/already recorded/);
+  });
+
+  it("blocks marking the same subscription paid again until the next cycle is due (unless pay-early)", async () => {
+    const sub = await callerOwnerA.subscriptions.create({
+      ...baseSub,
+      name: "No Double Pay",
+      locationId: locA1.id,
+      postingMode: "none",
+      nextDueDate: "2027-05-01",
+      cycleUnit: "month",
+      cycleCount: 1,
+    });
+
+    // Pay the cycle that is due (paid-date matches the cycle date).
+    const first = await callerOwnerA.subscriptions.recordPayment({
+      subscriptionId: sub.id,
+      paidDate: "2027-05-01",
+      paymentMethod: "cash",
+    });
+    expect(first.paymentId).toBeGreaterThan(0);
+
+    // The schedule advanced a cycle; marking paid again today must be refused.
+    await expect(
+      callerOwnerA.subscriptions.recordPayment({ subscriptionId: sub.id, paymentMethod: "cash" }),
+    ).rejects.toThrow(/isn't due until/);
+
+    // Explicit "Pay early" confirmation is still allowed (prepayment workflow).
+    const early = await callerOwnerA.subscriptions.recordPayment({
+      subscriptionId: sub.id,
+      paymentMethod: "cash",
+      allowEarly: true,
+    });
+    expect(early.paymentId).toBeGreaterThan(0);
+
+    const payments = await db.select().from(subscriptionPayments).where(eq(subscriptionPayments.subscriptionId, sub.id));
+    expect(payments).toHaveLength(2);
+
+    // The list exposes the last paid date so the card can show payment state.
+    const listed = await callerOwnerA.subscriptions.list({ search: "No Double Pay" });
+    expect(listed.rows[0].lastPaidDate).toBe("2027-05-01");
   });
 
   it("rolls back payment and expense together when posting fails mid-way", async () => {
@@ -321,7 +361,7 @@ describe("Subscriptions router", () => {
     });
 
     await expect(
-      callerOwnerA.subscriptions.recordPayment({ subscriptionId: sub.id, accountId: cashA1.id, paymentMethod: "cash" }),
+      callerOwnerA.subscriptions.recordPayment({ subscriptionId: sub.id, accountId: cashA1.id, paymentMethod: "cash", allowEarly: true }),
     ).rejects.toThrow(/not linked to a chart of accounts/);
 
     const payments = await db.select().from(subscriptionPayments).where(eq(subscriptionPayments.subscriptionId, sub.id));
@@ -340,7 +380,7 @@ describe("Subscriptions router", () => {
       postingMode: "expense",
       nextDueDate: "2027-02-01",
     });
-    const result = await callerOwnerA.subscriptions.recordPayment({ subscriptionId: sub.id, accountId: cashA2.id, paymentMethod: "cash" });
+    const result = await callerOwnerA.subscriptions.recordPayment({ subscriptionId: sub.id, accountId: cashA2.id, paymentMethod: "cash", allowEarly: true });
     const [expense] = await db.select().from(expenses).where(eq(expenses.id, result.expenseId!));
     expect(expense.locationId).toBe(locA2.id);
   });
@@ -354,7 +394,7 @@ describe("Subscriptions router", () => {
       postingMode: "none",
       nextDueDate: "2027-03-01",
     });
-    const result = await callerOwnerA.subscriptions.recordPayment({ subscriptionId: sub.id, paymentMethod: "cash" });
+    const result = await callerOwnerA.subscriptions.recordPayment({ subscriptionId: sub.id, paymentMethod: "cash", allowEarly: true });
     expect(result.expenseId).toBeNull();
     expect(result.billId).toBeNull();
   });
@@ -373,6 +413,7 @@ describe("Subscriptions router", () => {
       subscriptionId: sub.id,
       accountId: cashA1.id,
       paymentMethod: "cash",
+      allowEarly: true,
     });
     expect(result.billId).toBeGreaterThan(0);
 
@@ -536,6 +577,7 @@ describe("Subscriptions router", () => {
       cycleDueDate: "2027-08-05",
       paymentMethod: "cash",
       advance: false,
+      allowEarly: true,
     });
     const after = await callerOwnerA.subscriptions.stats({});
     const augAfter = after.monthStats.find((m) => m.month === "2027-08")!;

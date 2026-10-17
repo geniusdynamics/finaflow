@@ -55,6 +55,7 @@ const mockState = vi.hoisted(() => {
       vendorName: "Safaricom",
       categoryName: "Utilities",
       postingModeLabel: "Create expense",
+      lastPaidDate: "2026-10-16",
     },
     {
       id: 2,
@@ -105,6 +106,7 @@ const mockState = vi.hoisted(() => {
       vendorName: null,
       categoryName: "Pantry",
       postingModeLabel: "Create bill",
+      lastPaidDate: null,
     },
   ];
   return {
@@ -236,6 +238,7 @@ describe("Subscriptions summary strip", () => {
         isOverdue: false,
         branchName: null,
         postingModeLabel: "Create expense",
+        lastPaidDate: "2026-10-16",
       },
       {
         id: 2,
@@ -262,6 +265,7 @@ describe("Subscriptions summary strip", () => {
         isOverdue: true,
         branchName: "Westlands",
         postingModeLabel: "Create bill",
+        lastPaidDate: null,
       },
     ];
     mockState.totals = { monthly: "2200.00", yearly: "26400.00", currency: "KES", conversionUnavailable: 2 };
@@ -311,6 +315,34 @@ describe("Subscriptions cards view", () => {
         isOverdue: false,
         branchName: null,
         postingModeLabel: "Create expense",
+        lastPaidDate: "2026-10-16",
+      },
+      {
+        id: 2,
+        name: "Office Coffee",
+        amount: "1000.00",
+        currency: "KES",
+        cycleUnit: "month",
+        cycleCount: 1,
+        isOneTime: false,
+        startDate: "2026-02-01",
+        nextDueDate: "2026-10-11",
+        autoRenew: false,
+        status: "active",
+        locationId: 2,
+        vendorName: null,
+        categoryName: "Pantry",
+        monthlyNormalized: "1000.00",
+        yearlyNormalized: "12000.00",
+        convertedMonthly: null,
+        convertedYearly: null,
+        progress: 10,
+        daysUntilDue: -5,
+        isDueSoon: false,
+        isOverdue: true,
+        branchName: "Westlands",
+        postingModeLabel: "Create bill",
+        lastPaidDate: null,
       },
     ];
   });
@@ -322,6 +354,15 @@ describe("Subscriptions cards view", () => {
     expect(html).toContain('data-testid="subscription-card-1"');
     expect(html).toContain("Safaricom");
     expect(html).toContain("/ month");
+  });
+
+  it("colours Mark paid green when a payment exists and red when unpaid", () => {
+    const html = renderSubscriptions();
+    // Row 1 has a last payment -> green + check; row 2 was never paid -> red.
+    expect(html).toContain("Last paid");
+    expect(html).toContain("Not paid yet");
+    expect(html).toContain("bg-[#2E7D32]");
+    expect(html).toContain("bg-[#C73E1D]");
   });
 
   it("renders all three view options in the SegmentedToggle", () => {

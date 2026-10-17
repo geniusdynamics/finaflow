@@ -3,7 +3,7 @@
 // ABOUTME: Used by both the tRPC subscriptions router and the external /api/v1 REST API.
 import { and, eq, isNull } from "drizzle-orm";
 import { subscriptionPayments, subscriptions, type Subscription } from "@db/schema";
-import { advanceDueDate, parsePositiveAmount, type CycleUnit } from "./subscription-math";
+import { advanceDueDate, daysBetween, parsePositiveAmount, type CycleUnit } from "./subscription-math";
 import { postSubscriptionPayment, type SubscriptionPaymentMethod } from "./subscription-posting";
 import { clearNotificationsForSubscription } from "./notification-clearance";
 import type { DbClient } from "./account-subscriptions";
@@ -20,7 +20,13 @@ export interface RecordPaymentArgs {
   userId: number;
   businessId: number;
   advance: boolean;
+  /** Allow paying a cycle that is further ahead than the pay-ahead window. */
+  allowEarly?: boolean;
+  /** Days before a cycle's due date that it may be paid without `allowEarly`. */
+  payAheadWindowDays?: number;
 }
+
+const DEFAULT_PAY_AHEAD_WINDOW_DAYS = 7;
 
 export interface RecordPaymentResult {
   paymentId: number;
@@ -49,6 +55,19 @@ export async function recordPaymentInTx(tx: DbClient, args: RecordPaymentArgs): 
     )
     .limit(1);
   if (existing) throw new Error("Payment for this cycle is already recorded");
+
+  // Guard against marking the same item paid twice in one period: once the next cycle is
+  // more than the pay-ahead window away, a payment must be explicitly confirmed as early.
+  if (!args.allowEarly) {
+    const windowDays = args.payAheadWindowDays ?? DEFAULT_PAY_AHEAD_WINDOW_DAYS;
+    const daysAhead = daysBetween(cycleDueDate, args.paidDate);
+    if (daysAhead > windowDays) {
+      throw new Error(
+        `This cycle isn't due until ${cycleDueDate} (${daysAhead} days ahead). ` +
+          `Tick "Pay early" to record it now.`,
+      );
+    }
+  }
 
   const [payment] = await tx
     .insert(subscriptionPayments)

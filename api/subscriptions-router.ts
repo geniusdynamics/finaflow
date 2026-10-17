@@ -25,7 +25,7 @@ import {
   suppliers,
   type Subscription,
 } from "@db/schema";
-import { and, asc, desc, eq, gte, inArray, isNull, like, lt, or, count, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, like, lt, or, count, sql, type SQL } from "drizzle-orm";
 import { d, Decimal } from "./lib/decimal";
 import {
   advanceDueDate,
@@ -204,6 +204,32 @@ interface ComputedRow {
   vendorName: string | null;
   categoryName: string | null;
   postingModeLabel: string;
+  lastPaidDate: string | null;
+}
+
+/** Most recent confirmed payment date per subscription (for the "Last paid" card state). */
+async function loadLastPaidDates(
+  db: ReturnType<typeof getDb>,
+  businessId: number,
+  ids: number[],
+): Promise<Map<number, string>> {
+  if (ids.length === 0) return new Map();
+  const rows = await db
+    .select({
+      subscriptionId: subscriptionPayments.subscriptionId,
+      paidDate: sql<string | null>`max(${subscriptionPayments.paidDate})`,
+    })
+    .from(subscriptionPayments)
+    .where(
+      and(
+        eq(subscriptionPayments.businessId, businessId),
+        eq(subscriptionPayments.confirmed, true),
+        isNull(subscriptionPayments.deletedAt),
+        inArray(subscriptionPayments.subscriptionId, ids),
+      ),
+    )
+    .groupBy(subscriptionPayments.subscriptionId);
+  return new Map(rows.filter((r) => r.paidDate).map((r) => [r.subscriptionId, r.paidDate as string]));
 }
 
 function decorateRow(
@@ -212,6 +238,7 @@ function decorateRow(
   rates: Map<string, Decimal | null>,
   defaultNotifyDays: number,
   today: string,
+  lastPaidDates: Map<number, string>,
 ): Subscription & ComputedRow {
   const monthly = row.isOneTime ? d(0) : monthlyNormalized(row.amount, row.cycleUnit as CycleUnit, row.cycleCount);
   const yearly = row.isOneTime ? d(0) : yearlyNormalized(row.amount, row.cycleUnit as CycleUnit, row.cycleCount);
@@ -233,6 +260,7 @@ function decorateRow(
     vendorName: row.vendorId ? (names.vendorNames.get(row.vendorId) ?? null) : null,
     categoryName: row.categoryId ? (names.categoryNames.get(row.categoryId) ?? null) : null,
     postingModeLabel: postingModeLabel(row.postingMode),
+    lastPaidDate: lastPaidDates.get(row.id) ?? null,
   };
 }
 
@@ -370,8 +398,9 @@ export const subscriptionsRouter = createRouter({
     ]);
     const defaultNotifyDays = Number(defaultNotifyDaysRaw) || 7;
     const rates = await buildRateMap(rows.map((r) => r.currency), base);
+    const lastPaidDates = await loadLastPaidDates(db, businessId, rows.map((r) => r.id));
 
-    const decorated = rows.map((r) => decorateRow(r, names, rates, defaultNotifyDays, today));
+    const decorated = rows.map((r) => decorateRow(r, names, rates, defaultNotifyDays, today, lastPaidDates));
     const totals = decorated.reduce(
       (acc, r) => {
         if (r.convertedMonthly) acc.monthly = acc.monthly.plus(d(r.convertedMonthly));
@@ -419,8 +448,9 @@ export const subscriptionsRouter = createRouter({
     ]);
 
     const rates = await buildRateMap([row.currency], base);
+    const lastPaidDates = await loadLastPaidDates(db, businessId, [row.id]);
     return {
-      ...decorateRow(row, names, rates, Number(defaultNotifyDaysRaw) || 7, today),
+      ...decorateRow(row, names, rates, Number(defaultNotifyDaysRaw) || 7, today, lastPaidDates),
       payments,
       paymentCount: payments.length,
       successorName: successor[0]?.name ?? null,
@@ -667,6 +697,8 @@ export const subscriptionsRouter = createRouter({
           userId,
           businessId,
           advance: false,
+          // Renewal is an explicit action: paying the cycle being renewed is always allowed.
+          allowEarly: true,
         }).then((r) => ({ ...r, nextDueDate }));
       });
 
@@ -693,6 +725,7 @@ export const subscriptionsRouter = createRouter({
         reference: z.string().max(100).optional(),
         notes: z.string().optional(),
         advance: z.boolean().default(true),
+        allowEarly: z.boolean().default(false),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -701,6 +734,7 @@ export const subscriptionsRouter = createRouter({
       const userId = ctx.user?.id ?? 0;
       const row = await getSubscriptionChecked(ctx, input.subscriptionId);
       const cycleDueDate = input.cycleDueDate ?? row.nextDueDate;
+      const defaultNotifyDays = Number(await getSubscriptionSetting(db, businessId, "subscriptions_default_notify_days", "7")) || 7;
 
       const result = await db.transaction((tx) =>
         recordPaymentInTx(tx, {
@@ -715,6 +749,8 @@ export const subscriptionsRouter = createRouter({
           userId,
           businessId,
           advance: input.advance && cycleDueDate === row.nextDueDate,
+          allowEarly: input.allowEarly,
+          payAheadWindowDays: row.notifyDaysBefore ?? defaultNotifyDays,
         }),
       );
 
@@ -993,8 +1029,9 @@ async function computeStats(rows: Subscription[], businessId: number, today: str
   ]);
   const defaultNotifyDays = Number(defaultNotifyDaysRaw) || 7;
   const rates = await buildRateMap(rows.map((r) => r.currency), base);
+  const lastPaidDates = await loadLastPaidDates(db, businessId, rows.map((r) => r.id));
 
-  const decorated = rows.map((r) => decorateRow(r, names, rates, defaultNotifyDays, today));
+  const decorated = rows.map((r) => decorateRow(r, names, rates, defaultNotifyDays, today, lastPaidDates));
   const active = decorated.filter((r) => r.status === "active" && !r.isOneTime);
   const inactive = decorated.filter((r) => (r.status === "paused" || r.status === "cancelled") && !r.isOneTime);
 

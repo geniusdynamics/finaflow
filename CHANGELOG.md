@@ -3,6 +3,19 @@
 ## [Unreleased]
 
 ### Added
+- **Paid-state affordance on subscriptions** — "Mark paid" is now **green with a check** when a payment exists and the subscription isn't overdue, and **red** otherwise ("never paid or overdue"); the card and the detail popup both show `Last paid <date>` / `Not paid yet`. Backed by a new `lastPaidDate` field on `subscriptions.list`/`get`. Files: `src/pages/Subscriptions.tsx`, `api/subscriptions-router.ts`.
+- **Pay-ahead confirmation in the Mark-paid dialog** — the dialog now states exactly which cycle is being paid and requires an explicit **Pay early** tick when the cycle is further ahead than the pay-ahead window; the submit stays disabled until ticked.
+
+### Fixed
+- **A subscription could be marked paid again in the same period** — after a payment the schedule advances, so a second click silently paid the *next* cycle (observed in the dev data: a yearly Figma subscription paid twice 62 seconds apart, jumping two years). `recordPayment` now rejects cycles further ahead than the pay-ahead window (default 7 days, or the subscription's notify window) unless `allowEarly` is passed explicitly; renewals and API integrations can still prepay deliberately. `api/lib/subscription-service.ts`, `api/subscriptions-router.ts`, `api/routes/v1/subscriptions.ts`.
+- **Duplicate expense categories in every category dropdown** — `seedAccountingData` reused `onConflictDoNothing()` but `expense_categories` has no unique `(businessId, locationId, name)` constraint, so each seed run inserted a fresh 12-category set (the dev DB had 6 copies of each name, 72 rows). Seeding is now idempotent, a new `scripts/dedupe-expense-categories.ts` (dry-run by default, repoints FKs, soft-deletes duplicates) cleaned the existing 60 duplicates, and `expenses.categories` no longer returns a legacy global (businessId NULL) category that collides by name with the business's own row. Affects the Subscriptions form and the Expenses page alike.
+- **Oversized calendar list rows** — timeline event cards and the bill priority queue now use tighter padding and smaller icon boxes (~70px rows instead of ~145px).
+- **Legacy global categories shadowing business categories** — see the category fix above (`api/expenses-router.ts`).
+
+### Tested
+- Subscription suites re-run green after the changes (**104 tests** across math/router/v1/sweep/calendar/page), including new coverage for the pay-early guard (second same-period payment rejected; `allowEarly` allowed; `lastPaidDate` exposed) and the paid/unpaid button colours. Browser-verified: compact calendar rows, green/red Mark-paid states on cards and in the detail popup, pay-early dialog with disabled submit, and 15 deduplicated categories.
+
+### Added
 - **Calendar statistics panel (Wallos `calendar-monthly-stats` parity)** — the calendar view now shows a **Statistics** block with three cards for the current month (Active Subscriptions · Total Cost · Amount due this month) plus the over-budget warning bar when a `budgetPlans` budget exists. Backed by a new per-month `monthStats` block on `subscriptions.stats` (`month`, `dueCount`, base-currency `total`, payment-netted `amountDue`, `budget`). Files: `api/subscriptions-router.ts`, `src/pages/Calendar.tsx`.
 
 ### Fixed
