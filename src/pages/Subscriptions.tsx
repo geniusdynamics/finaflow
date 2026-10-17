@@ -145,7 +145,7 @@ interface SubscriptionRow {
 interface SubscriptionDetail extends SubscriptionRow {
   successorName: string | null;
   predecessorName: string | null;
-  paymentCount: number;
+  paymentCount?: number;
 }
 
 interface PaymentRow {
@@ -506,20 +506,24 @@ function SubscriptionDetailBody({ detail, canPay, canManage, onMarkPaid }: { det
           <p className="text-sm text-[#2D2A26]">{detail.notes}</p>
         </div>
       )}
-      <p className="text-xs text-[#8D8A87]">Last updated {formatDate(detail.updatedAt)} · {detail.paymentCount} payment{detail.paymentCount === 1 ? "" : "s"} recorded</p>
-      {canPay && detail.status !== "cancelled" && (
-        <Button
-          className={
-            detail.lastPaidDate && !detail.isOverdue
-              ? "bg-[#2E7D32] hover:bg-[#2E7D32]/90"
-              : "bg-[#C73E1D]"
-          }
-          onClick={onMarkPaid}
-        >
-          {detail.lastPaidDate && !detail.isOverdue ? <CheckCircle className="mr-1 h-3 w-3" /> : null}
-          Mark Paid
-        </Button>
-      )}
+      <p className="text-xs text-[#8D8A87]">
+        Last updated {formatDate(detail.updatedAt)} · {detail.paymentCount ?? 0} payment{(detail.paymentCount ?? 0) === 1 ? "" : "s"} recorded
+        {detail.lastPaidDate ? <> · last paid {formatDate(detail.lastPaidDate)}</> : null}
+      </p>
+      {canPay && detail.status !== "cancelled" && (() => {
+        const hasPayment = detail.lastPaidDate != null || (detail.paymentCount ?? 0) > 0;
+        const paidUp = hasPayment && !detail.isOverdue;
+        return (
+          <Button
+            className={paidUp ? "bg-[#2E7D32] hover:bg-[#2E7D32]/90" : "bg-[#C73E1D]"}
+            onClick={onMarkPaid}
+            data-testid="detail-mark-paid"
+          >
+            {paidUp ? <CheckCircle className="mr-1 h-3 w-3" /> : null}
+            Mark Paid
+          </Button>
+        );
+      })()}
       {canManage && detail.status === "cancelled" && detail.cancelReason && (
         <p className="text-sm text-[#8D8A87]">Cancel reason: {detail.cancelReason}</p>
       )}
@@ -681,7 +685,13 @@ export function Subscriptions({ embedded }: { embedded?: boolean }) {
     onError: (e) => toast.error(e.message),
   });
 
-  const detailRow = detailId != null ? rows.find((r) => r.id === detailId) ?? null : null;
+  // The detail popup reads the subscription's own record (fresh on open) so payment state
+  // cannot come from a stale list cache; falls back to the list row while it loads.
+  const { data: detailData } = trpc.subscriptions.get.useQuery(
+    { id: detailId ?? 0 },
+    { enabled: detailId != null },
+  );
+  const detailRow = detailId != null ? (detailData ?? rows.find((r) => r.id === detailId) ?? null) : null;
   const payRow = payForId != null ? rows.find((r) => r.id === payForId) ?? null : null;
   const cancelRow = cancelId != null ? rows.find((r) => r.id === cancelId) ?? null : null;
 
