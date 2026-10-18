@@ -9,6 +9,17 @@
 - `src/pages/__tests__/Profile.account-id.test.tsx` — **3 pass** (own profile, viewed profile, missing ID).
 - `npx tsc -b` and `npx eslint` on the touched files — clean.
 
+## [Unreleased]
+
+### Added
+- **Returning-user login** — the login page remembers up to three accounts used on the browser and opens straight on the username/password step for the most recent one, with the account chip acting as a **Change** button and the account-ID step listing recent accounts as quick picks. Storage is defensive: private mode, quota errors or malformed data fall back to the normal flow. Files: `src/lib/recent-accounts.ts`, `src/pages/Login.tsx`.
+- **Email-based account lookup** — the Account ID field now also accepts the email a user registered with; `localAuth.lookupAccount` resolves it case-insensitively (via `users.accountId`, then `customer_accounts`, then the user's first active business) before showing the credentials step. Files: `api/local-auth-router.ts`, `src/pages/Login.tsx`.
+
+### Tested
+- `src/lib/__tests__/recent-accounts.test.ts` (6), `src/pages/__tests__/Login.test.tsx` (9), `src/pages/__tests__/Login.remembered-account.test.tsx` (3) — **18 pass**.
+- `api/__tests__/local-auth-scope.test.ts` email lookup and unknown-email tests — pass against the test database.
+- `npx tsc -b` and focused `npx eslint` on all touched files — clean.
+
 ## [1.3.0] - 2026-10-18
 
 ### Fixed

@@ -166,5 +166,44 @@ Implemented the requested accounting model: subscriptions default to **bill** po
 - Card: "Unpaid bill for 17 Oct 2026" + red Mark paid → after settlement "Last paid 17 Oct 2026" + green Mark paid.
 - Popup: "Posting mode / Create bill / A bill is created on the due date and settled when you mark it paid", payment history pending → confirmed.
 
+---
+
+## 2026-10-18 — Returning-user login, email account lookup, Profile Account ID
+
+### What was done
+1. **Returning-user login** — the login page now remembers up to three accounts used in the browser and opens directly on the username/password step for the most recent one. The account chip on that step is a **Change** button; the account-ID step lists recent accounts as quick picks.
+2. **Email-based account lookup** — `localAuth.lookupAccount` accepts either an Account ID or the email the user registered with, resolving case-insensitively before showing the credentials step.
+3. **Profile Account ID** — the Profile page's Account Details card now shows the sign-in Account ID (own profile and admin-viewed profiles) with a copy button.
+
+### Files created
+| File | Purpose |
+|---|---|
+| `src/lib/recent-accounts.ts` | Defensive localStorage list (`finaflow_recent_accounts`, max 3): read, normalise, promote, ignore malformed/quota failures |
+| `src/lib/__tests__/recent-accounts.test.ts` | 6 unit tests with an in-memory Storage double |
+| `src/pages/__tests__/Login.remembered-account.test.tsx` | 3 render tests: auto-advance, change action, no-history fallback |
+| `src/pages/__tests__/Profile.account-id.test.tsx` | 3 render tests: own profile, viewed profile, missing ID |
+
+### Files modified
+| File | Change |
+|---|---|
+| `src/pages/Login.tsx` | Recent-account state + auto-advance, quick picks, **Change** button, Account ID/email field with format-aware hint, save on lookup and login success |
+| `api/local-auth-router.ts` | `findAccountIdByEmail` (users.email → customer_accounts → first active business, case-insensitive, most recent sign-in first); `lookupAccount` accepts emails (max 320) |
+| `api/__tests__/local-auth-scope.test.ts` | Email lookup (mixed case) and unknown-email tests |
+| `src/pages/Profile.tsx` | Account ID row in Account Details with clipboard copy + "Copied" feedback |
+| `CHANGELOG.md` | Two new sections under Unreleased |
+
+### Verification
+- `src/lib/__tests__/recent-accounts.test.ts` (6) + `src/pages/__tests__/Login.test.tsx` (9) + `src/pages/__tests__/Login.remembered-account.test.tsx` (3) — **18 pass**.
+- `api/__tests__/local-auth-scope.test.ts` — **14/14 pass** against the test DB, including email resolution.
+- `src/pages/__tests__/Profile.account-id.test.tsx` — **3/3 pass**.
+- `npx tsc -b` and focused `npx eslint` on every touched file — clean.
+- Not browser-verified: no dev server was running, and the OpenChamber browser carries a live session (so `/login` redirects to the dashboard there).
+
+### Findings / proposed next steps
+- Email lookup makes the unauthenticated `lookupAccount` an email→business/account oracle. The 120/min limiter was left unchanged to avoid breaking shared-office IPs; consider 30/min or resolving the email inside the login submit.
+- Pre-existing: `lookupAccount` returns every active username in the business; `users.email` has no index (email lookup is a sequential scan).
+- Pre-existing: `lookupLoading` state in `Login.tsx` is never set to `true` (the spinner uses `lookupMutation.isPending`).
+
+
 
 

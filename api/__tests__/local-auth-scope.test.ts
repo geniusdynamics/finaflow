@@ -283,6 +283,25 @@ describe("Local Auth - Account/Business Scope Separation", () => {
       .rejects.toMatchObject({ message: "Account not found" });
   });
 
+  it("looks up an account by the email registered for it", async () => {
+    const { caller: regCaller } = getRegisterCaller();
+    await regCaller.localAuth.register(baseSignup);
+
+    const caller = createCaller();
+    const result = await caller.localAuth.lookupAccount({
+      accountId: baseSignup.email.toUpperCase(),
+    });
+
+    expect(result.business.accountId).toBe(testAccountId);
+    expect(result.business.name).toBe(baseSignup.businessName);
+  });
+
+  it("fails lookup for an email with no account", async () => {
+    const caller = createCaller();
+    await expect(caller.localAuth.lookupAccount({ accountId: "nobody@example.com" }))
+      .rejects.toMatchObject({ message: "Account not found" });
+  });
+
   it("sets currentBusinessId and accountRefId on login", async () => {
     const { caller: regCaller } = getRegisterCaller();
     await regCaller.localAuth.register(baseSignup);
