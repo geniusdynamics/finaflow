@@ -1,4 +1,4 @@
-// ABOUTME: Integration tests for the subscriptions router — CRUD, validation, tenant/branch isolation,
+// ABOUTME: Integration tests for the subscriptions router â€” CRUD, validation, tenant/branch isolation,
 // ABOUTME: permission gating, payment posting to accounting (atomicity + posting location), calendar and stats.
 import { describe, expect, it, beforeAll } from "vitest";
 import { appRouter } from "../router";
@@ -68,7 +68,7 @@ describe("Subscriptions router", () => {
   let vendorB: typeof suppliers.$inferSelect;
   let cashA1: typeof accounts.$inferSelect;
   let cashA2: typeof accounts.$inferSelect;
-  let expenseAcctA: typeof accounts.$inferSelect;
+  let expenseAcctA: { id: number };
 
   let callerOwnerA: ReturnType<typeof appRouter.createCaller>;
   let callerManagerA1: ReturnType<typeof appRouter.createCaller>;
@@ -139,9 +139,9 @@ describe("Subscriptions router", () => {
     }
     await db.insert(userLocations).values({ userId: managerA1.id, locationId: locA1.id, isActive: true } as never);
 
-    [expenseAcctA] = await db.insert(accounts).values({ name: "Subs Expense Acct A", type: "bank_account", businessId: bizA.id, locationId: locA1.id, currentBalance: "0.00" } as never).returning();
-    [cashA1] = await db.insert(accounts).values({ name: "Subs Cash A1", type: "cash", businessId: bizA.id, locationId: locA1.id, currentBalance: "10000.00" } as never).returning();
-    [cashA2] = await db.insert(accounts).values({ name: "Subs Cash A2", type: "cash", businessId: bizA.id, locationId: locA2.id, currentBalance: "10000.00" } as never).returning();
+    [expenseAcctA] = await db.insert(accounts).values({ name: "Subs Expense Acct A", type: "bank_account", businessId: bizA.id, locationId: locA1.id, currentBalance: "0.00" } as never).returning({ id: accounts.id });
+    [cashA1] = await db.insert(accounts).values({ name: "Subs Cash A1", type: "cash", businessId: bizA.id, locationId: locA1.id, currentBalance: "10000.00" } as never).returning() as typeof accounts.$inferSelect[];
+    [cashA2] = await db.insert(accounts).values({ name: "Subs Cash A2", type: "cash", businessId: bizA.id, locationId: locA2.id, currentBalance: "10000.00" } as never).returning() as typeof accounts.$inferSelect[];
 
     [catA] = await db.insert(expenseCategories).values({ businessId: bizA.id, name: "Subs Cat A", defaultAccountId: expenseAcctA.id } as never).returning();
     [catNoAccount] = await db.insert(expenseCategories).values({ businessId: bizA.id, name: "Subs Cat No Account" } as never).returning();
@@ -157,7 +157,7 @@ describe("Subscriptions router", () => {
     callerOwnerB = makeAuthedCaller(ownerB, bizB, [bizB.id]);
   });
 
-  // ── CRUD + validation ─────────────────────────────────────────────────────
+  // â”€â”€ CRUD + validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   it("creates business-wide and branch-pinned subscriptions with computed fields on get", async () => {
     const wide = await callerOwnerA.subscriptions.create({
@@ -210,7 +210,7 @@ describe("Subscriptions router", () => {
     expect(ok.id).toBeGreaterThan(0);
   });
 
-  // ── Isolation ────────────────────────────────────────────────────────────
+  // â”€â”€ Isolation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   it("hides subscriptions across businesses and rejects cross-business access", async () => {
     const subA = await callerOwnerA.subscriptions.create({ ...baseSub, name: "Secret A", locationId: locA1.id });
@@ -238,7 +238,7 @@ describe("Subscriptions router", () => {
     await expect(callerManagerA1.subscriptions.create({ ...baseSub, locationId: locA2.id })).rejects.toThrow(/does not belong/);
   });
 
-  // ── Permission gating ────────────────────────────────────────────────────
+  // â”€â”€ Permission gating â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   it("enforces permissions server-side (employee cannot manage, viewer can only view)", async () => {
     await expect(callerEmployeeA.subscriptions.create({ ...baseSub, locationId: locA1.id })).rejects.toThrow(/permission/i);
@@ -250,7 +250,7 @@ describe("Subscriptions router", () => {
     await expect(callerViewerA.subscriptions.delete({ id: 1 })).rejects.toThrow(/permission/i);
   });
 
-  // ── Payments + posting ───────────────────────────────────────────────────
+  // â”€â”€ Payments + posting â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   it("records a payment that posts an expense atomically and advances the schedule", async () => {
     const sub = await callerOwnerA.subscriptions.create({
@@ -514,7 +514,7 @@ describe("Subscriptions router", () => {
     expect(confirmed.paidDate).toBeTruthy();
   });
 
-  // ── Lifecycle ────────────────────────────────────────────────────────────
+  // â”€â”€ Lifecycle â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   it("supports pause/resume/cancel and rejects invalid transitions", async () => {
     const sub = await callerOwnerA.subscriptions.create({ ...baseSub, name: "Lifecycle", locationId: locA1.id, nextDueDate: "2026-11-20" });
@@ -544,7 +544,7 @@ describe("Subscriptions router", () => {
     expect(row.status).toBe("active");
   });
 
-  // ── Calendar + stats ─────────────────────────────────────────────────────
+  // â”€â”€ Calendar + stats â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   it("returns calendar events in range with one-time subs only on their exact date", async () => {
     const recurring = await callerOwnerA.subscriptions.create({ ...baseSub, name: "Cal Recurring", locationId: locA1.id, nextDueDate: "2027-05-05", cycleUnit: "month", cycleCount: 1, isOneTime: false });

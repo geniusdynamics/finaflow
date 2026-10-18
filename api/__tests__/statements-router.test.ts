@@ -434,7 +434,7 @@ describe("Statement import service", () => {
       currentBalance: "0.00",
       openingBalance: "0.00",
       isActive: true,
-    } as never).returning();
+    } as never).returning({ id: accounts.id });
 
     await db.delete(mobileWalletDailyLedger).where(
       and(

@@ -5,6 +5,7 @@ import { hasScope, type ApiScope } from "./api-scopes";
 
 export type ApiKeyVariables = {
   apiKey: ResolvedApiKey;
+  requestId?: string;
 };
 
 function hasRequiredScope(apiKey: ResolvedApiKey, scope?: ApiScope): boolean {

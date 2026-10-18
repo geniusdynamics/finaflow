@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 
-let app: Awaited<ReturnType<typeof import("../boot")>["default"]>;
+let app: typeof import("../boot").default;
 
 beforeAll(async () => {
   process.env.NODE_ENV = "development";

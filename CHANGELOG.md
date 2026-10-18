@@ -4,6 +4,10 @@
 
 ## [1.3.0] - 2026-10-18
 
+### Fixed
+- **CI typecheck** — added the missing `@radix-ui/react-slider` dependency, typed the v1 `requestId`, defaulted an optional `saleDate` before ingestion, guarded the connect-session id, and corrected the docs-test module type and an ambiguous Drizzle `returning()` in the integration service.
+- **CI test database** — `api/test/setup.ts` now applies `0009_wallet_data_quality_and_partial_unique.sql`, so a fresh CI database has the partial unique index and re-import-after-undo behaves like production.
+
 ### Added
 - **Statement analysis & exports (P2)** — the stored analysis now covers every published block: summary, balance continuity, categories, fees, money in/out, financing, top contacts, recurring, monthly/weekly breakdown, daily balance, distribution, time of day, day of week, reversals, pay bills & tills, anomalies and statement-summary reconciliation. The Statements tab opens a detail view with the analysis, imported rows and CSV/XLSX/JSON export (UTF-8 BOM, hide-charges, date format, PII masking; XLSX includes all analysis sheets). The import review now lets you **untick rows** and **change category** per row before importing; post-import category editing supports “remember this merchant”, backed by `wallet_category_rules`, with a remembered-merchants list and delete. Files: `shared/statements/analyze/**`, `shared/statements/export/**`, `api/lib/statements/{export-service,export-xlsx}.ts`, `src/components/statements/{StatementDetail,StatementAnalysisPanel,CategoryCell}.tsx`.
 - **M-PESA CSV imports** — M-PESA statement CSV exports now run through the same pipeline via the RFC-4180 `delimited.ts` adapter (quoted commas/newlines handled). The free converter also accepts CSV. Paybill PDFs capture the printed Transaction Type and Other Party columns (real paybill-owner sample still needed for sign-off).

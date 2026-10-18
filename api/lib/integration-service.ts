@@ -596,7 +596,7 @@ export async function upsertAccount(
       externalSystem: "finabill",
       lastSyncedAt: new Date(),
     })
-    .returning();
+    .returning({ id: accounts.id, name: accounts.name, accountType: accounts.accountType });
   return { id: created.id, created: true, name: created.name, accountType: created.accountType };
 }
 

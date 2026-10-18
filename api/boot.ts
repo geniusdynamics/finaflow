@@ -512,7 +512,9 @@ app.post("/api/connect/complete", connectLimiter, async (c) => {
 });
 
 app.get("/api/connect/sessions/:sessionPublicId", connectLimiter, async (c) => {
-  const session = await getConnectSessionPublic(c.req.param("sessionPublicId"));
+  const sessionPublicId = c.req.param("sessionPublicId");
+  if (!sessionPublicId) return c.json({ error: "Not found" }, 404);
+  const session = await getConnectSessionPublic(sessionPublicId);
   if (!session) return c.json({ error: "Not found" }, 404);
   return c.json(session);
 });
