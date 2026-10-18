@@ -8,8 +8,7 @@ import {
   integrationConnections,
 } from "@db/schema";
 import { appRouter } from "../router";
-import { listAdapters, clearAdapters } from "../lib/integrations";
-import { finabillAdapter } from "../lib/integrations/adapters/finabill";
+import { listAdapters } from "../lib/integrations";
 
 let testBusinessId: number;
 let testUserId: number;

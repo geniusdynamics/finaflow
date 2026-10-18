@@ -148,7 +148,7 @@ export const walletManagementRouter = createRouter({
 
     latest: walletQuery
       .input(z.object({ from: z.string().optional(), to: z.string().optional() }))
-      .query(async ({ ctx }) => {
+      .query(async () => {
         const { currencyConverter } = await import("./lib/currency-converter");
         const rates = await currencyConverter.getLatestRates();
         if (rates.length > 0) return rates;

@@ -41,7 +41,7 @@ describe("Notification Business Isolation", () => {
   let db: ReturnType<typeof getDb>;
   let bizA: typeof businesses.$inferSelect;
   let bizB: typeof businesses.$inferSelect;
-  let locA: typeof locations.$inferSelect;
+  let _locA: typeof locations.$inferSelect;
   let locB: typeof locations.$inferSelect;
   let userA: typeof users.$inferSelect;
   let supplierB: typeof suppliers.$inferSelect;
@@ -86,7 +86,7 @@ describe("Notification Business Isolation", () => {
       } as any)
       .returning();
 
-    [locA] = await db
+    [_locA] = await db
       .insert(locations)
       .values({
         businessId: bizA.id,

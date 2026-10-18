@@ -10,7 +10,7 @@ import pg from "pg";
 /**
  * Split a SQL file into individual statements while respecting PostgreSQL syntax:
  *  - `--` line comments
- *  - `/* ... *​/` block comments
+ *  - block comments
  *  - `'...'` single-quoted strings (with `''` escape)
  *  - `$$ ... $$` dollar-quoted strings (any tag, including `$tag$ ... $tag$`)
  *  - `"..."` double-quoted identifiers
@@ -25,9 +25,7 @@ function splitSqlStatements(sql: string): string[] {
   let inSingleQuote = false;
   let inDoubleQuote = false;
   let dollarTag: string | null = null; // active $tag$ opener
-  let n = sql.length;
-
-  const peek = (off: number) => sql[i + off];
+  const n = sql.length;
 
   while (i < n) {
     const ch = sql[i];

@@ -1,12 +1,12 @@
 // ABOUTME: Budget list component that renders plan cards with status badges, period labels, and bucket counts.
 // ABOUTME: Supports click-to-select and status filter pills.
-import type { Period, BudgetStatus } from "@/lib/budgets/fiscal-year";
+import type { Period } from "@/lib/budgets/fiscal-year";
 import { budgetStatusConfig, PERIOD_LABELS } from "./shared";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CalendarDays, FolderOpen, Loader2 } from "lucide-react";
-import { fiscalYearLabel, getFiscalYearStart, fiscalYearMonthNames } from "@/lib/budgets/fiscal-year";
+import { fiscalYearLabel, getFiscalYearStart } from "@/lib/budgets/fiscal-year";
 import { trpc } from "@/providers/trpc";
 
 export interface PlanSummary {
@@ -58,7 +58,7 @@ export function BudgetList({
 }: BudgetListProps) {
   const { data: fyConfig } = trpc.budgets.getFiscalYearConfig.useQuery();
   const fys = fyConfig?.fiscalYearStartMonth ?? getFiscalYearStart();
-  const fyMonthNames = fiscalYearMonthNames(fys);
+
 
   const toggleStatus = (status: string | null) => {
     if (status === null) {

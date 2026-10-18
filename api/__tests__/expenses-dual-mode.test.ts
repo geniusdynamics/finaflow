@@ -1,7 +1,7 @@
 // ABOUTME: Verifies expense categories can work in simple mode without a prebuilt chart of accounts.
 // ABOUTME: Ensures bill posting can inherit a supplier default category instead of relying on fragile fallbacks.
 import { afterEach, describe, expect, it } from "vitest";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { appRouter } from "../router";
 import {
@@ -16,12 +16,8 @@ import {
   suppliers,
   userBusinesses,
   users,
-  accountSubTypeEnum,
-  transactionTypeEnum,
 } from "@db/schema";
-import { ensureSystemAccount } from "../lib/accounting-accounts";
 import { getTestDb } from "../test/db";
-import { d } from "../lib/decimal";
 
 type SeededContext = {
   accountId: string;
@@ -30,7 +26,7 @@ type SeededContext = {
   location: { id: number };
 };
 
-async function seedExpenseContext(seed: string): Promise<SeededContext> {
+async function _seedExpenseContext(seed: string): Promise<SeededContext> {
   const db = getTestDb();
   const accountId = `EXP-${seed}`;
 
@@ -81,7 +77,7 @@ async function seedExpenseContext(seed: string): Promise<SeededContext> {
   };
 }
 
-async function cleanupExpenseContext(accountId: string) {
+async function _cleanupExpenseContext(accountId: string) {
   const db = getTestDb();
   const [business] = await db
     .select()

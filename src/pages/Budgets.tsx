@@ -4,8 +4,7 @@ import { useState, useCallback } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -16,11 +15,10 @@ import {
 import { BudgetList } from "@/components/budgets/BudgetList";
 import { BudgetDetail } from "@/components/budgets/BudgetDetail";
 import { BudgetFormDialog } from "@/components/budgets/BudgetFormDialog";
-import { budgetStatusConfig } from "@/components/budgets/shared";
+
 import {
   Plus,
   ArrowLeft,
-  CalendarDays,
   Loader2,
   AlertTriangle,
 } from "lucide-react";

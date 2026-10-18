@@ -13,7 +13,6 @@ import { clearNotificationsForBill } from "./lib/notification-clearance";
 import { triggerBillPaid } from "./lib/webhook-triggers";
 import type { DbClient } from "./lib/account-subscriptions";
 
-type Db = ReturnType<typeof getDb>;
 type BillInsert = typeof bills.$inferInsert;
 type LedgerEntryInsert = typeof ledgerEntries.$inferInsert;
 type AttachmentInsert = typeof attachments.$inferInsert;

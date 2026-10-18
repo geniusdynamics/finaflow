@@ -15,10 +15,9 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { LocationSelector } from "@/components/LocationSelector";
 import { DisburseDebtDialog } from "@/components/DisburseDebtDialog";
 import { AddDebtDialog } from "@/components/AddDebtDialog";
-import { Plus, Pencil, Trash2, Wallet, CalendarDays, Landmark, BadgeInfo, AlertTriangle, CheckCircle, Clock, Gauge, Building2, FilePlus, Link2 } from "lucide-react";
+import { Pencil, Trash2, Wallet, CalendarDays, Landmark, BadgeInfo, AlertTriangle, CheckCircle, Clock, Gauge, Building2, FilePlus, Link2 } from "lucide-react";
 import { toast } from "sonner";
 
 export function Debts({ embedded }: { embedded?: boolean }) {
@@ -77,14 +76,6 @@ export function Debts({ embedded }: { embedded?: boolean }) {
     },
     onError: (e) => toast.error(e.message),
   });
-
-  const resetForm = () => {
-    setForm({
-      creditorName: "", description: "",
-      totalAmount: "", interestRate: "", dueDate: "",
-      paymentSchedule: "monthly", notes: "",
-    });
-  };
 
   const handleEdit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,14 +141,6 @@ export function Debts({ embedded }: { embedded?: boolean }) {
 
   const calcRemaining = (paid: string, total: string) => {
     return (parseFloat(total) - parseFloat(paid)).toFixed(2);
-  };
-
-  const isLongTerm = (loanDate: string | Date | null, dueDate: string | Date | null) => {
-    if (!loanDate || !dueDate) return false;
-    const start = new Date(loanDate).getTime();
-    const end = new Date(dueDate).getTime();
-    if (Number.isNaN(start) || Number.isNaN(end)) return false;
-    return (end - start) / (1000 * 60 * 60 * 24) > 365;
   };
 
   return (

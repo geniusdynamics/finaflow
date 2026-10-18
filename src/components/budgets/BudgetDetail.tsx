@@ -18,7 +18,6 @@ import {
 import { toast } from "sonner";
 import {
   PERIOD_LABELS,
-  PERIOD_DESCRIPTIONS,
   budgetStatusConfig,
   canEditStatus,
   canActivate,
@@ -37,10 +36,8 @@ import {
   Lock,
   Archive,
   Settings,
-  ArrowRight,
 } from "lucide-react";
 import type { Period } from "@/lib/budgets/fiscal-year";
-import { fiscalMonths } from "@/lib/budgets/period";
 import { getFiscalYearStart, fiscalYearLabel } from "@/lib/budgets/fiscal-year";
 import { useNavigate } from "react-router";
 
@@ -51,7 +48,6 @@ interface BudgetDetailProps {
 export function BudgetDetail({ planId }: BudgetDetailProps) {
   const navigate = useNavigate();
   const { data: plan, isLoading, isError, error, refetch } = trpc.budgets.get.useQuery({ planId });
-  const utils = trpc.useUtils();
 
   const [selectedBucketId, setSelectedBucketId] = useState<number | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -94,7 +90,7 @@ export function BudgetDetail({ planId }: BudgetDetailProps) {
   });
 
   const period = plan?.period as Period | undefined;
-  const fsMonths = fiscalMonths();
+
   const periodBuckets = plan?.buckets ?? [];
 
   // Auto-select the first bucket once buckets are loaded and nothing is selected yet

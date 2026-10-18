@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions";
 import { FinabillIntegrationCard } from "@/components/FinabillIntegrationCard";
 import { APP_VERSION_FULL } from "@/lib/version";
@@ -68,8 +67,6 @@ export function Settings() {
   const [tab, setTab] = useState<"features" | "account" | "integrations" | "feedback" | "wallets">(tabParam || "features");
   const [walletSubTab, setWalletSubTab] = useState<"providers" | "rates" | "currencies">("providers");
   const [referredByCode, setReferredByCode] = useState("");
-
-  const isMobile = useIsMobile();
 
   const handleTabChange = (newTab: typeof tab) => {
     setTab(newTab);

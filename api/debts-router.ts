@@ -45,7 +45,6 @@ export const debtsRouter = createRouter({
   get: debtsView
     .input(z.object({ id: z.number() }))
     .query(async ({ input, ctx }) => {
-      const db = getDb();
       const debt = await requireAuthorizedEntity(ctx, debts, input.id);
       return debt;
     }),

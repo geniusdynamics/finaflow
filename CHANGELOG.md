@@ -6,7 +6,9 @@
 
 ### Fixed
 - **CI typecheck** — added the missing `@radix-ui/react-slider` dependency, typed the v1 `requestId`, defaulted an optional `saleDate` before ingestion, guarded the connect-session id, and corrected the docs-test module type and an ambiguous Drizzle `returning()` in the integration service.
+- **CI lint** — cleared the repository-wide unused imports/variables across API tests, routers, budget/debt UI and scripts, and fixed the React Compiler memo dependency in `PartnerDashboard`, so `npm run lint` exits clean.
 - **CI test database** — `api/test/setup.ts` now applies `0009_wallet_data_quality_and_partial_unique.sql`, so a fresh CI database has the partial unique index and re-import-after-undo behaves like production.
+- **CI lint** — cleared the repository-wide unused imports/variables in API tests, routers, budget/debt UI and scripts, and fixed the React Compiler memo dependency in `PartnerDashboard`, so `npm run lint` exits clean.
 
 ### Added
 - **Statement analysis & exports (P2)** — the stored analysis now covers every published block: summary, balance continuity, categories, fees, money in/out, financing, top contacts, recurring, monthly/weekly breakdown, daily balance, distribution, time of day, day of week, reversals, pay bills & tills, anomalies and statement-summary reconciliation. The Statements tab opens a detail view with the analysis, imported rows and CSV/XLSX/JSON export (UTF-8 BOM, hide-charges, date format, PII masking; XLSX includes all analysis sheets). The import review now lets you **untick rows** and **change category** per row before importing; post-import category editing supports “remember this merchant”, backed by `wallet_category_rules`, with a remembered-merchants list and delete. Files: `shared/statements/analyze/**`, `shared/statements/export/**`, `api/lib/statements/{export-service,export-xlsx}.ts`, `src/components/statements/{StatementDetail,StatementAnalysisPanel,CategoryCell}.tsx`.

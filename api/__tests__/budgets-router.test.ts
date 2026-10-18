@@ -7,7 +7,7 @@ import {
   accounts, businesses, expenseCategories, locations, userBusinesses, users,
   budgetPlans as bp, budgetPlanBuckets as bpb, budgetBucketLines as bbl,
 } from "@db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 function makeAuthedCaller(
   user: typeof users.$inferSelect,

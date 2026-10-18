@@ -1,6 +1,6 @@
 // ABOUTME: Shared constants, type aliases, and helper utilities for budget UI components.
 // ABOUTME: Provides status color config, period labels, and type definitions used across the budgets feature.
-import type { Period, BudgetStatus } from "@/lib/budgets/fiscal-year";
+import type { Period } from "@/lib/budgets/fiscal-year";
 import { Circle, Lock, Archive, PlayCircle } from "lucide-react";
 import type { ReactNode } from "react";
 

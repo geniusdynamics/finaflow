@@ -4,8 +4,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { appRouter } from "../router";
 import { getDb } from "../queries/connection";
 
-type Row = { id: number };
-
 describe("account subscription enforcement", () => {
   beforeEach(async () => {
     const db = getDb();

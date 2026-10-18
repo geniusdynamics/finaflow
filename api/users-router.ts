@@ -359,7 +359,7 @@ export const usersRouter = createRouter({
           } as typeof userBusinesses.$inferInsert);
         }
 
-        const scope = await applyUserLocationScope(tx, {
+        await applyUserLocationScope(tx, {
           userId: createdUser.id,
           operatorId: currentUserId,
           mode: locationIds.length > 0 ? "replace" : "preserve",
