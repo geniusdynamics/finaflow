@@ -10,14 +10,19 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Smartphone, Upload, ArrowUpRight, ArrowDownRight, Tag, Receipt, Wallet as WalletIcon, Landmark, Plus, Link2, BookOpen, LayoutDashboard } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Smartphone, Upload, ArrowUpRight, ArrowDownRight, Tag, Receipt, Wallet as WalletIcon, Landmark, Plus, Link2, BookOpen, LayoutDashboard, History } from "lucide-react";
 import { LocationSelector } from "@/components/LocationSelector";
 import { ExpenseCategorySelector } from "@/components/ExpenseCategorySelector";
+import { StatementImportPanel } from "@/components/statements/StatementImportPanel";
+import { StatementsList } from "@/components/statements/StatementsList";
+import { CategoryCell } from "@/components/statements/CategoryCell";
 
 export function Wallet() {
   const { user } = useAuth();
   const { data: settings } = trpc.settings.list.useQuery();
-  const [tab, setTab] = useState<"overview" | "transactions" | "ledger" | "import">("overview");
+  const [tab, setTab] = useState<"overview" | "transactions" | "ledger" | "import" | "statements">("overview");
+  const [importOpen, setImportOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<string>("");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
@@ -250,8 +255,8 @@ export function Wallet() {
           <div className="mt-2 max-h-48 overflow-y-auto space-y-1">
 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}            {parsedPreview.slice(0, 10).map((p: any, i: number) => (
               <div key={i} className="flex items-center justify-between text-xs">
-                <span className="text-[#2D2A26]">{p.txnId} · {p.partyName || "-"}</span>
-                <span className={p.direction === "in" ? "text-[#2E7D32]" : "text-[#D32F2F]"}>{p.currency || "KES"} {p.amount} · {p.txnType}</span>
+                <span className="text-[#2D2A26]">{p.txnId} Â· {p.partyName || "-"}</span>
+                <span className={p.direction === "in" ? "text-[#2E7D32]" : "text-[#D32F2F]"}>{p.currency || "KES"} {p.amount} Â· {p.txnType}</span>
               </div>
             ))}
             {parsedPreview.length > 10 && <p className="text-xs text-[#8D8A87]">... and {parsedPreview.length - 10} more</p>}
@@ -259,6 +264,33 @@ export function Wallet() {
         </div>
       )}
     </div>
+  );
+
+  const importTabs = (fullPage?: boolean) => (
+    <Tabs defaultValue="statement" className="w-full">
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="statement">Statement</TabsTrigger>
+        <TabsTrigger value="sms">SMS</TabsTrigger>
+      </TabsList>
+      <TabsContent value="statement" className="mt-4">
+        <StatementImportPanel
+          locations={locations}
+          locationId={selectedLocation ? parseInt(selectedLocation, 10) : null}
+          onLocationChange={setSelectedLocation}
+          assignedLocationIds={user?.assignedLocationIds ?? []}
+          enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
+          fullPage={fullPage}
+          onImported={() => {
+            void refetch();
+            void utils.wallet.transactions.stats.invalidate();
+            void utils.wallet.dailyLedger.list.invalidate();
+          }}
+        />
+      </TabsContent>
+      <TabsContent value="sms" className="mt-4">
+        {smsImportSection(fullPage)}
+      </TabsContent>
+    </Tabs>
   );
 
   return (
@@ -270,19 +302,24 @@ export function Wallet() {
             <p className="text-sm text-[#8D8A87]">Multi-provider wallet aggregation</p>
           </div>
           <div className="flex gap-2">
-            <Dialog>
+            <Dialog open={importOpen} onOpenChange={setImportOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="border-[#C73E1D] text-[#C73E1D]"><Upload className="mr-2 h-4 w-4" />Import SMS</Button>
+                <Button className="bg-[#C73E1D] hover:bg-[#C73E1D]/90"><Upload className="mr-2 h-4 w-4" />Import</Button>
               </DialogTrigger>
-              <DialogContent className="max-w-lg">
-                <DialogHeader><DialogTitle>Import SMS Transactions</DialogTitle></DialogHeader>
-                {smsImportSection()}
+              <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto bg-white">
+                <DialogHeader>
+                  <DialogTitle className="font-serif text-xl text-[#2D2A26]">Import transactions</DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-[#8D8A87]">
+                  Import an M-PESA statement PDF, or paste SMS messages. SMS stays available for phone-only records.
+                </p>
+                {importTabs()}
               </DialogContent>
             </Dialog>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 border-b border-[#E8E0D8]">
+        <div className="flex flex-wrap items-center gap-2 border-b border-[#E8E0D8]">
           <button onClick={() => setTab("overview")} className={`px-4 py-2 text-sm font-medium ${tab === "overview" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
             <LayoutDashboard className="mr-1 inline h-4 w-4"/>Overview
           </button>
@@ -294,6 +331,9 @@ export function Wallet() {
           </button>
           <button onClick={() => setTab("import")} className={`px-4 py-2 text-sm font-medium ${tab === "import" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
             <Upload className="mr-1 inline h-4 w-4"/>Import
+          </button>
+          <button onClick={() => setTab("statements")} className={`px-4 py-2 text-sm font-medium ${tab === "statements" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <History className="mr-1 inline h-4 w-4"/>Statements
           </button>
         </div>
 
@@ -438,6 +478,7 @@ export function Wallet() {
                       <th className="px-4 py-3 font-medium">Provider</th>
                       <th className="px-4 py-3 font-medium">Type</th>
                       <th className="px-4 py-3 font-medium">Party</th>
+                      <th className="px-4 py-3 font-medium">Category</th>
                       <th className="px-4 py-3 text-right font-medium">Amount</th>
                       <th className="px-4 py-3 text-right font-medium">Fee</th>
                       <th className="px-4 py-3 text-center font-medium">Status</th>
@@ -465,6 +506,17 @@ export function Wallet() {
                             }`}>{txn.txnType.replace(/_/g, " ")}</span>
                           </td>
                           <td className="px-4 py-3 text-sm text-[#2D2A26]">{txn.partyName || txn.description || "-"}</td>
+                          <td className="px-4 py-3 text-sm">
+                            <CategoryCell
+                              walletTxnId={txn.id}
+                              categoryId={txn.categoryId ?? null}
+                              categoryName={txn.categoryName ?? null}
+                              partyName={txn.partyName ?? null}
+                              description={txn.description ?? null}
+                              categories={categories}
+                              onSaved={() => void refetch()}
+                            />
+                          </td>
                           <td className={`px-4 py-3 text-right font-mono text-sm ${isOut ? "text-[#D32F2F]" : "text-[#2E7D32]"}`}>
                             {isOut ? "-" : "+"}{formatKES(amt.toFixed(2))}
                           </td>
@@ -487,14 +539,14 @@ export function Wallet() {
                                     <div className="space-y-4">
                                       <div className="rounded-lg bg-[#F5EDE6] p-3">
                                         <p className="text-sm font-medium text-[#2D2A26]">{txn.providerTxnId || txn.txnId}</p>
-                                        <p className="text-xs text-[#8D8A87]">Topup: {formatKES(amt.toFixed(2))} · Fee: {formatKES(txn.txnFee || "0")}</p>
+                                        <p className="text-xs text-[#8D8A87]">Topup: {formatKES(amt.toFixed(2))} Â· Fee: {formatKES(txn.txnFee || "0")}</p>
                                       </div>
                                       <div className="space-y-2">
                                         <Label>Source Bank Account</Label>
                                         <p className="text-xs text-[#8D8A87]">Select the bank account that funded this topup. The system will deduct the topup amount + fee from that account.</p>
                                         <select value={linkForm.sourceAccountId} onChange={(e) => setLinkForm(p => ({...p, sourceAccountId: e.target.value}))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
                                           <option value="">Select bank account</option>
-                                          {bankAccounts.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {a.accountNumber ? `(${a.accountNumber})` : ""} {loc ? `· ${loc}` : ""} · Bal: {formatKES(a.currentBalance)}</option>; })}
+                                          {bankAccounts.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {a.accountNumber ? `(${a.accountNumber})` : ""} {loc ? `Â· ${loc}` : ""} Â· Bal: {formatKES(a.currentBalance)}</option>; })}
                                         </select>
                                       </div>
                                       <div className="space-y-2">
@@ -502,7 +554,7 @@ export function Wallet() {
                                         <p className="text-xs text-[#8D8A87]">Select the wallet account that received this topup. The system will credit this account.</p>
                                         <select value={linkForm.destinationAccountId} onChange={(e) => setLinkForm(p => ({...p, destinationAccountId: e.target.value}))} className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
                                           <option value="">Auto (no specific wallet)</option>
-                                          {walletAccounts.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {loc ? `· ${loc}` : ""} · Bal: {formatKES(a.currentBalance)}</option>; })}
+                                          {walletAccounts.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {loc ? `Â· ${loc}` : ""} Â· Bal: {formatKES(a.currentBalance)}</option>; })}
                                         </select>
                                       </div>
                                       <Button onClick={() => linkTopup.mutate({ walletTxnId: txn.id, sourceAccountId: parseInt(linkForm.sourceAccountId), destinationAccountId: linkForm.destinationAccountId ? parseInt(linkForm.destinationAccountId) : undefined })} disabled={!linkForm.sourceAccountId || linkTopup.isPending} className="w-full bg-[#C73E1D]">
@@ -524,7 +576,7 @@ export function Wallet() {
                                     <div className="space-y-4">
                                       <div className="rounded-lg bg-[#F5EDE6] p-3">
                                         <p className="text-sm font-medium text-[#2D2A26]">{txn.providerTxnId || txn.txnId}</p>
-                                        <p className="text-xs text-[#8D8A87]">{txn.partyName} · {formatKES(amt.toFixed(2))}</p>
+                                        <p className="text-xs text-[#8D8A87]">{txn.partyName} Â· {formatKES(amt.toFixed(2))}</p>
                                       </div>
                                       <div className="space-y-2">
                                       <ExpenseCategorySelector
@@ -578,10 +630,10 @@ export function Wallet() {
                       );
                     })}
                     {(!transactions || transactions.length === 0) && (
-                      <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-[#8D8A87]">
+                      <tr><td colSpan={10} className="px-4 py-8 text-center text-sm text-[#8D8A87]">
                         <Smartphone className="mx-auto mb-2 h-8 w-8 opacity-30 text-[#8D8A87]" />
                         <p>No transactions found for the selected date range.</p>
-                        <p className="mt-1 text-xs text-[#8D8A87]">Import SMS messages or adjust your date filter.</p>
+                        <p className="mt-1 text-xs text-[#8D8A87]">Import a statement or SMS messages, or adjust your date filter.</p>
                       </td></tr>
                     )}
                   </tbody>
@@ -593,15 +645,33 @@ export function Wallet() {
 
         {tab === "import" && (
           <Card className="border-[#E8E0D8] bg-white">
-            <CardHeader className="pb-3"><CardTitle className="font-serif text-lg text-[#2D2A26]">Bulk SMS Import</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="font-serif text-lg text-[#2D2A26]">Import Transactions</CardTitle></CardHeader>
             <CardContent>
               <p className="mb-4 text-sm text-[#8D8A87]">
-                This bulk import view is designed for processing large volumes of SMS transactions. 
-                Paste multiple transaction messages below, preview them, and import in a single batch.
+                Import an M-PESA statement PDF, or paste multiple SMS messages. Statement imports keep the period,
+                running balance and best-effort categories; SMS import remains available for phone-only records.
               </p>
-              {smsImportSection(true)}
+              {importTabs(true)}
             </CardContent>
           </Card>
+        )}
+
+        {tab === "statements" && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="font-serif text-lg text-[#2D2A26]">Statement imports</h2>
+              <p className="text-sm text-[#8D8A87]">
+                Every statement import is kept as a batch. Undo removes its wallet rows only if none are linked to an expense or bill.
+              </p>
+            </div>
+            <StatementsList
+              locationId={selectedLocation ? parseInt(selectedLocation, 10) : null}
+              onChanged={() => {
+                void refetch();
+                void utils.wallet.transactions.stats.invalidate();
+              }}
+            />
+          </div>
         )}
 
         {tab === "ledger" && (
@@ -610,7 +680,7 @@ export function Wallet() {
               <div className="flex items-center gap-2">
                 <select value={selectedWallet} onChange={e => setSelectedWallet(e.target.value)} className="rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm">
                   <option value="">All Wallets</option>
-                  {walletAccounts.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {loc ? `· ${loc}` : ""}</option>; })}
+                  {walletAccounts.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {loc ? `Â· ${loc}` : ""}</option>; })}
                 </select>
               </div>
               <Dialog open={ledgerOpen} onOpenChange={setLedgerOpen}>
@@ -645,7 +715,7 @@ export function Wallet() {
                         <Label>Wallet</Label>
                         <select value={ledgerForm.accountId} onChange={e => setLedgerForm(p => ({ ...p, accountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm" required>
                           <option value="">Select wallet</option>
-                          {walletAccounts.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {loc ? `· ${loc}` : ""}</option>; })}
+                          {walletAccounts.map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {loc ? `Â· ${loc}` : ""}</option>; })}
                         </select>
                       </div>
                       <div className="space-y-2">

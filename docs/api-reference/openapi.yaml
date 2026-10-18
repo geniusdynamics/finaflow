@@ -36,6 +36,8 @@ tags:
     description: Expense listing for pull sync
   - name: Subscriptions
     description: Subscription renewals and payment history
+  - name: Statements
+    description: M-PESA statement parsing, import, analysis and exports
   - name: Suppliers
     description: Supplier management
   - name: Categories
@@ -285,7 +287,9 @@ paths:
     get:
       operationId: listSubscriptionPayments
       summary: List subscription payments
-      description: Payment history for subscriptions (pending rows have `paidDate: null` and `confirmed: false`). Supports `updatedSince` cursor.
+      description: |
+        Payment history for subscriptions (pending rows have `paidDate: null` and `confirmed: false`).
+        Supports `updatedSince` cursor.
       tags: [Subscriptions]
       security:
         - BearerAuth: []
@@ -630,6 +634,218 @@ paths:
         "400":
           $ref: "#/components/responses/ValidationError"
 
+  /statements/parse:
+    post:
+      operationId: parseStatement
+      summary: Parse an M-PESA statement without importing it
+      description: |
+        Accepts a password-protected M-PESA PDF either as `multipart/form-data`
+        (`file`, `password`, `locationId`) or JSON (`contentBase64`, `fileName`,
+        `password`, `locationId`). Parses in memory, never stores the file or password.
+        Rate limited to 20 requests/minute per IP. Nothing is written to the database.
+      tags: [Statements]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["statements:write"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatementParseInput"
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                password:
+                  type: string
+                locationId:
+                  type: integer
+      responses:
+        "200":
+          description: Parsed preview and analysis
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /statements/analyze:
+    post:
+      operationId: analyzeStatement
+      summary: Parse a statement and return its analysis only
+      tags: [Statements]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["statements:write"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatementParseInput"
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                password:
+                  type: string
+                locationId:
+                  type: integer
+      responses:
+        "200":
+          description: Analysis blocks
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /statements/import:
+    post:
+      operationId: importStatements
+      summary: Parse and import one or more statement files
+      description: |
+        Each file is parsed server-side (client rows are never trusted) and inserted in
+        its own transaction. Existing receipts are skipped and reported as duplicates.
+      tags: [Statements]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["statements:write"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StatementImportInput"
+      responses:
+        "200":
+          description: Batch imported
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "202":
+          description: Batch completed with one or more failed files
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "400":
+          $ref: "#/components/responses/ValidationError"
+
+  /statements/imports:
+    get:
+      operationId: listStatementImports
+      summary: List statement imports
+      tags: [Statements]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["statements:read"]
+      parameters:
+        - in: query
+          name: locationId
+          schema: { type: integer }
+        - in: query
+          name: provider
+          schema: { type: string }
+        - in: query
+          name: batchRef
+          schema: { type: string }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 100, default: 25 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: Import history
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /statements/imports/{id}:
+    get:
+      operationId: getStatementImport
+      summary: Get one import with its analysis and rows
+      tags: [Statements]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["statements:read"]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Import detail
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /statements/imports/{id}/export:
+    get:
+      operationId: exportStatementImport
+      summary: Export an import as CSV, XLSX or JSON
+      tags: [Statements]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["statements:read"]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+        - in: query
+          name: format
+          schema: { type: string, enum: [csv, xlsx, json], default: csv }
+        - in: query
+          name: excludeCharges
+          schema: { type: boolean }
+        - in: query
+          name: sortOrder
+          schema: { type: string, enum: [asc, desc] }
+        - in: query
+          name: dateFormat
+          schema: { type: string, enum: [iso, dd-mmm-yyyy, dd/mm/yyyy] }
+        - in: query
+          name: maskPii
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: File download (Content-Disposition attachment)
+          content:
+            text/csv:
+              schema: { type: string, format: binary }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+            application/json:
+              schema: { type: string, format: binary }
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /webhooks/finabill:
     post:
       operationId: receiveFinabillWebhook
@@ -719,6 +935,8 @@ components:
             "journal:write": Create/post journal entries
             "subscriptions:read": Read subscriptions and payment history
             "subscriptions:write": Record subscription payments
+            "statements:read": Read statement imports, analyses and exports
+            "statements:write": Parse and import statement files
             "webhooks": Manage webhooks
 
   parameters:
@@ -753,8 +971,73 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
 
   schemas:
+    StatementParseInput:
+      type: object
+      required: [contentBase64]
+      properties:
+        fileName:
+          type: string
+          example: MPESA_Statement.pdf
+        contentBase64:
+          type: string
+          description: Base64 PDF bytes (max 10 MB decoded)
+        password:
+          type: string
+          description: Statement password; never stored
+        provider:
+          type: string
+          enum: [mpesa]
+        locationId:
+          type: integer
+          description: Defaults to the business's first active location
+
+    StatementFileInput:
+      type: object
+      required: [fileName, contentBase64]
+      properties:
+        fileName:
+          type: string
+        contentBase64:
+          type: string
+        password:
+          type: string
+        provider:
+          type: string
+        overrides:
+          type: object
+          additionalProperties:
+            type: integer
+            nullable: true
+          description: externalId → categoryId (null clears)
+        exclude:
+          type: array
+          items:
+            type: string
+          description: externalIds to leave out of the import
+
+    StatementImportInput:
+      type: object
+      required: [locationId, files]
+      properties:
+        locationId:
+          type: integer
+        batchLabel:
+          type: string
+        files:
+          type: array
+          minItems: 1
+          maxItems: 12
+          items:
+            $ref: "#/components/schemas/StatementFileInput"
+
     Meta:
       type: object
       properties:

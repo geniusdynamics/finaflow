@@ -10,7 +10,7 @@ import {
   Landmark, TrendingUp, Users, ShieldCheck, Zap,
   CheckCircle, ArrowRight, Store, FileSpreadsheet, CreditCard, Bell,
   Menu, X, BarChart3, Wallet, Receipt, PiggyBank,
-  ChevronRight, Globe, Lock,
+  ChevronRight, ChevronDown, Globe, Lock,
   RefreshCw, Building2, Percent, HeartHandshake,
   Github, Star, Plus, Sparkles, HelpCircle, BookOpen, LogIn, UserPlus,
   Smartphone,
@@ -258,6 +258,24 @@ export default function Home() {
               <a href="#how-it-works" className="hover:text-[#C73E1D]">How it works</a>
               <a href="#pricing" className="hover:text-[#C73E1D]">Pricing</a>
               <a href="#faq" className="hover:text-[#C73E1D]">FAQ</a>
+              <div className="group relative">
+                <Link to="/tools/mpesa-statement-converter" className="flex items-center gap-1 hover:text-[#C73E1D]">
+                  M-PESA tools <ChevronDown className="h-3 w-3" />
+                </Link>
+                <div className="invisible absolute left-0 top-full z-50 w-56 pt-2 opacity-0 transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
+                  <div className="rounded-lg border border-[#E8E0D8] bg-white p-2 shadow-lg">
+                    <Link to="/tools/mpesa-statement-converter" className="block rounded px-2 py-1.5 text-sm hover:bg-[#F5EDE6]">
+                      Statement converter
+                    </Link>
+                    <Link to="/tools/mpesa-to-excel" className="block rounded px-2 py-1.5 text-sm hover:bg-[#F5EDE6]">
+                      PDF to Excel
+                    </Link>
+                    <Link to="/tools/mpesa-for-accountants" className="block rounded px-2 py-1.5 text-sm hover:bg-[#F5EDE6]">
+                      For accountants
+                    </Link>
+                  </div>
+                </div>
+              </div>
               <a
                 href="https://github.com/geniusdynamics/finaflow"
                 target="_blank"
@@ -333,6 +351,16 @@ export default function Home() {
               <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="block py-1">How it works</a>
               <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="block py-1">Pricing</a>
               <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block py-1">FAQ</a>
+              <p className="pt-2 text-xs uppercase tracking-wider text-[#8D8A87]">Free M-PESA tools</p>
+              <Link to="/tools/mpesa-statement-converter" onClick={() => setMobileMenuOpen(false)} className="block py-1">
+                Statement converter
+              </Link>
+              <Link to="/tools/mpesa-to-excel" onClick={() => setMobileMenuOpen(false)} className="block py-1">
+                PDF to Excel
+              </Link>
+              <Link to="/tools/mpesa-for-accountants" onClick={() => setMobileMenuOpen(false)} className="block py-1">
+                For accountants
+              </Link>
               <a
                 href="https://github.com/geniusdynamics/finaflow"
                 target="_blank"
@@ -1100,6 +1128,9 @@ export default function Home() {
               </div>
               <p className="text-xs text-[#8D8A87]">{"\u00A9"} 2026 Finaflow. Built for African Businesses.</p>
               <div className="flex items-center gap-4 text-xs text-[#8D8A87]">
+                <Link to="/tools/mpesa-statement-converter" className="transition-colors hover:text-[#2D2A26]">
+                  Free M-PESA converter
+                </Link>
                 <a
                   href="https://github.com/geniusdynamics/finaflow"
                   target="_blank"

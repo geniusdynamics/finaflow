@@ -5,9 +5,10 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createRouter, walletQuery, walletImport, walletAdmin, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
-import { mobileWalletTransactions, mobileWalletProviders, mobileWalletDailyLedger, mobileWalletReconciliation, providerConfigs, expenses, suppliers, accounts, ledgerEntries, locations } from "@db/schema";
-import { eq, and, isNull, desc, sql } from "drizzle-orm";
+import { mobileWalletTransactions, mobileWalletProviders, mobileWalletDailyLedger, mobileWalletReconciliation, providerConfigs, expenses, suppliers, accounts, ledgerEntries, locations, expenseCategories } from "@db/schema";
+import { eq, and, isNull, desc, sql, getTableColumns } from "drizzle-orm";
 import { walletRegistry } from "./lib/mobile-wallet/provider-registry";
+import { statementsRouter } from "./statements-router";
 
 export const walletRouter = createRouter({
 
@@ -136,8 +137,12 @@ export const walletRouter = createRouter({
         if (input?.direction) conditions.push(eq(mobileWalletTransactions.direction, input.direction));
         if (input?.currency) conditions.push(eq(mobileWalletTransactions.currency, input.currency));
 
-        return db.select()
+        return db.select({
+          ...getTableColumns(mobileWalletTransactions),
+          categoryName: expenseCategories.name,
+        })
           .from(mobileWalletTransactions)
+          .leftJoin(expenseCategories, eq(mobileWalletTransactions.categoryId, expenseCategories.id))
           .where(and(...conditions))
           .orderBy(desc(mobileWalletTransactions.txnDate), desc(mobileWalletTransactions.txnTime))
           .limit(input?.limit ?? 100)
@@ -179,15 +184,15 @@ export const walletRouter = createRouter({
 
         const rows = await db.select({
           totalIn: sql<string>`COALESCE(SUM(CASE WHEN ${mobileWalletTransactions.direction} = 'in' THEN ABS(CAST(${mobileWalletTransactions.amount} AS DECIMAL)) ELSE 0 END), 0)`,
-          totalOut: sql<string>`COALESCE(SUM(CASE WHEN ${mobileWalletTransactions.direction} = 'out' THEN ABS(CAST(${mobileWalletTransactions.amount} AS DECIMAL)) ELSE 0 END), 0)`,
-          totalFees: sql<string>`COALESCE(SUM(CAST(${mobileWalletTransactions.txnFee} AS DECIMAL)), 0)`,
+          totalOut: sql<string>`COALESCE(SUM(CASE WHEN ${mobileWalletTransactions.direction} = 'out' AND ${mobileWalletTransactions.txnType} <> 'charge' THEN ABS(CAST(${mobileWalletTransactions.amount} AS DECIMAL)) ELSE 0 END), 0)`,
+          totalFees: sql<string>`COALESCE(SUM(CASE WHEN ${mobileWalletTransactions.txnType} = 'charge' THEN ABS(CAST(${mobileWalletTransactions.amount} AS DECIMAL)) ELSE CAST(${mobileWalletTransactions.txnFee} AS DECIMAL) END), 0)`,
           countIn: sql<number>`COUNT(CASE WHEN ${mobileWalletTransactions.direction} = 'in' THEN 1 END)`,
-          countOut: sql<number>`COUNT(CASE WHEN ${mobileWalletTransactions.direction} = 'out' THEN 1 END)`,
+          countOut: sql<number>`COUNT(CASE WHEN ${mobileWalletTransactions.direction} = 'out' AND ${mobileWalletTransactions.txnType} <> 'charge' THEN 1 END)`,
         }).from(mobileWalletTransactions).where(and(...conditions));
 
         const feesByType = await db.select({
           txnType: mobileWalletTransactions.txnType,
-          totalFees: sql<string>`COALESCE(SUM(CAST(${mobileWalletTransactions.txnFee} AS DECIMAL)), 0)`,
+          totalFees: sql<string>`COALESCE(SUM(CASE WHEN ${mobileWalletTransactions.txnType} = 'charge' THEN ABS(CAST(${mobileWalletTransactions.amount} AS DECIMAL)) ELSE CAST(${mobileWalletTransactions.txnFee} AS DECIMAL) END), 0)`,
           count: sql<number>`COUNT(*)`,
         }).from(mobileWalletTransactions).where(and(...conditions)).groupBy(mobileWalletTransactions.txnType);
 
@@ -195,7 +200,7 @@ export const walletRouter = createRouter({
           partyName: mobileWalletTransactions.partyName,
           totalAmount: sql<string>`COALESCE(SUM(ABS(CAST(${mobileWalletTransactions.amount} AS DECIMAL))), 0)`,
           count: sql<number>`COUNT(*)`,
-        }).from(mobileWalletTransactions).where(and(...conditions, sql`${mobileWalletTransactions.direction} = 'out'`)).groupBy(mobileWalletTransactions.partyName).orderBy(sql`SUM(ABS(CAST(${mobileWalletTransactions.amount} AS DECIMAL))) DESC`).limit(10);
+        }).from(mobileWalletTransactions).where(and(...conditions, sql`${mobileWalletTransactions.direction} = 'out'`, sql`${mobileWalletTransactions.txnType} <> 'charge'`)).groupBy(mobileWalletTransactions.partyName).orderBy(sql`SUM(ABS(CAST(${mobileWalletTransactions.amount} AS DECIMAL))) DESC`).limit(10);
 
         return { summary: rows[0], feesByType, topRecipients };
         } catch {
@@ -574,14 +579,18 @@ export const walletRouter = createRouter({
         const dayTxns = await db.select({
           amount: mobileWalletTransactions.amount,
           txnFee: mobileWalletTransactions.txnFee,
+          direction: mobileWalletTransactions.direction,
+          txnType: mobileWalletTransactions.txnType,
         }).from(mobileWalletTransactions).where(and(...conditions));
 
         let totalInflow = 0, totalOutflow = 0, totalFees = 0;
         for (const txn of dayTxns) {
-          const amt = parseFloat(txn.amount) || 0;
-          if (amt > 0) totalInflow += amt;
-          else totalOutflow += Math.abs(amt);
-          totalFees += parseFloat(txn.txnFee) || 0;
+          const amt = Math.abs(parseFloat(txn.amount) || 0);
+          const isCharge = txn.txnType === "charge";
+          totalFees += isCharge ? amt : (parseFloat(txn.txnFee) || 0);
+          if (isCharge) continue;
+          if (txn.direction === "in") totalInflow += amt;
+          else totalOutflow += amt;
         }
 
         const opening = parseFloat(input.openingBalance) || 0;
@@ -666,4 +675,7 @@ export const walletRouter = createRouter({
         return result;
       }),
   }),
+
+  // ── Statement Import ───────────────────────────────────────────────────
+  statements: statementsRouter,
 });

@@ -11,6 +11,8 @@ import type { Permission } from "@/lib/permissions";
 
 const Home = lazy(() => import("./pages/Home"));
 const MobileMoneyAgents = lazy(() => import("./pages/MobileMoneyAgents"));
+const MpesaStatementConverter = lazy(() => import("./pages/tools/MpesaStatementConverter"));
+const StatementGuide = lazy(() => import("./pages/tools/StatementGuide"));
 const Login = lazy(() => import("./pages/Login"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
@@ -54,6 +56,9 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Suspense fallback={<PageSkeleton />}><Home /></Suspense>} />
         <Route path="/solutions/mobile-money-agents" element={<Suspense fallback={<PageSkeleton />}><MobileMoneyAgents /></Suspense>} />
+        <Route path="/tools/mpesa-statement-converter" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><MpesaStatementConverter /></Suspense></ErrorBoundary>} />
+        <Route path="/tools/mpesa-to-excel" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><StatementGuide kind="excel" /></Suspense></ErrorBoundary>} />
+        <Route path="/tools/mpesa-for-accountants" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><StatementGuide kind="accountants" /></Suspense></ErrorBoundary>} />
         <Route path="/login" element={<Suspense fallback={<PageSkeleton />}><Login /></Suspense>} />
         <Route path="/forgot-password" element={<Suspense fallback={<PageSkeleton />}><ForgotPassword /></Suspense>} />
         <Route path="/reset-password" element={<Suspense fallback={<PageSkeleton />}><ResetPassword /></Suspense>} />

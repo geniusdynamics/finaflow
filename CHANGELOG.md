@@ -2,6 +2,40 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-18
+
+### Added
+- **Statement analysis & exports (P2)** — the stored analysis now covers every published block: summary, balance continuity, categories, fees, money in/out, financing, top contacts, recurring, monthly/weekly breakdown, daily balance, distribution, time of day, day of week, reversals, pay bills & tills, anomalies and statement-summary reconciliation. The Statements tab opens a detail view with the analysis, imported rows and CSV/XLSX/JSON export (UTF-8 BOM, hide-charges, date format, PII masking; XLSX includes all analysis sheets). The import review now lets you **untick rows** and **change category** per row before importing; post-import category editing supports “remember this merchant”, backed by `wallet_category_rules`, with a remembered-merchants list and delete. Files: `shared/statements/analyze/**`, `shared/statements/export/**`, `api/lib/statements/{export-service,export-xlsx}.ts`, `src/components/statements/{StatementDetail,StatementAnalysisPanel,CategoryCell}.tsx`.
+- **M-PESA CSV imports** — M-PESA statement CSV exports now run through the same pipeline via the RFC-4180 `delimited.ts` adapter (quoted commas/newlines handled). The free converter also accepts CSV. Paybill PDFs capture the printed Transaction Type and Other Party columns (real paybill-owner sample still needed for sign-off).
+- **Statement REST API (P3)** — `/api/v1/statements/parse`, `/analyze`, `/import`, `/imports`, `/imports/{id}` and `/imports/{id}/export` with `statements:read` / `statements:write` scopes, a 20/min parse limiter, audit logging and OpenAPI documentation (`docs/api-reference/openapi.yaml`, `docs/statements.md`). Parse accepts JSON base64 or multipart; import supports 1–12 files with per-file passwords/overrides.
+- **Free no-upload converter (P4)** — public `/tools/mpesa-statement-converter` parses statements entirely in the browser (pdf.js worker) and downloads CSV/JSON; `/tools/mpesa-to-excel` and `/tools/mpesa-for-accountants` guide pages; Home “M-PESA tools” dropdown and mobile links; a shared tools header with a visible **Back to home** control. The converter code-splits pdf.js and loads it only on conversion, and tools routes plus the app root now have error boundaries, so a module failure shows a message instead of a white page.
+- **Audit DOWNLOAD action** — migration `0034_audit_download_action.sql` adds the value already declared in the schema, so export/download audit rows persist instead of failing.
+
+### Tested
+- Shared statement suite **43/43**, statement router **6/6**, v1 statement API **6/6**, wallet router **26/26**.
+- Production build green; Playwright browser runs against the real 77-page statement (PDF **and** CSV): **2,371 transactions**, CSV download with UTF-8 BOM, zero console/page errors, on both dev and `vite preview`.
+- Mobile (390px) and desktop verified: tools menu, Home M-PESA tools menu, visible back link.
+
+### Added
+- **Statement import (P1, M-PESA PDF)** — the Wallet **Import** button now opens two tabs: **Statement** (default) and **SMS** (the existing paste flow, unchanged). Statement import accepts 1–12 password-protected M-PESA PDFs, parses them in memory (pdf.js), shows period/totals/duplicate counts and best-effort category suggestions, then imports rows into `mobile_wallet_transactions`. Files and passwords are never stored. Migration `0033_statement_imports.sql` adds `statement_imports`, `wallet_category_rules`, and `categoryId` / `classificationSource` / `classificationConfidence` / `statementImportId` on wallet rows. Service: `api/lib/statements/{service,categories}.ts`; router: `api/statements-router.ts` under `wallet.statements.*`; UI: `src/components/statements/*` and `src/pages/Wallet.tsx`.
+- **Statement history and safe undo** — new **Statements** tab lists imports with period, rows, imported/skipped/duplicates and status. Undo soft-deletes only that import’s wallet rows and refuses when any row is linked to an expense or bill.
+- **Best-effort categorisation** — statement rows carry a canonical category key resolved against the business’s existing expense categories via name aliases (`Bank Charges & Fees`, `Utilities`, `Airtime/Data`, `Food Supplies`, `Fuel`, `Transport & Delivery`, …). Unmatched rows stay with **no category** (no “Miscellaneous” dumping, no category creation). The `wallet_category_rules` table is in place for learned merchant overrides.
+
+### Fixed
+- **Daily ledger counted every positive amount as inflow** — `wallet.dailyLedger.create` ignored `direction`; it now splits inflows/outflows correctly (regression test included).
+
+### Tested
+- `shared/statements` + statement router + wallet router — **61/61 pass**, including import/dedupe, linked-row undo refusal, tenant scoping, category resolution and the ledger direction regression.
+- Real 77-page statement through the new preview service: **2,371 rows**, **786,098.76 in / 782,565.53 out** (matches the statement summary), **5,272.74 fees**.
+
+### Added
+- **Statement import foundation (P0, M-PESA)** — provider-agnostic parser core that extracts M-PESA statement PDFs in-process (pdf.js), reconstructs rows from positioned text, groups same-receipt legs (charge/Fuliza), links them, and produces canonical transactions with best-effort category hints. Validated against a real 77-page statement: **2,371 rows**, **786,098.76 in / 782,565.53 out**, matching the statement’s own summary to the cent, **5,272.74** in fees. Files: `shared/statements/**`, `scripts/inspect-statement.ts`; aliases in `tsconfig.app.json`, `tsconfig.server.json`, `vite.config.ts`, `vitest.config.ts`; `pdfjs-dist@5.4.624`. No user-visible change yet.
+- **Local statement diagnostics** — `npm run inspect:statement -- <pdf> [password]` prints row counts, totals, rail/category breakdowns and balance-continuity diagnostics without persisting the file.
+
+### Tested
+- `npx vitest run shared/statements` — **28/28 pass** (row reconstruction, date/time split, wrapped details, receipt groups, Fuliza links, summary reconciliation, amount/date edge cases).
+- `npx eslint` on `shared/statements/**` and `scripts/inspect-statement.ts` — exit 0; focused `tsc --noEmit` — 0 errors.
+
 ### Added
 - **Bill-mode subscriptions accrue on the due date (default posting mode)** — new subscriptions default to `postingMode = 'bill'`. The daily sweep now materializes, for each due cycle, a **pending bill** tagged `externalSystem='subscription'` / `externalId='<subscriptionId>:<cycleDueDate>'` plus the accrual ledger (expense debit / AP credit, mirroring `bills-router.create`), a `subscriptionPayments` row with `confirmed=false`, a "Bill created" notification, and advances the schedule. Marking paid **settles** that bill (AP debit / cash credit) instead of creating a second one; paying before the due date accrues and settles in one step. Migration `0032_subscription_posting_default_bill.sql`.
 - **Posting mode is explicit in the subscription popup** — the detail tile now reads "Posting mode" with the mode name (Create bill / Create expense / Reminder only) and a one-line explanation of what it does. Cards show **"Unpaid bill for <date>"** when a materialized cycle is outstanding.

@@ -1723,6 +1723,73 @@ export type InsertBusinessCurrency = typeof businessCurrencies.$inferInsert;
 
 // ── Mobile Wallet Aggregation Framework ────────────────────────────────
 
+// Statement import history. The PDF/CSV and its password are never stored.
+export const statementImports = pgTable("statement_imports", {
+  id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  locationId: bigint("locationId", { mode: "number" }).notNull(),
+  provider: varchar("provider", { length: 20 }).notNull(),
+  sourceType: varchar("sourceType", { length: 20 }).notNull(),
+  kind: varchar("kind", { length: 40 }).notNull(),
+  fileName: text("fileName"),
+  fileSize: integer("fileSize"),
+  fileHash: varchar("fileHash", { length: 64 }),
+  batchRef: varchar("batchRef", { length: 36 }),
+  parserId: varchar("parserId", { length: 50 }),
+  parserVersion: varchar("parserVersion", { length: 20 }),
+  currency: varchar("currency", { length: 3 }).default("KES").notNull(),
+  periodStart: date("periodStart"),
+  periodEnd: date("periodEnd"),
+  openingBalance: numeric("openingBalance", { precision: 15, scale: 2 }),
+  closingBalance: numeric("closingBalance", { precision: 15, scale: 2 }),
+  rowCount: integer("rowCount").default(0).notNull(),
+  importedCount: integer("importedCount").default(0).notNull(),
+  skippedCount: integer("skippedCount").default(0).notNull(),
+  duplicateCount: integer("duplicateCount").default(0).notNull(),
+  status: varchar("status", { length: 20 }).default("parsed").notNull(),
+  errorMessage: text("errorMessage"),
+  warnings: jsonb("warnings"),
+  analysis: jsonb("analysis"),
+  passwordProtected: boolean("passwordProtected").default(false).notNull(),
+  importedBy: bigint("importedBy", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  businessCreatedIdx: index("idx_statement_imports_business_created").on(table.businessId, table.createdAt),
+  locationProviderIdx: index("idx_statement_imports_location_provider").on(table.locationId, table.provider),
+  fileHashIdx: index("idx_statement_imports_file_hash").on(table.fileHash),
+  batchIdx: index("idx_statement_imports_batch").on(table.batchRef),
+}));
+
+export type StatementImport = typeof statementImports.$inferSelect;
+export type InsertStatementImport = typeof statementImports.$inferInsert;
+
+// Learned merchant-to-category rules. System rules live in shared/statements code.
+export const walletCategoryRules = pgTable("wallet_category_rules", {
+  id: serial("id").primaryKey(),
+  businessId: bigint("businessId", { mode: "number" }).notNull(),
+  provider: varchar("provider", { length: 20 }),
+  matchType: varchar("matchType", { length: 10 }).default("contains").notNull(),
+  pattern: varchar("pattern", { length: 255 }).notNull(),
+  categoryId: bigint("categoryId", { mode: "number" }).notNull().references(() => expenseCategories.id, { onDelete: "cascade" }),
+  priority: integer("priority").default(1000).notNull(),
+  source: varchar("source", { length: 10 }).default("user").notNull(),
+  hitCount: integer("hitCount").default(0).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  createdBy: bigint("createdBy", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  businessActiveIdx: index("idx_wallet_category_rules_business").on(table.businessId, table.isActive),
+  uniqueCategoryRule: uniqueIndex("idx_wallet_category_rules_unique")
+    .on(table.businessId, table.provider, table.matchType, table.pattern)
+    .where(sql`"deletedAt" IS NULL`),
+}));
+
+export type WalletCategoryRule = typeof walletCategoryRules.$inferSelect;
+export type InsertWalletCategoryRule = typeof walletCategoryRules.$inferInsert;
+
 export const mobileWalletProviders = pgTable("mobile_wallet_providers", {
   code: varchar("code", { length: 20 }).primaryKey(),
   name: varchar("name", { length: 100 }).notNull(),
@@ -1760,6 +1827,10 @@ export const mobileWalletTransactions = pgTable("mobile_wallet_transactions", {
   description: text("description"),
   rawText: text("rawText"),
   rawPayload: jsonb("raw_payload"),
+  categoryId: bigint("categoryId", { mode: "number" }).references(() => expenseCategories.id, { onDelete: "set null" }),
+  classificationSource: varchar("classificationSource", { length: 20 }).default("none").notNull(),
+  classificationConfidence: numeric("classificationConfidence", { precision: 4, scale: 3 }),
+  statementImportId: bigint("statementImportId", { mode: "number" }).references(() => statementImports.id, { onDelete: "set null" }),
   status: varchar("status", { length: 20 }).default("completed").notNull(),
   isReconciled: boolean("is_reconciled").default(false).notNull(),
   isLinked: boolean("is_linked").default(false).notNull(),
@@ -1779,6 +1850,8 @@ export const mobileWalletTransactions = pgTable("mobile_wallet_transactions", {
   uniqueProviderTxn: uniqueIndex("idx_wallet_txn_provider_txn").on(table.provider, table.providerTxnId),
   walletTxnLocationIdx: index("idx_wallet_txn_location").on(table.locationId),
   walletTxnStatusIdx: index("idx_wallet_txn_status").on(table.status),
+  walletTxnStatementImportIdx: index("idx_wallet_txn_statement_import").on(table.statementImportId),
+  walletTxnCategoryIdx: index("idx_wallet_txn_category").on(table.categoryId),
 }));
 
 export type MobileWalletTransaction = typeof mobileWalletTransactions.$inferSelect;

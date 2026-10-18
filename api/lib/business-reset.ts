@@ -65,6 +65,8 @@ import {
   mobileWalletTransactions,
   mobileWalletDailyLedger,
   mobileWalletReconciliation,
+  statementImports,
+  walletCategoryRules,
   mpesaReconciliation,
   mpesaTransactions,
   notifications,
@@ -637,6 +639,21 @@ export async function resetBusinessTransactions(input: {
       .where(and(eq(debts.businessId, input.businessId), isNull(debts.deletedAt)))
       .returning({ id: debts.id });
     results.debts = { count: debtDeleted.length };
+
+    // 7i. statement imports and learned category rules (business-scoped, soft-delete)
+    const importsDeleted = await tx
+      .update(statementImports)
+      .set({ deletedAt: now, status: "rolled_back" })
+      .where(and(eq(statementImports.businessId, input.businessId), isNull(statementImports.deletedAt)))
+      .returning({ id: statementImports.id });
+    results.statement_imports = { count: importsDeleted.length };
+
+    const categoryRulesDeleted = await tx
+      .update(walletCategoryRules)
+      .set({ deletedAt: now, isActive: false })
+      .where(and(eq(walletCategoryRules.businessId, input.businessId), isNull(walletCategoryRules.deletedAt)))
+      .returning({ id: walletCategoryRules.id });
+    results.wallet_category_rules = { count: categoryRulesDeleted.length };
 
     // ── Step 8: Reset location counters ────────────────────────────────────
 
