@@ -1,6 +1,13 @@
 # Changelog
 
-## [Unreleased]
+## [Unreleased] — Profile Account ID
+
+### Added
+- **Account ID on Profile** — the Account Details card now shows the sign-in Account ID for your own profile and when viewing another user, with a copy button. Previously the ID was only visible from the business details page. File: `src/pages/Profile.tsx`.
+
+### Tested
+- `src/pages/__tests__/Profile.account-id.test.tsx` — **3 pass** (own profile, viewed profile, missing ID).
+- `npx tsc -b` and `npx eslint` on the touched files — clean.
 
 ## [1.3.0] - 2026-10-18
 
