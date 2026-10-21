@@ -76,7 +76,6 @@ async function deliverToWebhook(
 
   let finalStatus: "success" | "failed" = "failed";
   let lastError: string | null = null;
-  let lastStatusCode: number | null = null;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     try {
@@ -90,7 +89,6 @@ async function deliverToWebhook(
       });
       clearTimeout(timeout);
 
-      lastStatusCode = response.status;
       const responseText = await response.text().catch(() => "");
       const deliveryStatus = response.ok ? "success" : `failed`;
       await recordDelivery(
@@ -111,7 +109,6 @@ async function deliverToWebhook(
       lastError = `HTTP ${response.status}`;
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
-      lastStatusCode = null;
       await recordDelivery(webhook.id, event, payload, null, lastError, "error");
     }
 

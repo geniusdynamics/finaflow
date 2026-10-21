@@ -59,6 +59,9 @@ const PERMISSION_LABELS: Record<string, string> = {
   "payment_methods:view": "Payment Methods View",
   "payment_methods:manage": "Payment Methods Manage",
   "expense_categories:manage": "Expense Categories Manage",
+  "subscriptions:view": "Subscriptions View",
+  "subscriptions:manage": "Subscriptions Manage",
+  "subscriptions:pay": "Subscriptions Pay",
 };
 
 const ROLE_ORDER = ["owner", "admin", "manager", "employee", "viewer"] as const;
@@ -85,6 +88,7 @@ const PERMISSION_GROUPS = [
   { label: "Debts", keys: [PERMISSIONS.DEBTS_VIEW, PERMISSIONS.DEBTS_MANAGE] },
   { label: "Payment Methods", keys: [PERMISSIONS.PAYMENT_METHODS_VIEW, PERMISSIONS.PAYMENT_METHODS_MANAGE] },
   { label: "Expense Categories", keys: [PERMISSIONS.EXPENSE_CATEGORIES_MANAGE] },
+  { label: "Subscriptions", keys: [PERMISSIONS.SUBSCRIPTIONS_VIEW, PERMISSIONS.SUBSCRIPTIONS_MANAGE, PERMISSIONS.SUBSCRIPTIONS_PAY] },
   { label: "Other", keys: [PERMISSIONS.FEEDBACK_MANAGE, PERMISSIONS.RESET_TRANSACTIONS] },
 ];
 

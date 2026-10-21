@@ -2,7 +2,6 @@
 // ABOUTME: Validates deterministic even-split with remainder distribution and full plan rollup across all periods.
 
 import { describe, it, expect } from "vitest";
-import Decimal from "decimal.js";
 import {
   computeBucketTotal,
   computeAnalyticalSplit,

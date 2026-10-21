@@ -90,15 +90,16 @@ export function PartnerDashboard() {
       .reduce((sum, commission) => sum + parseFloat(commission.commissionAmount ?? "0"), 0) ?? 0;
   }, [commissions]);
 
+  const currentBusinessId = user?.currentBusinessId;
   const allocatedPartnersCount = useMemo(() => {
-    if (!ownerAllocations || !user?.currentBusinessId) return 0;
+    if (!ownerAllocations || !currentBusinessId) return 0;
 
     return new Set(
       ownerAllocations
-        .filter((allocation) => allocation.ownerBusinessId === user.currentBusinessId && allocation.status === "active")
+        .filter((allocation) => allocation.ownerBusinessId === currentBusinessId && allocation.status === "active")
         .map((allocation) => allocation.partnerUserId),
     ).size;
-  }, [ownerAllocations, user?.currentBusinessId]);
+  }, [ownerAllocations, currentBusinessId]);
 
   const summaryCards = [
     ...(canSeePartnerPortfolio ? [

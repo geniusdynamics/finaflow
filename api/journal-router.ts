@@ -184,7 +184,7 @@ export const journalRouter = createRouter({
           .optional(),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+    .mutation(async ({ input }) => {
       const db = getDb();
       
 

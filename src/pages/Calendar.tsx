@@ -1,43 +1,99 @@
-import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router";
+import { useState, useEffect, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CalendarDays, Receipt, TrendingDown, FileText, Landmark, AlertTriangle, Clock, Wallet } from "lucide-react";
+import { CalendarDays, Receipt, TrendingDown, FileText, Landmark, AlertTriangle, Clock, Wallet, Repeat } from "lucide-react";
 import { DailyPayments } from "./DailyPayments";
+import { SegmentedToggle } from "@/components/ui/segmented-toggle";
+import { useAuth } from "@/hooks/useAuth";
+import { hasPermission, PERMISSIONS } from "@/lib/permissions";
+
+/** Money label for a calendar event — subscription events render in their own currency. */
+function formatEventMoney(amount: string, currency?: string): string {
+  if (!currency || currency === "KES") return formatKES(amount);
+  const value = Number(amount);
+  if (!Number.isFinite(value)) return `${currency} ${amount}`;
+  return `${currency} ${value.toLocaleString("en-KE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
 
 export function Calendar() {
   const [searchParams, setSearchParams] = useSearchParams();
   const sectionParam = searchParams.get("section");
-  const [section, setSection] = useState<"calendar" | "payments">(
-    sectionParam === "payments" ? "payments" : "calendar"
+  const [section, setSection] = useState<"calendar" | "payments" | "subscriptions">(
+    sectionParam === "payments" || sectionParam === "subscriptions" ? sectionParam : "calendar"
   );
   const [view, setView] = useState<"all" | "bills" | "sales" | "payroll">("all");
   const [daysAhead, setDaysAhead] = useState(90);
+  // Source toggle (Subscriptions / Bills / Both) — which event streams the calendar shows.
+  const [sources, setSources] = useState<{ subscriptions: boolean; bills: boolean }>({ subscriptions: true, bills: true });
 
   useEffect(() => {
     const sp = searchParams.get("section");
-    if (sp === "payments") {
-      setSection("payments");
+    if (sp === "payments" || sp === "subscriptions") {
+      setSection(sp);
     }
   }, [searchParams]);
 
-  const handleSectionChange = (newSection: "calendar" | "payments") => {
+  const handleSectionChange = (newSection: "calendar" | "payments" | "subscriptions") => {
     setSection(newSection);
     setSearchParams(newSection === "calendar" ? {} : { section: newSection });
   };
 
   const [today] = useState(() => getLocalDateString());
-  const [futureDate] = useState(() => getLocalDateString(new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000)));
+  // Derived so the query range reacts to daysAhead changes.
+  const futureDate = useMemo(() => getLocalDateString(new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000)), [daysAhead]);
 
-  const { data: sales } = trpc.dailySales.list.useQuery({});
-  const { data: expenses } = trpc.expenses.list.useQuery({});
-  const { data: billCalendar } = trpc.dashboard.billCalendar.useQuery({ dateFrom: today, dateTo: futureDate });
-  const { data: payrollPeriods } = trpc.payroll.periods.useQuery({});
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const permContext = user?.permissions?.length ? user.permissions : (user?.role ?? "viewer");
+  const canViewSubscriptions = hasPermission(permContext, PERMISSIONS.SUBSCRIPTIONS_VIEW);
+
+  // The ?section=subscriptions deep link locks the toggle to Subscriptions-only.
+  const effectiveSources = section === "subscriptions" ? { subscriptions: true, bills: false } : sources;
+  const sourceMode: "subscriptions" | "bills" | "both" =
+    effectiveSources.subscriptions && effectiveSources.bills
+      ? "both"
+      : effectiveSources.subscriptions
+        ? "subscriptions"
+        : "bills";
+
+  const handleSourceChange = (mode: "subscriptions" | "bills" | "both") => {
+    if (section === "subscriptions") {
+      // Unlock the deep-linked preset by returning to the main calendar with the tapped source.
+      handleSectionChange("calendar");
+    }
+    setSources({ subscriptions: mode !== "bills", bills: mode !== "subscriptions" });
+  };
+
+  const { data: sales } = trpc.dailySales.list.useQuery({}, { enabled: sourceMode !== "subscriptions" });
+  const { data: expenses } = trpc.expenses.list.useQuery({}, { enabled: sourceMode !== "subscriptions" });
+  const { data: billCalendar } = trpc.dashboard.billCalendar.useQuery({ dateFrom: today, dateTo: futureDate }, { enabled: sourceMode !== "subscriptions" });
+  const { data: payrollPeriods } = trpc.payroll.periods.useQuery({}, { enabled: sourceMode !== "subscriptions" });
+  const { data: subCalendar } = trpc.subscriptions.calendar.useQuery(
+    { dateFrom: today, dateTo: futureDate },
+    { enabled: sourceMode !== "bills" && canViewSubscriptions },
+  );
+  const { data: subStats } = trpc.subscriptions.stats.useQuery(
+    {},
+    { enabled: sourceMode !== "bills" && canViewSubscriptions },
+  );
+
+  // Current-month statistics for the calendar Statistics panel (Wallos calendar-monthly-stats parity).
+  const currentMonthKey = today.slice(0, 7);
+  const currentMonthStat = subStats?.monthStats?.find((m) => m.month === currentMonthKey) ?? null;
+  const currentMonthLabel = new Date(`${currentMonthKey}-01`).toLocaleDateString("en-KE", { month: "long", year: "numeric" });
+  const currentMonthBudget = currentMonthStat?.budget != null ? Number(currentMonthStat.budget) : 0;
+  const currentMonthOverBudget = currentMonthBudget > 0 && Number(currentMonthStat?.total ?? "0") > currentMonthBudget;
+  const overBudgetAmount = (Number(currentMonthStat?.total ?? "0") - currentMonthBudget).toFixed(2);
 
   // Build events
-  const billEvents = (billCalendar?.bills ?? []).map((b) => {
+  // Subscription-sourced bills are excluded here: their charges are already shown as
+  // subscription events, so including them would double count this month's outflow.
+  const billEvents = (billCalendar?.bills ?? [])
+    .filter((b) => (b as { externalSystem?: string | null }).externalSystem !== "subscription")
+    .map((b) => {
     const daysUntil = Math.ceil((new Date(b.dueDate).getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24));
     const isOverdue = daysUntil < 0 || b.status === "overdue";
     const isDueSoon = daysUntil >= 0 && daysUntil <= 7;
@@ -46,18 +102,35 @@ export function Calendar() {
     return { type: "bill" as const, date: b.dueDate, title: `${b.description} ${titleSuffix}`, amount: b.balanceDue, id: b.id, priority, status: b.status, isOverdue };
   });
 
+  const subscriptionEvents = (subCalendar?.events ?? []).map((e) => {
+    const titleSuffix = e.isOverdue ? "(OVERDUE)" : e.isDueToday ? "(DUE TODAY)" : "";
+    return {
+      type: "subscription" as const,
+      date: e.date,
+      title: `${e.name} ${titleSuffix}`.trim(),
+      amount: e.amount,
+      id: e.id,
+      priority: e.isOverdue ? 3 : e.isDueToday ? 2 : 0,
+      isOverdue: e.isOverdue,
+      isDueToday: e.isDueToday,
+      currency: e.currency,
+      branchName: e.branchName,
+    };
+  });
+
   const allEvents = [
-    ...(view === "all" || view === "sales" ? (sales?.map((s) => ({ type: "sale" as const, date: s.saleDate, title: `Sales: ${formatKES(s.netSales)}`, amount: s.netSales, id: s.id, priority: 0 })) ?? []) : []),
-    ...(view === "all" || view === "sales" ? (expenses?.map((e) => ({ type: "expense" as const, date: e.expenseDate, title: e.description, amount: e.amount, id: e.id, priority: 0 })) ?? []) : []),
-    ...(view === "all" || view === "bills" ? billEvents : []),
-    ...(view === "all" || view === "payroll" ? (payrollPeriods?.map((p) => ({ type: "payroll" as const, date: p.paymentDate, title: `Payroll: ${p.periodName}`, amount: null, id: p.id, priority: p.status === "open" ? 1 : 0 })) ?? []) : []),
+    ...(sourceMode !== "subscriptions" && (view === "all" || view === "sales") ? (sales?.map((s) => ({ type: "sale" as const, date: s.saleDate, title: `Sales: ${formatKES(s.netSales)}`, amount: s.netSales, id: s.id, priority: 0 })) ?? []) : []),
+    ...(sourceMode !== "subscriptions" && (view === "all" || view === "sales") ? (expenses?.map((e) => ({ type: "expense" as const, date: e.expenseDate, title: e.description, amount: e.amount, id: e.id, priority: 0 })) ?? []) : []),
+    ...(sourceMode !== "subscriptions" && (view === "all" || view === "bills") ? billEvents : []),
+    ...(sourceMode !== "subscriptions" && (view === "all" || view === "payroll") ? (payrollPeriods?.map((p) => ({ type: "payroll" as const, date: p.paymentDate, title: `Payroll: ${p.periodName}`, amount: null, id: p.id, priority: p.status === "open" ? 1 : 0 })) ?? []) : []),
+    ...(sourceMode !== "bills" ? subscriptionEvents : []),
   ].sort((a, b) => {
     if (a.priority !== b.priority) return b.priority - a.priority;
     return new Date(a.date).getTime() - new Date(b.date).getTime();
   });
 
   const grouped = allEvents.reduce((acc, event) => {
-    const month = new Date(event.date).toLocaleDateString("en-KE", { month: "long", year: "numeric" });
+    const month = event.date.slice(0, 7);
     if (!acc[month]) acc[month] = [];
     acc[month].push(event);
     return acc;
@@ -78,9 +151,12 @@ export function Calendar() {
           <button onClick={() => handleSectionChange("payments")} className={`px-4 py-2 text-sm font-medium ${section === "payments" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
             <Wallet className="mr-1 inline h-4 w-4"/>Daily Payments
           </button>
+          <button onClick={() => handleSectionChange("subscriptions")} className={`px-4 py-2 text-sm font-medium ${section === "subscriptions" ? "border-b-2 border-[#C73E1D] text-[#C73E1D]" : "text-[#8D8A87] hover:text-[#2D2A26]"}`}>
+            <Repeat className="mr-1 inline h-4 w-4"/>Subscriptions
+          </button>
         </div>
 
-        {section === "calendar" && (
+        {(section === "calendar" || section === "subscriptions") && (
         <>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -88,16 +164,67 @@ export function Calendar() {
             <p className="mt-1 text-sm text-[#8D8A87]">All financial events and upcoming bills</p>
           </div>
           <div className="flex items-center gap-2">
-            <select value={view} onChange={(e) => setView(e.target.value as "all" | "bills" | "sales" | "payroll")} className="rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26]">
-              <option value="all">All Events</option><option value="bills">Bills Only</option><option value="sales">Sales Only</option><option value="payroll">Payroll Only</option>
-            </select>
+            <SegmentedToggle
+              ariaLabel="Calendar sources"
+              options={[
+                { value: "subscriptions", label: "Subscriptions", icon: <Repeat className="h-4 w-4" /> },
+                { value: "bills", label: "Bills" },
+                { value: "both", label: "Both" },
+              ]}
+              value={sourceMode}
+              onChange={handleSourceChange}
+            />
+            {sourceMode !== "subscriptions" && (
+              <select value={view} onChange={(e) => setView(e.target.value as "all" | "bills" | "sales" | "payroll")} className="rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26]">
+                <option value="all">All Events</option><option value="bills">Bills Only</option><option value="sales">Sales Only</option><option value="payroll">Payroll Only</option>
+              </select>
+            )}
             <select value={daysAhead} onChange={(e) => setDaysAhead(Number(e.target.value))} className="rounded-lg border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26]">
               <option value={30}>30 days</option><option value={60}>60 days</option><option value={90}>90 days</option><option value={180}>180 days</option>
             </select>
           </div>
         </div>
 
+        {/* Source legend */}
+        {sourceMode === "both" && (
+          <div className="flex items-center gap-4 text-xs text-[#8D8A87]">
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#6B4FA8]" /> Subscriptions</span>
+            <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-[#ED6C02]" /> Bills</span>
+          </div>
+        )}
+
+        {/* Calendar statistics for the current month (Wallos calendar-monthly-stats parity) */}
+        {sourceMode !== "bills" && currentMonthStat && (
+          <div className="rounded-xl border border-[#E8E0D8] bg-white p-4" data-testid="calendar-statistics">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <h2 className="font-serif text-lg font-semibold text-[#2D2A26]">Statistics</h2>
+              <span className="text-xs text-[#8D8A87]">{currentMonthLabel}</span>
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-lg bg-[#F5EDE6]/60 px-4 py-5 text-center">
+                <p className="font-mono text-2xl font-semibold text-[#C73E1D]">{currentMonthStat.dueCount}</p>
+                <p className="mt-1 text-xs font-medium text-[#8D8A87]">Active Subscriptions</p>
+              </div>
+              <div className="rounded-lg bg-[#F5EDE6]/60 px-4 py-5 text-center">
+                <p className="font-mono text-2xl font-semibold text-[#C73E1D]">{formatKES(currentMonthStat.total)}</p>
+                <p className="mt-1 text-xs font-medium text-[#8D8A87]">Total Cost</p>
+              </div>
+              <div className="rounded-lg bg-[#F5EDE6]/60 px-4 py-5 text-center">
+                <p className="font-mono text-2xl font-semibold text-[#C73E1D]">{formatKES(currentMonthStat.amountDue)}</p>
+                <p className="mt-1 text-xs font-medium text-[#8D8A87]">Amount due this month</p>
+              </div>
+            </div>
+            {currentMonthOverBudget && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#D32F2F]/30 bg-[#D32F2F]/5 px-3 py-2 text-sm font-medium text-[#D32F2F]">
+                <AlertTriangle className="h-4 w-4" />
+                Over budget warning ({formatKES(overBudgetAmount)})
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Alert Cards */}
+        {sourceMode !== "subscriptions" && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <Card className="border-[#D32F2F]/30 bg-[#D32F2F]/5">
             <CardContent className="flex items-center gap-3 p-4">
@@ -127,9 +254,10 @@ export function Calendar() {
             </CardContent>
           </Card>
         </div>
+        )}
 
         {/* Bill Priority List */}
-        {(view === "all" || view === "bills") && billCalendar && (
+        {sourceMode !== "subscriptions" && (view === "all" || view === "bills") && billCalendar && (
           <Card className="border-[#E8E0D8] bg-white">
             <CardHeader className="pb-3"><CardTitle className="font-serif text-lg text-[#2D2A26]">Bill Priority Queue</CardTitle></CardHeader>
             <CardContent>
@@ -138,19 +266,19 @@ export function Calendar() {
                   const daysUntil = Math.ceil((new Date(event.date).getTime() - new Date(today).getTime()) / (1000 * 60 * 60 * 24));
                   const billEvent = event as { isOverdue?: boolean; status?: string };
                   return (
-                    <div key={`bill-${event.id}`} className={`flex items-center gap-3 rounded-lg border p-3 ${
+                    <div key={`bill-${event.id}`} className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 ${
                       billEvent.isOverdue ? "border-[#D32F2F] bg-[#D32F2F]/5" :
                       event.priority === 2 ? "border-[#ED6C02] bg-[#ED6C02]/5" :
                       "border-[#E8E0D8] bg-white"
                     }`}>
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
                         billEvent.isOverdue ? "bg-[#D32F2F]/10" :
                         event.priority === 2 ? "bg-[#ED6C02]/10" :
                         "bg-[#8D8A87]/10"
                       }`}>
-                        {billEvent.isOverdue ? <AlertTriangle className="h-5 w-5 text-[#D32F2F]" /> :
-                         event.priority === 2 ? <Clock className="h-5 w-5 text-[#ED6C02]" /> :
-                         <FileText className="h-5 w-5 text-[#8D8A87]" />}
+                        {billEvent.isOverdue ? <AlertTriangle className="h-4 w-4 text-[#D32F2F]" /> :
+                         event.priority === 2 ? <Clock className="h-4 w-4 text-[#ED6C02]" /> :
+                         <FileText className="h-4 w-4 text-[#8D8A87]" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -178,11 +306,22 @@ export function Calendar() {
 
         {/* All Events Timeline */}
         <div className="space-y-6">
-          {Object.entries(grouped).map(([month, monthEvents]) => {
+          {Object.entries(grouped).map(([monthKey, monthEvents]) => {
+            const month = new Date(`${monthKey}-01`).toLocaleDateString("en-KE", { month: "long", year: "numeric" });
             const monthIncome = monthEvents.filter(e => e.type === "sale").reduce((sum, e) => sum + parseFloat(e.amount || "0"), 0);
             const monthOutflow = monthEvents.filter(e => e.type === "expense" || e.type === "bill").reduce((sum, e) => sum + parseFloat(e.amount || "0"), 0);
+            const monthSubs = monthEvents.filter((e) => e.type === "subscription");
+            // Base-currency figures from the stats month breakdown (converts mixed currencies and
+            // nets off payments); fall back to the raw event sum outside the stats window.
+            const monthStat = subStats?.monthStats?.find((m) => m.month === monthKey);
+            const monthSubTotal = monthStat
+              ? Number(monthStat.total)
+              : monthSubs.reduce((sum, e) => sum + parseFloat(e.amount || "0"), 0);
+            const monthBillTotal = monthEvents.filter((e) => e.type === "bill").reduce((sum, e) => sum + parseFloat(e.amount || "0"), 0);
+            const monthBudget = monthStat?.budget ?? null;
+            const overBudget = monthBudget !== null && Number(monthBudget) > 0 && monthSubTotal + monthBillTotal > Number(monthBudget);
             return (
-            <div key={month}>
+            <div key={monthKey}>
               <div className="mb-3 flex items-center justify-between flex-wrap gap-2">
                 <h2 className="font-serif text-lg font-semibold text-[#2D2A26]">{month}</h2>
                 <div className="flex gap-3 text-xs">
@@ -191,22 +330,56 @@ export function Calendar() {
                   <span className="text-[#8D8A87]">Net: <span className="font-mono font-semibold">{formatKES((monthIncome - monthOutflow).toFixed(2))}</span></span>
                 </div>
               </div>
+              {/* Monthly subscription strip (Wallos calendar-monthly-stats parity) */}
+              {monthSubs.length > 0 && (
+                <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-[#6B4FA8]/20 bg-[#6B4FA8]/5 px-3 py-2 text-xs text-[#2D2A26]">
+                  <Repeat className="h-3.5 w-3.5 text-[#6B4FA8]" />
+                  <span className="font-medium">
+                    {monthStat ? monthStat.dueCount : monthSubs.length} subscription
+                    {(monthStat ? monthStat.dueCount : monthSubs.length) === 1 ? "" : "s"} due
+                  </span>
+                  <span className="text-[#8D8A87]">·</span>
+                  <span>
+                    <span className="font-mono">{formatKES(monthSubTotal.toFixed(2))}</span> subscriptions +{" "}
+                    <span className="font-mono">{formatKES(monthBillTotal.toFixed(2))}</span> bills ={" "}
+                    <span className="font-mono font-semibold">{formatKES((monthSubTotal + monthBillTotal).toFixed(2))}</span>
+                  </span>
+                  {overBudget && (
+                    <span className="flex items-center gap-1 font-semibold text-[#D32F2F]">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Over budget ({formatKES(monthBudget as string)})
+                    </span>
+                  )}
+                </div>
+              )}
               <div className="space-y-2">
                 {monthEvents.map((event) => {
                   const billEvent = event as { isOverdue?: boolean; status?: string };
+                  const isSubEvent = event.type === "subscription";
+                  const subOverdue = isSubEvent && (event as { isOverdue?: boolean }).isOverdue === true;
+                  const subDueToday = isSubEvent && (event as { isDueToday?: boolean }).isDueToday === true;
+                  const openSubscription = isSubEvent ? () => navigate(`/subscriptions?highlight=${event.id}`) : undefined;
                   return (
-                  <Card key={`${event.type}-${event.id}`} className="border-[#E8E0D8] bg-white">
-                    <CardContent className="flex items-center gap-4 p-4">
-                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
+                  <Card
+                    key={`${event.type}-${event.id}-${event.date}`}
+                    className={`border-[#E8E0D8] bg-white ${isSubEvent ? "cursor-pointer transition-colors hover:bg-[#F5EDE6]" : ""}`}
+                    onClick={openSubscription}
+                    role={isSubEvent ? "button" : undefined}
+                    tabIndex={isSubEvent ? 0 : undefined}
+                    onKeyDown={isSubEvent ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openSubscription?.(); } } : undefined}
+                  >
+                    <CardContent className="flex items-center gap-3 px-3 py-2">
+                      <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
                         event.type === "sale" ? "bg-[#2E7D32]/10" :
                         event.type === "expense" ? "bg-[#D32F2F]/10" :
                         event.type === "bill" ? billEvent.isOverdue ? "bg-[#D32F2F]/10" : event.priority >= 2 ? "bg-[#ED6C02]/10" : "bg-[#8D8A87]/10" :
+                        isSubEvent ? subOverdue ? "bg-[#D32F2F]/10" : subDueToday ? "bg-[#6B4FA8]" : "bg-[#6B4FA8]/10" :
                         "bg-[#D4A854]/10"
                       }`}>
-                        {event.type === "sale" ? <Receipt className="h-5 w-5 text-[#2E7D32]" /> :
-                         event.type === "expense" ? <TrendingDown className="h-5 w-5 text-[#D32F2F]" /> :
-                         event.type === "bill" ? billEvent.isOverdue ? <AlertTriangle className="h-5 w-5 text-[#D32F2F]" /> : <FileText className="h-5 w-5 text-[#ED6C02]" /> :
-                         <Landmark className="h-5 w-5 text-[#D4A854]" />}
+                        {event.type === "sale" ? <Receipt className="h-4 w-4 text-[#2E7D32]" /> :
+                         event.type === "expense" ? <TrendingDown className="h-4 w-4 text-[#D32F2F]" /> :
+                         event.type === "bill" ? billEvent.isOverdue ? <AlertTriangle className="h-4 w-4 text-[#D32F2F]" /> : <FileText className="h-4 w-4 text-[#ED6C02]" /> :
+                         isSubEvent ? <Repeat className={`h-4 w-4 ${subOverdue ? "text-[#D32F2F]" : subDueToday ? "text-white" : "text-[#6B4FA8]"}`} /> :
+                         <Landmark className="h-4 w-4 text-[#D4A854]" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
@@ -217,6 +390,9 @@ export function Calendar() {
                             event.type === "bill" && event.priority >= 2 ? "bg-[#ED6C02]/10 text-[#ED6C02]" :
                             event.type === "bill" && billEvent.status === "partial" ? "bg-[#D4A854]/10 text-[#D4A854]" :
                             event.type === "bill" ? "bg-[#8D8A87]/10 text-[#8D8A87]" :
+                            isSubEvent && subOverdue ? "bg-[#D32F2F]/10 text-[#D32F2F]" :
+                            isSubEvent && subDueToday ? "bg-[#6B4FA8] text-white" :
+                            isSubEvent ? "border border-[#6B4FA8] text-[#6B4FA8]" :
                             "bg-[#D4A854]/10 text-[#D4A854]"
                           }`}>{event.type}</span>
                           <span className="text-xs text-[#8D8A87]">{formatDate(event.date)}</span>
@@ -224,14 +400,18 @@ export function Calendar() {
                           {event.priority === 2 && !billEvent.isOverdue && <span className="text-xs font-bold text-[#ED6C02]">DUE SOON</span>}
                           {billEvent.status === "partial" && !billEvent.isOverdue && event.priority !== 2 && <span className="text-xs font-bold text-[#D4A854]">PARTIAL</span>}
                         </div>
-                        <p className="mt-1 truncate text-sm font-medium text-[#2D2A26]">{event.title}</p>
+                        <p className="mt-0.5 truncate text-sm font-medium text-[#2D2A26]">{event.title}</p>
+                        {isSubEvent && (event as { branchName?: string | null }).branchName !== undefined && (
+                          <p className="truncate text-[11px] text-[#8D8A87]">{(event as { branchName?: string | null }).branchName ?? "Whole business"}</p>
+                        )}
                       </div>
                       {event.amount && (
-                        <span className={`shrink-0 font-mono text-sm font-semibold ${
+                        <span className={`shrink-0 font-mono text-xs font-semibold ${
                           event.type === "sale" ? "text-[#2E7D32]" :
                           event.type === "expense" ? "text-[#D32F2F]" :
+                          isSubEvent ? subOverdue ? "text-[#D32F2F]" : "text-[#6B4FA8]" :
                           "text-[#ED6C02]"
-                        }`}>{formatKES(event.amount)}</span>
+                        }`}>{isSubEvent ? formatEventMoney(event.amount, (event as { currency?: string }).currency) : formatKES(event.amount)}</span>
                       )}
                     </CardContent>
                   </Card>

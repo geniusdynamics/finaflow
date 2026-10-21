@@ -9,10 +9,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Link, useSearchParams, useNavigate } from "react-router";
-import { Landmark, LogIn, Store, Eye, EyeOff, Briefcase, CheckCircle, Gift, Building, Globe, Loader2, Check, X, ArrowRight, ArrowLeft, ChevronLeft, UserPlus, Handshake } from "lucide-react";
+import { Landmark, LogIn, Store, Eye, EyeOff, Briefcase, CheckCircle, Gift, Building, Globe, Loader2, Check, X, ArrowRight, ArrowLeft, ChevronLeft, UserPlus, Handshake, Pencil } from "lucide-react";
 import { setCsrfFromResponse } from "@/hooks/useAuth";
 import { setAuthToken } from "@/providers/trpc";
 import { getDefaultLandingPage } from "@/lib/permissions";
+import { readRecentAccounts, saveRecentAccount, type RecentAccount } from "@/lib/recent-accounts";
 
 
 type Intent = "login" | "signup";
@@ -64,15 +65,25 @@ export default function Login() {
   const initialUserType: UserType = preselectedType === "partner" ? "partner" : "standard";
 
   const [intent, setIntent] = useState<Intent>(initialIntent);
+  // Accounts previously used in this browser: on a returning visit the user
+  // lands straight on the credentials step, with the account still switchable.
+  const [recentAccounts, setRecentAccounts] = useState<RecentAccount[]>(() =>
+    initialIntent === "login" ? readRecentAccounts() : [],
+  );
+  const rememberedAccount = recentAccounts[0] ?? null;
   const [mode, setMode] = useState<LoginStep | "signup">(
-    initialIntent === "signup" ? "signup" : "accountLookup",
+    initialIntent === "signup" ? "signup" : rememberedAccount ? "credentials" : "accountLookup",
   );
   const [showPassword, setShowPassword] = useState(false);
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  const [accountId, setAccountId] = useState("");
-  const [foundBusiness, setFoundBusiness] = useState<Record<string, unknown> | null>(null);
+  const [accountId, setAccountId] = useState(rememberedAccount?.accountId ?? "");
+  const [foundBusiness, setFoundBusiness] = useState<Record<string, unknown> | null>(
+    rememberedAccount
+      ? { accountId: rememberedAccount.accountId, name: rememberedAccount.name }
+      : null,
+  );
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
   const [signupForm, setSignupForm] = useState({
     name: "", username: "", email: "", password: "", confirmPassword: "",
@@ -99,7 +110,14 @@ export default function Login() {
 
   const lookupMutation = trpc.localAuth.lookupAccount.useMutation({
     onSuccess: (data: Record<string, unknown>) => {
-      setFoundBusiness(data.business as Record<string, unknown> | null);
+      const business = data.business as Record<string, unknown> | null;
+      setFoundBusiness(business);
+      if (business?.accountId) {
+        setRecentAccounts(saveRecentAccount({
+          accountId: business.accountId as string,
+          name: (business.name as string) || "",
+        }));
+      }
       setMode("credentials");
       setLookupLoading(false);
       setLookupError(null);
@@ -115,6 +133,13 @@ export default function Login() {
       setCsrfFromResponse((data.csrfToken as string) || null);
       // Store JWT as Bearer token fallback for reliable auth
       if (data.token) setAuthToken(data.token as string);
+      const usedAccountId = (foundBusiness?.accountId as string) || accountId;
+      if (usedAccountId) {
+        setRecentAccounts(saveRecentAccount({
+          accountId: usedAccountId,
+          name: (foundBusiness?.name as string) || "",
+        }));
+      }
       toast.success("Welcome back, " + ((data.user as Record<string, string>)?.name || (data.user as Record<string, string>)?.username) + "!");
       // Reset (remove from cache) the me query before navigating so
       // ProtectedRoute starts with a cache miss, shows its loading
@@ -185,9 +210,26 @@ export default function Login() {
 
   const handleLookup = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accountId.trim()) { toast.error("Enter your Account ID"); return; }
+    if (!accountId.trim()) { toast.error("Enter your Account ID or email"); return; }
     setLoginError(null);
     lookupMutation.mutate({ accountId: accountId.trim() });
+  };
+
+  const handleSelectRecentAccount = (account: RecentAccount) => {
+    setAccountId(account.accountId);
+    setFoundBusiness({ accountId: account.accountId, name: account.name });
+    setLookupError(null);
+    setLoginError(null);
+    setMode("credentials");
+    setRecentAccounts(saveRecentAccount(account));
+  };
+
+  const handleChangeAccount = () => {
+    setMode("accountLookup");
+    setFoundBusiness(null);
+    setAccountId("");
+    setLoginError(null);
+    setLookupError(null);
   };
 
   const handleLogin = (e: React.FormEvent) => {
@@ -285,8 +327,8 @@ export default function Login() {
               {mode === "signup" ? "Create Your Account" : "Welcome Back"}
             </h1>
             <p className="mt-2 text-sm text-[#8D8A87]">
-              {mode === "accountLookup" ? "Enter your Account ID to sign in" :
-               mode === "credentials" ? "Signing in to " + businessName :
+              {mode === "accountLookup" ? "Enter your Account ID or email to sign in" :
+               mode === "credentials" ? "Signing in to " + (businessName || accountId) :
                "Set up your account and start tracking"}
             </p>
           </div>
@@ -323,8 +365,36 @@ export default function Login() {
             <CardContent className="p-5" id="auth-panel" role="tabpanel">
               {mode === "accountLookup" && (
                 <form onSubmit={handleLookup} className="space-y-4" noValidate>
+                  {recentAccounts.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium uppercase tracking-wide text-[#8D8A87]">
+                        Recent on this device
+                      </p>
+                      {recentAccounts.map((account) => (
+                        <button
+                          key={account.accountId}
+                          type="button"
+                          onClick={() => handleSelectRecentAccount(account)}
+                          data-testid={`recent-account-${account.accountId}`}
+                          className="flex w-full items-center gap-3 rounded-lg border border-[#E8E0D8] bg-white px-3 py-2.5 text-left transition-colors hover:border-[#C73E1D]/40 hover:bg-[#F5EDE6] min-h-[48px]"
+                        >
+                          <Building className="h-4 w-4 shrink-0 text-[#C73E1D]" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-[#2D2A26]">
+                              {account.name || account.accountId}
+                            </span>
+                            <span className="block truncate font-mono text-xs text-[#8D8A87]">
+                              {account.accountId}
+                            </span>
+                          </span>
+                          <ArrowRight className="h-4 w-4 shrink-0 text-[#8D8A87]" />
+                        </button>
+                      ))}
+                      <p className="pt-1 text-center text-xs text-[#8D8A87]">or use another account</p>
+                    </div>
+                  )}
                   <div>
-                    <Label htmlFor="accountId" className="text-xs text-[#8D8A87]">Account ID</Label>
+                    <Label htmlFor="accountId" className="text-xs text-[#8D8A87]">Account ID or email</Label>
                     <div className="relative">
                       <Globe className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8D8A87]" />
                       <Input
@@ -332,14 +402,15 @@ export default function Login() {
                         name="accountId"
                         autoComplete="username"
                         spellCheck={false}
-                        autoCapitalize="characters"
+                        autoCapitalize="none"
                         value={accountId}
                         onChange={e => {
-                          setAccountId(e.target.value.toUpperCase());
+                          const value = e.target.value;
+                          setAccountId(value.includes("@") ? value : value.toUpperCase());
                           if (lookupError) setLookupError(null);
                         }}
-                        placeholder="e.g. GENIUS"
-                        className="font-mono uppercase pl-9"
+                        placeholder="e.g. GENIUS or you@business.com"
+                        className={accountId.includes("@") ? "pl-9" : "font-mono uppercase pl-9"}
                         required
                       />
                       {lookupLoading && (
@@ -358,10 +429,15 @@ export default function Login() {
                         <X className="h-3 w-3" /> {lookupError}
                       </p>
                     )}
-                    {!lookupError && accountId && (
+                    {!lookupError && accountId.includes("@") && (
+                      <p className="mt-1 text-xs text-[#8D8A87]">
+                        We'll use this email to find your account.
+                      </p>
+                    )}
+                    {!lookupError && accountId && !accountId.includes("@") && (
                       <p className="mt-1 text-xs text-[#8D8A87]">
                         Your unique business identifier.
-                        {accountId && <span className="ml-1 text-[#C73E1D]">{"-> "}<strong>{accountId.toLowerCase()}.finaflow.app</strong></span>}
+                        <span className="ml-1 text-[#C73E1D]">{"-> "}<strong>{accountId.toLowerCase()}.finaflow.app</strong></span>
                       </p>
                     )}
                   </div>
@@ -396,11 +472,26 @@ export default function Login() {
               )}
               {mode === "credentials" && (
                 <form onSubmit={handleLogin} className="space-y-4" noValidate>
-                  <div className="mb-2 flex items-center gap-2 rounded-lg bg-[#F5EDE6] px-3 py-2">
-                    <Building className="h-4 w-4 text-[#C73E1D]" />
-                    <span className="text-sm font-medium text-[#2D2A26]">{businessName}</span>
-                    <span className="ml-auto font-mono text-xs text-[#8D8A87]">{foundBusiness?.accountId as string}</span>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={handleChangeAccount}
+                    data-testid="change-account"
+                    aria-label="Change account"
+                    className="mb-2 flex w-full items-center gap-2 rounded-lg bg-[#F5EDE6] px-3 py-2 text-left transition-colors hover:bg-[#EDE2D8] min-h-[48px]"
+                  >
+                    <Building className="h-4 w-4 shrink-0 text-[#C73E1D]" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-[#2D2A26]">
+                        {businessName || accountId}
+                      </span>
+                      <span className="block truncate font-mono text-xs text-[#8D8A87]">
+                        {foundBusiness?.accountId as string}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-[#C73E1D]">
+                      <Pencil className="h-3 w-3" /> Change
+                    </span>
+                  </button>
                   <div>
                     <Label htmlFor="login-username" className="text-xs text-[#8D8A87]">Username</Label>
                     <Input
@@ -467,10 +558,7 @@ export default function Login() {
                   <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
                     <button
                       type="button"
-                      onClick={() => {
-                        setMode("accountLookup");
-                        setLoginError(null);
-                      }}
+                      onClick={handleChangeAccount}
                       className="text-xs text-[#8D8A87] hover:text-[#2D2A26] flex items-center justify-center gap-1 min-h-[44px]"
                     >
                       <ArrowLeft className="h-3 w-3" /> Different account

@@ -9,7 +9,8 @@ export type ClearedReason =
   | "bill_paid"
   | "action_completed"
   | "manual_clear_all"
-  | "system_resolved";
+  | "system_resolved"
+  | "subscription_paid";
 
 /** A snapshot of a notification's lifecycle-relevant fields, no DB required. */
 export interface NotificationLifecycleRecord {

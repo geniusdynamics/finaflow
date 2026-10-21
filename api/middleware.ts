@@ -71,6 +71,9 @@ export const PERMISSIONS = {
   PAYMENT_METHODS_VIEW: "payment_methods:view",
   PAYMENT_METHODS_MANAGE: "payment_methods:manage",
   EXPENSE_CATEGORIES_MANAGE: "expense_categories:manage",
+  SUBSCRIPTIONS_VIEW: "subscriptions:view",
+  SUBSCRIPTIONS_MANAGE: "subscriptions:manage",
+  SUBSCRIPTIONS_PAY: "subscriptions:pay",
 } as const;
 
 export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
@@ -98,6 +101,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.DEBTS_VIEW, PERMISSIONS.DEBTS_MANAGE,
     PERMISSIONS.PAYMENT_METHODS_VIEW, PERMISSIONS.PAYMENT_METHODS_MANAGE,
     PERMISSIONS.EXPENSE_CATEGORIES_MANAGE,
+    PERMISSIONS.SUBSCRIPTIONS_VIEW, PERMISSIONS.SUBSCRIPTIONS_MANAGE, PERMISSIONS.SUBSCRIPTIONS_PAY,
     PERMISSIONS.INTEGRATIONS_MANAGE,
   ],
   manager: [
@@ -117,6 +121,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.DEBTS_VIEW, PERMISSIONS.DEBTS_MANAGE,
     PERMISSIONS.PAYMENT_METHODS_VIEW,
     PERMISSIONS.EXPENSE_CATEGORIES_MANAGE,
+    PERMISSIONS.SUBSCRIPTIONS_VIEW, PERMISSIONS.SUBSCRIPTIONS_MANAGE, PERMISSIONS.SUBSCRIPTIONS_PAY,
   ],
   employee: [
     // Sole permission: can create new daily sales entries only
@@ -131,6 +136,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.REPORTS_VIEW,
     PERMISSIONS.MPESA_VIEW,
     PERMISSIONS.FEEDBACK_MANAGE,
+    PERMISSIONS.SUBSCRIPTIONS_VIEW,
     PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.CALENDAR_VIEW,
   ],
 };
@@ -481,6 +487,9 @@ export const debtsManage = t.procedure.use(requirePermission(PERMISSIONS.DEBTS_M
 export const paymentMethodsView = t.procedure.use(requirePermission(PERMISSIONS.PAYMENT_METHODS_VIEW));
 export const paymentMethodsManage = t.procedure.use(requirePermission(PERMISSIONS.PAYMENT_METHODS_MANAGE));
 export const expenseCategoriesManage = t.procedure.use(requirePermission(PERMISSIONS.EXPENSE_CATEGORIES_MANAGE));
+export const subscriptionsView = t.procedure.use(requirePermission(PERMISSIONS.SUBSCRIPTIONS_VIEW));
+export const subscriptionsManage = t.procedure.use(requirePermission(PERMISSIONS.SUBSCRIPTIONS_MANAGE));
+export const subscriptionsPay = t.procedure.use(requirePermission(PERMISSIONS.SUBSCRIPTIONS_PAY));
 
 // Owner-only middleware
 const requireOwner = t.middleware(async (opts) => {

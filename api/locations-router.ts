@@ -4,7 +4,7 @@
 import { z } from "zod";
 import { createRouter, authedQuery, settingsManage, getAuthorizedLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
-import { locations, users, userLocations } from "@db/schema";
+import { locations, userLocations } from "@db/schema";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { assertCanCreateLocation } from "./lib/subscription-enforcement";
 import { syncUserLocationAssignments } from "./users-router";

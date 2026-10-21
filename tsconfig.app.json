@@ -21,6 +21,9 @@
       ],
       "@db/*": [
         "./db/*"
+      ],
+      "@shared/*": [
+        "./shared/*"
       ]
     },
     "moduleResolution": "bundler",
@@ -38,6 +41,7 @@
     "noUncheckedSideEffectImports": true
   },
   "include": [
-    "src"
+    "src",
+    "shared"
   ]
 }

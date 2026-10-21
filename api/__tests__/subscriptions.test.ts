@@ -84,17 +84,6 @@ async function seedBusiness(accountId: string, overrides?: Partial<typeof busine
   return { account, business, user };
 }
 
-interface CallerUser {
-  id: number;
-  role: string;
-  currentBusinessId: number;
-  accountId: string;
-  accountRefId: number | null;
-  currentBusiness: typeof businesses.$inferSelect;
-  businessIds: number[];
-}
-
-
 function createAuthedCaller(
   user: { id: number; role: string; currentBusinessId: number; accountId: string; accountRefId: number | null },
   business: typeof businesses.$inferSelect,

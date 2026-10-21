@@ -8,7 +8,7 @@ import {
   ChevronRight, FileSpreadsheet,
   ShieldCheck, Settings,
   Building, Bell, Handshake, Wallet,
-  PanelLeftClose, PanelLeftOpen,
+  PanelLeftClose, PanelLeftOpen, Repeat,
 } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
 import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
@@ -26,6 +26,7 @@ const allNavItems = [
   { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_PROCESS] },
   { path: "/wallet", label: "Wallet", icon: Wallet, perms: [PERMISSIONS.WALLET_VIEW] },
   { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
+  { path: "/subscriptions", label: "Subscriptions", icon: Repeat, perms: [PERMISSIONS.SUBSCRIPTIONS_VIEW] },
   { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
   { path: "/budgets", label: "Budgets", icon: FileSpreadsheet, perms: [PERMISSIONS.BUDGETS_VIEW] },
   { path: "/users", label: "Users & Roles", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },

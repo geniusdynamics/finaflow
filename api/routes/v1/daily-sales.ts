@@ -21,6 +21,7 @@ dailySales.post("/", resolveApiKeyMiddleware("sales:write"), async (c) => {
     const result = await ingestDailySales({
       businessId: apiKey.businessId,
       ...parsed.data,
+      saleDate: parsed.data.saleDate ?? new Date().toISOString().slice(0, 10),
     });
 
     if (!result.success) {

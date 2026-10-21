@@ -42,6 +42,7 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
       "@db": path.resolve(__dirname, "./db"),
       "db": path.resolve(__dirname, "./db"),
+      "@shared": path.resolve(__dirname, "./shared"),
     },
   },
   envDir: path.resolve(__dirname),

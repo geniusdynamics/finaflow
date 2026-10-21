@@ -16,6 +16,8 @@ import roles from "./roles";
 import dailySales from "./daily-sales";
 import billsRouter from "./bills";
 import expensesRouter from "./expenses";
+import subscriptionsRouter from "./subscriptions";
+import statements from "./statements";
 import webhooks from "./webhooks";
 
 const v1 = new Hono<{ Variables: ApiKeyVariables }>();
@@ -36,6 +38,8 @@ v1.route("/roles", roles);
 v1.route("/daily-sales", dailySales);
 v1.route("/bills", billsRouter);
 v1.route("/expenses", expensesRouter);
+v1.route("/subscriptions", subscriptionsRouter);
+v1.route("/statements", statements);
 v1.route("/webhooks", webhooks);
 
 // 404 catch-all for unmatched v1 routes

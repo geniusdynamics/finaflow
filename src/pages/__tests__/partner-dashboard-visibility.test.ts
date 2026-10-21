@@ -31,8 +31,9 @@ describe("partner dashboard and visibility regressions", () => {
 
     expect(typeof module.default).toBe("function");
     expect(source).toContain("const { data: ownerAllocations } = trpc.partner.listOwnerAllocations.useQuery(undefined, {");
+    expect(source).toContain("const currentBusinessId = user?.currentBusinessId;");
     expect(source).toContain("const allocatedPartnersCount = useMemo(() => {");
-    expect(source).toContain("allocation.ownerBusinessId === user.currentBusinessId && allocation.status === \"active\"");
+    expect(source).toContain("allocation.ownerBusinessId === currentBusinessId && allocation.status === \"active\"");
     expect(source).toContain("{ label: \"Allocated Partners\", value: allocatedPartnersCount, icon: Key, color: \"text-[#C73E1D]\" }");
     expect(source).toContain("const { data: leadStats } = trpc.leads.stats.useQuery()");
     expect(source).toContain("<LeadsTab />");

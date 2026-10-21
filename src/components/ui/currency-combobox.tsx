@@ -6,7 +6,7 @@ import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { SUPPORTED_CURRENCIES, getCurrencyInfo, type CurrencyInfo } from "@/lib/currency";
+import { SUPPORTED_CURRENCIES, getCurrencyInfo } from "@/lib/currency";
 
 const EA_CODES = ["KES","TZS","UGX","RWF","BIF","SSP","ETB","SOS","DJF","ERN"];
 

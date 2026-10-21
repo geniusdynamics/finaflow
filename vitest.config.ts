@@ -13,6 +13,7 @@ export default defineConfig({
       "@": path.resolve(templateRoot, "src"),
       "@db": path.resolve(templateRoot, "db"),
       "db": path.resolve(templateRoot, "db"),
+      "@shared": path.resolve(templateRoot, "shared"),
       "@assets": path.resolve(templateRoot, "attached_assets"),
     },
   },
@@ -40,6 +41,7 @@ export default defineConfig({
       "src/**/__tests__/*.test.ts",
       "src/**/__tests__/*.test.tsx",
       "db/**/__tests__/*.test.ts",
+      "shared/**/__tests__/*.test.ts",
     ],
     coverage: {
       provider: "v8",

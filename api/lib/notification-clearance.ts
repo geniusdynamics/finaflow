@@ -58,3 +58,56 @@ export async function clearNotificationsForBill(
   }
   return cleared;
 }
+
+/**
+ * Archive any active notifications tied to the given subscription (entityType='subscription',
+ * entityId=id) for ALL users — subscription reminders fan out per user (see
+ * api/lib/subscription-sweep.ts), so payment clears every copy. Reason is recorded as
+ * 'subscription_paid'. Idempotent — a no-op when nothing is active.
+ *
+ * Returns the number of rows that were archived.
+ */
+export async function clearNotificationsForSubscription(
+  db: DbClient,
+  args: { subscriptionId: number; now?: Date },
+): Promise<number> {
+  const now = args.now ?? new Date();
+  const active = await db
+    .select()
+    .from(notifications)
+    .where(
+      and(
+        eq(notifications.entityType, "subscription"),
+        eq(notifications.entityId, args.subscriptionId),
+        isNull(notifications.clearedAt),
+      ),
+    );
+  let cleared = 0;
+  for (const row of active) {
+    const update = applyClear(
+      {
+        id: row.id,
+        highlightState: row.highlightState,
+        fadedAt: row.fadedAt ?? null,
+        lastHighlightedAt: row.lastHighlightedAt,
+        highlightCount: row.highlightCount,
+        archivedAt: row.archivedAt ?? null,
+        clearedAt: row.clearedAt ?? null,
+        clearedReason: row.clearedReason ?? null,
+      },
+      "subscription_paid",
+      now,
+    );
+    await db
+      .update(notifications)
+      .set({
+        highlightState: update.highlightState,
+        archivedAt: update.archivedAt,
+        clearedAt: update.clearedAt,
+        clearedReason: update.clearedReason,
+      })
+      .where(eq(notifications.id, row.id));
+    cleared++;
+  }
+  return cleared;
+}

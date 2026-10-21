@@ -81,3 +81,25 @@ describe("Home header responsive layout", () => {
     expect(html).toContain("lg:hidden");
   });
 });
+
+describe("Home solutions section", () => {
+  it("links the Mobile Money Agents solution card to its dedicated page", () => {
+    const html = renderHomeAt();
+    expect(html).toContain('data-testid="solutions-mobile-money-agents"');
+    expect(html).toContain('href="/solutions/mobile-money-agents"');
+  });
+
+  it("exposes a Solutions nav entry pointing at the solutions section", () => {
+    const html = renderHomeAt();
+    expect(html).toContain('href="#solutions"');
+    expect(html).toContain('id="solutions"');
+    expect(html).toContain("Solutions");
+  });
+
+  it("keeps the other solution cards pointing at real destinations", () => {
+    const html = renderHomeAt();
+    expect(html).toContain('data-testid="solutions-retail"');
+    expect(html).toContain('href="#features"');
+    expect(html).toContain('href="/login?type=partner"');
+  });
+});

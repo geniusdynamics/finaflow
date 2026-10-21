@@ -5,6 +5,7 @@ export { CashflowTrendCard } from "./CashflowTrendCard";
 export { MobileWalletSummaryCard } from "./MobileWalletSummaryCard";
 export { TrendKpiCard, type TrendDirection, type TrendKpiCardProps } from "./TrendKpiCard";
 export { BillsPipelineCard, type PipelineBill } from "./BillsPipelineCard";
+export { SubscriptionsCard, type DueSubscription } from "./SubscriptionsCard";
 export { TodayStrip } from "./TodayStrip";
 export {
   aggregateCashPosition,

@@ -8,6 +8,8 @@ export const REQUIRED_SCHEMA_COLUMNS = {
   expenses: ["businessId", "journalEntryId", "reversedAt", "reversedBy"],
   journal_entries: ["businessId", "isPosted", "isReversed", "reversedBy", "reversalOf"],
   journal_lines: ["journalEntryId", "accountId", "debit", "credit"],
+  statement_imports: ["businessId", "locationId", "provider", "status"],
+  mobile_wallet_transactions: ["categoryId", "classificationSource", "statementImportId"],
 } as const;
 
 export type RequiredSchemaColumns = typeof REQUIRED_SCHEMA_COLUMNS;

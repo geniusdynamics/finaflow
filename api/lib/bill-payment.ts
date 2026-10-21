@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { accounts, bills, billPayments, expenses, suppliers, ledgerEntries } from "@db/schema";
 import { d } from "./decimal";
 import { ensureSystemAccount } from "./accounting-accounts";
@@ -68,12 +68,18 @@ export async function payBill(input: PayBillInput): Promise<PayBillResult> {
 
   let cashAccountId = accountId;
   if (!cashAccountId) {
-    const typeMap: Record<string, string> = { cash: "cash", wallet: "cash", bank_transfer: "bank", card: "bank" };
+    // accounts.type uses the typeEnum values ("cash" | "mpesa" | "bank_account" | "wallet").
+    const allowedTypes: Record<string, string[]> = {
+      cash: ["cash"],
+      wallet: ["mpesa", "wallet"],
+      bank_transfer: ["bank_account"],
+      card: ["bank_account"],
+    };
     const [defaultAccount] = await tx.select().from(accounts).where(
       and(
         eq(accounts.locationId, locationId),
-        eq(accounts.type, typeMap[paymentMethod] as AccountType),
-        isNull(accounts.deletedAt)
+        inArray(accounts.type, (allowedTypes[paymentMethod] ?? ["cash"]) as AccountType[]),
+        isNull(accounts.deletedAt),
       )
     ).limit(1);
     if (defaultAccount) cashAccountId = defaultAccount.id;

@@ -17,7 +17,7 @@ import {
   type InsertCustomerAccount,
   type InsertUser,
 } from "@db/schema";
-import { eq, and, or, isNull, sql } from "drizzle-orm";
+import { eq, and, or, isNull, sql, desc } from "drizzle-orm";
 import * as jose from "jose";
 import { env } from "./lib/env";
 import { hashPassword, verifyPassword } from "./lib/password";
@@ -112,6 +112,60 @@ async function findPrimaryBusinessForAccount(
   return rows[0] ?? null;
 }
 
+/**
+ * Resolve the account a user signs into from the email they registered with.
+ * Email comparison is case-insensitive because legacy rows were stored as typed.
+ */
+async function findAccountIdByEmail(
+  db: ReturnType<typeof getDb>,
+  rawEmail: string,
+): Promise<string | null> {
+  const email = rawEmail.trim().toLowerCase();
+  if (!email) return null;
+
+  const userRows = await db.select({
+    id: users.id,
+    accountId: users.accountId,
+    accountRefId: users.accountRefId,
+  }).from(users)
+    .where(and(
+      sql`lower(${users.email}) = ${email}`,
+      isNull(users.deletedAt),
+      eq(users.isActive, true),
+    ))
+    // Emails are unique per active user; ordering just makes legacy duplicates
+    // resolve to the account the person most recently signed into.
+    .orderBy(desc(users.lastSignInAt))
+    .limit(1);
+  const user = userRows[0];
+  if (!user) return null;
+
+  if (user.accountId) return user.accountId;
+
+  if (user.accountRefId) {
+    const accountRows = await db.select({ accountId: customerAccounts.accountId })
+      .from(customerAccounts)
+      .where(and(
+        eq(customerAccounts.id, user.accountRefId),
+        isNull(customerAccounts.deletedAt),
+      ))
+      .limit(1);
+    if (accountRows[0]?.accountId) return accountRows[0].accountId;
+  }
+
+  // Legacy users predate the accountId column; fall back to their first active business.
+  const linkedRows = await db.select({ accountId: businesses.accountId })
+    .from(userBusinesses)
+    .innerJoin(businesses, eq(businesses.id, userBusinesses.businessId))
+    .where(and(
+      eq(userBusinesses.userId, user.id),
+      eq(userBusinesses.isActive, true),
+      isNull(businesses.deletedAt),
+    ))
+    .limit(1);
+  return linkedRows[0]?.accountId ?? null;
+}
+
 function setAuthCookies(ctx: AuthCookieContext, token: string, csrfToken: string): void {
   const host = ctx.req.headers.get("host") || "";
   // Also treat .localhost (portless), .local domains as local
@@ -181,15 +235,18 @@ async function recordLoginSession(
 
 export const localAuthRouter = createRouter({
   lookupAccount: publicQuery
-    .input(z.object({ accountId: z.string().min(1).max(100) }))
+    // Accepts an Account ID or the email address the user registered with.
+    .input(z.object({ accountId: z.string().trim().min(1).max(320) }))
     .mutation(async ({ input }) => {
       const db = getDb();
-      const accountId = normalizeAccountId(input.accountId);
-      console.log(`[lookupAccount] input.accountId="${input.accountId}" normalized="${accountId}"`);
+      const identifier = input.accountId;
+      const accountId = identifier.includes("@")
+        ? await findAccountIdByEmail(db, identifier)
+        : normalizeAccountId(identifier);
+      if (!accountId) throw new Error("Account not found");
+
       const account = await findCustomerAccount(db, accountId);
-      console.log(`[lookupAccount] customerAccount found:`, account ? `id=${account.id}` : null);
       const biz = await findPrimaryBusinessForAccount(db, accountId, account?.id ?? null);
-      console.log(`[lookupAccount] business found:`, biz ? `id=${biz.id}, name="${biz.name}"` : null);
       if (!biz) throw new Error("Account not found");
 
       const usersInBiz = await db.select({
@@ -203,7 +260,15 @@ export const localAuthRouter = createRouter({
           eq(users.isActive, true),
         ));
 
-      return { business: biz, users: usersInBiz };
+      // Only expose the minimal public fields needed for the login UI.
+      // The full business row contains PII (kraPin, email, phone) and plan/limits.
+      const publicBusiness = {
+        id: biz.id,
+        accountId: biz.accountId,
+        name: biz.name,
+      };
+
+      return { business: publicBusiness, users: usersInBiz };
     }),
 
   checkAccountAvailability: publicQuery
@@ -233,11 +298,8 @@ export const localAuthRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const accountId = normalizeAccountId(input.accountId);
-      console.log(`[login] attempt accountId="${accountId}" username="${input.username}"`);
       const account = await findCustomerAccount(db, accountId);
-      console.log(`[login] customerAccount:`, account ? `id=${account.id}` : null);
       const accountBusiness = await findPrimaryBusinessForAccount(db, accountId, account?.id ?? null);
-      console.log(`[login] business:`, accountBusiness ? `id=${accountBusiness.id}` : null);
       if (!accountBusiness) throw new Error("Invalid account ID or credentials");
 
       const userRows = await db.select().from(users).where(and(
@@ -276,10 +338,11 @@ export const localAuthRouter = createRouter({
       if (!user) throw new Error("Invalid username or password");
       if (!user.isActive) throw new Error("Account is disabled");
 
-      if (user.passwordHash) {
-        const valid = await verifyPassword(input.password, user.passwordHash);
-        if (!valid) throw new Error("Invalid username or password");
-      }
+      // Users without a password hash (e.g. OAuth-only / never set a password)
+      // must not be able to log in with any password via local auth.
+      if (!user.passwordHash) throw new Error("Invalid username or password");
+      const valid = await verifyPassword(input.password, user.passwordHash);
+      if (!valid) throw new Error("Invalid username or password");
 
       const junctions = await db.select().from(userBusinesses)
         .where(and(eq(userBusinesses.userId, user.id), eq(userBusinesses.isActive, true)));

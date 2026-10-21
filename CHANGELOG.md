@@ -1,5 +1,132 @@
 # Changelog
 
+## [Unreleased] — Profile Account ID
+
+### Added
+- **Account ID on Profile** — the Account Details card now shows the sign-in Account ID for your own profile and when viewing another user, with a copy button. Previously the ID was only visible from the business details page. File: `src/pages/Profile.tsx`.
+
+### Tested
+- `src/pages/__tests__/Profile.account-id.test.tsx` — **3 pass** (own profile, viewed profile, missing ID).
+- `npx tsc -b` and `npx eslint` on the touched files — clean.
+
+## [Unreleased]
+
+### Added
+- **Returning-user login** — the login page remembers up to three accounts used on the browser and opens straight on the username/password step for the most recent one, with the account chip acting as a **Change** button and the account-ID step listing recent accounts as quick picks. Storage is defensive: private mode, quota errors or malformed data fall back to the normal flow. Files: `src/lib/recent-accounts.ts`, `src/pages/Login.tsx`.
+- **Email-based account lookup** — the Account ID field now also accepts the email a user registered with; `localAuth.lookupAccount` resolves it case-insensitively (via `users.accountId`, then `customer_accounts`, then the user's first active business) before showing the credentials step. Files: `api/local-auth-router.ts`, `src/pages/Login.tsx`.
+
+### Tested
+- `src/lib/__tests__/recent-accounts.test.ts` (6), `src/pages/__tests__/Login.test.tsx` (9), `src/pages/__tests__/Login.remembered-account.test.tsx` (3) — **18 pass**.
+- `api/__tests__/local-auth-scope.test.ts` email lookup and unknown-email tests — pass against the test database.
+- `npx tsc -b` and focused `npx eslint` on all touched files — clean.
+
+## [1.3.0] - 2026-10-18
+
+### Fixed
+- **CI typecheck** — added the missing `@radix-ui/react-slider` dependency, typed the v1 `requestId`, defaulted an optional `saleDate` before ingestion, guarded the connect-session id, and corrected the docs-test module type and an ambiguous Drizzle `returning()` in the integration service.
+- **CI lint** — cleared the repository-wide unused imports/variables across API tests, routers, budget/debt UI and scripts, and fixed the React Compiler memo dependency in `PartnerDashboard`, so `npm run lint` exits clean.
+- **CI test database** — `api/test/setup.ts` now applies `0009_wallet_data_quality_and_partial_unique.sql`, so a fresh CI database has the partial unique index and re-import-after-undo behaves like production.
+- **CI lint** — cleared the repository-wide unused imports/variables in API tests, routers, budget/debt UI and scripts, and fixed the React Compiler memo dependency in `PartnerDashboard`, so `npm run lint` exits clean.
+
+### Added
+- **Statement analysis & exports (P2)** — the stored analysis now covers every published block: summary, balance continuity, categories, fees, money in/out, financing, top contacts, recurring, monthly/weekly breakdown, daily balance, distribution, time of day, day of week, reversals, pay bills & tills, anomalies and statement-summary reconciliation. The Statements tab opens a detail view with the analysis, imported rows and CSV/XLSX/JSON export (UTF-8 BOM, hide-charges, date format, PII masking; XLSX includes all analysis sheets). The import review now lets you **untick rows** and **change category** per row before importing; post-import category editing supports “remember this merchant”, backed by `wallet_category_rules`, with a remembered-merchants list and delete. Files: `shared/statements/analyze/**`, `shared/statements/export/**`, `api/lib/statements/{export-service,export-xlsx}.ts`, `src/components/statements/{StatementDetail,StatementAnalysisPanel,CategoryCell}.tsx`.
+- **M-PESA CSV imports** — M-PESA statement CSV exports now run through the same pipeline via the RFC-4180 `delimited.ts` adapter (quoted commas/newlines handled). The free converter also accepts CSV. Paybill PDFs capture the printed Transaction Type and Other Party columns (real paybill-owner sample still needed for sign-off).
+- **Statement REST API (P3)** — `/api/v1/statements/parse`, `/analyze`, `/import`, `/imports`, `/imports/{id}` and `/imports/{id}/export` with `statements:read` / `statements:write` scopes, a 20/min parse limiter, audit logging and OpenAPI documentation (`docs/api-reference/openapi.yaml`, `docs/statements.md`). Parse accepts JSON base64 or multipart; import supports 1–12 files with per-file passwords/overrides.
+- **Free no-upload converter (P4)** — public `/tools/mpesa-statement-converter` parses statements entirely in the browser (pdf.js worker) and downloads CSV/JSON; `/tools/mpesa-to-excel` and `/tools/mpesa-for-accountants` guide pages; Home “M-PESA tools” dropdown and mobile links; a shared tools header with a visible **Back to home** control. The converter code-splits pdf.js and loads it only on conversion, and tools routes plus the app root now have error boundaries, so a module failure shows a message instead of a white page.
+- **Audit DOWNLOAD action** — migration `0034_audit_download_action.sql` adds the value already declared in the schema, so export/download audit rows persist instead of failing.
+
+### Tested
+- Shared statement suite **43/43**, statement router **6/6**, v1 statement API **6/6**, wallet router **26/26**.
+- Production build green; Playwright browser runs against the real 77-page statement (PDF **and** CSV): **2,371 transactions**, CSV download with UTF-8 BOM, zero console/page errors, on both dev and `vite preview`.
+- Mobile (390px) and desktop verified: tools menu, Home M-PESA tools menu, visible back link.
+
+### Added
+- **Statement import (P1, M-PESA PDF)** — the Wallet **Import** button now opens two tabs: **Statement** (default) and **SMS** (the existing paste flow, unchanged). Statement import accepts 1–12 password-protected M-PESA PDFs, parses them in memory (pdf.js), shows period/totals/duplicate counts and best-effort category suggestions, then imports rows into `mobile_wallet_transactions`. Files and passwords are never stored. Migration `0033_statement_imports.sql` adds `statement_imports`, `wallet_category_rules`, and `categoryId` / `classificationSource` / `classificationConfidence` / `statementImportId` on wallet rows. Service: `api/lib/statements/{service,categories}.ts`; router: `api/statements-router.ts` under `wallet.statements.*`; UI: `src/components/statements/*` and `src/pages/Wallet.tsx`.
+- **Statement history and safe undo** — new **Statements** tab lists imports with period, rows, imported/skipped/duplicates and status. Undo soft-deletes only that import’s wallet rows and refuses when any row is linked to an expense or bill.
+- **Best-effort categorisation** — statement rows carry a canonical category key resolved against the business’s existing expense categories via name aliases (`Bank Charges & Fees`, `Utilities`, `Airtime/Data`, `Food Supplies`, `Fuel`, `Transport & Delivery`, …). Unmatched rows stay with **no category** (no “Miscellaneous” dumping, no category creation). The `wallet_category_rules` table is in place for learned merchant overrides.
+
+### Fixed
+- **Daily ledger counted every positive amount as inflow** — `wallet.dailyLedger.create` ignored `direction`; it now splits inflows/outflows correctly (regression test included).
+
+### Tested
+- `shared/statements` + statement router + wallet router — **61/61 pass**, including import/dedupe, linked-row undo refusal, tenant scoping, category resolution and the ledger direction regression.
+- Real 77-page statement through the new preview service: **2,371 rows**, **786,098.76 in / 782,565.53 out** (matches the statement summary), **5,272.74 fees**.
+
+### Added
+- **Statement import foundation (P0, M-PESA)** — provider-agnostic parser core that extracts M-PESA statement PDFs in-process (pdf.js), reconstructs rows from positioned text, groups same-receipt legs (charge/Fuliza), links them, and produces canonical transactions with best-effort category hints. Validated against a real 77-page statement: **2,371 rows**, **786,098.76 in / 782,565.53 out**, matching the statement’s own summary to the cent, **5,272.74** in fees. Files: `shared/statements/**`, `scripts/inspect-statement.ts`; aliases in `tsconfig.app.json`, `tsconfig.server.json`, `vite.config.ts`, `vitest.config.ts`; `pdfjs-dist@5.4.624`. No user-visible change yet.
+- **Local statement diagnostics** — `npm run inspect:statement -- <pdf> [password]` prints row counts, totals, rail/category breakdowns and balance-continuity diagnostics without persisting the file.
+
+### Tested
+- `npx vitest run shared/statements` — **28/28 pass** (row reconstruction, date/time split, wrapped details, receipt groups, Fuliza links, summary reconciliation, amount/date edge cases).
+- `npx eslint` on `shared/statements/**` and `scripts/inspect-statement.ts` — exit 0; focused `tsc --noEmit` — 0 errors.
+
+### Added
+- **Bill-mode subscriptions accrue on the due date (default posting mode)** — new subscriptions default to `postingMode = 'bill'`. The daily sweep now materializes, for each due cycle, a **pending bill** tagged `externalSystem='subscription'` / `externalId='<subscriptionId>:<cycleDueDate>'` plus the accrual ledger (expense debit / AP credit, mirroring `bills-router.create`), a `subscriptionPayments` row with `confirmed=false`, a "Bill created" notification, and advances the schedule. Marking paid **settles** that bill (AP debit / cash credit) instead of creating a second one; paying before the due date accrues and settles in one step. Migration `0032_subscription_posting_default_bill.sql`.
+- **Posting mode is explicit in the subscription popup** — the detail tile now reads "Posting mode" with the mode name (Create bill / Create expense / Reminder only) and a one-line explanation of what it does. Cards show **"Unpaid bill for <date>"** when a materialized cycle is outstanding.
+- **Bills vs subscriptions separation** — subscription-generated bills are tagged (`externalSystem='subscription'`) and excluded from the Calendar's bill stream (the subscription event already represents the charge), so "subscriptions + bills" totals never double count. They remain in Bills/AP, where they belong.
+
+### Fixed
+- **Bill-mode posting was not balanced** — it created a bill already marked paid at payment time, debiting AP without ever crediting it (and recognising no expense). Bills now accrue first (expense/AP) and settle later (AP/cash).
+- **Auto-detected payment accounts threw a 500** — `payBill` (and the expense auto-detect) filtered `accounts.type = 'bank'`, which is not a valid enum value (`bank_account` is); bank/card payments with "Auto-detect" failed. Both maps now use `bank_account` / `mpesa` / `wallet` correctly.
+- **Ledger balance signs ignored account nature** — subscription postings applied debit=+ blindly, which is wrong for liability accounts (an AP credit increased nothing); natural-balance rules are now applied (asset/expense debit-natural, liability/equity/revenue credit-natural).
+- **Settlement could target a different AP account than the accrual** (legacy duplicate AP rows) — settlement now passes the deterministic `ensureSystemAccount` AP id to `payBill`.
+- **Mark paid targeted the next cycle after materialization** — it now settles the outstanding pending cycle ("Settling the bill for cycle …") and only pays ahead when nothing is pending.
+- **Settlement without a resolvable funding account silently skipped the cash leg** — now rejected with "Select a funding source: no <method> account exists for this branch."
+
+### Tested
+- Subscription suites green after the change (**router 24, sweep 8, v1 5, digest 2, math 60, migration tests 19**), incl. new coverage for bill default + accrual entries, sweep materialization (pending bill, linked pending payment, schedule advance, replay-safe), calendar exclusion of subscription bills, and ledger/AP balance assertions. Browser-verified end-to-end: default bill mode → materialized pending bill (`BILL-SUB-0002`, 2,500) → "Unpaid bill for 17 Oct 2026" → settle → expense +2,500, AP net 0, cash −2,500, bill paid, card green with "Last paid".
+
+### Added
+- **Paid-state affordance on subscriptions** — "Mark paid" is now **green with a check** when a payment exists and the subscription isn't overdue, and **red** otherwise ("never paid or overdue"); the card and the detail popup both show `Last paid <date>` / `Not paid yet`. Backed by a new `lastPaidDate` field on `subscriptions.list`/`get`. Files: `src/pages/Subscriptions.tsx`, `api/subscriptions-router.ts`.
+- **Pay-ahead confirmation in the Mark-paid dialog** — the dialog now states exactly which cycle is being paid and requires an explicit **Pay early** tick when the cycle is further ahead than the pay-ahead window; the submit stays disabled until ticked.
+
+### Fixed
+- **A subscription could be marked paid again in the same period** — after a payment the schedule advances, so a second click silently paid the *next* cycle (observed in the dev data: a yearly Figma subscription paid twice 62 seconds apart, jumping two years). `recordPayment` now rejects cycles further ahead than the pay-ahead window (default 7 days, or the subscription's notify window) unless `allowEarly` is passed explicitly; renewals and API integrations can still prepay deliberately. `api/lib/subscription-service.ts`, `api/subscriptions-router.ts`, `api/routes/v1/subscriptions.ts`.
+- **Duplicate expense categories in every category dropdown** — `seedAccountingData` reused `onConflictDoNothing()` but `expense_categories` has no unique `(businessId, locationId, name)` constraint, so each seed run inserted a fresh 12-category set (the dev DB had 6 copies of each name, 72 rows). Seeding is now idempotent, a new `scripts/dedupe-expense-categories.ts` (dry-run by default, repoints FKs, soft-deletes duplicates) cleaned the existing 60 duplicates, and `expenses.categories` no longer returns a legacy global (businessId NULL) category that collides by name with the business's own row. Affects the Subscriptions form and the Expenses page alike.
+- **Oversized calendar list rows** — timeline event cards and the bill priority queue now use tighter padding and smaller icon boxes (~70px rows instead of ~145px).
+- **Legacy global categories shadowing business categories** — see the category fix above (`api/expenses-router.ts`).
+
+### Tested
+- Subscription suites re-run green after the changes (**104 tests** across math/router/v1/sweep/calendar/page), including new coverage for the pay-early guard (second same-period payment rejected; `allowEarly` allowed; `lastPaidDate` exposed) and the paid/unpaid button colours. Browser-verified: compact calendar rows, green/red Mark-paid states on cards and in the detail popup, pay-early dialog with disabled submit, and 15 deduplicated categories.
+
+### Added
+- **Calendar statistics panel (Wallos `calendar-monthly-stats` parity)** — the calendar view now shows a **Statistics** block with three cards for the current month (Active Subscriptions · Total Cost · Amount due this month) plus the over-budget warning bar when a `budgetPlans` budget exists. Backed by a new per-month `monthStats` block on `subscriptions.stats` (`month`, `dueCount`, base-currency `total`, payment-netted `amountDue`, `budget`). Files: `api/subscriptions-router.ts`, `src/pages/Calendar.tsx`.
+
+### Fixed
+- **Subscription amounts rendered as KES regardless of currency** — calendar event rows hard-coded `formatKES`, so a USD subscription showed "KES 144.00". Event rows now render in the subscription's own currency (`formatEventMoney`), e.g. "USD 144.00".
+- **Mixed-currency totals in the calendar month strip** — the strip summed raw event amounts across currencies (144 USD + 8,000 KES read as 9,344). It now uses the base-currency `monthStats` figures (real FX conversion), and the due count comes from the same source so the count and total always agree.
+- **Dashboard subscription card hid overdue renewals** — `subscriptions.stats.upcoming` only covers 0–30 days, so an overdue subscription showed as "Due this week: 0" while its OVERDUE badge styling sat unused. `stats` now returns a separate `overdue` list and the card surfaces it ("1 overdue · Due this week: 0"), listing overdue rows first.
+- **Stats KPI "paused/cancelled" count excluded one-time subs** — a cancelled one-time subscription showed as "0 paused/cancelled" next to a visible cancelled card; the count now includes them (savings still exclude one-time, which is correct).
+- **Invalid date literal in month statistics** — the stats query used a `-31` upper bound (`2027-02-31`), which Postgres rejects with `22008`; replaced with an exclusive next-month bound (`monthAfter`).
+
+### Tested (post-UI verification round)
+- Added `autoProvision`/month-statistics coverage in `api/__tests__/subscriptions-router.test.ts` (calendar month counts, converted totals, and payment-netted amount due). Subscription + calendar suites re-run green after the fixes; browser-verified end-to-end against a seeded demo account (cards/table/split/stats views, calendar source toggle, `?section=subscriptions` preset, deep-link pulse, dashboard card, real expense posting from a recorded payment).
+
+### Added
+- **Subscription Management module (P1–P4)** — first-class recurring-cost tracking for business accounts, Wallos-inspired but branch-scoped (no household model):
+  - **Data layer** (`db/`): `subscription_cycle` / `subscription_status` / `subscription_posting` enums, `subscriptions` + `subscription_payments` tables (nullable `locationId` = whole business, `postingLocationId` for business-wide posting, unique `(subscriptionId, cycleDueDate)` idempotency guard), `subscription_paid` notification clear reason, `subscription_due_digest` email log type. Migration `db/migrations/0031_subscription_management.sql` (idempotent DDL + `role_permissions` merge so DB-backed role matrices gain the new permissions), registered in `api/test/setup.ts` and `db/migrations/meta/_journal.json`.
+  - **Money math** (`api/lib/subscription-math.ts`): Wallos-parity `monthlyNormalized` / `yearlyNormalized`, `advanceDueDate` with month-end clamping, `cycleProgress`, real-due-date `projectMonths`, `parsePositiveAmount` — all decimal.js, 60 unit tests.
+  - **Accounting posting** (`api/lib/subscription-posting.ts`, `api/lib/subscription-service.ts`): `postingMode` = expense (P&L) / bill (AP, settled via `payBill`) / none, reusing the house `ledgerEntries` + `accounts.currentBalance` mechanics; business-wide subs post to `postingLocationId`. Atomic payment recording with rollback verified.
+  - **API** (`api/subscriptions-router.ts`, mounted as `subscriptions`): `list` (filters/scope/sort/pagination + computed fields + base-currency totals), `get`, `create`, `update`, `delete`, `clone`, `pause`/`resume`, `cancel` (with successor tracking), `renew`, `recordPayment`, `confirmPayment`, `payments.list`, `calendar`, `stats`, `autoProvisionBudgets` (draft-plan budget lines for subscription categories). New `subscriptions:view/manage/pay` permissions (owner/admin/manager all; viewer view-only; employee unchanged) with a dedicated write rate limiter.
+  - **Scheduler** (`api/lib/subscription-sweep.ts` + `api/boot.ts` daily job): due-soon / due-today re-highlight / overdue escalation (warning → critical at 3 days) notifications with per-user fan-out (branch assignment + `subscriptions:view`), auto-renew advance with `confirmed=false` pending payments (replay-safe), trial-expiry notices; `api/lib/subscription-digest.ts` sends one logged digest email per business per day.
+  - **UI**: `/subscriptions` page (`src/pages/Subscriptions.tsx` — summary strip, filters, Cards/Table/Split views, detail + payment + cancellation dialogs, `?highlight=<id>` pulse deep links), `SubscriptionFormDialog` (incl. the "Post to branch" rule), `SegmentedToggle`, `SubscriptionStats` (KPI cards, category/branch donuts, 12-month forecast with `budgetPlans` budget line, upcoming/cancellations), CSV export (subscriptions + payments), dashboard `SubscriptionsCard`, Calendar hub **source toggle** (Subscriptions / Bills / Both) with legend, monthly subscription strip with over-budget warning, and `?section=subscriptions` deep-link preset.
+  - **External API (v1)**: `/api/v1/subscriptions` (list), `/subscriptions/payments` (list), `POST /subscriptions/{id}/payments` behind new `subscriptions:read` / `subscriptions:write` scopes, documented in `docs/api-reference/openapi.yaml`; bank-feed matching design note in the spec (`spec.md` §12).
+
+### Fixed
+- **Calendar date range frozen at mount** — `futureDate` ignored `daysAhead` changes; now derived via `useMemo` (`src/pages/Calendar.tsx`).
+- **`?section=subscriptions` rendered an empty page** — the calendar body was gated on `section === "calendar"` only.
+
+### Tested
+- 37 new tests: `api/__tests__/subscriptions-{math,router,sweep,digest,v1}.test.ts` (103 incl. migration test), `src/pages/__tests__/Subscriptions.test.tsx`, `src/pages/__tests__/Calendar-toggle.test.tsx`, `src/components/__tests__/segmented-toggle.test.tsx`. Covers CRUD/validation, cross-business + branch isolation, server-side permission gating, atomic posting with rollback, duplicate-cycle guard, posting location rules, sweep idempotency + fan-out + escalation, digest once-per-day, API-key scopes + 409 conflicts. Full suite: **105 files / 829 tests green** (`npm test`); `npm run check` and `npm run lint` show only pre-existing repo issues in unrelated files (unchanged by this batch); `npm run build` succeeds.
+
+### Added
+- **Subscription management spec** — detailed implementation spec for a business-oriented (non-household) subscription module inspired by Wallos: branch-scoped subscription registry with lifecycle (pause/cancel/replace), Wallos-parity cycle math (monthly normalization, progress, 12-month projection), calendar hub type toggle (Subscriptions/Bills/Both), payment history with transactional expense/bill posting, due-soon/overdue notification sweep, and stats (KPIs, category + branch donuts, forecast vs budget). Docs: `.trae/specs/subscription-management/{spec,tasks,checklist}.md`. No application code changed in this batch.
+
+### Fixed
+- **Local-auth login bypass for passwordless users** — `localAuth.login` now rejects users with no `passwordHash` instead of skipping verification and logging them in with any password (`api/local-auth-router.ts`).
+- **Unauthenticated business PII exposure in `lookupAccount`** — the endpoint now returns only the minimal public fields (`id`, `accountId`, `name`) instead of the full business row (`kraPin`, `email`, `phone`, plan/limits) (`api/local-auth-router.ts`).
+- **Noisy auth logging** — removed `console.log` of every `login`/`lookupAccount` attempt, including usernames (`api/local-auth-router.ts`).
+
 ## [1.2.0] - 2026-07-27
 
 ### Changed
@@ -8,6 +135,34 @@
 ## [Unreleased]
 
 ### Added
+- **Mobile Money Agents solution page** — new public marketing page at `/solutions/mobile-money-agents` (`src/pages/MobileMoneyAgents.tsx`, lazy-loaded route in `src/App.tsx`) aimed at mobile money agents and agent-outlet operators. It markets cash position across outlets, M-PESA/Airtel Money SMS import, e-money movement, the daily wallet ledger, deposits/drawings/transfers, location-tagged outlet expenses, per-outlet accounts, bill alerts and reporting. Every capability claimed on the page is backed by shipped code; the outlet-control features that do **not** exist yet (cash handover, open/close day, expected-vs-counted cash, shortage/surplus review, per-outlet e-float position) are confined to an explicitly labelled "Not available yet — being built" roadmap section, and the page states plainly that Finaflow does not process mobile money transactions.
+- **`MobileMoneyAgents` page tests** — `src/pages/__tests__/MobileMoneyAgents.test.tsx` covers the hero CTAs, shipped-capability content and in-page anchors, and adds an honesty guard that fails if any not-yet-shipped term (`handover`, `shortage`, `surplus`, `e-float`, `close day`, `salesbook`) appears *before* the roadmap section — so a future edit cannot quietly sell roadmap items as available. It also asserts no CSV or statement upload is advertised.
+
+### Changed
+- **Home page Solutions section** — new `#solutions` section on the landing page (`src/pages/Home.tsx`) with three audience cards: Mobile Money Agents (links to the new dedicated page), Retail & Multi-Branch Shops (`#features`) and Accountants & Consultants (partner signup). A matching "Solutions" entry was added to the desktop and mobile navigation.
+- **`src/pages/__tests__/Home.test.tsx`** — added coverage for the Solutions section links, the `#solutions` nav anchor and the non-agent card destinations.
+
+### Fixed
+- **False CSV-import claims in marketing copy** — the landing page told visitors they could "upload a CSV" during setup and "import sales, expenses, and account balances via CSV", and the dashboard's Mobile Wallet card referred to importing an "Airtel or M-Pesa statement". Only CSV *export* exists (`src/pages/Expenses.tsx`); wallet transactions are imported by pasting SMS (`wallet.transactions.importSms`). The copy now describes the real import path.
+
+### Added
+- **Admin SMTP configuration** — SMTP settings are now persisted to the database (`app_settings` key `smtp_config`, tenant-agnostic) with environment variables as a fallback source. `admin.updateSmtpConfig` no longer depends on a writable `.env`; any `.env` sync failure (e.g. `EACCES` in Docker) is collected as a warning instead of crashing the request. `admin.getSmtpConfig` now reports the effective `source` (`database`/`env`), and the Admin SMTP tab shows the current configuration (username, password state, source badge) with an "Edit" flow that prefills the form and leaves the password untouched when omitted. `from` accepts both `name@example.com` and `"Name <name@example.com>"` formats. `admin.updateSmtpConfig` no longer depends on a writable `.env`; any `.env` sync failure (e.g. `EACCES` in Docker) is collected as a warning instead of crashing the request. `admin.getSmtpConfig` now reports the effective `source` (`database`/`env`), and the Admin SMTP tab shows the current configuration (username, password state, source badge) with an "Edit" flow that prefills the form and leaves the password untouched when omitted. `from` accepts both `name@example.com` and `"Name <name@example.com>"` formats.
+- **Admin test-email error detail** — `admin.sendTestEmail` returns the underlying delivery error (and `logId`) instead of a generic "Test email failed"; the email logs table surfaces `errorMessage` on failed rows.
+- **Admin account drill-down** — `admin.getAccountDetail` returns an account's businesses (with per-business user counts) and users (username, email, role, status, last sign-in, business memberships), so support can see the email and username on file for each account. The Admin Accounts tab renders this in a detail dialog with a "NO EMAIL" badge for users missing an address.
+- **Admin-initiated password reset** — `admin.sendPasswordReset` creates a single-use 60-minute reset token for a user (sharing the existing local-auth token flow) and emails the reset link; if SMTP is not configured or delivery fails, the admin gets the copyable reset URL to share manually. Users without an email address are rejected with a clear error.
+- **Shared password-reset helpers** — new `api/lib/password-reset.ts` (`createPasswordResetForUser`, `sendPasswordResetEmail`) reused by the public forgot-password flow and the admin flow.
+- **`isEmailConfiguredAsync`** — DB-aware email configuration check used by registration, password change, and reset flows (previously env-only).
+
+### Changed
+- **`api/lib/email.ts`** — email configuration resolution is now asynchronous and DB-aware (`getSmtpConfig` + `getSmtpPassword`), with `resetEmailTransporter()` to pick up config changes; the legacy sync `isEmailConfigured` API is preserved.
+- **`api/lib/update-env.ts`** — added `updateEnvVarSafe`, a best-effort `.env` writer that never throws (`{ ok, warning }`); `updateEnvVar` keeps its throwing behavior for backward compatibility.
+- **`api/lib/logged-email.ts`** — delivery results now include `error: string | null`.
+
+### Fixed
+- **Admin SMTP save crash on read-only filesystems** — configuring SMTP in the admin UI previously threw `EACCES: permission denied, open '/app/.env'` in containerized deployments; configuration now persists to the database and succeeds with warnings.
+- **Test email failures were opaque** — the admin UI now shows the real delivery error instead of a generic failure message.
+
+
 - **`integrationFinabill.listPaymentAccounts`** — new tRPC query (scope: `accounts:read`) exposing money accounts (cash drawers, M-PESA tills, wallets, bank accounts — `accountType IS NULL`) with `type`, `currentBalance`, `currency`, and location name, so FinaBill can mirror real payment accounts and live balances instead of deriving them from the Chart of Accounts.
 - **`integrationFinabill.listAccountTransactions`** — new tRPC query (scope: `accounts:read`) returning ledger entries for one money account, oldest-first and cursor-paginated by entry id (`sinceEntryId`/`limit`), rejecting CoA/other-business accounts, so FinaBill can pull real transaction history and derive true opening balances.
 - **`integrationFinabill.upsertAccount`** — new tRPC mutation (scope: `accounts:write`) that creates/updates a Chart of Accounts entry pushed from FinaBill, matched by `externalId` → `accountType`+`code` → `accountType`+`name`, stamping `finabillAccountId`.

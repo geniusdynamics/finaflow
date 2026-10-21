@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { UserCircle, Mail, Phone, Key, Lock, Calendar, Clock, Shield, Save, ArrowLeft } from "lucide-react";
+import { UserCircle, Mail, Phone, Key, Lock, Calendar, Clock, Shield, Save, ArrowLeft, Globe, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 
 export function Profile() {
@@ -32,6 +32,10 @@ export function Profile() {
   const [pwForm, setPwForm] = useState({ userId: 0, newPassword: "", confirmPassword: "" });
   const [pwOpen, setPwOpen] = useState(false);
   const [formDirty, setFormDirty] = useState(false);
+  const [accountIdCopied, setAccountIdCopied] = useState(false);
+
+  // The sign-in account ID: available on the user row and on the auth payload.
+  const accountId = profileUser?.accountId ?? null;
 
   const utils = trpc.useUtils();
   const updateProfile = trpc.users.updateProfile.useMutation({
@@ -54,6 +58,17 @@ export function Profile() {
   const openPwDialog = () => {
     setPwForm({ userId: profileUser?.id ?? 0, newPassword: "", confirmPassword: "" });
     setPwOpen(true);
+  };
+
+  const copyAccountId = () => {
+    if (!accountId) return;
+    navigator.clipboard
+      .writeText(accountId)
+      .then(() => {
+        setAccountIdCopied(true);
+        setTimeout(() => setAccountIdCopied(false), 2000);
+      })
+      .catch(() => toast.error("Could not copy Account ID"));
   };
 
   return (
@@ -253,6 +268,26 @@ export function Profile() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 sm:grid-cols-2">
+              <div className="flex flex-wrap items-center gap-2 text-sm sm:col-span-2">
+                <Globe className="h-4 w-4 text-[#8D8A87]" />
+                <span className="text-[#8D8A87]">Account ID:</span>
+                <span className="font-mono font-medium text-[#2D2A26]">{accountId ?? "—"}</span>
+                {accountId && (
+                  <button
+                    type="button"
+                    onClick={copyAccountId}
+                    aria-label={accountIdCopied ? "Account ID copied" : "Copy Account ID"}
+                    className="flex min-h-[36px] items-center gap-1 rounded px-1.5 text-xs text-[#8D8A87] transition-colors hover:bg-[#F5EDE6] hover:text-[#2D2A26]"
+                  >
+                    {accountIdCopied ? (
+                      <Check className="h-3.5 w-3.5 text-green-600" />
+                    ) : (
+                      <Copy className="h-3.5 w-3.5" />
+                    )}
+                    {accountIdCopied ? "Copied" : "Copy"}
+                  </button>
+                )}
+              </div>
               <div className="flex items-center gap-2 text-sm">
                 <Shield className="h-4 w-4 text-[#8D8A87]" />
                 <span className="text-[#8D8A87]">Role:</span>

@@ -79,8 +79,8 @@ export const dashboardRouter = createRouter({
 
       const walletR = await db.select({
         totalIn: sql<string>`COALESCE(SUM(CASE WHEN ${mobileWalletTransactions.direction} = 'in' THEN CAST(${mobileWalletTransactions.amount} AS DECIMAL) ELSE 0 END), 0)`,
-        totalOut: sql<string>`COALESCE(SUM(CASE WHEN ${mobileWalletTransactions.direction} = 'out' THEN CAST(${mobileWalletTransactions.amount} AS DECIMAL) ELSE 0 END), 0)`,
-        totalFees: sql<string>`COALESCE(SUM(CAST(${mobileWalletTransactions.txnFee} AS DECIMAL)), 0)`,
+        totalOut: sql<string>`COALESCE(SUM(CASE WHEN ${mobileWalletTransactions.direction} = 'out' AND ${mobileWalletTransactions.txnType} <> 'charge' THEN CAST(${mobileWalletTransactions.amount} AS DECIMAL) ELSE 0 END), 0)`,
+        totalFees: sql<string>`COALESCE(SUM(CASE WHEN ${mobileWalletTransactions.txnType} = 'charge' THEN ABS(CAST(${mobileWalletTransactions.amount} AS DECIMAL)) ELSE CAST(${mobileWalletTransactions.txnFee} AS DECIMAL) END), 0)`,
       }).from(mobileWalletTransactions).where(and(sql`${mobileWalletTransactions.txnDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`, isNull(mobileWalletTransactions.deletedAt), sql`${mobileWalletTransactions.locationId} IN (${locIdSql})`));
 
       return {
@@ -206,24 +206,28 @@ export const dashboardRouter = createRouter({
       const db = getDb();
       const locIds = await getCurrentBusinessLocationIds(ctx);
       if (locIds.length === 0) return { totalFees: { total: "0", count: 0 }, feesByType: [], topRecipients: [] };
-      const locFilter = sql`${mpesaTransactions.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`;
-      const conditions = [isNull(mpesaTransactions.deletedAt), locFilter];
-      if (input?.dateFrom && input?.dateTo) conditions.push(sql`${mpesaTransactions.txnDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`);
+      const locFilter = sql`${mobileWalletTransactions.locationId} IN (${sql.join(locIds.map(id => sql`${id}`), sql`, `)})`;
+      const conditions = [isNull(mobileWalletTransactions.deletedAt), locFilter];
+      if (input?.dateFrom && input?.dateTo) conditions.push(sql`${mobileWalletTransactions.txnDate} BETWEEN ${input.dateFrom} AND ${input.dateTo}`);
+
+      // Statement imports carry fees as separate charge rows; SMS imports carry them in txnFee.
+      const feeExpr = sql`CASE WHEN ${mobileWalletTransactions.txnType} = 'charge' THEN ABS(CAST(${mobileWalletTransactions.amount} AS DECIMAL)) ELSE CAST(${mobileWalletTransactions.txnFee} AS DECIMAL) END`;
+
       const totalFees = await db.select({
-        total: sql<string>`COALESCE(SUM(${mpesaTransactions.txnFee}), 0)`,
+        total: sql<string>`COALESCE(SUM(${feeExpr}), 0)`,
         count: sql<number>`COUNT(*)`,
-      }).from(mpesaTransactions).where(and(...conditions));
+      }).from(mobileWalletTransactions).where(and(...conditions));
       const feesByType = await db.select({
-        txnType: mpesaTransactions.txnType,
-        totalFees: sql<string>`COALESCE(SUM(${mpesaTransactions.txnFee}), 0)`,
+        txnType: mobileWalletTransactions.txnType,
+        totalFees: sql<string>`COALESCE(SUM(${feeExpr}), 0)`,
         count: sql<number>`COUNT(*)`,
-        avgFee: sql<string>`COALESCE(AVG(${mpesaTransactions.txnFee}), 0)`,
-      }).from(mpesaTransactions).where(and(...conditions)).groupBy(mpesaTransactions.txnType);
+        avgFee: sql<string>`COALESCE(AVG(${feeExpr}), 0)`,
+      }).from(mobileWalletTransactions).where(and(...conditions)).groupBy(mobileWalletTransactions.txnType);
       const topRecipients = await db.select({
-        partyName: mpesaTransactions.partyName,
-        totalFees: sql<string>`COALESCE(SUM(${mpesaTransactions.txnFee}), 0)`,
+        partyName: mobileWalletTransactions.partyName,
+        totalFees: sql<string>`COALESCE(SUM(${feeExpr}), 0)`,
         count: sql<number>`COUNT(*)`,
-      }).from(mpesaTransactions).where(and(...conditions, sql`${mpesaTransactions.txnFee} > 0`)).groupBy(mpesaTransactions.partyName).orderBy(sql`SUM(${mpesaTransactions.txnFee}) DESC`).limit(10);
+      }).from(mobileWalletTransactions).where(and(...conditions, sql`(${mobileWalletTransactions.txnType} = 'charge' OR CAST(${mobileWalletTransactions.txnFee} AS DECIMAL) > 0)`)).groupBy(mobileWalletTransactions.partyName).orderBy(sql`SUM(${feeExpr}) DESC`).limit(10);
       return { totalFees: totalFees[0], feesByType, topRecipients };
     }),
 

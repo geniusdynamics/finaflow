@@ -17,6 +17,8 @@ import {
   bills,
   billItems,
   expenses,
+  subscriptions,
+  subscriptionPayments,
   type AccountType,
   type AccountSubType,
 } from "@db/schema";
@@ -594,7 +596,7 @@ export async function upsertAccount(
       externalSystem: "finabill",
       lastSyncedAt: new Date(),
     })
-    .returning();
+    .returning({ id: accounts.id, name: accounts.name, accountType: accounts.accountType });
   return { id: created.id, created: true, name: created.name, accountType: created.accountType };
 }
 
@@ -980,4 +982,72 @@ export async function upsertCategory(
     name: created.name,
     defaultAccountId: created.defaultAccountId,
   };
+}
+
+/** List subscriptions for external pull sync (v1 REST API). */
+export async function listSubscriptions(businessId: number, options?: { updatedSince?: string }) {
+  const db = getDb();
+  const conditions = [eq(subscriptions.businessId, businessId), isNull(subscriptions.deletedAt)];
+  if (options?.updatedSince) {
+    conditions.push(gt(subscriptions.updatedAt, new Date(options.updatedSince)));
+  }
+
+  return db
+    .select({
+      id: subscriptions.id,
+      name: subscriptions.name,
+      description: subscriptions.description,
+      vendorId: subscriptions.vendorId,
+      categoryId: subscriptions.categoryId,
+      locationId: subscriptions.locationId,
+      postingLocationId: subscriptions.postingLocationId,
+      amount: subscriptions.amount,
+      currency: subscriptions.currency,
+      cycleUnit: subscriptions.cycleUnit,
+      cycleCount: subscriptions.cycleCount,
+      isOneTime: subscriptions.isOneTime,
+      startDate: subscriptions.startDate,
+      nextDueDate: subscriptions.nextDueDate,
+      autoRenew: subscriptions.autoRenew,
+      status: subscriptions.status,
+      postingMode: subscriptions.postingMode,
+      trialEndsAt: subscriptions.trialEndsAt,
+      notifyEnabled: subscriptions.notifyEnabled,
+      notifyDaysBefore: subscriptions.notifyDaysBefore,
+      externalSystem: subscriptions.externalSystem,
+      externalId: subscriptions.externalId,
+      updatedAt: subscriptions.updatedAt,
+    })
+    .from(subscriptions)
+    .where(and(...conditions))
+    .orderBy(subscriptions.nextDueDate);
+}
+
+/** List subscription payments for external pull sync (v1 REST API). */
+export async function listSubscriptionPayments(businessId: number, options?: { updatedSince?: string }) {
+  const db = getDb();
+  const conditions = [eq(subscriptionPayments.businessId, businessId), isNull(subscriptionPayments.deletedAt)];
+  if (options?.updatedSince) {
+    conditions.push(gt(subscriptionPayments.updatedAt, new Date(options.updatedSince)));
+  }
+
+  return db
+    .select({
+      id: subscriptionPayments.id,
+      subscriptionId: subscriptionPayments.subscriptionId,
+      cycleDueDate: subscriptionPayments.cycleDueDate,
+      amount: subscriptionPayments.amount,
+      currency: subscriptionPayments.currency,
+      paidDate: subscriptionPayments.paidDate,
+      accountId: subscriptionPayments.accountId,
+      paymentMethod: subscriptionPayments.paymentMethod,
+      reference: subscriptionPayments.reference,
+      confirmed: subscriptionPayments.confirmed,
+      expenseId: subscriptionPayments.expenseId,
+      billId: subscriptionPayments.billId,
+      updatedAt: subscriptionPayments.updatedAt,
+    })
+    .from(subscriptionPayments)
+    .where(and(...conditions))
+    .orderBy(subscriptionPayments.cycleDueDate);
 }

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, expenseQuery, expenseViewOrCreate, expenseCreate, expenseManage, expenseCategoriesManage, getCurrentBusinessLocationIds, requireAuthorizedLocation, requireAuthorizedEntity, requireAuthorizedBusinessEntity } from "./middleware";
 import { getDb } from "./queries/connection";
 import { expenses, expenseItems, expenseCategories, accounts, ledgerEntries, suppliers, bills, attachments, locations } from "@db/schema";
-import { eq, and, isNull, desc, sql } from "drizzle-orm";
+import { eq, and, inArray, isNull, desc, sql } from "drizzle-orm";
 import { d } from "./lib/decimal";
 import { notFutureDateString, optionalNotFutureDateString } from "./lib/future-date";
 import { logAudit } from "./lib/audit";
@@ -71,12 +71,25 @@ export const expensesRouter = createRouter({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const businessId = (ctx as any).user?.currentBusiness?.id ?? (ctx as any).user?.currentBusinessId;
     if (!businessId) return [];
-    return db.select().from(expenseCategories)
+    const rows = await db.select().from(expenseCategories)
       .where(and(
         isNull(expenseCategories.deletedAt),
         sql`((${isNull(expenseCategories.businessId)}) OR (${eq(expenseCategories.businessId, businessId)}))`
       ))
       .orderBy(expenseCategories.name);
+
+    // Legacy global rows (businessId IS NULL) can share a name with a business-scoped row,
+    // which made the dropdown show the same category twice. Prefer the business-scoped row
+    // and keep globals only where the business has no row of its own.
+    const byName = new Map<string, (typeof rows)[number]>();
+    for (const row of rows) {
+      const key = row.name.trim().toLowerCase();
+      const existing = byName.get(key);
+      if (!existing || (existing.businessId == null && row.businessId != null)) {
+        byName.set(key, row);
+      }
+    }
+    return [...byName.values()].sort((a, b) => a.name.localeCompare(b.name));
   }),
 
   createCategory: expenseCategoriesManage
@@ -324,15 +337,23 @@ export const expensesRouter = createRouter({
         }
 
         if (!accountId) {
-          const typeMap: Record<string, string> = { cash: "cash", wallet: "cash", bank_transfer: "bank", card: "bank" };
+          // accounts.type uses the typeEnum values ("cash" | "mpesa" | "bank_account" | "wallet").
+          const allowedTypes: Record<string, string[]> = {
+            cash: ["cash"],
+            wallet: ["mpesa", "wallet"],
+            bank_transfer: ["bank_account"],
+            card: ["bank_account"],
+          };
+          const typeValues = allowedTypes[input.paymentMethod] ?? ["cash"];
           // Prefer branch-specific account, fall back to business-level account
           let accts = await tx.select().from(accounts).where(
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            and(eq(accounts.locationId, input.locationId), eq(accounts.type, typeMap[input.paymentMethod] as any), isNull(accounts.deletedAt))
+            and(eq(accounts.locationId, input.locationId), inArray(accounts.type, typeValues as any[]), isNull(accounts.deletedAt))
           ).limit(1);
           if (!accts[0]) {
             accts = await tx.select().from(accounts).where(
-              and(isNull(accounts.locationId), eq(accounts.type, typeMap[input.paymentMethod] as any), isNull(accounts.deletedAt))
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+              and(isNull(accounts.locationId), inArray(accounts.type, typeValues as any[]), isNull(accounts.deletedAt))
             ).limit(1);
           }
           if (accts[0]) accountId = accts[0].id;

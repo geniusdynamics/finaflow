@@ -51,7 +51,7 @@ async function tableExists(testPool: pg.Pool, tableName: string): Promise<boolea
 /**
  * Split a SQL file into individual statements while respecting PostgreSQL syntax:
  *  - `--` line comments
- *  - `/* ... *​/` block comments
+ *  - `/* ... *\/` block comments
  *  - `'...'` single-quoted strings (with `''` escape)
  *  - `$$ ... $$` dollar-quoted strings (any tag, including `$tag$ ... $tag$`)
  *  - `"..."` double-quoted identifiers
@@ -240,6 +240,7 @@ async function ensureTestDatabase(): Promise<void> {
       "0001_misty_mulholland_black.sql",
       "0002_add_currency_columns.sql",
       "0004_add_wallet_account_type.sql",
+      "0009_wallet_data_quality_and_partial_unique.sql",
       "0010_debt_origination_and_accounting.sql",
       "0011_coa_auto_link_and_wallet_support.sql",
       "0012_notification_highlight_lifecycle.sql",
@@ -263,6 +264,10 @@ async function ensureTestDatabase(): Promise<void> {
       "0028_wallet_reconciliation_tenant_scope.sql",
       "0029_partner_leads.sql",
       "0030_finabill_sync_expansion.sql",
+      "0031_subscription_management.sql",
+      "0032_subscription_posting_default_bill.sql",
+      "0033_statement_imports.sql",
+      "0034_audit_download_action.sql",
     ]) {
       const p = path.resolve(import.meta.dirname, `../../db/migrations/${file}`);
       if (fs.existsSync(p)) {
