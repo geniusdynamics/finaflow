@@ -90,6 +90,35 @@ export function syntheticMpesaDocument(): ExtractedDocument {
   };
 }
 
+/** Some statements print the Paid Out column as a negative number; the parser must keep magnitudes. */
+export function syntheticMpesaNegativeOutDocument(): ExtractedDocument {
+  const lines: TextLine[] = [
+    line(1, 767, [["M-PESA STATEMENT", 38]]),
+    line(1, 740, [["Customer Name: TEST CUSTOMER", 38]]),
+    line(1, 723, [["Mobile Number: 0700 000 000", 38]]),
+    line(1, 706, [["Statement Period: 1st July 2026 - 2nd July 2026", 38]]),
+    line(1, 689, [["Request Date: 2nd July 2026", 38]]),
+    line(1, 630.5, [["SUMMARY", 38]]),
+    line(1, 616.5, [["TRANSACTION TYPE PAID IN PAID OUT", 38]]),
+    line(1, 605.5, [["Send Money 0.00 -108.00", 38]]),
+    line(1, 594.5, [["Agent Deposit 1,000.00 0.00", 38]]),
+    line(1, 583.5, [["Total 1,000.00 -108.00", 38]]),
+    line(1, 500, [["DETAILED STATEMENT", 38]]),
+    line(1, 473.5, [["Receipt No. Completion Time Details Transaction Status Paid In Withdrawn Balance", 50.9]]),
+    rowStart(1, 462.5, { receipt: "UG12NEG01", date: "2026-07-01", details: "Customer Transfer of Funds", withdrawn: "-108.00", balance: "892.00" }),
+    continuation(1, 455.5, "20:00:00"),
+    rowStart(1, 437.5, { receipt: "UG12NEG02", date: "2026-07-01", details: "Deposit of Funds at Agent Till 123456 - SAMPLE AGENT", paidIn: "1,000.00", balance: "1,000.00" }),
+    continuation(1, 430.5, "19:00:00"),
+    ...footer(1, 1),
+  ];
+
+  return {
+    pages: 1,
+    charCount: lines.reduce((n, l) => n + l.cells.reduce((m, c) => m + c.text.length, 0), 0),
+    lines,
+  };
+}
+
 /** Paybill-owner layout: 9 columns with Transaction Type and Other Party after the balance. */
 export function syntheticMpesaPaybillDocument(): ExtractedDocument {
   const lines: TextLine[] = [

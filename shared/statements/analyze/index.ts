@@ -9,7 +9,7 @@ import {
   sumAmounts,
 } from "../normalize/amount";
 import { daysInclusive } from "../normalize/date";
-import type { ParsedStatement, ParsedStatementRow } from "../types";
+import type { MpesaRail, ParsedStatement, ParsedStatementRow } from "../types";
 
 export interface AnalysisPeriod {
   start: string | null;
@@ -86,6 +86,14 @@ export interface ContactRow {
   count: number;
   total: string;
   average: string;
+}
+
+export interface IncomeChannelRow {
+  key: string;
+  label: string;
+  count: number;
+  total: string;
+  share: number;
 }
 
 export interface RecurringRow {
@@ -179,7 +187,7 @@ export interface StatementAnalysis {
     byType: FeeRow[];
     topRecipients: ContactRow[];
   };
-  moneyIn: { count: number; total: string; largest: AnalysisRowRef | null; bySource: ContactRow[] };
+  moneyIn: { count: number; total: string; largest: AnalysisRowRef | null; bySource: ContactRow[]; byChannel?: IncomeChannelRow[] };
   moneyOut: { count: number; total: string; largest: AnalysisRowRef | null; byDestination: ContactRow[] };
   financing: { drawdowns: string; repayments: string; net: string; count: number };
   topContacts: { sent: ContactRow[]; received: ContactRow[] };
@@ -241,6 +249,21 @@ const TIME_PERIODS: Array<{ key: string; label: string; from: number; to: number
   { key: "night", label: "Night (20:00–05:00)", from: 20, to: 29 },
 ];
 
+const INCOME_CHANNEL_LABELS: Record<MpesaRail, string> = {
+  agent_deposit: "Agent deposits",
+  received: "Received money",
+  send_money: "Send money",
+  agent_withdrawal: "Agent withdrawals",
+  paybill: "Paybill",
+  till: "Till",
+  charge: "Charges",
+  airtime: "Airtime",
+  reversal: "Reversals",
+  fuliza_draw: "Fuliza drawdown",
+  fuliza_repay: "Fuliza repayment",
+  other: "Other inflows",
+};
+
 function isCharge(row: ParsedStatementRow): boolean {
   return row.txnType === "charge" || row.rail === "charge";
 }
@@ -250,11 +273,20 @@ function isFinancing(row: ParsedStatementRow): boolean {
 }
 
 function signed(row: ParsedStatementRow): string {
-  return row.direction === "in" ? row.paidIn : `-${row.withdrawn}`;
+  const magnitude = absoluteAmount(row.direction === "in" ? row.paidIn : row.withdrawn);
+  return row.direction === "in" ? magnitude : `-${magnitude}`;
 }
 
 function amountOf(row: ParsedStatementRow): string {
-  return row.direction === "in" ? row.paidIn : row.withdrawn;
+  return absoluteAmount(row.direction === "in" ? row.paidIn : row.withdrawn);
+}
+
+/** Old imports may have stored a printed outflow as a negative number; analysis works on magnitudes. */
+function normalizeRowAmounts(row: ParsedStatementRow): ParsedStatementRow {
+  const paidIn = absoluteAmount(row.paidIn);
+  const withdrawn = absoluteAmount(row.withdrawn);
+  if (paidIn === row.paidIn && withdrawn === row.withdrawn) return row;
+  return { ...row, paidIn, withdrawn, amount: absoluteAmount(row.amount) };
 }
 
 function average(total: string, count: number): string {
@@ -456,7 +488,8 @@ export function isStatementAnalysis(value: unknown): value is StatementAnalysis 
 export function buildStatementAnalysis(
   statement: ParsedStatement,
   options: AnalysisOptions = {},
-): StatementAnalysis {  const rows = statement.rows;
+): StatementAnalysis {
+  const rows = statement.rows.map(normalizeRowAmounts);
   const categoryOf = options.categoryOf ?? ((row: ParsedStatementRow) => ({
     id: null,
     name: row.categoryKey ?? "No category",
@@ -551,6 +584,27 @@ export function buildStatementAnalysis(
 
   const moneyInGroups = contactRows(operatingIn);
   const moneyOutGroups = contactRows(operatingOut);
+  const operatingInTotal = sumAmounts(operatingIn.map((row) => row.paidIn));
+
+  const inboundChannels = new Map<MpesaRail, { count: number; total: string[] }>();
+  for (const row of operatingIn) {
+    const entry = inboundChannels.get(row.rail) ?? { count: 0, total: [] };
+    entry.count++;
+    entry.total.push(row.paidIn);
+    inboundChannels.set(row.rail, entry);
+  }
+  const moneyInByChannel: IncomeChannelRow[] = [...inboundChannels.entries()]
+    .map(([rail, entry]) => {
+      const total = sumAmounts(entry.total);
+      return {
+        key: rail,
+        label: INCOME_CHANNEL_LABELS[rail],
+        count: entry.count,
+        total,
+        share: percentOf(total, operatingInTotal),
+      };
+    })
+    .sort((a, b) => compareAmounts(b.total, a.total));
 
   const financingRows = rows.filter(isFinancing);
   const drawdowns = sumAmounts(rows.filter((row) => row.rail === "fuliza_draw").map((row) => row.paidIn));
@@ -879,9 +933,10 @@ export function buildStatementAnalysis(
     },
     moneyIn: {
       count: operatingIn.length,
-      total: sumAmounts(operatingIn.map((row) => row.paidIn)),
+      total: operatingInTotal,
       largest: operatingIn.length ? ref(operatingIn.reduce((a, b) => (compareAmounts(a.paidIn, b.paidIn) >= 0 ? a : b))) : null,
       bySource: moneyInGroups,
+      byChannel: moneyInByChannel,
     },
     moneyOut: {
       count: operatingOut.length,

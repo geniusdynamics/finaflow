@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased] — M-PESA negative paid-out amounts
+
+### Fixed
+- **Negative paid-out values** — statements that print the Paid Out column with a minus sign (for example `-108.00`) are normalised to positive magnitudes at the parser boundary. This removes the public converter failure `[DecimalError] Invalid argument: -108.00` caused by `signed()` producing `--108.00`, and makes parsed totals reconcile with Safaricom's summary. Analysis also normalises any older stored rows that still carry the sign, so existing imports do not crash.
+- **Inbound bank/business payments** — `Small Business Payment to Customer` and `Transfer from Bank` rows arriving with `direction = in` are classified as received money instead of `other`.
+
+### Added
+- **Money-in by source** — `StatementAnalysis.moneyIn.byChannel` groups operating inflows into agent deposits, received money and other channels with count, total and share. The statement analysis panel and the public converter show the mix; on the reference statement agent deposits are **72.45% (KES 19.27M)** of KES 26.60M total inflow.
+
+### Tested
+- `shared/statements/__tests__/mpesa.test.ts`, `analysis.test.ts`, `delimited.test.ts` — **42 pass**, including a negative-paid-out fixture and a legacy-row analysis regression.
+- Reference statement: **1,945 rows**, totals **KES 26,598,949.00 in / KES 26,176,619.01 out**, reconciliation diff **0.00 / 0.00**.
+- `npm run typecheck` and `npm run lint` — clean (0 errors).
+
 ## [Unreleased] — Profile Account ID
 
 ### Added

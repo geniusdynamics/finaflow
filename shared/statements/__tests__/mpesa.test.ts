@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import { parseMpesaStatement, detectMpesaStatement, classifyMpesaDetails } from "../parsers/mpesa";
-import { syntheticMpesaDocument, syntheticMpesaPaybillDocument } from "../__fixtures__/synthetic";
+import { syntheticMpesaDocument, syntheticMpesaPaybillDocument, syntheticMpesaNegativeOutDocument } from "../__fixtures__/synthetic";
 import { normalizeAmount, isMoneyToken, sumAmounts } from "../normalize/amount";
 import { normalizeDate, normalizeTime, parsePeriod } from "../normalize/date";
 
@@ -93,6 +93,19 @@ describe("M-PESA parser", () => {
     expect(received.transactionType).toBe("Funds received");
     expect(received.otherParty).toBe("SAMPLE SENDER");
   });
+
+  it("normalises a printed negative paid-out value to a positive magnitude", () => {
+    const statement = parseMpesaStatement(syntheticMpesaNegativeOutDocument());
+    const out = statement.rows.find((row) => row.externalId === "UG12NEG01")!;
+
+    expect(out.paidIn).toBe("0.00");
+    expect(out.withdrawn).toBe("108.00");
+    expect(out.amount).toBe("108.00");
+    expect(out.direction).toBe("out");
+    expect(statement.totals).toMatchObject({ totalIn: "1000.00", totalOut: "108.00", totalFees: "0.00" });
+    expect(statement.statementSummary?.totalOut).toBe("108.00");
+    expect(statement.warnings.some((warning) => /negative sign/i.test(warning))).toBe(true);
+  });
 });
 
 describe("detail classification", () => {
@@ -138,6 +151,13 @@ describe("detail classification", () => {
     expect(inbound.rail).toBe("received");
     expect(inbound.txnType).toBe("topup");
     expect(inbound.categoryKey).toBeNull();
+
+    const businessPayment = classifyMpesaDetails(
+      "Small Business Payment to Customer via API from - 254724***647 BAKARI MWAKOI",
+      "in",
+    );
+    expect(businessPayment.rail).toBe("received");
+    expect(businessPayment.txnType).toBe("topup");
   });
 });
 

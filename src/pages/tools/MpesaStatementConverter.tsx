@@ -102,6 +102,15 @@ export default function MpesaStatementConverter() {
         categories.set(category.name, (categories.get(category.name) ?? new Decimal(0)).plus(category.totalOut));
       }
     }
+    const incomeChannels = new Map<string, { label: string; count: number; total: Decimal }>();
+    for (const file of converted) {
+      for (const channel of file.analysis.moneyIn.byChannel ?? []) {
+        const entry = incomeChannels.get(channel.key) ?? { label: channel.label, count: 0, total: new Decimal(0) };
+        entry.count += channel.count;
+        entry.total = entry.total.plus(channel.total);
+        incomeChannels.set(channel.key, entry);
+      }
+    }
     return {
       rows,
       totalIn: totalIn.toFixed(2),
@@ -110,6 +119,15 @@ export default function MpesaStatementConverter() {
       categories: [...categories.entries()]
         .map(([name, total]) => [name, total.toNumber()] as const)
         .sort((a, b) => b[1] - a[1]),
+      incomeChannels: [...incomeChannels.entries()]
+        .map(([key, entry]) => ({
+          key,
+          label: entry.label,
+          count: entry.count,
+          total: entry.total.toFixed(2),
+          share: totalIn.isZero() ? 0 : entry.total.div(totalIn).mul(100).toDecimalPlaces(2).toNumber(),
+        }))
+        .sort((a, b) => new Decimal(b.total).comparedTo(a.total)),
     };
   }, [converted]);
 
@@ -309,7 +327,7 @@ export default function MpesaStatementConverter() {
               <ul className="mt-3 space-y-2 text-sm text-[#5C5853]">
                 <li>· Every transaction with receipt, time, details, paid in, withdrawn and running balance</li>
                 <li>· Charges kept as their own rows, so fee totals are explicit</li>
-                <li>· A financial summary, category hints and balance checks</li>
+                <li>· A financial summary, money-in sources, category hints and balance checks</li>
                 <li>· CSV for Excel/Sheets, JSON for scripts and integrations</li>
               </ul>
             </div>
@@ -326,20 +344,46 @@ export default function MpesaStatementConverter() {
           </section>
         </div>
 
-        {converted.length > 0 && aggregate.categories.length > 0 && (
-          <section className="mt-8 rounded-xl border border-[#E8E0D8] bg-white p-5">
-            <h2 className="font-serif text-lg font-semibold">Spending hints</h2>
-            <p className="mt-1 text-xs text-[#8D8A87]">
-              Merchant-based hints only; rows without a confident match stay uncategorised.
-            </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {aggregate.categories.slice(0, 10).map(([name, total]) => (
-                <div key={name} className="flex items-center justify-between rounded-lg bg-[#F5EDE6] px-3 py-2 text-sm">
-                  <span className="truncate">{name}</span>
-                  <span className="font-mono text-[#5C5853]">{formatKES(total.toFixed(2))}</span>
+        {converted.length > 0 && (aggregate.incomeChannels.length > 0 || aggregate.categories.length > 0) && (
+          <section className="mt-8 grid gap-4 md:grid-cols-2">
+            {aggregate.incomeChannels.length > 0 && (
+              <div className="rounded-xl border border-[#E8E0D8] bg-white p-5">
+                <h2 className="font-serif text-lg font-semibold">Money in by source</h2>
+                <p className="mt-1 text-xs text-[#8D8A87]">
+                  Where the inflows came from: agent deposits, received money and other channels.
+                </p>
+                <div className="mt-3 space-y-2">
+                  {aggregate.incomeChannels.map((channel) => (
+                    <div key={channel.key} className="flex items-center justify-between rounded-lg bg-[#F5EDE6] px-3 py-2 text-sm">
+                      <span className="min-w-0 truncate">
+                        {channel.label}
+                        <span className="ml-2 text-xs text-[#8D8A87]">
+                          {channel.count} · {channel.share.toFixed(1)}%
+                        </span>
+                      </span>
+                      <span className="ml-2 shrink-0 font-mono text-[#2E7D32]">{formatKES(channel.total)}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+
+            {aggregate.categories.length > 0 && (
+              <div className="rounded-xl border border-[#E8E0D8] bg-white p-5">
+                <h2 className="font-serif text-lg font-semibold">Spending hints</h2>
+                <p className="mt-1 text-xs text-[#8D8A87]">
+                  Merchant-based hints only; rows without a confident match stay uncategorised.
+                </p>
+                <div className="mt-3 space-y-2">
+                  {aggregate.categories.slice(0, 10).map(([name, total]) => (
+                    <div key={name} className="flex items-center justify-between rounded-lg bg-[#F5EDE6] px-3 py-2 text-sm">
+                      <span className="min-w-0 truncate">{name}</span>
+                      <span className="ml-2 shrink-0 font-mono text-[#5C5853]">{formatKES(total.toFixed(2))}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
 

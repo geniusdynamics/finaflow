@@ -110,20 +110,36 @@ export function StatementAnalysisPanel({ analysis }: { analysis: StatementAnalys
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <div>
-          <h4 className="mb-2 text-sm font-medium text-[#2D2A26]">Spending by category</h4>
-          {analysis.categories.length > 0 ? (
-            <BarList
-              rows={analysis.categories.slice(0, 10).map((row) => ({
-                name: row.name,
-                value: row.totalOut,
-                share: row.shareOfOut,
-                hint: `${row.count} transactions · ${row.shareOfOut.toFixed(1)}% of spend`,
-              }))}
-            />
-          ) : (
-            <p className="text-sm text-[#8D8A87]">No categorised rows.</p>
+        <div className="space-y-4">
+          {analysis.moneyIn.byChannel && analysis.moneyIn.byChannel.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-sm font-medium text-[#2D2A26]">Money in by source</h4>
+              <BarList
+                rows={analysis.moneyIn.byChannel.map((row) => ({
+                  name: row.label,
+                  value: row.total,
+                  share: row.share,
+                  hint: `${row.count} transactions · ${row.share.toFixed(1)}% of inflow`,
+                }))}
+              />
+            </div>
           )}
+
+          <div>
+            <h4 className="mb-2 text-sm font-medium text-[#2D2A26]">Spending by category</h4>
+            {analysis.categories.length > 0 ? (
+              <BarList
+                rows={analysis.categories.slice(0, 10).map((row) => ({
+                  name: row.name,
+                  value: row.totalOut,
+                  share: row.shareOfOut,
+                  hint: `${row.count} transactions · ${row.shareOfOut.toFixed(1)}% of spend`,
+                }))}
+              />
+            ) : (
+              <p className="text-sm text-[#8D8A87]">No categorised rows.</p>
+            )}
+          </div>
         </div>
 
         <div>
