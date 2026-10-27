@@ -2,7 +2,7 @@
 // ABOUTME: Covers negative money-out values, integer amounts, opening balance and reconciliation.
 
 import { describe, expect, it } from "vitest";
-import { parseKcbBankStatement, detectKcbBankStatement, parseKcbDate } from "../parsers/kcb";
+import { parseKcbBankStatement, detectKcbBankStatement, parseKcbDate, parseKcbReference } from "../parsers/kcb";
 import { parseStatement } from "../parsers/registry";
 import { buildStatementAnalysis } from "../analyze";
 import { syntheticKcbStatement } from "../__fixtures__/kcb";
@@ -79,9 +79,26 @@ describe("KCB bank statement parser", () => {
     ]);
   });
 
-  it("parses impossible printed period days by clamping to the month end", () => {
+  it("parses printed period days by clamping to the month end", () => {
     expect(parseKcbDate("31 FEB 2026")).toBe("2026-02-28");
     expect(parseKcbDate("31 APR 2026")).toBe("2026-04-30");
     expect(parseKcbDate("31 FEB 2026", false)).toBeNull();
+  });
+
+  it("extracts account, channel, transaction code and payer phone from wrapped descriptions", () => {
+    expect(parseKcbReference("Transfer 8048732 MPES A UC14C8A98C 2547033 68683 A")).toMatchObject({
+      accountReference: "8048732",
+      channel: "M-PESA",
+      transactionCode: "UC14C8A98C",
+      phone: "254703368683",
+    });
+    expect(parseKcbReference("Transfer 8048732 LipaNa KCB MBNHE38DWDXC8 FO5 254710 894819")).toMatchObject({
+      accountReference: "8048732",
+      channel: "LipaNa KCB",
+      transactionCode: "MBNHE38DWDXC8",
+      phone: "254710894819",
+    });
+    expect(parseKcbReference("Transfer G BAMBURI CE MENT PUBLIC LIMITED FT2606").name).toBe("BAMBURI CE MENT PUBLIC LIMITED");
+    expect(parseKcbReference("Transfer H ALPHA META LS FT26063H9TM8").name).toBe("ALPHA META LS");
   });
 });

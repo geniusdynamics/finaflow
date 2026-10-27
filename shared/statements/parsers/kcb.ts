@@ -181,36 +181,101 @@ function classify(details: string, direction: StatementDirection): {
   };
 }
 
-function compactName(value: string): string {
-  return value
-    .replace(/\s+/g, " ")
-    .replace(/\s+[A-Z]\s+[A-Z0-9]{4,}.*$/i, "")
-    .trim();
+export interface KcbReference {
+  name: string | null;
+  phone: string | null;
+  accountReference: string | null;
+  channel: string | null;
+  transactionCode: string | null;
 }
 
-function counterpartyOf(details: string): string | null {
+function extractPhone(value: string): string | null {
+  const groups = value.match(/\d{4,}/g) ?? [];
+  let candidate = "";
+  for (const group of groups) {
+    candidate += group;
+    if (/^(?:2547\d{8}|07\d{8})$/.test(candidate)) return candidate;
+    if (candidate.length >= 12) candidate = group;
+  }
+  const compact = value.replace(/[^\d]/g, "");
+  return /(?:2547\d{8}|07\d{8})/.exec(compact)?.[0] ?? null;
+}
+
+function extractTransactionCode(value: string): string | null {
+  const match = /\b(?:FT[A-Z0-9]{4,}|TT[A-Z0-9]{4,}|U[A-Z0-9]{8,}|MBN[A-Z0-9]{8,}|CHQ\d{4,})\b/i.exec(value);
+  return match?.[0].toUpperCase() ?? null;
+}
+
+function extractAccountReference(value: string): string | null {
+  const match = /^(?:transfer|billpay|payment)\s+(\d{6,10})\b/i.exec(value)
+    ?? /(?:Agent Till|Till)\s+(\d{4,})\b/i.exec(value);
+  return match?.[1] ?? null;
+}
+
+function channelOf(value: string): string {
+  if (/LipaNa\s*KCB/i.test(value)) return "LipaNa KCB";
+  if (/\bM-?PES(?:A)?\b/i.test(value)) return "M-PESA";
+  if (/Bank to Mobile/i.test(value)) return "Bank to Mobile";
+  if (/BillPay/i.test(value)) return "BillPay";
+  if (/Airtel/i.test(value)) return "Airtel Money";
+  if (/CHQ\d*|\bCheque\b/i.test(value)) return "Cheque";
+  if (/Cash Deposit/i.test(value)) return "Cash Deposit";
+  if (/Cash Withdrawal/i.test(value)) return "Cash Withdrawal";
+  if (/Customer Transfer/i.test(value)) return "Customer Transfer";
+  if (/Funds received/i.test(value)) return "Funds received";
+  if (/Agent Till/i.test(value)) return "Agent deposit";
+  if (/Transfer Charge/i.test(value)) return "Charge";
+  if (/Tax Amount Due/i.test(value)) return "Tax";
+  if (/Transfer/i.test(value)) return "Transfer";
+  return "Bank";
+}
+
+export function cleanPartyName(value: string): string | null {
+  let name = value
+    .toUpperCase()
+    .replace(/[#*]/g, " ")
+    .replace(/\b(?:FT[A-Z0-9]{4,}|TT[A-Z0-9]{4,}|U[A-Z0-9]{8,}|MBN[A-Z0-9]{8,}|CHQ\d{4,})\b/g, " ")
+    .replace(/\b(?:2547\d{8}|07\d{8})\b/g, " ")
+    .replace(/\b\d{4,}\b/g, " ")
+    .replace(/\bAC-?\d+\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  name = name.replace(/^(?:\d{6,10}\s+)/, "");
+  name = name.replace(/^(?:MPES|MPESA|M-?PES|LIPANA KCB|BANK TO MOBILE|BILLPAY|AIRTEL MONEY|CUSTOMER TRANSFER|FUNDS RECEIVED|CASH DEPOSIT|INHOUSE|TRANSFER|PAYMENT)\b/, "").trim();
+  name = name.replace(/^(?:[A-Z]\s+)+(?=[A-Z]{2,})/, "");
+  name = name.replace(/\s+/g, " ").replace(/^[-:]+|[-:]+$/g, "").trim();
+  if (/^M-?PES(?:\s+A)?$/i.test(name)) return null;
+  if (/^INHOUSE(?:\s+BA\s*NK)?$/i.test(name) || /^BA\s*NK$/i.test(name)) return "Cheque";
+  if (/^(?:[A-Z]\s*)+$/.test(name) && name.replace(/\s/g, "").length <= 3) return null;
+  return name.length >= 2 ? name : null;
+}
+
+export function parseKcbReference(details: string): KcbReference {
   const cleaned = details.replace(/\s+/g, " ").trim();
-  if (/^(balance b\/fwd|balance c\/fwd)/i.test(cleaned)) return null;
+  const phone = extractPhone(cleaned);
+  const accountReference = extractAccountReference(cleaned);
+  const transactionCode = extractTransactionCode(cleaned);
+  const channel = channelOf(cleaned);
 
   let match = /(?:Deposit of Funds at Agent Till|Customer Withdrawal At Agent Till)\s+\d+\s*-\s*(.+)$/i.exec(cleaned);
-  if (match) return compactName(match[1]);
+  if (match) return { name: cleanPartyName(match[1]), phone, accountReference, channel, transactionCode };
 
   match = /^(?:Funds received from|Customer Transfer to|Customer Transfer from|Small Business Payment to Customer via API from|Business Payment from)\s*-\s*(?:\d{3,}\s*)?(.+)$/i.exec(cleaned);
-  if (match) return compactName(match[1]);
+  if (match) return { name: cleanPartyName(match[1]), phone, accountReference, channel, transactionCode };
 
-  if (/^bank to mobile/i.test(cleaned)) return "Bank to Mobile";
-  if (/^transfer from bank/i.test(cleaned)) return "Bank transfer";
-  if (/^bill\s*pay/i.test(cleaned)) return "BillPay";
-  if (/\bchq\d*/i.test(cleaned)) return "Cheque";
+  match = /\bCHQ\d{4,}\s+(?:BA\s*NK\s+)?([A-Z][A-Z\s]+)$/i.exec(cleaned);
+  if (match) return { name: cleanPartyName(match[1]), phone, accountReference, channel, transactionCode };
 
-  match = /^(?:transfer|payment)\s+(?!charge\b)(.+)$/i.exec(cleaned);
-  if (match) {
-    const rest = match[1].trim();
-    if (/\bMPES\b/i.test(rest)) return "M-PESA transfer";
-    return compactName(rest);
-  }
+  let rest = cleaned
+    .replace(new RegExp(`^${channel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*`, "i"), "")
+    .replace(/^(?:transfer|payment)\s+/i, "")
+    .replace(/^(?:\d{6,10})\s+/, "")
+    .replace(/^(?:MPES|MPESA|LipaNa\s*KCB)\s+/i, "")
+    .replace(/^(?:A|A\s+)$/i, "")
+    .trim();
 
-  return null;
+  if (/^(?:bank to mobile|billpay|airtel money)$/i.test(rest)) rest = "";
+  return { name: cleanPartyName(rest), phone, accountReference, channel, transactionCode };
 }
 
 function readPrimary(line: TextLine, layout: KcbLayout): Omit<KcbRawRow, "rawLines"> | null {
@@ -365,6 +430,7 @@ export function parseKcbBankStatement(doc: ExtractedDocument): ParsedStatement {
     const direction: StatementDirection = item.withdrawn !== "0.00" ? "out" : "in";
     const amount = direction === "in" ? item.paidIn : item.withdrawn;
     const classified = classify(item.details, direction);
+    const reference = parseKcbReference(item.details);
     const accountKey = (metadata.accountNumber ?? "BANK").replace(/[^A-Za-z0-9]/g, "");
     const base = `KCB-${accountKey}-${item.date.replace(/-/g, "")}-${stableHash(
       `${item.date}|${item.valueDate ?? ""}|${item.details}|${item.paidIn}|${item.withdrawn}|${item.balance}`,
@@ -397,11 +463,13 @@ export function parseKcbBankStatement(doc: ExtractedDocument): ParsedStatement {
       currency: "KES",
       rail: classified.rail,
       txnType: classified.txnType,
-      counterpartyName: counterpartyOf(item.details),
-      counterpartyId: null,
-      accountReference: /\bAC-?([A-Z0-9-]+)/i.exec(item.details)?.[1] ?? null,
-      transactionType: null,
+      counterpartyName: reference.name,
+      counterpartyId: reference.phone,
+      accountReference: reference.accountReference ?? /\bAC-?([A-Z0-9-]+)/i.exec(item.details)?.[1] ?? null,
+      transactionType: reference.channel,
       otherParty: null,
+      channel: reference.channel,
+      transactionCode: reference.transactionCode,
       categoryKey: classified.categoryKey,
       categoryConfidence: classified.categoryConfidence,
       fulizaFunded: false,
