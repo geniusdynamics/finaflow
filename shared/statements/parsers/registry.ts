@@ -9,6 +9,12 @@ import {
   detectMpesaStatement,
   parseMpesaStatement,
 } from "./mpesa";
+import {
+  KCB_PARSER_ID,
+  KCB_PARSER_VERSION,
+  detectKcbBankStatement,
+  parseKcbBankStatement,
+} from "./kcb";
 
 const mpesaParser: StatementParser = {
   id: MPESA_PARSER_ID,
@@ -19,7 +25,16 @@ const mpesaParser: StatementParser = {
   parse: (doc) => parseMpesaStatement(doc),
 };
 
-const parsers: StatementParser[] = [mpesaParser];
+const kcbParser: StatementParser = {
+  id: KCB_PARSER_ID,
+  version: KCB_PARSER_VERSION,
+  provider: "bank",
+  displayName: "Bank statement (KCB layout)",
+  detect: (doc) => detectKcbBankStatement(doc),
+  parse: (doc) => parseKcbBankStatement(doc),
+};
+
+const parsers: StatementParser[] = [mpesaParser, kcbParser];
 
 export interface DetectedParser {
   parser: StatementParser;
@@ -48,7 +63,7 @@ export function detectStatementParser(
   }
   if (!best || best.confidence < 0.3) {
     throw new UnsupportedStatementError(
-      "This statement format is not recognised. Supported today: M-PESA statements (PDF).",
+      "This statement format is not recognised. Supported today: M-PESA statements and KCB bank statements (PDF).",
     );
   }
   return best;

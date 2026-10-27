@@ -47,6 +47,19 @@ export type MpesaRail =
   | "fuliza_repay"
   | "other";
 
+/** Bank-statement rails. Kept separate so bank profiles can add their own without changing M-PESA. */
+export type BankRail =
+  | "bank_transfer"
+  | "cash_deposit"
+  | "cash_withdrawal"
+  | "cheque"
+  | "interest"
+  | "salary"
+  | "standing_order"
+  | "loan";
+
+export type StatementRail = MpesaRail | BankRail;
+
 export interface TextCell {
   text: string;
   /** Horizontal position in PDF points. */
@@ -100,7 +113,7 @@ export interface ParsedStatementRow {
   /** Positive decimal string, 2dp — the side that moved (paidIn or withdrawn). */
   amount: string;
   currency: string;
-  rail: MpesaRail;
+  rail: StatementRail;
   txnType: StatementTxnType;
   counterpartyName: string | null;
   counterpartyId: string | null;
@@ -140,6 +153,13 @@ export interface StatementMetadata {
   periodStart?: string;
   periodEnd?: string;
   requestDate?: string;
+  /** Bank statements: institution, account identity and printed opening/closing balances. */
+  bankName?: string;
+  accountNumber?: string;
+  accountName?: string;
+  productName?: string;
+  openingBalance?: string;
+  closingBalance?: string;
 }
 
 export interface ParsedStatement {
@@ -150,6 +170,8 @@ export interface ParsedStatement {
   currency: string;
   metadata: StatementMetadata;
   rows: ParsedStatementRow[];
+  /** Row order in the source. M-PESA is newest-first; KCB is oldest-first. Defaults to "desc". */
+  order?: "asc" | "desc";
   /** Totals computed from the parsed rows. */
   totals: {
     rowCount: number;

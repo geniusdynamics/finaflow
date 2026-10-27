@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased] — Bank statement import (KCB)
+
+### Added
+- **Bank statement converter** — public `/tools/bank-statement-converter` accepts one or more bank PDFs, runs entirely in the browser, and downloads CSV/JSON with a running balance plus the full statement analysis (inflow sources, categories, fees, balance continuity, monthly totals). KCB online statements are supported today; the parser is profile-based so more banks can be added without changing the tool.
+- **Bank import in Wallets** — the Wallet Import dialog now has **M-PESA / Bank / SMS** tabs. The Bank tab accepts KCB PDFs, optionally links rows to a bank account, and uses the same preview, duplicate detection, category suggestions, statement history and undo flow as M-PESA imports. Bank statements are stored under the generic `bank` provider.
+- **Bank statement analysis** — candidate bank rails (bank transfers, cash deposits/withdrawals, cheques, interest, salary, standing orders, loans) and `moneyIn.byChannel` now work for bank rows too. KCB's oldest-first row order is handled explicitly for opening/closing balances, daily balances and balance continuity.
+- **BOM-tolerant PDF detection** — bank exports that prepend a UTF-8 BOM before `%PDF` are accepted by both Node and browser extractors.
+
+### Tested
+- `shared/statements/__tests__/kcb.test.ts`, `pdf-errors.test.ts`, plus the existing M-PESA/analysis suites — **48 pass**.
+- Four real KCB statements: **3,332 / 3,288 / 2,741 / 3,121 transactions**, every one reconciled to the printed footer at **0.00 in / 0.00 out**, with **0 unexplained balance steps**.
+- `npm run typecheck`, `npm run lint` (0 errors), production build.
+
+### Notes
+- Scanned/image bank statements are not supported yet.
+- The statement PDFs and account details used for validation are not committed.
+
 ## [Unreleased] — M-PESA negative paid-out amounts
 
 ### Fixed

@@ -2,6 +2,7 @@
 // ABOUTME: Uses the shared parser through tRPC; files are held in the browser and never persisted server-side.
 
 import { useMemo, useState } from "react";
+import { Link } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -86,6 +87,9 @@ interface Props {
   enforceAssigned?: boolean;
   onImported?: () => void;
   fullPage?: boolean;
+  /** "bank" changes the copy and offers an optional bank-account link. */
+  mode?: "mobile" | "bank";
+  bankAccounts?: Array<{ id: number; name: string; accountNumber?: string | null; locationId?: number | null }>;
 }
 
 async function toBase64(file: File): Promise<string> {
@@ -131,11 +135,19 @@ export function StatementImportPanel({
   enforceAssigned,
   onImported,
   fullPage,
+  mode = "mobile",
+  bankAccounts = [],
 }: Props) {
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [password, setPassword] = useState("");
+  const [bankAccountId, setBankAccountId] = useState("");
   const [results, setResults] = useState<ImportFileResult[] | null>(null);
   const [batchError, setBatchError] = useState<string | null>(null);
+
+  const isBank = mode === "bank";
+  const availableBankAccounts = bankAccounts.filter(
+    (account) => !locationId || !account.locationId || account.locationId === locationId,
+  );
 
   const utils = trpc.useUtils();
   const { data: categories } = trpc.expenses.categories.useQuery();
@@ -193,6 +205,7 @@ export function StatementImportPanel({
         fileName: file.name,
         fileBase64,
         password: effectivePassword || undefined,
+        accountId: isBank && bankAccountId ? Number(bankAccountId) : undefined,
       });
 
       setFiles((prev) =>
@@ -301,6 +314,7 @@ export function StatementImportPanel({
         fileName: string;
         fileBase64: string;
         password?: string;
+        accountId?: number;
         overrides?: Record<string, number | null>;
         exclude?: string[];
       }> = [];
@@ -309,6 +323,7 @@ export function StatementImportPanel({
           fileName: entry.file.name,
           fileBase64: await toBase64(entry.file),
           password: entry.password ?? (password.trim() || undefined),
+          accountId: isBank && bankAccountId ? Number(bankAccountId) : undefined,
           overrides: Object.keys(entry.overrides).length > 0 ? entry.overrides : undefined,
           exclude: entry.exclude.length > 0 ? entry.exclude : undefined,
         });
@@ -344,13 +359,44 @@ export function StatementImportPanel({
         )}
       </div>
 
+      {isBank && (
+        <div className="space-y-2">
+          <Label>Bank account</Label>
+          <select
+            value={bankAccountId}
+            onChange={(event) => setBankAccountId(event.target.value)}
+            className="w-full rounded-lg border border-[#E8E0D8] px-3 py-2 text-sm"
+          >
+            <option value="">Link later / not specified</option>
+            {availableBankAccounts.map((account) => (
+              <option key={account.id} value={account.id}>
+                {account.name}{account.accountNumber ? ` (${account.accountNumber})` : ""}
+              </option>
+            ))}
+          </select>
+          {availableBankAccounts.length === 0 ? (
+            <p className="text-xs text-[#8D8A87]">
+              No bank accounts yet. <Link to="/accounts" className="text-[#C73E1D] hover:underline">Add one in Accounts</Link> to link imported rows.
+            </p>
+          ) : (
+            <p className="text-xs text-[#8D8A87]">
+              Optional: links imported transactions to the selected bank account for reconciliation.
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="rounded-lg border border-dashed border-[#D4A854] bg-[#F5EDE6]/40 p-4">
         <div className="flex items-start gap-3">
           <Upload className="mt-0.5 h-5 w-5 text-[#C73E1D]" />
           <div className="min-w-0 flex-1">
-            <Label className="text-sm font-medium text-[#2D2A26]">M-PESA statement PDFs or CSV</Label>
+            <Label className="text-sm font-medium text-[#2D2A26]">
+              {isBank ? "Bank statement PDFs" : "M-PESA statement PDFs or CSV"}
+            </Label>
             <p className="mt-1 text-xs text-[#8D8A87]">
-              Drop one or more PDF or CSV statements (up to 12, 10 MB each). Files are parsed in memory and never stored.
+              {isBank
+                ? "Drop one or more bank statement PDFs (up to 12, 10 MB each). KCB online statements are supported today; more banks are coming."
+                : "Drop one or more PDF or CSV statements (up to 12, 10 MB each). Files are parsed in memory and never stored."}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <label className={`inline-flex cursor-pointer items-center gap-2 rounded-lg bg-[#C73E1D] px-3 py-2 text-sm font-medium text-white hover:bg-[#C73E1D]/90 ${!locationId ? "cursor-not-allowed opacity-50" : ""}`}>
@@ -358,7 +404,7 @@ export function StatementImportPanel({
                 Choose files
                 <input
                   type="file"
-                  accept="application/pdf,.pdf,text/csv,.csv"
+                  accept={isBank ? "application/pdf,.pdf" : "application/pdf,.pdf,text/csv,.csv"}
                   multiple
                   className="hidden"
                   onChange={(e) => {
@@ -377,14 +423,14 @@ export function StatementImportPanel({
 
       <div className="space-y-2">
         <Label className="flex items-center gap-1.5">
-          <Lock className="h-3.5 w-3.5" /> Statement password
+          <Lock className="h-3.5 w-3.5" /> Statement password {isBank ? "(if any)" : ""}
         </Label>
         <div className="flex gap-2">
           <Input
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Usually your national ID or phone number"
+            placeholder={isBank ? "Leave empty if the PDF is not protected" : "Usually your national ID or phone number"}
             autoComplete="off"
           />
           {needsPassword && (

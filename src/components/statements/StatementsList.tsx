@@ -168,7 +168,7 @@ export function StatementsList({ locationId, onChanged }: Props) {
                     <td colSpan={8} className="px-4 py-10 text-center text-sm text-[#8D8A87]">
                       <FileText className="mx-auto mb-2 h-8 w-8 opacity-30" />
                       <p>No statements imported yet.</p>
-                      <p className="mt-1 text-xs">Use Import to add an M-PESA statement PDF.</p>
+                      <p className="mt-1 text-xs">Use Import to add an M-PESA or bank statement PDF.</p>
                     </td>
                   </tr>
                 )}

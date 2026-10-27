@@ -5,8 +5,10 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { getDb } from "../../queries/connection";
 import {
+  accounts,
   expenseCategories,
   locations,
+  mobileWalletProviders,
   mobileWalletTransactions,
   statementImports,
   walletCategoryRules,
@@ -32,6 +34,8 @@ export interface StatementFileInput {
   bytes: Uint8Array;
   password?: string;
   provider?: string;
+  /** Optional bank account to link imported bank rows to. */
+  accountId?: number;
   /** externalId -> categoryId, or null to force "no category". */
   overrides?: Record<string, number | null>;
   /** externalIds to leave out of this import. */
@@ -109,6 +113,50 @@ interface ParsedFile {
 
 function sha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+async function validateBankAccount(input: {
+  businessId: number;
+  locationId: number;
+  accountId?: number;
+}): Promise<void> {
+  if (!input.accountId) return;
+  const db = getDb();
+  const [account] = await db
+    .select({ id: accounts.id })
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.id, input.accountId),
+        eq(accounts.businessId, input.businessId),
+        eq(accounts.locationId, input.locationId),
+        isNull(accounts.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!account) {
+    throw new StatementError(
+      "UNSUPPORTED_STATEMENT",
+      "The selected bank account does not belong to this business and location.",
+    );
+  }
+}
+
+/** Bank imports use the generic `bank` provider; seed it on demand for existing databases. */
+async function ensureStatementProvider(provider: string): Promise<void> {
+  if (provider !== "bank") return;
+  await getDb()
+    .insert(mobileWalletProviders)
+    .values({
+      code: "bank",
+      name: "Bank",
+      displayName: "Bank statement",
+      brandColor: "#1E3A5F",
+      supportedCurrencies: "KES",
+      isActive: true,
+      requiresProvisioning: false,
+    })
+    .onConflictDoNothing({ target: mobileWalletProviders.code });
 }
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -223,6 +271,11 @@ export async function buildStatementPreview(input: {
   file: StatementFileInput;
 }): Promise<StatementPreview> {
   await assertLocation(input.businessId, input.locationId);
+  await validateBankAccount({
+    businessId: input.businessId,
+    locationId: input.locationId,
+    accountId: input.file.accountId,
+  });
   const parsedFile = await parseStatementFile(input.file);
   const { parsed } = parsedFile;
   const context = await loadCategoryContext(input.businessId, input.locationId, parsed.provider);
@@ -402,6 +455,7 @@ function toWalletRows(
       status: row.status,
       isLinked: false,
       importedBy: userId ?? undefined,
+      sourceAccountId: file.accountId ?? undefined,
       baseCurrency: row.currency,
       baseAmount: row.amount,
     });
@@ -421,16 +475,26 @@ export async function persistParsedFile(input: {
   const { parsed } = input.parsedFile;
   const db = getDb();
 
+  await validateBankAccount({
+    businessId: input.businessId,
+    locationId: input.locationId,
+    accountId: input.file.accountId,
+  });
+  await ensureStatementProvider(parsed.provider);
+
   const existing = await findExistingIds(parsed.provider, parsed.rows.map((row) => row.externalId));
   const exclude = new Set(input.file.exclude ?? []);
   const rowCount = parsed.rows.length;
   const excluded = parsed.rows.filter((row) => exclude.has(row.externalId)).length;
   const duplicates = parsed.rows.filter((row) => existing.has(row.externalId)).length;
 
-  const closingBalance = parsed.rows[0]?.balance ?? null;
-  const openingBalance = closingBalance
-    ? subtractAmounts(closingBalance, subtractAmounts(parsed.totals.totalIn, parsed.totals.totalOut))
-    : null;
+  const closingBalance = parsed.metadata.closingBalance
+    ?? (parsed.order === "asc" ? parsed.rows[parsed.rows.length - 1]?.balance : parsed.rows[0]?.balance)
+    ?? null;
+  const openingBalance = parsed.metadata.openingBalance
+    ?? (closingBalance
+      ? subtractAmounts(closingBalance, subtractAmounts(parsed.totals.totalIn, parsed.totals.totalOut))
+      : null);
 
   const categoryOf = categoryResolver(input.context, input.file);
   const analysis = buildStatementAnalysis(parsed, {

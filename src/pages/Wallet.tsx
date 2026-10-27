@@ -138,12 +138,14 @@ export function Wallet() {
     mpesa: "bg-green-600",
     airtel_money: "bg-[#E30613]",
     sasapay: "bg-blue-600",
+    bank: "bg-[#1E3A5F]",
   };
 
   const providerIcons: Record<string, string> = {
     mpesa: "M-PESA",
     airtel_money: "Airtel",
     sasapay: "Sasapay",
+    bank: "Bank",
   };
 
   const totalIn = parseFloat(stats?.summary?.totalIn ?? "0");
@@ -153,7 +155,15 @@ export function Wallet() {
 
   const walletTypes = ["mpesa", "wallet"];
   const walletAccounts = accounts?.filter(a => walletTypes.includes(a.type) && a.isActive && !a.deletedAt) ?? [];
-  const bankAccounts = accounts?.filter(a => a.type === "bank_account" && !a.deletedAt) ?? [];
+  const bankAccounts = (accounts ?? [])
+    .filter((a) => a.type === "bank_account" && !a.deletedAt)
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      accountNumber: a.accountNumber ?? null,
+      locationId: a.locationId ?? null,
+      currentBalance: a.currentBalance,
+    }));
 
   // Ledger calculations (mirror Mpesa page pattern)
 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}  const ledgerTxns = selectedWallet ? transactions?.filter((t: any) => {
@@ -268,12 +278,30 @@ export function Wallet() {
 
   const importTabs = (fullPage?: boolean) => (
     <Tabs defaultValue="statement" className="w-full">
-      <TabsList className="grid w-full grid-cols-2">
-        <TabsTrigger value="statement">Statement</TabsTrigger>
+      <TabsList className="grid w-full grid-cols-3">
+        <TabsTrigger value="statement">M-PESA</TabsTrigger>
+        <TabsTrigger value="bank">Bank</TabsTrigger>
         <TabsTrigger value="sms">SMS</TabsTrigger>
       </TabsList>
       <TabsContent value="statement" className="mt-4">
         <StatementImportPanel
+          locations={locations}
+          locationId={selectedLocation ? parseInt(selectedLocation, 10) : null}
+          onLocationChange={setSelectedLocation}
+          assignedLocationIds={user?.assignedLocationIds ?? []}
+          enforceAssigned={settings?.["enforceLocationAssignment"] === "true"}
+          fullPage={fullPage}
+          onImported={() => {
+            void refetch();
+            void utils.wallet.transactions.stats.invalidate();
+            void utils.wallet.dailyLedger.list.invalidate();
+          }}
+        />
+      </TabsContent>
+      <TabsContent value="bank" className="mt-4">
+        <StatementImportPanel
+          mode="bank"
+          bankAccounts={bankAccounts}
           locations={locations}
           locationId={selectedLocation ? parseInt(selectedLocation, 10) : null}
           onLocationChange={setSelectedLocation}
@@ -311,7 +339,7 @@ export function Wallet() {
                   <DialogTitle className="font-serif text-xl text-[#2D2A26]">Import transactions</DialogTitle>
                 </DialogHeader>
                 <p className="text-sm text-[#8D8A87]">
-                  Import an M-PESA statement PDF, or paste SMS messages. SMS stays available for phone-only records.
+                  Import an M-PESA or bank statement PDF, or paste SMS messages. SMS stays available for phone-only records.
                 </p>
                 {importTabs()}
               </DialogContent>
@@ -648,7 +676,7 @@ export function Wallet() {
             <CardHeader className="pb-3"><CardTitle className="font-serif text-lg text-[#2D2A26]">Import Transactions</CardTitle></CardHeader>
             <CardContent>
               <p className="mb-4 text-sm text-[#8D8A87]">
-                Import an M-PESA statement PDF, or paste multiple SMS messages. Statement imports keep the period,
+                Import an M-PESA statement, a bank statement, or paste multiple SMS messages. Statement imports keep the period,
                 running balance and best-effort categories; SMS import remains available for phone-only records.
               </p>
               {importTabs(true)}

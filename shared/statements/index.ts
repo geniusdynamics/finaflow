@@ -7,6 +7,7 @@ export * from "./normalize/amount";
 export * from "./normalize/date";
 export * from "./table/text";
 export * from "./parsers/mpesa";
+export * from "./parsers/kcb";
 export * from "./parsers/registry";
 export * from "./categorize/taxonomy";
 export * from "./analyze";

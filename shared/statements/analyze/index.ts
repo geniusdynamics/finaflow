@@ -9,7 +9,7 @@ import {
   sumAmounts,
 } from "../normalize/amount";
 import { daysInclusive } from "../normalize/date";
-import type { MpesaRail, ParsedStatement, ParsedStatementRow } from "../types";
+import type { StatementRail, ParsedStatement, ParsedStatementRow } from "../types";
 
 export interface AnalysisPeriod {
   start: string | null;
@@ -249,7 +249,7 @@ const TIME_PERIODS: Array<{ key: string; label: string; from: number; to: number
   { key: "night", label: "Night (20:00–05:00)", from: 20, to: 29 },
 ];
 
-const INCOME_CHANNEL_LABELS: Record<MpesaRail, string> = {
+const INCOME_CHANNEL_LABELS: Record<StatementRail, string> = {
   agent_deposit: "Agent deposits",
   received: "Received money",
   send_money: "Send money",
@@ -262,6 +262,14 @@ const INCOME_CHANNEL_LABELS: Record<MpesaRail, string> = {
   fuliza_draw: "Fuliza drawdown",
   fuliza_repay: "Fuliza repayment",
   other: "Other inflows",
+  bank_transfer: "Bank transfers",
+  cash_deposit: "Cash deposits",
+  cash_withdrawal: "Cash withdrawals",
+  cheque: "Cheques",
+  interest: "Interest",
+  salary: "Salary",
+  standing_order: "Standing orders",
+  loan: "Loan movements",
 };
 
 function isCharge(row: ParsedStatementRow): boolean {
@@ -269,7 +277,7 @@ function isCharge(row: ParsedStatementRow): boolean {
 }
 
 function isFinancing(row: ParsedStatementRow): boolean {
-  return row.rail === "fuliza_draw" || row.rail === "fuliza_repay";
+  return row.rail === "fuliza_draw" || row.rail === "fuliza_repay" || row.rail === "loan";
 }
 
 function signed(row: ParsedStatementRow): string {
@@ -410,7 +418,7 @@ function contactRows(rows: ParsedStatementRow[], limit = 20): ContactRow[] {
     .slice(0, limit);
 }
 
-function balanceContinuity(rows: ParsedStatementRow[]): AnalysisBalance["continuity"] {
+function balanceContinuity(rows: ParsedStatementRow[], descending: boolean): AnalysisBalance["continuity"] {
   const byReceipt = new Map<string, ParsedStatementRow[]>();
   for (const row of rows) {
     const list = byReceipt.get(row.groupId) ?? [];
@@ -424,8 +432,8 @@ function balanceContinuity(rows: ParsedStatementRow[]): AnalysisBalance["continu
   const samples: BalanceBreak[] = [];
 
   for (let i = 0; i < rows.length - 1; i++) {
-    const current = rows[i];
-    const next = rows[i + 1];
+    const current = descending ? rows[i] : rows[i + 1];
+    const next = descending ? rows[i + 1] : rows[i];
     const expected = new Decimal(next.balance).plus(signed(current));
     const gap = new Decimal(current.balance).minus(expected).toFixed(2);
 
@@ -490,6 +498,7 @@ export function buildStatementAnalysis(
   options: AnalysisOptions = {},
 ): StatementAnalysis {
   const rows = statement.rows.map(normalizeRowAmounts);
+  const descending = statement.order !== "asc";
   const categoryOf = options.categoryOf ?? ((row: ParsedStatementRow) => ({
     id: null,
     name: row.categoryKey ?? "No category",
@@ -521,8 +530,9 @@ export function buildStatementAnalysis(
   const busiestWeekday = [...weekdayCounts.entries()].sort((a, b) => b[1] - a[1])[0];
 
   const balances = rows.map((row) => row.balance);
-  const closing = rows[0]?.balance ?? null;
-  const opening = closing ? subtractAmounts(closing, net) : null;
+  const closing = statement.metadata.closingBalance
+    ?? (rows.length ? (descending ? rows[0].balance : rows[rows.length - 1].balance) : null);
+  const opening = statement.metadata.openingBalance ?? (closing ? subtractAmounts(closing, net) : null);
   const highestBalance = balances.length ? balances.reduce((a, b) => (compareAmounts(a, b) >= 0 ? a : b)) : null;
   const lowestBalance = balances.length ? balances.reduce((a, b) => (compareAmounts(a, b) <= 0 ? a : b)) : null;
   const averageBalance = balances.length ? new Decimal(sumAmounts(balances)).div(balances.length).toFixed(2) : null;
@@ -586,7 +596,7 @@ export function buildStatementAnalysis(
   const moneyOutGroups = contactRows(operatingOut);
   const operatingInTotal = sumAmounts(operatingIn.map((row) => row.paidIn));
 
-  const inboundChannels = new Map<MpesaRail, { count: number; total: string[] }>();
+  const inboundChannels = new Map<StatementRail, { count: number; total: string[] }>();
   for (const row of operatingIn) {
     const entry = inboundChannels.get(row.rail) ?? { count: 0, total: [] };
     entry.count++;
@@ -685,7 +695,7 @@ export function buildStatementAnalysis(
       const balancesForDay = list.map((row) => row.balance);
       return {
         date,
-        endBalance: list[0].balance,
+        endBalance: descending ? list[0].balance : list[list.length - 1].balance,
         highest: balancesForDay.reduce((a, b) => (compareAmounts(a, b) >= 0 ? a : b)),
         lowest: balancesForDay.reduce((a, b) => (compareAmounts(a, b) <= 0 ? a : b)),
         count: list.length,
@@ -885,7 +895,7 @@ export function buildStatementAnalysis(
       reason: "Out of hours",
     }));
 
-  const continuity = balanceContinuity(rows);
+  const continuity = balanceContinuity(rows, descending);
 
   const uncategorised = operatingOut.filter((row) => !(categoryOf(row)?.id));
   const uncategorisedSpend = {

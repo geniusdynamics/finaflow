@@ -26,18 +26,39 @@ export const walletRouter = createRouter({
       } catch {
         // table may not exist (pre-migration)
       }
-      return registryProviders.map((rp) => {
-        const dbRow = dbMap.get(rp.code);
-        return {
-          code: rp.code,
-          name: rp.displayName,
-          displayName: rp.displayName,
-          supportedCurrencies: rp.supportedCurrencies.join(","),
-          isActive: dbRow?.isActive ?? true,
-          brandColor: dbRow?.brandColor ?? null,
-          features: rp.features,
-        };
-      });
+      return [
+        ...registryProviders.map((rp) => {
+          const dbRow = dbMap.get(rp.code);
+          return {
+            code: rp.code,
+            name: rp.displayName,
+            displayName: rp.displayName,
+            supportedCurrencies: rp.supportedCurrencies.join(","),
+            isActive: dbRow?.isActive ?? true,
+            brandColor: dbRow?.brandColor ?? null,
+            features: rp.features,
+          };
+        }),
+        // Providers that exist only as database rows (for example bank statements) still appear in filters.
+        ...[...dbMap.values()]
+          .filter((row) => !registryProviders.some((rp) => rp.code === row.code))
+          .map((row) => ({
+            code: row.code,
+            name: row.displayName ?? row.name,
+            displayName: row.displayName ?? row.name,
+            supportedCurrencies: row.supportedCurrencies ?? "KES",
+            isActive: row.isActive,
+            brandColor: row.brandColor ?? null,
+            features: {
+              initiatePayment: false,
+              queryStatus: false,
+              processWebhook: false,
+              refund: false,
+              balanceInquiry: false,
+              smsImport: false,
+            },
+          })),
+      ];
     }),
 
     listForLocation: walletQuery
