@@ -181,13 +181,36 @@ function classify(details: string, direction: StatementDirection): {
   };
 }
 
+function compactName(value: string): string {
+  return value
+    .replace(/\s+/g, " ")
+    .replace(/\s+[A-Z]\s+[A-Z0-9]{4,}.*$/i, "")
+    .trim();
+}
+
 function counterpartyOf(details: string): string | null {
   const cleaned = details.replace(/\s+/g, " ").trim();
   if (/^(balance b\/fwd|balance c\/fwd)/i.test(cleaned)) return null;
-  const match = /^(?:transfer|payment|cash deposit|cash withdrawal|cheque|standing order|salary|rtgs|eft|swift|bank to mobile|bill ?pay|direct credit)\s+(?:from\s+|to\s+)?(.+)$/i.exec(cleaned);
-  if (!match) return null;
-  const name = match[1].trim();
-  return name.length >= 2 ? name : null;
+
+  let match = /(?:Deposit of Funds at Agent Till|Customer Withdrawal At Agent Till)\s+\d+\s*-\s*(.+)$/i.exec(cleaned);
+  if (match) return compactName(match[1]);
+
+  match = /^(?:Funds received from|Customer Transfer to|Customer Transfer from|Small Business Payment to Customer via API from|Business Payment from)\s*-\s*(?:\d{3,}\s*)?(.+)$/i.exec(cleaned);
+  if (match) return compactName(match[1]);
+
+  if (/^bank to mobile/i.test(cleaned)) return "Bank to Mobile";
+  if (/^transfer from bank/i.test(cleaned)) return "Bank transfer";
+  if (/^bill\s*pay/i.test(cleaned)) return "BillPay";
+  if (/\bchq\d*/i.test(cleaned)) return "Cheque";
+
+  match = /^(?:transfer|payment)\s+(?!charge\b)(.+)$/i.exec(cleaned);
+  if (match) {
+    const rest = match[1].trim();
+    if (/\bMPES\b/i.test(rest)) return "M-PESA transfer";
+    return compactName(rest);
+  }
+
+  return null;
 }
 
 function readPrimary(line: TextLine, layout: KcbLayout): Omit<KcbRawRow, "rawLines"> | null {

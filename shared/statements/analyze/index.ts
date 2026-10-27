@@ -222,6 +222,10 @@ export interface StatementAnalysis {
 export interface AnalysisOptions {
   categoryOf?: (row: ParsedStatementRow) => { id: number | null; name: string } | null;
   duplicateCount?: number;
+  /** Maximum contacts kept in top/source lists. Defaults to 20. */
+  contactLimit?: number;
+  /** Maximum fee recipients kept. Defaults to 10. */
+  feeRecipientLimit?: number;
 }
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -588,12 +592,12 @@ export function buildStatementAnalysis(
       return { name, count: entry.count, total, average: average(total, entry.count) };
     })
     .sort((a, b) => compareAmounts(b.total, a.total))
-    .slice(0, 10);
+    .slice(0, options.feeRecipientLimit ?? 10);
 
   const operatingOutTotal = sumAmounts(operatingOut.map((row) => row.withdrawn));
 
-  const moneyInGroups = contactRows(operatingIn);
-  const moneyOutGroups = contactRows(operatingOut);
+  const moneyInGroups = contactRows(operatingIn, options.contactLimit);
+  const moneyOutGroups = contactRows(operatingOut, options.contactLimit);
   const operatingInTotal = sumAmounts(operatingIn.map((row) => row.paidIn));
 
   const inboundChannels = new Map<StatementRail, { count: number; total: string[] }>();
@@ -961,8 +965,8 @@ export function buildStatementAnalysis(
       count: financingRows.length,
     },
     topContacts: {
-      sent: contactRows(operatingOut),
-      received: contactRows(operatingIn),
+      sent: contactRows(operatingOut, options.contactLimit),
+      received: contactRows(operatingIn, options.contactLimit),
     },
     recurring,
     breakdown: {

@@ -1,5 +1,5 @@
-// ABOUTME: Public, no-upload bank statement converter: parses bank PDFs in the browser and downloads CSV/JSON.
-// ABOUTME: Uses the shared bank parser profile (KCB today) and the same analysis engine as wallet imports.
+// ABOUTME: Public, no-upload bank statement converter: parses bank PDFs in the browser and downloads CSV/JSON/PDF.
+// ABOUTME: Consolidates multiple uploads into one detailed analysis with per-file coverage and PDF export.
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -7,6 +7,7 @@ import Decimal from "decimal.js";
 import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { parseStatement } from "@shared/statements/parsers/registry";
 import { buildStatementAnalysis, type StatementAnalysis } from "@shared/statements/analyze";
+import { consolidateStatements, type ConsolidatedAnalysis } from "@shared/statements/consolidate";
 import { buildStatementCsv, type ExportTransaction } from "@shared/statements/export/csv";
 import { CATEGORY_KEY_LABELS } from "@shared/statements/categorize/taxonomy";
 import { StatementError } from "@shared/statements/errors";
@@ -16,11 +17,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToolHeader } from "@/components/tools/ToolHeader";
-import { StatementAnalysisPanel } from "@/components/statements/StatementAnalysisPanel";
+import { ConsolidatedAnalysisPanel } from "@/components/statements/ConsolidatedAnalysisPanel";
 import {
   AlertCircle,
   CheckCircle2,
   Download,
+  FileDown,
   FileText,
   Loader2,
   Lock,
@@ -88,6 +90,7 @@ export default function BankStatementConverter() {
   const [password, setPassword] = useState("");
   const [converted, setConverted] = useState<ConvertedFile[]>([]);
   const [busy, setBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -104,6 +107,19 @@ export default function BankStatementConverter() {
       fees: fees.toFixed(2),
       net: net.toFixed(2),
     };
+  }, [converted]);
+
+  const consolidated = useMemo<ConsolidatedAnalysis | null>(() => {
+    if (converted.length === 0) return null;
+    return consolidateStatements(
+      converted.map((file) => ({ fileName: file.fileName, parsed: file.parsed, analysis: file.analysis })),
+      {
+        categoryOf: (row) => ({
+          id: null,
+          name: row.categoryKey ? CATEGORY_KEY_LABELS[row.categoryKey] ?? row.categoryKey : "No category",
+        }),
+      },
+    );
   }, [converted]);
 
   async function convert() {
@@ -186,6 +202,20 @@ export default function BankStatementConverter() {
     );
   }
 
+  async function downloadPdf() {
+    if (!consolidated) return;
+    setPdfBusy(true);
+    setError(null);
+    try {
+      const { saveConsolidatedPdf } = await import("@/lib/statements/consolidated-pdf");
+      saveConsolidatedPdf(consolidated);
+    } catch (pdfError) {
+      setError(pdfError instanceof Error ? `Could not generate the PDF: ${pdfError.message}` : "Could not generate the PDF.");
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF7F2] text-[#2D2A26]">
       <ToolHeader active="bank" />
@@ -194,11 +224,12 @@ export default function BankStatementConverter() {
         <div className="max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[#C73E1D]">Free tool · no account</p>
           <h1 className="mt-2 font-serif text-3xl font-bold tracking-tight text-[#2D2A26] sm:text-4xl">
-            Bank statement to CSV
+            Bank statement analysis
           </h1>
           <p className="mt-3 text-[#5C5853]">
-            Unlock a bank statement PDF and download a clean CSV or JSON with a running balance and an analysis.
-            Everything runs in your browser — the file and password never leave your device.
+            Unlock one or more bank statement PDFs and download a consolidated analysis as PDF, plus clean CSV or JSON.
+            Every file is combined into one view while keeping its own coverage and reconciliation. Everything runs in
+            your browser — the files and password never leave your device.
           </p>
           <p className="mt-3 flex items-center gap-2 text-sm text-[#2E7D32]">
             <ShieldCheck className="h-4 w-4" /> Processed on this device. Nothing uploaded, nothing stored.
@@ -288,7 +319,11 @@ export default function BankStatementConverter() {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={downloadCsv} className="bg-[#2D2A26] hover:bg-[#2D2A26]/90">
+                  <Button onClick={downloadPdf} disabled={pdfBusy} className="bg-[#C73E1D] hover:bg-[#C73E1D]/90">
+                    {pdfBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                    {pdfBusy ? "Preparing PDF…" : "PDF analysis"}
+                  </Button>
+                  <Button onClick={downloadCsv} variant="outline">
                     <Download className="mr-2 h-4 w-4" /> CSV
                   </Button>
                   <Button variant="outline" onClick={downloadJson}>
@@ -296,7 +331,7 @@ export default function BankStatementConverter() {
                   </Button>
                 </div>
                 <p className="text-xs text-[#8D8A87]">
-                  The CSV opens directly in Excel or Google Sheets (UTF-8 BOM, plain amounts).
+                  The PDF contains the consolidated analysis across every uploaded statement. CSV opens in Excel or Google Sheets.
                 </p>
               </div>
             )}
@@ -307,9 +342,9 @@ export default function BankStatementConverter() {
               <h2 className="font-serif text-lg font-semibold">What you get</h2>
               <ul className="mt-3 space-y-2 text-sm text-[#5C5853]">
                 <li>· Every transaction with date, description, money out, money in and running balance</li>
-                <li>· Charges kept as their own rows, so fee totals are explicit</li>
-                <li>· Inflow sources, category hints, balance checks and monthly totals</li>
-                <li>· CSV for Excel/Sheets, JSON for scripts and integrations</li>
+                <li>· One consolidated view across every uploaded statement, with cross-file duplicate detection</li>
+                <li>· All contacts, categories, fee types, recurring payments and every calendar month — not a truncated preview</li>
+                <li>· PDF analysis for the consolidated view, plus CSV for Excel/Sheets and JSON for scripts</li>
               </ul>
             </div>
             <div className="rounded-xl border border-[#E8E0D8] bg-white p-5">
@@ -335,24 +370,22 @@ export default function BankStatementConverter() {
           </section>
         </div>
 
-        {converted.length > 0 && (
+        {consolidated && (
           <section className="mt-8 space-y-4">
-            <h2 className="font-serif text-lg font-semibold">Statement analysis</h2>
-            {converted.map((file) => (
-              <details key={file.fileName} className="rounded-xl border border-[#E8E0D8] bg-white p-5" open={converted.length === 1}>
-                <summary className="cursor-pointer text-sm font-medium text-[#2D2A26]">
-                  {file.fileName}
-                  <span className="ml-2 text-xs font-normal text-[#8D8A87]">
-                    {file.parsed.metadata.bankName ?? "Bank"} · {file.parsed.metadata.accountNumber ?? "account"} ·{" "}
-                    {file.parsed.metadata.periodStart ?? "?"} → {file.parsed.metadata.periodEnd ?? "?"} ·{" "}
-                    {file.parsed.rows.length.toLocaleString()} rows
-                  </span>
-                </summary>
-                <div className="mt-4 border-t border-[#E8E0D8] pt-4">
-                  <StatementAnalysisPanel analysis={file.analysis} />
-                </div>
-              </details>
-            ))}
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 className="font-serif text-xl font-semibold text-[#2D2A26]">Consolidated analysis</h2>
+                <p className="text-sm text-[#8D8A87]">
+                  One view across all {consolidated.fileCount} uploaded statement{consolidated.fileCount === 1 ? "" : "s"}.
+                  Every month, contact, category and fee is included.
+                </p>
+              </div>
+              <Button onClick={downloadPdf} disabled={pdfBusy} className="bg-[#C73E1D] hover:bg-[#C73E1D]/90">
+                {pdfBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                {pdfBusy ? "Preparing PDF…" : "Download PDF"}
+              </Button>
+            </div>
+            <ConsolidatedAnalysisPanel consolidated={consolidated} />
           </section>
         )}
 

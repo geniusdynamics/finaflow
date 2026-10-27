@@ -11,5 +11,6 @@ export * from "./parsers/kcb";
 export * from "./parsers/registry";
 export * from "./categorize/taxonomy";
 export * from "./analyze";
+export * from "./consolidate";
 export * from "./export/csv";
 export * from "./export/json";

@@ -74,3 +74,60 @@ export function syntheticKcbStatement(): ExtractedDocument {
     lines,
   };
 }
+
+/** Second-period KCB statement used to test cross-month consolidation. */
+export function syntheticKcbFebruaryStatement(): ExtractedDocument {
+  const lines: TextLine[] = [
+    line(1, 5427, [["23 October 2026", 3108]]),
+    line(1, 5373, [["13:11:02", 3276]]),
+    line(1, 5289, [["ACCOUNT STATEMENT", 144]]),
+    line(1, 5235, [["Customer:", 144]]),
+    line(1, 5181, [["Account:", 144], ["9876543210", 427], ["FEBRUARY TRADERS LTD", 768]]),
+    line(1, 5127, [["Product Name:", 144], ["Business Account", 569]]),
+    line(1, 5073, [["Statement Period:", 144], ["01 FEB 2026", 683], ["-", 1051], ["28 FEB 2026", 1136]]),
+    line(1, 5019, [
+      ["Balance at Period Start", 144],
+      ["50,000.00", 853],
+      ["KES", 1250],
+      ["Balance at Period End:", 1391],
+      ["69,000.00", 2072],
+      ["KES", 2468],
+    ]),
+    line(1, 4951, [
+      ["TXN DATE", 158],
+      ["DESCRIPTION", 710],
+      ["VALUE DATE", 1262],
+      ["MONEY OUT", 1814],
+      ["MONEY IN", 2366],
+      ["LEDGER BALANCE", 2918],
+    ]),
+    line(1, 4840, [
+      ["01 FEB 2026", 158],
+      ["BALANCE B/FWD", 710],
+      ["01 FEB 2026", 1262],
+      ["50,000.00", 3122],
+    ]),
+    line(1, 4758, [
+      ["05 FEB 2026", 158],
+      ["Cash Deposit 456", 710],
+      ["05 FEB 2026", 1262],
+      ["20,000", 2696],
+      ["70,000.00", 3122],
+    ]),
+    line(1, 4676, [
+      ["10 FEB 2026", 158],
+      ["Transfer FEB SUPPLIER", 710],
+      ["10 FEB 2026", 1262],
+      ["-1,000", 2041],
+      ["69,000.00", 3122],
+    ]),
+    line(1, 307, [["Page 1 of 1", 3176]]),
+    line(1, 290, [["BALANCE AT PERIOD E -1,000.00 20,000.00 69,000.00", 144]]),
+  ];
+
+  return {
+    pages: 1,
+    charCount: lines.reduce((n, l) => n + l.cells.reduce((m, c) => m + c.text.length, 0), 0),
+    lines,
+  };
+}
