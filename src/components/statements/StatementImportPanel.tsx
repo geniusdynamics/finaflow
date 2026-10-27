@@ -454,8 +454,8 @@ export function StatementImportPanel({
                   <p className="text-xs text-[#8D8A87]">
                     {(entry.file.size / 1024 / 1024).toFixed(2)} MB
                     {entry.preview ? ` · ${entry.preview.sourceType.toUpperCase()}` : ""}
-                    {entry.preview ? ` · ${entry.preview.totals.rowCount} rows · ${entry.preview.metadata.periodStart ?? "?"} → ${entry.preview.metadata.periodEnd ?? "?"}` : ""}
-                    {entry.preview ? ` · duplicate rows: ${entry.preview.duplicateCount}` : ""}
+                    {entry.preview ? ` · ${entry.preview.totals.rowCount.toLocaleString()} rows · ${entry.preview.metadata.periodStart ?? "?"} → ${entry.preview.metadata.periodEnd ?? "?"}` : ""}
+                    {entry.preview ? ` · duplicate rows: ${entry.preview.duplicateCount.toLocaleString()}` : ""}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -512,11 +512,11 @@ export function StatementImportPanel({
             </div>
             <div>
               <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Rows</p>
-              <p className="font-mono font-semibold text-[#2D2A26]">{aggregate.rows}</p>
+              <p className="font-mono font-semibold text-[#2D2A26]">{aggregate.rows.toLocaleString()}</p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Excluded</p>
-              <p className="font-mono font-semibold text-[#8D6E00]">{aggregate.excluded}</p>
+              <p className="font-mono font-semibold text-[#8D6E00]">{aggregate.excluded.toLocaleString()}</p>
             </div>
             <div>
               <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Already imported</p>
@@ -628,7 +628,7 @@ export function StatementImportPanel({
           {importMutation.isPending ? (
             <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Importing…</>
           ) : (
-            <><Upload className="mr-2 h-4 w-4" /> Import {aggregate.rows - aggregate.excluded > 0 ? `${aggregate.rows - aggregate.excluded} rows` : "statement"}</>
+            <><Upload className="mr-2 h-4 w-4" /> Import {aggregate.rows - aggregate.excluded > 0 ? `${(aggregate.rows - aggregate.excluded).toLocaleString()} rows` : "statement"}</>
           )}
         </Button>
         {files.length > 0 && (

@@ -130,9 +130,9 @@ export function StatementsList({ locationId, onChanged }: Props) {
                     <td className="px-4 py-3 text-xs text-[#8D8A87]">
                       {record.periodStart ?? "?"} → {record.periodEnd ?? "?"}
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-sm text-[#2D2A26]">{record.rowCount}</td>
-                    <td className="px-4 py-3 text-right font-mono text-sm text-[#2E7D32]">{record.importedCount}</td>
-                    <td className="px-4 py-3 text-right font-mono text-sm text-[#8D6E00]">{record.duplicateCount}</td>
+                    <td className="px-4 py-3 text-right font-mono text-sm text-[#2D2A26]">{record.rowCount.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-mono text-sm text-[#2E7D32]">{record.importedCount.toLocaleString()}</td>
+                    <td className="px-4 py-3 text-right font-mono text-sm text-[#8D6E00]">{record.duplicateCount.toLocaleString()}</td>
                     <td className="px-4 py-3 text-center">
                       <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${statusClass(record.status)}`}>
                         {statusLabel(record.status)}

@@ -267,9 +267,9 @@ export default function BankStatementConverter() {
               <div className="mt-5 space-y-3">
                 <div className="flex items-center gap-2 text-sm text-[#2E7D32]">
                   <CheckCircle2 className="h-4 w-4" />
-                  {converted.length} file{converted.length === 1 ? "" : "s"} converted · {aggregate.rows} transactions
+                  {converted.length} file{converted.length === 1 ? "" : "s"} converted · {aggregate.rows.toLocaleString()} transactions
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-center sm:grid-cols-4">
+                <div className="grid grid-cols-2 gap-2 text-center">
                   <div className="rounded-lg bg-[#F5EDE6] p-2">
                     <p className="text-xs uppercase tracking-wider text-[#8D8A87]">In</p>
                     <p className="font-mono text-sm font-semibold text-[#2E7D32]">{formatKES(aggregate.totalIn)}</p>
@@ -345,7 +345,7 @@ export default function BankStatementConverter() {
                   <span className="ml-2 text-xs font-normal text-[#8D8A87]">
                     {file.parsed.metadata.bankName ?? "Bank"} · {file.parsed.metadata.accountNumber ?? "account"} ·{" "}
                     {file.parsed.metadata.periodStart ?? "?"} → {file.parsed.metadata.periodEnd ?? "?"} ·{" "}
-                    {file.parsed.rows.length} rows
+                    {file.parsed.rows.length.toLocaleString()} rows
                   </span>
                 </summary>
                 <div className="mt-4 border-t border-[#E8E0D8] pt-4">

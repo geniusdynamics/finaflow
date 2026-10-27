@@ -42,10 +42,10 @@ export function StatementAnalysisPanel({ analysis }: { analysis: StatementAnalys
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Tile label="Money In" value={formatKES(summary.totalIn)} hint={`${analysis.moneyIn.count} operating`} tone="in" />
-        <Tile label="Money Out" value={formatKES(summary.totalOut)} hint={`${analysis.moneyOut.count} operating`} tone="out" />
-        <Tile label="Fees" value={formatKES(summary.totalFees)} hint={`${fees.count} charge rows`} tone="warn" />
-        <Tile label="Net Flow" value={formatKES(summary.net)} hint={`${summary.rowCount} transactions`} />
+        <Tile label="Money In" value={formatKES(summary.totalIn)} hint={`${analysis.moneyIn.count.toLocaleString()} operating`} tone="in" />
+        <Tile label="Money Out" value={formatKES(summary.totalOut)} hint={`${analysis.moneyOut.count.toLocaleString()} operating`} tone="out" />
+        <Tile label="Fees" value={formatKES(summary.totalFees)} hint={`${fees.count.toLocaleString()} charge rows`} tone="warn" />
+        <Tile label="Net Flow" value={formatKES(summary.net)} hint={`${summary.rowCount.toLocaleString()} transactions`} />
       </div>
 
       <div
@@ -119,7 +119,7 @@ export function StatementAnalysisPanel({ analysis }: { analysis: StatementAnalys
                   name: row.label,
                   value: row.total,
                   share: row.share,
-                  hint: `${row.count} transactions · ${row.share.toFixed(1)}% of inflow`,
+                  hint: `${row.count.toLocaleString()} transactions · ${row.share.toFixed(1)}% of inflow`,
                 }))}
               />
             </div>
@@ -133,7 +133,7 @@ export function StatementAnalysisPanel({ analysis }: { analysis: StatementAnalys
                   name: row.name,
                   value: row.totalOut,
                   share: row.shareOfOut,
-                  hint: `${row.count} transactions · ${row.shareOfOut.toFixed(1)}% of spend`,
+                  hint: `${row.count.toLocaleString()} transactions · ${row.shareOfOut.toFixed(1)}% of spend`,
                 }))}
               />
             ) : (
