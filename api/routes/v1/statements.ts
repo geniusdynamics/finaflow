@@ -22,6 +22,7 @@ import {
   listStatementImports,
 } from "../../lib/statements/service";
 import { exportStatementImport } from "../../lib/statements/export-service";
+import { analyzePublicStatements } from "../../lib/statements/public-analysis";
 import { StatementError } from "@shared/statements/errors";
 
 const statements = new Hono<{ Variables: ApiKeyVariables }>();
@@ -34,8 +35,7 @@ const parseSchema = z.object({
   locationId: z.number().optional(),
 });
 
-const importSchema = z.object({
-  locationId: z.number(),
+const importSchema = z.object({  locationId: z.number(),
   batchLabel: z.string().max(100).optional(),
   files: z
     .array(
@@ -58,6 +58,65 @@ interface FilePayload {
   password?: string;
   provider?: string;
   locationId?: number;
+}
+
+const analysisFileSchema = z.object({
+  fileName: z.string().min(1).max(255).optional(),
+  contentBase64: z.string().min(1).max(14_000_000),
+  password: z.string().max(100).optional(),
+});
+
+const analysisRequestSchema = z.object({
+  files: z.array(analysisFileSchema).min(1).max(MAX_FILES_PER_BATCH),
+  includeTransactions: z.boolean().optional(),
+});
+
+interface AnalysisPayload {
+  files: Array<{ fileName: string; bytes: Uint8Array; password?: string }>;
+  includeTransactions: boolean;
+}
+
+function isUploadedFile(value: unknown): value is File {
+  return Boolean(
+    value
+    && typeof value === "object"
+    && "arrayBuffer" in value
+    && "name" in value
+    && "size" in value,
+  );
+}
+
+async function readAnalysisPayload(c: Context): Promise<AnalysisPayload | null> {
+  const contentType = c.req.header("content-type") ?? "";
+  if (contentType.includes("multipart/form-data")) {
+    const body = (await c.req.parseBody()) as Record<string, unknown>;
+    const raw = body.files ?? body.file;
+    const entries = Array.isArray(raw) ? raw : [raw];
+    const password = typeof body.password === "string" ? body.password : undefined;
+    const files: AnalysisPayload["files"] = [];
+    for (const entry of entries) {
+      if (!isUploadedFile(entry)) continue;
+      files.push({
+        fileName: entry.name || "statement.pdf",
+        bytes: new Uint8Array(await entry.arrayBuffer()),
+        password,
+      });
+    }
+    if (files.length === 0) return null;
+    return { files, includeTransactions: body.includeTransactions === "true" };
+  }
+
+  const json = await c.req.json();
+  const parsed = analysisRequestSchema.safeParse(json);
+  if (!parsed.success) return null;
+  return {
+    files: parsed.data.files.map((file) => ({
+      fileName: file.fileName ?? "statement.pdf",
+      bytes: fromBase64(file.contentBase64),
+      password: file.password,
+    })),
+    includeTransactions: parsed.data.includeTransactions === true,
+  };
 }
 
 function fromBase64(value: string): Uint8Array {
@@ -189,6 +248,25 @@ statements.post("/analyze", statementParseLimiter, resolveApiKeyMiddleware("stat
       warnings: preview.warnings,
       analysis: preview.analysis,
     });
+  } catch (error) {
+    return statementFailure(c, error);
+  }
+});
+
+statements.post("/analyze/full", statementParseLimiter, resolveApiKeyMiddleware("statements:read"), async (c) => {
+  try {
+    const payload = await readAnalysisPayload(c);
+    if (!payload) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", "Send multipart files= (one or more PDF/CSV) or JSON files[].");
+    }
+    const totalBytes = payload.files.reduce((sum, file) => sum + file.bytes.length, 0);
+    if (totalBytes > 40 * 1024 * 1024) {
+      return errorResponse(c, 400, "FILE_TOO_LARGE", "The combined upload is larger than 40 MB.");
+    }
+    const result = await analyzePublicStatements(payload.files, {
+      includeTransactions: payload.includeTransactions,
+    });
+    return successResponse(c, result);
   } catch (error) {
     return statementFailure(c, error);
   }

@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import type { ApiKeyVariables } from "../../lib/api-key-middleware";
 import { resolveApiKeyMiddleware } from "../../lib/api-key-middleware";
 import { successResponse, paginatedResponse, errorResponse } from "../../lib/api-response";
-import { listBills, upsertBill, logIntegration } from "../../lib/integration-service";
+import { listBills, getBill, upsertBill, logIntegration } from "../../lib/integration-service";
 import { upsertBillSchema, updatedSinceQuerySchema } from "../../schemas";
 
 const bills = new Hono<{ Variables: ApiKeyVariables }>();
@@ -25,6 +25,23 @@ bills.get("/", resolveApiKeyMiddleware("bills:read"), async (c) => {
     return paginatedResponse(c, data, { page: Math.floor(offset / limit) + 1, limit, total });
   } catch (err) {
     logIntegration({ businessId: c.get("apiKey")?.businessId, apiKey: c.get("apiKey") }, "listBills", "failed", { error: String(err) });
+    return errorResponse(c, 500, "INTERNAL_ERROR", err instanceof Error ? err.message : "Internal server error");
+  }
+});
+
+bills.get("/:id", resolveApiKeyMiddleware("bills:read"), async (c) => {
+  try {
+    const apiKey = c.get("apiKey");
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id) || id <= 0) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", "Invalid bill id");
+    }
+    const bill = await getBill(apiKey.businessId, id);
+    if (!bill) return errorResponse(c, 404, "NOT_FOUND", "Bill not found");
+    logIntegration({ businessId: apiKey.businessId, apiKey }, "getBill", "success", { billId: id });
+    return successResponse(c, bill);
+  } catch (err) {
+    logIntegration({ businessId: c.get("apiKey")?.businessId, apiKey: c.get("apiKey") }, "getBill", "failed", { error: String(err) });
     return errorResponse(c, 500, "INTERNAL_ERROR", err instanceof Error ? err.message : "Internal server error");
   }
 });

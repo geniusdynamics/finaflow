@@ -601,7 +601,65 @@ paths:
                   meta:
                     $ref: "#/components/schemas/PaginatedMeta"
 
+  /bills/{id}:
+    get:
+      operationId: getBill
+      summary: Get one bill with line items
+      tags: [Bills]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["bills:read"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Bill with line items
+        "404":
+          $ref: "#/components/responses/ValidationError"
   /daily-sales:
+    get:
+      operationId: listDailySales
+      summary: List daily sales batches
+      description: Returns daily sales for the business with payment-channel rows. Filter by location, date range, source batch or update cursor.
+      tags: [Daily Sales]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["sales:read"]
+      parameters:
+        - $ref: "#/components/parameters/Offset"
+        - $ref: "#/components/parameters/Limit"
+        - name: locationId
+          in: query
+          schema:
+            type: integer
+        - name: dateFrom
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: updatedSince
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: sourceBatchId
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Paginated daily sales with payment channels
+        "400":
+          $ref: "#/components/responses/ValidationError"
     post:
       operationId: ingestDailySales
       summary: Ingest a daily sales batch
@@ -712,6 +770,153 @@ paths:
                 additionalProperties: true
         "400":
           $ref: "#/components/responses/ValidationError"
+
+  /statements/analyze/full:
+    post:
+      operationId: analyzeStatementFull
+      summary: Consolidated, AI-ready statement analysis with report sheets
+      description: |
+        Stateless public analysis for one or more PDF or CSV statements. Files are parsed
+        in memory, never persisted, and no location is required. The response includes the
+        consolidated analysis, per-file coverage, every Excel report sheet as JSON, an
+        optional deduplicated transaction list, and a data dictionary for AI agents.
+      tags: [Statements]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["statements:read"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  minItems: 1
+                  maxItems: 12
+                  items:
+                    type: object
+                    required: [contentBase64]
+                    properties:
+                      fileName:
+                        type: string
+                        example: statement.pdf
+                      contentBase64:
+                        type: string
+                        description: Base64 of the PDF/CSV bytes.
+                      password:
+                        type: string
+                includeTransactions:
+                  type: boolean
+                  default: false
+          multipart/form-data:
+            schema:
+              type: object
+              required: [files]
+              properties:
+                files:
+                  type: array
+                  minItems: 1
+                  maxItems: 12
+                  items:
+                    type: string
+                    format: binary
+                password:
+                  type: string
+                  description: Applies to all uploaded files.
+                includeTransactions:
+                  type: boolean
+                  default: false
+      responses:
+        "200":
+          description: Consolidated analysis, report sheets and optional transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, meta]
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      schemaVersion:
+                        type: string
+                      generatedAt:
+                        type: string
+                        format: date-time
+                      files:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+                      fileCount:
+                        type: integer
+                      totalRowCount:
+                        type: integer
+                      duplicateRows:
+                        type: integer
+                      periodStart:
+                        type: string
+                        nullable: true
+                      periodEnd:
+                        type: string
+                        nullable: true
+                      banks:
+                        type: array
+                        items:
+                          type: string
+                      analysis:
+                        type: object
+                        additionalProperties: true
+                      coverage:
+                        type: array
+                        items:
+                          type: object
+                          additionalProperties: true
+                      sheets:
+                        type: array
+                        description: One object per Excel report sheet.
+                        items:
+                          type: object
+                          required: [name, columns, rows]
+                          properties:
+                            name:
+                              type: string
+                            columns:
+                              type: array
+                              items:
+                                type: string
+                            rows:
+                              type: array
+                              items:
+                                type: array
+                                items:
+                                  oneOf:
+                                    - type: string
+                                    - type: number
+                      transactions:
+                        type: array
+                        description: Present only when includeTransactions=true.
+                        items:
+                          type: object
+                          additionalProperties: true
+                      dataDictionary:
+                        type: object
+                        additionalProperties: true
+                      warnings:
+                        type: array
+                        items:
+                          type: string
+                  meta:
+                    $ref: "#/components/schemas/ResponseMeta"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /statements/import:
     post:
@@ -931,6 +1136,7 @@ components:
             "locations:read": Read locations
             "users:read": Read users and roles
             "users:write": Create/update users
+            "sales:read": Read daily sales
             "sales:write": Ingest daily sales
             "journal:write": Create/post journal entries
             "subscriptions:read": Read subscriptions and payment history
@@ -965,6 +1171,18 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Missing or invalid API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: API key lacks the required scope
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
     ErrorResponse:
       description: Error
       content:
@@ -979,6 +1197,12 @@ components:
             $ref: "#/components/schemas/ErrorResponse"
 
   schemas:
+    ResponseMeta:
+      type: object
+      required: [requestId]
+      properties:
+        requestId:
+          type: string
     StatementParseInput:
       type: object
       required: [contentBase64]

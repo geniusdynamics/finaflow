@@ -17,6 +17,7 @@ export const API_SCOPES = {
   "locations:read": "Read locations/branches",
   "users:read": "Read users and role templates",
   "users:write": "Create and update users",
+  "sales:read": "Read daily sales batches and payment channels",
   "sales:write": "Ingest daily sales batches",
   "journal:write": "Create and post journal entries",
   "bills:read": "Read bills and line items",
@@ -43,6 +44,7 @@ export const DEFAULT_CONNECT_SCOPES: ApiScope[] = [
   "locations:read",
   "users:read",
   "users:write",
+  "sales:read",
   "sales:write",
   "journal:write",
   "bills:read",
@@ -61,7 +63,7 @@ export function isValidScope(scope: string): scope is ApiScope {
  * Used during migration to avoid breaking existing API keys.
  */
 export const SCOPE_ALIASES: Record<string, ApiScope[]> = {
-  read: ["accounts:read", "suppliers:read", "categories:read", "business:read", "locations:read", "users:read", "bills:read", "expenses:read"],
+  read: ["accounts:read", "suppliers:read", "categories:read", "business:read", "locations:read", "users:read", "bills:read", "expenses:read", "sales:read"],
   write: ["suppliers:write", "categories:write", "accounts:write", "bills:write"],
 };
 

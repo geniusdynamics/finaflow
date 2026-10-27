@@ -14,6 +14,7 @@ import {
   apiKeys,
 } from "@db/schema";
 import { ingestDailySales } from "../lib/daily-sales-ingestion";
+import { listDailySales } from "../lib/integration-service";
 import { appRouter } from "../router";
 import {
   generateApiKey,
@@ -201,6 +202,39 @@ describe("daily sales ingestion", () => {
     expect(row[0]).toBeDefined();
     expect(row[0].netSales).toBe("21250.00");
     expect(row[0].sourceBatchId).toBe(`finabill:business:${testBusinessId}:2026-07-01`);
+  });
+
+  it("lists daily sales with payment channels for the business", async () => {
+    const saleDate = "2026-08-15";
+    const sourceBatchId = `finabill:business:${testBusinessId}:${saleDate}`;
+    const created = await ingestDailySales({
+      businessId: testBusinessId,
+      locationId: testLocationId,
+      saleDate,
+      sourceSystem: "finabill",
+      sourceBatchId,
+      payments: [
+        { channel: "cash", amount: "3000.00" },
+        { channel: "mpesa", amount: "2000.00" },
+      ],
+    });
+    expect(created.success).toBe(true);
+
+    const result = await listDailySales(testBusinessId, {
+      locationId: testLocationId,
+      dateFrom: saleDate,
+      dateTo: saleDate,
+      limit: 10,
+      offset: 0,
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.items[0]).toMatchObject({
+      saleDate,
+      netSales: "5000.00",
+      locationName: expect.any(String),
+    });
+    expect(result.items[0].payments).toHaveLength(2);
   });
 
   it("is idempotent by sourceBatchId", async () => {

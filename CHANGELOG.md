@@ -1,5 +1,19 @@
 # Changelog
 
+## [Unreleased] — Public statement analysis API and MCP brief
+
+### Added
+- **`POST /api/v1/statements/analyze/full`** — stateless public analysis for one or more PDF/CSV statements. Returns a consolidated analysis, per-file coverage, every Excel report sheet as JSON, optional deduplicated transactions, a data dictionary and warnings. Requires `statements:read`; no location or database write is needed.
+- **`GET /api/v1/daily-sales`** — read daily sales with date/location/batch filters, pagination and payment-channel rows. Adds the `sales:read` scope and grants it to legacy `read` aliases and Fina Connect defaults.
+- **`GET /api/v1/bills/{id}`** — bill detail with line items, supplier, paid amount and balance.
+- **MCP implementation brief** — `docs/mcp-server.md` covers transports, auth/scopes, tools, resources, prompts, safety, testing, deployment and the planned tax-agent workflow. `docs/mcp-tools.json` is a machine-readable tool manifest.
+- **API gap audit** — `docs/api-reference/gap-audit.md` maps current coverage and prioritises bill payments, expense writes, bank-account detail/relinking, category archive, tax records and reconciliation matches.
+
+### Tested
+- `api/__tests__/statements-v1.test.ts` — **8 pass**, including JSON and multipart public analysis, cross-file deduplication, report sheets and scope enforcement.
+- `api/__tests__/integration-finabill.test.ts` — **10 pass**, including daily sales read with payment channels.
+- `npm run typecheck`, `npm run lint` (0 errors), OpenAPI YAML parse (25 paths).
+
 ## [Unreleased] — Bank statement import (KCB)
 
 ### Added

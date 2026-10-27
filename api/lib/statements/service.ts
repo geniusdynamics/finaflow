@@ -102,7 +102,7 @@ export interface ImportBatchResult {
   files: ImportFileResult[];
 }
 
-interface ParsedFile {
+export interface ParsedFile {
   parsed: ParsedStatement;
   fileName: string;
   fileHash: string;
@@ -173,7 +173,7 @@ function statementError(error: unknown): StatementError {
   );
 }
 
-async function parseStatementFile(file: StatementFileInput): Promise<ParsedFile> {
+export async function parseStatementFile(file: StatementFileInput): Promise<ParsedFile> {
   if (file.bytes.length === 0) {
     throw new StatementError("INVALID_FILE", "The file is empty.");
   }

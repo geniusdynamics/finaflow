@@ -1,6 +1,6 @@
 // ABOUTME: Shared business logic for external API integration endpoints.
 // ABOUTME: Called by both the v1 REST routes and the legacy tRPC integrationFinabill router.
-import { eq, and, isNull, inArray, or, gt, sql } from "drizzle-orm";
+import { eq, and, isNull, inArray, or, gt, desc, sql } from "drizzle-orm";
 import { getDb } from "../queries/connection";
 import { hashPassword } from "./password";
 import {
@@ -19,6 +19,8 @@ import {
   expenses,
   subscriptions,
   subscriptionPayments,
+  dailySales,
+  dailySalePayments,
   type AccountType,
   type AccountSubType,
 } from "@db/schema";
@@ -196,11 +198,14 @@ export async function listAccountTransactions(
  * List bills for FinaBill pull sync. Includes line items and external linkage
  * so FinaBill can skip bills that originated from FinaBill itself.
  */
-export async function listBills(businessId: number, options?: { updatedSince?: string }) {
+export async function listBills(businessId: number, options?: { updatedSince?: string; billId?: number }) {
   const db = getDb();
   const conditions = [eq(bills.businessId, businessId), isNull(bills.deletedAt)];
   if (options?.updatedSince) {
     conditions.push(gt(bills.updatedAt, new Date(options.updatedSince)));
+  }
+  if (options?.billId) {
+    conditions.push(eq(bills.id, options.billId));
   }
 
   const billRows = await db
@@ -247,6 +252,84 @@ export async function listBills(businessId: number, options?: { updatedSince?: s
   }
 
   return billRows.map((b) => ({ ...b, items: itemsByBill.get(b.id) ?? [] }));
+}
+
+/** Single bill with line items, for detail views and AI tool calls. */
+export async function getBill(businessId: number, billId: number) {
+  const rows = await listBills(businessId, { billId });
+  return rows[0] ?? null;
+}
+
+/** List daily sales with payment channels for pull sync, reporting and AI tools. */
+export async function listDailySales(
+  businessId: number,
+  options: {
+    locationId?: number;
+    dateFrom?: string;
+    dateTo?: string;
+    updatedSince?: string;
+    sourceBatchId?: string;
+    limit: number;
+    offset: number;
+  },
+) {
+  const db = getDb();
+  const locationRows = await db
+    .select({ id: locations.id, name: locations.name })
+    .from(locations)
+    .where(and(eq(locations.businessId, businessId), isNull(locations.deletedAt)));
+  const locationIds = locationRows.map((row) => row.id);
+  if (locationIds.length === 0) return { items: [], total: 0 };
+  if (options.locationId && !locationIds.includes(options.locationId)) {
+    return { items: [], total: 0 };
+  }
+
+  const scopedLocationIds = options.locationId ? [options.locationId] : locationIds;
+  const conditions = [inArray(dailySales.locationId, scopedLocationIds), isNull(dailySales.deletedAt)];
+  if (options.dateFrom) conditions.push(sql`${dailySales.saleDate} >= ${options.dateFrom}`);
+  if (options.dateTo) conditions.push(sql`${dailySales.saleDate} <= ${options.dateTo}`);
+  if (options.updatedSince) conditions.push(gt(dailySales.updatedAt, new Date(options.updatedSince)));
+  if (options.sourceBatchId) conditions.push(eq(dailySales.sourceBatchId, options.sourceBatchId));
+
+  const [{ total }] = await db
+    .select({ total: sql<number>`count(*)::int` })
+    .from(dailySales)
+    .where(and(...conditions));
+
+  const items = await db
+    .select()
+    .from(dailySales)
+    .where(and(...conditions))
+    .orderBy(desc(dailySales.saleDate), desc(dailySales.id))
+    .limit(options.limit)
+    .offset(options.offset);
+
+  if (items.length === 0) return { items: [], total };
+
+  const payments = await db
+    .select({
+      dailySaleId: dailySalePayments.dailySaleId,
+      paymentMethodId: dailySalePayments.paymentMethodId,
+      amount: dailySalePayments.amount,
+    })
+    .from(dailySalePayments)
+    .where(inArray(dailySalePayments.dailySaleId, items.map((item) => item.id)));
+
+  const paymentsBySale = new Map<number, typeof payments>();
+  for (const payment of payments) {
+    const list = paymentsBySale.get(payment.dailySaleId) ?? [];
+    list.push(payment);
+    paymentsBySale.set(payment.dailySaleId, list);
+  }
+
+  return {
+    items: items.map((item) => ({
+      ...item,
+      locationName: locationRows.find((location) => location.id === item.locationId)?.name ?? null,
+      payments: paymentsBySale.get(item.id) ?? [],
+    })),
+    total,
+  };
 }
 
 /** List expenses for FinaBill pull sync (billId lets FinaBill skip bill-payment expenses). */
