@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Smartphone, Upload, ArrowUpRight, ArrowDownRight, Tag, Receipt, Wallet as WalletIcon, Landmark, Plus, Link2, BookOpen, LayoutDashboard, History } from "lucide-react";
 import { LocationSelector } from "@/components/LocationSelector";
@@ -334,13 +334,13 @@ export function Wallet() {
               <DialogTrigger asChild>
                 <Button className="bg-[#C73E1D] hover:bg-[#C73E1D]/90"><Upload className="mr-2 h-4 w-4" />Import</Button>
               </DialogTrigger>
-              <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto bg-white">
+              <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto bg-white sm:max-w-3xl">
                 <DialogHeader>
                   <DialogTitle className="font-serif text-xl text-[#2D2A26]">Import transactions</DialogTitle>
+                  <DialogDescription className="text-sm text-[#8D8A87]">
+                    Import an M-PESA or bank statement PDF, or paste SMS messages. SMS stays available for phone-only records.
+                  </DialogDescription>
                 </DialogHeader>
-                <p className="text-sm text-[#8D8A87]">
-                  Import an M-PESA or bank statement PDF, or paste SMS messages. SMS stays available for phone-only records.
-                </p>
                 {importTabs()}
               </DialogContent>
             </Dialog>

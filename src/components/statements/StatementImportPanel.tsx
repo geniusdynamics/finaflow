@@ -505,7 +505,7 @@ export function StatementImportPanel({
 
       {ready && aggregate.files > 0 && (
         <div className="space-y-3 rounded-lg bg-[#F5EDE6] p-3">
-          <div className="grid grid-cols-2 gap-2 text-sm md:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
             <div>
               <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Files</p>
               <p className="font-mono font-semibold text-[#2D2A26]">{aggregate.files}</p>
