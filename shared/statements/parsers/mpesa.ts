@@ -68,6 +68,8 @@ interface RawRow {
   balance: string;
   transactionType?: string | null;
   otherParty?: string | null;
+  /** The statement printed a paid-in or paid-out value with a negative sign. */
+  negativeAmount: boolean;
   rawLines: string[];
   warnings: string[];
 }
@@ -139,7 +141,8 @@ export function classifyMpesaDetails(
   else if (/funds received|business payment from|salary payment from|promotion payment from|merchant customer payment from|bics international transfer/i.test(d)) rail = "received";
 
   // Money arriving through a send/paybill/till rail is income, not a spend.
-  if (direction === "in" && (rail === "send_money" || rail === "paybill" || rail === "till")) {
+  const inboundBank = /small business payment to customer|transfer from bank|business payment to customer/i.test(d);
+  if (direction === "in" && (rail === "send_money" || rail === "paybill" || rail === "till" || inboundBank)) {
     rail = "received";
   }
 
@@ -234,6 +237,13 @@ function readRowStart(line: TextLine, tokens: StatementToken[], paybill = false)
   if (statusIdx < 0 || !status) return null;
 
   const warnings: string[] = [];
+  let negativeAmount = false;
+  const magnitude = (raw: string): string => {
+    const value = normalizeAmount(raw).value;
+    if (!value.startsWith("-")) return value;
+    negativeAmount = true;
+    return absoluteAmount(value);
+  };
   const moneyEntries = tokens
     .slice(statusIdx + 1)
     .map((token, offset) => ({ token, index: statusIdx + 1 + offset }))
@@ -245,8 +255,8 @@ function readRowStart(line: TextLine, tokens: StatementToken[], paybill = false)
 
   if (moneyEntries.length >= 3) {
     const three = moneyEntries.slice(-3);
-    paidIn = normalizeAmount(three[0].token.text).value;
-    withdrawn = normalizeAmount(three[1].token.text).value;
+    paidIn = magnitude(three[0].token.text);
+    withdrawn = magnitude(three[1].token.text);
     balance = normalizeAmount(three[2].token.text).value;
     balanceEntry = three[2];
     if (moneyEntries.length > 3) {
@@ -257,8 +267,8 @@ function readRowStart(line: TextLine, tokens: StatementToken[], paybill = false)
     balance = normalizeAmount(second.token.text).value;
     balanceEntry = second;
     const mid = (tokens[statusIdx].x + second.token.x) / 2;
-    if (first.token.x < mid) paidIn = normalizeAmount(first.token.text).value;
-    else withdrawn = normalizeAmount(first.token.text).value;
+    if (first.token.x < mid) paidIn = magnitude(first.token.text);
+    else withdrawn = magnitude(first.token.text);
     warnings.push("Statement omits one amount column; direction inferred from column position.");
   } else {
     return null;
@@ -313,6 +323,7 @@ function readRowStart(line: TextLine, tokens: StatementToken[], paybill = false)
     balance,
     transactionType,
     otherParty,
+    negativeAmount,
     rawLines: [lineText(line)],
     warnings,
   };
@@ -377,8 +388,8 @@ function parseSummary(lines: string[]): StatementSummaryBlock | undefined {
     const tokens = text.split(/\s+/);
     const money = tokens.filter((t) => isMoneyToken(t));
     if (money.length < 2) continue;
-    const paidIn = normalizeAmount(money[money.length - 2]).value;
-    const paidOut = normalizeAmount(money[money.length - 1]).value;
+    const paidIn = absoluteAmount(normalizeAmount(money[money.length - 2]).value);
+    const paidOut = absoluteAmount(normalizeAmount(money[money.length - 1]).value);
     const label = tokens.slice(0, tokens.length - 2).join(" ").replace(/^Total\b/i, "Total");
     if (/^total\b/i.test(text)) {
       totalIn = paidIn;
@@ -461,6 +472,9 @@ export function parseMpesaStatement(doc: ExtractedDocument): ParsedStatement {
   }
 
   // Group consecutive rows that share a receipt: charge + spend + Fuliza overdraft.
+  if (rawRows.some((row) => row.negativeAmount)) {
+    warnings.push("Statement prints paid-in/paid-out values with a negative sign; normalized to positive magnitudes.");
+  }
   const groups: RawRow[][] = [];
   for (const row of rawRows) {
     const last = groups[groups.length - 1];

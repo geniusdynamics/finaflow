@@ -32,6 +32,15 @@ const DEFAULT_PROVIDERS = [
     isActive: true,
     requiresProvisioning: true,
   },
+  {
+    code: "bank",
+    name: "Bank",
+    displayName: "Bank statement",
+    brandColor: "#1E3A5F",
+    supportedCurrencies: "KES",
+    isActive: true,
+    requiresProvisioning: false,
+  },
 ];
 
 export async function seedWalletProviders(): Promise<void> {

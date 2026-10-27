@@ -6,11 +6,12 @@ import { Link } from "react-router";
 import { ArrowLeft, Landmark, Menu, X } from "lucide-react";
 
 interface Props {
-  active?: "converter" | "excel" | "accountants";
+  active?: "converter" | "bank" | "excel" | "accountants";
 }
 
 const LINKS: Array<{ to: string; label: string; key: Props["active"] }> = [
-  { to: "/tools/mpesa-statement-converter", label: "Converter", key: "converter" },
+  { to: "/tools/mpesa-statement-converter", label: "M-PESA converter", key: "converter" },
+  { to: "/tools/bank-statement-converter", label: "Bank converter", key: "bank" },
   { to: "/tools/mpesa-to-excel", label: "PDF to Excel", key: "excel" },
   { to: "/tools/mpesa-for-accountants", label: "For accountants", key: "accountants" },
 ];

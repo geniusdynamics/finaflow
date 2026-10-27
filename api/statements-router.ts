@@ -23,6 +23,7 @@ const fileSchema = z.object({
   fileBase64: z.string().min(1).max(14_000_000),
   password: z.string().max(100).optional(),
   provider: z.string().max(20).optional(),
+  accountId: z.number().optional(),
   overrides: z.record(z.string(), z.number().nullable()).optional(),
   exclude: z.array(z.string().max(120)).max(50_000).optional(),
 });
@@ -85,6 +86,7 @@ export const statementsRouter = createRouter({
         fileBase64: z.string().min(1).max(14_000_000),
         password: z.string().max(100).optional(),
         provider: z.string().max(20).optional(),
+        accountId: z.number().optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -99,6 +101,7 @@ export const statementsRouter = createRouter({
             bytes: decodeFile(input.fileBase64),
             password: input.password,
             provider: input.provider,
+            accountId: input.accountId,
           },
         });
         return { ok: true as const, preview };
@@ -134,6 +137,7 @@ export const statementsRouter = createRouter({
             bytes: decodeFile(file.fileBase64),
             password: file.password,
             provider: file.provider,
+            accountId: file.accountId,
             overrides: file.overrides,
             exclude: file.exclude,
           })),

@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import { parseMpesaStatement } from "../parsers/mpesa";
-import { syntheticMpesaDocument } from "../__fixtures__/synthetic";
+import { syntheticMpesaDocument, syntheticMpesaNegativeOutDocument } from "../__fixtures__/synthetic";
 import { buildStatementAnalysis, isStatementAnalysis } from "../analyze";
 import { buildStatementCsv, statementCsvBytes, type ExportTransaction } from "../export/csv";
 import { buildStatementJson } from "../export/json";
@@ -47,6 +47,9 @@ describe("statement analysis", () => {
     expect(analysis.summary.net).toBe("1094.37");
 
     expect(analysis.moneyIn.total).toBe("1500.00");
+    expect(analysis.moneyIn.byChannel).toEqual([
+      { key: "received", label: "Received money", count: 1, total: "1500.00", share: 100 },
+    ]);
     expect(analysis.moneyOut.total).toBe("650.00");
     expect(analysis.financing.drawdowns).toBe("251.37");
     expect(analysis.financing.repayments).toBe("0.00");
@@ -115,6 +118,25 @@ describe("CSV export", () => {
     const csv = buildStatementCsv(exportRows(), { sortOrder: "asc" });
     expect(csv).toContain(",400.00,");
     expect(csv).not.toContain("KES 400");
+  });
+
+  it("normalises legacy rows stored with negative paid-out amounts", () => {
+    const base = parseMpesaStatement(syntheticMpesaNegativeOutDocument());
+    const legacy = {
+      ...base,
+      rows: base.rows.map((row) =>
+        row.direction === "out" ? { ...row, withdrawn: `-${row.withdrawn}`, amount: row.withdrawn } : row,
+      ),
+    };
+
+    const result = buildStatementAnalysis(legacy);
+    expect(result.summary.totalOut).toBe("108.00");
+    expect(result.summary.net).toBe("892.00");
+    expect(result.balance.continuity.checked).toBe(1);
+    expect(result.balance.continuity.ok).toBe(1);
+    expect(result.moneyIn.byChannel).toEqual([
+      { key: "agent_deposit", label: "Agent deposits", count: 1, total: "1000.00", share: 100 },
+    ]);
   });
 });
 

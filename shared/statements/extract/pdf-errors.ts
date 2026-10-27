@@ -8,12 +8,15 @@ import {
 } from "../errors";
 
 export function isPdfBytes(bytes: Uint8Array): boolean {
-  return bytes.length >= 5
-    && bytes[0] === 0x25 // %
-    && bytes[1] === 0x50 // P
-    && bytes[2] === 0x44 // D
-    && bytes[3] === 0x46 // F
-    && bytes[4] === 0x2d; // -
+  // Some bank exports prepend a UTF-8 BOM before %PDF.
+  const start =
+    bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
+  return bytes.length >= start + 5
+    && bytes[start] === 0x25 // %
+    && bytes[start + 1] === 0x50 // P
+    && bytes[start + 2] === 0x44 // D
+    && bytes[start + 3] === 0x46 // F
+    && bytes[start + 4] === 0x2d; // -
 }
 
 export function mapPdfError(error: unknown): Error {

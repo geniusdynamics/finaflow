@@ -1,5 +1,39 @@
 # Changelog
 
+## [Unreleased] — Bank statement import (KCB)
+
+### Added
+- **Bank statement converter** — public `/tools/bank-statement-converter` accepts one or more bank PDFs, runs entirely in the browser, and downloads CSV/JSON with a running balance plus the full statement analysis (inflow sources, categories, fees, balance continuity, monthly totals). KCB online statements are supported today; the parser is profile-based so more banks can be added without changing the tool.
+- **Bank import in Wallets** — the Wallet Import dialog now has **M-PESA / Bank / SMS** tabs. The Bank tab accepts KCB PDFs, optionally links rows to a bank account, and uses the same preview, duplicate detection, category suggestions, statement history and undo flow as M-PESA imports. Bank statements are stored under the generic `bank` provider.
+- **Bank statement analysis** — candidate bank rails (bank transfers, cash deposits/withdrawals, cheques, interest, salary, standing orders, loans) and `moneyIn.byChannel` now work for bank rows too. KCB's oldest-first row order is handled explicitly for opening/closing balances, daily balances and balance continuity.
+- **Consolidated analysis & PDF** — the public bank tool now combines every uploaded statement into one deduplicated view, with per-file coverage and reconciliation, cross-file duplicate detection, all calendar months, all contacts, all categories and full fee/recurring tables. It does this for a single upload too. A detailed PDF report (jsPDF + autoTable) downloads from the same page.
+- **KCB counterparty cleanup** — extraction now removes KCB reference codes and phone prefixes, so top contacts group by real counterparty/agent instead of creating thousands of unique strings.
+- **BOM-tolerant PDF detection** — bank exports that prepend a UTF-8 BOM before `%PDF` are accepted by both Node and browser extractors.
+
+### Tested
+- `shared/statements/__tests__` — **58 pass**, including consolidation, cross-file deduplication, full contact lists, KCB parsing and BOM handling.
+- Browser end-to-end: two real KCB statements converted together into **6,620 transactions**, consolidated across **5 calendar months**, with **75 money-in sources / 55 money-out destinations** all rendered and exported to a **6-page PDF**.
+- Four real KCB statements individually: **3,332 / 3,288 / 2,741 / 3,121 transactions**, every one reconciled to the printed footer at **0.00 in / 0.00 out**, with **0 unexplained balance steps**.
+- `npm run typecheck`, `npm run lint` (0 errors), production build.
+
+### Notes
+- Scanned/image bank statements are not supported yet.
+- The statement PDFs and account details used for validation are not committed.
+
+## [Unreleased] — M-PESA negative paid-out amounts
+
+### Fixed
+- **Negative paid-out values** — statements that print the Paid Out column with a minus sign (for example `-108.00`) are normalised to positive magnitudes at the parser boundary. This removes the public converter failure `[DecimalError] Invalid argument: -108.00` caused by `signed()` producing `--108.00`, and makes parsed totals reconcile with Safaricom's summary. Analysis also normalises any older stored rows that still carry the sign, so existing imports do not crash.
+- **Inbound bank/business payments** — `Small Business Payment to Customer` and `Transfer from Bank` rows arriving with `direction = in` are classified as received money instead of `other`.
+
+### Added
+- **Money-in by source** — `StatementAnalysis.moneyIn.byChannel` groups operating inflows into agent deposits, received money and other channels with count, total and share. The statement analysis panel and the public converter show the mix; on the reference statement agent deposits are **72.45% (KES 19.27M)** of KES 26.60M total inflow.
+
+### Tested
+- `shared/statements/__tests__/mpesa.test.ts`, `analysis.test.ts`, `delimited.test.ts` — **42 pass**, including a negative-paid-out fixture and a legacy-row analysis regression.
+- Reference statement: **1,945 rows**, totals **KES 26,598,949.00 in / KES 26,176,619.01 out**, reconciliation diff **0.00 / 0.00**.
+- `npm run typecheck` and `npm run lint` — clean (0 errors).
+
 ## [Unreleased] — Profile Account ID
 
 ### Added

@@ -9,7 +9,7 @@ import {
   sumAmounts,
 } from "../normalize/amount";
 import { daysInclusive } from "../normalize/date";
-import type { ParsedStatement, ParsedStatementRow } from "../types";
+import type { StatementRail, ParsedStatement, ParsedStatementRow } from "../types";
 
 export interface AnalysisPeriod {
   start: string | null;
@@ -86,6 +86,14 @@ export interface ContactRow {
   count: number;
   total: string;
   average: string;
+}
+
+export interface IncomeChannelRow {
+  key: string;
+  label: string;
+  count: number;
+  total: string;
+  share: number;
 }
 
 export interface RecurringRow {
@@ -179,7 +187,7 @@ export interface StatementAnalysis {
     byType: FeeRow[];
     topRecipients: ContactRow[];
   };
-  moneyIn: { count: number; total: string; largest: AnalysisRowRef | null; bySource: ContactRow[] };
+  moneyIn: { count: number; total: string; largest: AnalysisRowRef | null; bySource: ContactRow[]; byChannel?: IncomeChannelRow[] };
   moneyOut: { count: number; total: string; largest: AnalysisRowRef | null; byDestination: ContactRow[] };
   financing: { drawdowns: string; repayments: string; net: string; count: number };
   topContacts: { sent: ContactRow[]; received: ContactRow[] };
@@ -214,6 +222,10 @@ export interface StatementAnalysis {
 export interface AnalysisOptions {
   categoryOf?: (row: ParsedStatementRow) => { id: number | null; name: string } | null;
   duplicateCount?: number;
+  /** Maximum contacts kept in top/source lists. Defaults to 20. */
+  contactLimit?: number;
+  /** Maximum fee recipients kept. Defaults to 10. */
+  feeRecipientLimit?: number;
 }
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -241,20 +253,52 @@ const TIME_PERIODS: Array<{ key: string; label: string; from: number; to: number
   { key: "night", label: "Night (20:00–05:00)", from: 20, to: 29 },
 ];
 
+const INCOME_CHANNEL_LABELS: Record<StatementRail, string> = {
+  agent_deposit: "Agent deposits",
+  received: "Received money",
+  send_money: "Send money",
+  agent_withdrawal: "Agent withdrawals",
+  paybill: "Paybill",
+  till: "Till",
+  charge: "Charges",
+  airtime: "Airtime",
+  reversal: "Reversals",
+  fuliza_draw: "Fuliza drawdown",
+  fuliza_repay: "Fuliza repayment",
+  other: "Other inflows",
+  bank_transfer: "Bank transfers",
+  cash_deposit: "Cash deposits",
+  cash_withdrawal: "Cash withdrawals",
+  cheque: "Cheques",
+  interest: "Interest",
+  salary: "Salary",
+  standing_order: "Standing orders",
+  loan: "Loan movements",
+};
+
 function isCharge(row: ParsedStatementRow): boolean {
   return row.txnType === "charge" || row.rail === "charge";
 }
 
 function isFinancing(row: ParsedStatementRow): boolean {
-  return row.rail === "fuliza_draw" || row.rail === "fuliza_repay";
+  return row.rail === "fuliza_draw" || row.rail === "fuliza_repay" || row.rail === "loan";
 }
 
 function signed(row: ParsedStatementRow): string {
-  return row.direction === "in" ? row.paidIn : `-${row.withdrawn}`;
+  const magnitude = absoluteAmount(row.direction === "in" ? row.paidIn : row.withdrawn);
+  return row.direction === "in" ? magnitude : `-${magnitude}`;
 }
 
 function amountOf(row: ParsedStatementRow): string {
-  return row.direction === "in" ? row.paidIn : row.withdrawn;
+  return absoluteAmount(row.direction === "in" ? row.paidIn : row.withdrawn);
+}
+
+/** Old imports may have stored a printed outflow as a negative number; analysis works on magnitudes. */
+function normalizeRowAmounts(row: ParsedStatementRow): ParsedStatementRow {
+  const paidIn = absoluteAmount(row.paidIn);
+  const withdrawn = absoluteAmount(row.withdrawn);
+  if (paidIn === row.paidIn && withdrawn === row.withdrawn) return row;
+  return { ...row, paidIn, withdrawn, amount: absoluteAmount(row.amount) };
 }
 
 function average(total: string, count: number): string {
@@ -378,7 +422,7 @@ function contactRows(rows: ParsedStatementRow[], limit = 20): ContactRow[] {
     .slice(0, limit);
 }
 
-function balanceContinuity(rows: ParsedStatementRow[]): AnalysisBalance["continuity"] {
+function balanceContinuity(rows: ParsedStatementRow[], descending: boolean): AnalysisBalance["continuity"] {
   const byReceipt = new Map<string, ParsedStatementRow[]>();
   for (const row of rows) {
     const list = byReceipt.get(row.groupId) ?? [];
@@ -392,8 +436,8 @@ function balanceContinuity(rows: ParsedStatementRow[]): AnalysisBalance["continu
   const samples: BalanceBreak[] = [];
 
   for (let i = 0; i < rows.length - 1; i++) {
-    const current = rows[i];
-    const next = rows[i + 1];
+    const current = descending ? rows[i] : rows[i + 1];
+    const next = descending ? rows[i + 1] : rows[i];
     const expected = new Decimal(next.balance).plus(signed(current));
     const gap = new Decimal(current.balance).minus(expected).toFixed(2);
 
@@ -456,7 +500,9 @@ export function isStatementAnalysis(value: unknown): value is StatementAnalysis 
 export function buildStatementAnalysis(
   statement: ParsedStatement,
   options: AnalysisOptions = {},
-): StatementAnalysis {  const rows = statement.rows;
+): StatementAnalysis {
+  const rows = statement.rows.map(normalizeRowAmounts);
+  const descending = statement.order !== "asc";
   const categoryOf = options.categoryOf ?? ((row: ParsedStatementRow) => ({
     id: null,
     name: row.categoryKey ?? "No category",
@@ -488,8 +534,9 @@ export function buildStatementAnalysis(
   const busiestWeekday = [...weekdayCounts.entries()].sort((a, b) => b[1] - a[1])[0];
 
   const balances = rows.map((row) => row.balance);
-  const closing = rows[0]?.balance ?? null;
-  const opening = closing ? subtractAmounts(closing, net) : null;
+  const closing = statement.metadata.closingBalance
+    ?? (rows.length ? (descending ? rows[0].balance : rows[rows.length - 1].balance) : null);
+  const opening = statement.metadata.openingBalance ?? (closing ? subtractAmounts(closing, net) : null);
   const highestBalance = balances.length ? balances.reduce((a, b) => (compareAmounts(a, b) >= 0 ? a : b)) : null;
   const lowestBalance = balances.length ? balances.reduce((a, b) => (compareAmounts(a, b) <= 0 ? a : b)) : null;
   const averageBalance = balances.length ? new Decimal(sumAmounts(balances)).div(balances.length).toFixed(2) : null;
@@ -545,12 +592,33 @@ export function buildStatementAnalysis(
       return { name, count: entry.count, total, average: average(total, entry.count) };
     })
     .sort((a, b) => compareAmounts(b.total, a.total))
-    .slice(0, 10);
+    .slice(0, options.feeRecipientLimit ?? 10);
 
   const operatingOutTotal = sumAmounts(operatingOut.map((row) => row.withdrawn));
 
-  const moneyInGroups = contactRows(operatingIn);
-  const moneyOutGroups = contactRows(operatingOut);
+  const moneyInGroups = contactRows(operatingIn, options.contactLimit);
+  const moneyOutGroups = contactRows(operatingOut, options.contactLimit);
+  const operatingInTotal = sumAmounts(operatingIn.map((row) => row.paidIn));
+
+  const inboundChannels = new Map<StatementRail, { count: number; total: string[] }>();
+  for (const row of operatingIn) {
+    const entry = inboundChannels.get(row.rail) ?? { count: 0, total: [] };
+    entry.count++;
+    entry.total.push(row.paidIn);
+    inboundChannels.set(row.rail, entry);
+  }
+  const moneyInByChannel: IncomeChannelRow[] = [...inboundChannels.entries()]
+    .map(([rail, entry]) => {
+      const total = sumAmounts(entry.total);
+      return {
+        key: rail,
+        label: INCOME_CHANNEL_LABELS[rail],
+        count: entry.count,
+        total,
+        share: percentOf(total, operatingInTotal),
+      };
+    })
+    .sort((a, b) => compareAmounts(b.total, a.total));
 
   const financingRows = rows.filter(isFinancing);
   const drawdowns = sumAmounts(rows.filter((row) => row.rail === "fuliza_draw").map((row) => row.paidIn));
@@ -631,7 +699,7 @@ export function buildStatementAnalysis(
       const balancesForDay = list.map((row) => row.balance);
       return {
         date,
-        endBalance: list[0].balance,
+        endBalance: descending ? list[0].balance : list[list.length - 1].balance,
         highest: balancesForDay.reduce((a, b) => (compareAmounts(a, b) >= 0 ? a : b)),
         lowest: balancesForDay.reduce((a, b) => (compareAmounts(a, b) <= 0 ? a : b)),
         count: list.length,
@@ -831,7 +899,7 @@ export function buildStatementAnalysis(
       reason: "Out of hours",
     }));
 
-  const continuity = balanceContinuity(rows);
+  const continuity = balanceContinuity(rows, descending);
 
   const uncategorised = operatingOut.filter((row) => !(categoryOf(row)?.id));
   const uncategorisedSpend = {
@@ -879,9 +947,10 @@ export function buildStatementAnalysis(
     },
     moneyIn: {
       count: operatingIn.length,
-      total: sumAmounts(operatingIn.map((row) => row.paidIn)),
+      total: operatingInTotal,
       largest: operatingIn.length ? ref(operatingIn.reduce((a, b) => (compareAmounts(a.paidIn, b.paidIn) >= 0 ? a : b))) : null,
       bySource: moneyInGroups,
+      byChannel: moneyInByChannel,
     },
     moneyOut: {
       count: operatingOut.length,
@@ -896,8 +965,8 @@ export function buildStatementAnalysis(
       count: financingRows.length,
     },
     topContacts: {
-      sent: contactRows(operatingOut),
-      received: contactRows(operatingIn),
+      sent: contactRows(operatingOut, options.contactLimit),
+      received: contactRows(operatingIn, options.contactLimit),
     },
     recurring,
     breakdown: {
