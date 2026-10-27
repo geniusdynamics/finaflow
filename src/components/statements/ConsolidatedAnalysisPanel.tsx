@@ -1,7 +1,9 @@
 // ABOUTME: Detailed cross-file bank statement analysis for the public converter.
 // ABOUTME: Shows every contact, category and month rather than truncating to a dashboard-sized preview.
 
+import { useState } from "react";
 import type { ConsolidatedAnalysis } from "@shared/statements/consolidate";
+import { groupContacts } from "@shared/statements/group";
 import { formatKES } from "@/lib/utils";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
@@ -49,6 +51,20 @@ function Head({ columns }: { columns: Array<[string, boolean?]> }) {
 
 export function ConsolidatedAnalysisPanel({ consolidated }: { consolidated: ConsolidatedAnalysis }) {
   const { analysis, files } = consolidated;
+  const [inMode, setInMode] = useState<"exact" | "grouped">("exact");
+  const [outMode, setOutMode] = useState<"exact" | "grouped">("exact");
+  const groupedIn = groupContacts(analysis.moneyIn.bySource);
+  const groupedOut = groupContacts(analysis.moneyOut.byDestination);
+  const inRows: Array<{ name: string; count: number; total: string; average: string; members?: number }> =
+    inMode === "grouped" ? groupedIn : analysis.moneyIn.bySource;
+  const outRows: Array<{ name: string; count: number; total: string; average: string; members?: number }> =
+    outMode === "grouped" ? groupedOut : analysis.moneyOut.byDestination;
+  const inColumns: Array<[string, boolean?]> = inMode === "grouped"
+    ? [["Source"], ["Variants", true], ["Transactions", true], ["Total", true], ["Average", true]]
+    : [["Source"], ["Transactions", true], ["Total", true], ["Average", true]];
+  const outColumns: Array<[string, boolean?]> = outMode === "grouped"
+    ? [["Destination"], ["Variants", true], ["Transactions", true], ["Total", true], ["Average", true]]
+    : [["Destination"], ["Transactions", true], ["Total", true], ["Average", true]];
   const balanceGaps = files.reduce((sum, file) => sum + file.balance.continuity.unexplained, 0);
 
   return (
@@ -118,13 +134,37 @@ export function ConsolidatedAnalysisPanel({ consolidated }: { consolidated: Cons
       </Section>
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Section title="Money in by source" hint="Every counterparty, not truncated to a dashboard preview.">
+        <Section
+          title="Money in by source"
+          hint={inMode === "grouped"
+            ? "Grouped by party, ignoring prefixes, phone fragments and transaction codes."
+            : "Every counterparty exactly as printed — not truncated to a dashboard preview."}
+        >
+          <div className="mb-2 flex items-center justify-end gap-2 text-xs text-[#8D8A87]">
+            <label className="flex items-center gap-1.5">
+              Group
+              <select
+                value={inMode}
+                onChange={(event) => setInMode(event.target.value as "exact" | "grouped")}
+                className="rounded border border-[#E8E0D8] bg-white px-2 py-1 text-[#2D2A26]"
+              >
+                <option value="exact">Exact names</option>
+                <option value="grouped">Grouped party</option>
+              </select>
+            </label>
+          </div>
           <Table>
-            <Head columns={[["Source"], ["Transactions", true], ["Total", true], ["Average", true]]} />
+            <Head columns={inColumns} />
             <tbody>
-              {analysis.moneyIn.bySource.map((row) => (
+              {inRows.map((row) => (
                 <tr key={row.name} className="border-t border-[#E8E0D8]">
-                  <td className="px-3 py-2">{row.name}</td>
+                  <td className="px-3 py-2">
+                    {row.name}
+                    {inMode === "grouped" && (
+                      <span className="ml-1 text-[10px] text-[#8D8A87]">({row.members ?? 1} variants)</span>
+                    )}
+                  </td>
+                  {inMode === "grouped" && <td className="px-3 py-2 text-right font-mono">{row.members ?? 1}</td>}
                   <td className="px-3 py-2 text-right font-mono">{row.count.toLocaleString()}</td>
                   <td className="px-3 py-2 text-right font-mono">{formatKES(row.total)}</td>
                   <td className="px-3 py-2 text-right font-mono">{formatKES(row.average)}</td>
@@ -134,13 +174,37 @@ export function ConsolidatedAnalysisPanel({ consolidated }: { consolidated: Cons
           </Table>
         </Section>
 
-        <Section title="Money out by destination" hint="Every counterparty, not truncated to a dashboard preview.">
+        <Section
+          title="Money out by destination"
+          hint={outMode === "grouped"
+            ? "Grouped by party, ignoring prefixes, phone fragments and transaction codes."
+            : "Every counterparty exactly as printed — not truncated to a dashboard preview."}
+        >
+          <div className="mb-2 flex items-center justify-end gap-2 text-xs text-[#8D8A87]">
+            <label className="flex items-center gap-1.5">
+              Group
+              <select
+                value={outMode}
+                onChange={(event) => setOutMode(event.target.value as "exact" | "grouped")}
+                className="rounded border border-[#E8E0D8] bg-white px-2 py-1 text-[#2D2A26]"
+              >
+                <option value="exact">Exact names</option>
+                <option value="grouped">Grouped party</option>
+              </select>
+            </label>
+          </div>
           <Table>
-            <Head columns={[["Destination"], ["Transactions", true], ["Total", true], ["Average", true]]} />
+            <Head columns={outColumns} />
             <tbody>
-              {analysis.moneyOut.byDestination.map((row) => (
+              {outRows.map((row) => (
                 <tr key={row.name} className="border-t border-[#E8E0D8]">
-                  <td className="px-3 py-2">{row.name}</td>
+                  <td className="px-3 py-2">
+                    {row.name}
+                    {outMode === "grouped" && (
+                      <span className="ml-1 text-[10px] text-[#8D8A87]">({row.members ?? 1} variants)</span>
+                    )}
+                  </td>
+                  {outMode === "grouped" && <td className="px-3 py-2 text-right font-mono">{row.members ?? 1}</td>}
                   <td className="px-3 py-2 text-right font-mono">{row.count.toLocaleString()}</td>
                   <td className="px-3 py-2 text-right font-mono">{formatKES(row.total)}</td>
                   <td className="px-3 py-2 text-right font-mono">{formatKES(row.average)}</td>

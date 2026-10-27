@@ -121,6 +121,9 @@ export interface ParsedStatementRow {
   /** Paybill statements: the printed Transaction Type and Other Party columns. */
   transactionType?: string | null;
   otherParty?: string | null;
+  /** Bank statements: payment channel and printed transaction/reference code. */
+  channel?: string | null;
+  transactionCode?: string | null;
   /** Canonical category key suggestion (mapped to a business category later). */
   categoryKey: string | null;
   /** Confidence of the category suggestion, 0..1. */
