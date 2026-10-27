@@ -442,6 +442,8 @@ function toWalletRows(
         accountReference: row.accountReference,
         transactionType: row.transactionType ?? null,
         otherParty: row.otherParty ?? null,
+        channel: row.channel ?? null,
+        transactionCode: row.transactionCode ?? null,
         fulizaFunded: row.fulizaFunded,
         linkedTxnExternalId: row.linkedTxnExternalId,
         fulizaOf: row.fulizaOf,

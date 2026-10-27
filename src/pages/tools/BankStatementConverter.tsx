@@ -22,7 +22,9 @@ import {
   AlertCircle,
   CheckCircle2,
   Download,
+  FileArchive,
   FileDown,
+  FileSpreadsheet,
   FileText,
   Loader2,
   Lock,
@@ -91,6 +93,7 @@ export default function BankStatementConverter() {
   const [converted, setConverted] = useState<ConvertedFile[]>([]);
   const [busy, setBusy] = useState(false);
   const [pdfBusy, setPdfBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState<"xlsx" | "csv" | null>(null);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -216,6 +219,34 @@ export default function BankStatementConverter() {
     }
   }
 
+  async function downloadXlsx() {
+    if (!consolidated) return;
+    setExportBusy("xlsx");
+    setError(null);
+    try {
+      const { saveConsolidatedXlsx } = await import("@/lib/statements/analysis-export");
+      await saveConsolidatedXlsx(consolidated);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? `Could not generate the Excel workbook: ${exportError.message}` : "Could not generate the Excel workbook.");
+    } finally {
+      setExportBusy(null);
+    }
+  }
+
+  async function downloadCsvBundle() {
+    if (!consolidated) return;
+    setExportBusy("csv");
+    setError(null);
+    try {
+      const { saveConsolidatedCsvBundle } = await import("@/lib/statements/analysis-export");
+      await saveConsolidatedCsvBundle(consolidated);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? `Could not generate the CSV bundle: ${exportError.message}` : "Could not generate the CSV bundle.");
+    } finally {
+      setExportBusy(null);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF7F2] text-[#2D2A26]">
       <ToolHeader active="bank" />
@@ -227,9 +258,9 @@ export default function BankStatementConverter() {
             Bank statement analysis
           </h1>
           <p className="mt-3 text-[#5C5853]">
-            Unlock one or more bank statement PDFs and download a consolidated analysis as PDF, plus clean CSV or JSON.
-            Every file is combined into one view while keeping its own coverage and reconciliation. Everything runs in
-            your browser — the files and password never leave your device.
+            Unlock one or more bank statement PDFs and download a consolidated analysis as PDF, plus a multi-sheet Excel
+            workbook, a CSV bundle or JSON. Every file is combined into one view while keeping its own coverage and
+            reconciliation. Everything runs in your browser — the files and password never leave your device.
           </p>
           <p className="mt-3 flex items-center gap-2 text-sm text-[#2E7D32]">
             <ShieldCheck className="h-4 w-4" /> Processed on this device. Nothing uploaded, nothing stored.
@@ -323,15 +354,23 @@ export default function BankStatementConverter() {
                     {pdfBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
                     {pdfBusy ? "Preparing PDF…" : "PDF analysis"}
                   </Button>
+                  <Button onClick={downloadXlsx} disabled={exportBusy !== null} variant="outline">
+                    {exportBusy === "xlsx" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-2 h-4 w-4" />}
+                    {exportBusy === "xlsx" ? "Preparing…" : "Excel analysis"}
+                  </Button>
+                  <Button onClick={downloadCsvBundle} disabled={exportBusy !== null} variant="outline">
+                    {exportBusy === "csv" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileArchive className="mr-2 h-4 w-4" />}
+                    {exportBusy === "csv" ? "Preparing…" : "Analysis CSV bundle"}
+                  </Button>
                   <Button onClick={downloadCsv} variant="outline">
-                    <Download className="mr-2 h-4 w-4" /> CSV
+                    <Download className="mr-2 h-4 w-4" /> Transactions CSV
                   </Button>
                   <Button variant="outline" onClick={downloadJson}>
                     <Download className="mr-2 h-4 w-4" /> JSON
                   </Button>
                 </div>
                 <p className="text-xs text-[#8D8A87]">
-                  The PDF contains the consolidated analysis across every uploaded statement. CSV opens in Excel or Google Sheets.
+                  PDF uses grouped parties; the Excel workbook and CSV bundle include both exact and grouped sheets for every report.
                 </p>
               </div>
             )}
@@ -344,7 +383,7 @@ export default function BankStatementConverter() {
                 <li>· Every transaction with date, description, money out, money in and running balance</li>
                 <li>· One consolidated view across every uploaded statement, with cross-file duplicate detection</li>
                 <li>· All contacts, categories, fee types, recurring payments and every calendar month — not a truncated preview</li>
-                <li>· PDF analysis for the consolidated view, plus CSV for Excel/Sheets and JSON for scripts</li>
+                <li>· PDF analysis for the consolidated view, plus a multi-sheet Excel workbook, a CSV bundle and JSON</li>
               </ul>
             </div>
             <div className="rounded-xl border border-[#E8E0D8] bg-white p-5">

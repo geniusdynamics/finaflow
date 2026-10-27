@@ -5,6 +5,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatKES } from "@/lib/utils";
 import type { ConsolidatedAnalysis } from "@shared/statements/consolidate";
+import { groupContacts } from "@shared/statements/group";
 
 const MARGIN = 32;
 const ACCENT: [number, number, number] = [199, 62, 29];
@@ -79,6 +80,11 @@ function monthlyRows(rows: ConsolidatedAnalysis["analysis"]["breakdown"]["monthl
 export function saveConsolidatedPdf(consolidated: ConsolidatedAnalysis): void {
   const { analysis, files } = consolidated;
   const balanceGaps = files.reduce((sum, file) => sum + file.balance.continuity.unexplained, 0);
+  const contactLimit = 100;
+  const recurringLimit = 50;
+  const groupedIn = groupContacts(analysis.moneyIn.bySource).slice(0, contactLimit);
+  const groupedOut = groupContacts(analysis.moneyOut.byDestination).slice(0, contactLimit);
+  const recurring = analysis.recurring.slice(0, recurringLimit);
   const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
   const width = doc.internal.pageSize.getWidth();
 
@@ -98,6 +104,12 @@ export function saveConsolidatedPdf(consolidated: ConsolidatedAnalysis): void {
     `${consolidated.banks.join(", ") || "Bank"} · ${consolidated.duplicateRows.toLocaleString()} duplicate rows skipped across uploads`,
     MARGIN,
     78,
+  );
+  doc.setFontSize(7);
+  doc.text(
+    `Contact tables show the top ${contactLimit} grouped parties and top ${recurringLimit} recurring patterns; the complete exact and grouped lists are in the Excel/CSV export.`,
+    MARGIN,
+    89,
   );
   const firstY = 98;
 
@@ -170,19 +182,31 @@ export function saveConsolidatedPdf(consolidated: ConsolidatedAnalysis): void {
   y = pageBreak(doc, y);
   y = addTable(doc, {
     startY: y,
-    title: "Money in by source",
-    head: ["Source", "Transactions", "Total", "Average"],
-    body: analysis.moneyIn.bySource.map((row) => [row.name, row.count.toLocaleString(), formatKES(row.total), formatKES(row.average)]),
-    columnStyles: { 1: { halign: "right" }, 2: { halign: "right" }, 3: { halign: "right" } },
+    title: `Money in by source (grouped parties, top ${contactLimit})`,
+    head: ["Source", "Variants", "Transactions", "Total", "Average"],
+    body: groupedIn.map((row) => [
+      row.name,
+      row.members.toLocaleString(),
+      row.count.toLocaleString(),
+      formatKES(row.total),
+      formatKES(row.average),
+    ]),
+    columnStyles: { 1: { halign: "right" }, 2: { halign: "right" }, 3: { halign: "right" }, 4: { halign: "right" } },
   });
 
   y = pageBreak(doc, y);
   y = addTable(doc, {
     startY: y,
-    title: "Money out by destination",
-    head: ["Destination", "Transactions", "Total", "Average"],
-    body: analysis.moneyOut.byDestination.map((row) => [row.name, row.count.toLocaleString(), formatKES(row.total), formatKES(row.average)]),
-    columnStyles: { 1: { halign: "right" }, 2: { halign: "right" }, 3: { halign: "right" } },
+    title: `Money out by destination (grouped parties, top ${contactLimit})`,
+    head: ["Destination", "Variants", "Transactions", "Total", "Average"],
+    body: groupedOut.map((row) => [
+      row.name,
+      row.members.toLocaleString(),
+      row.count.toLocaleString(),
+      formatKES(row.total),
+      formatKES(row.average),
+    ]),
+    columnStyles: { 1: { halign: "right" }, 2: { halign: "right" }, 3: { halign: "right" }, 4: { halign: "right" } },
   });
 
   y = pageBreak(doc, y);
@@ -229,13 +253,13 @@ export function saveConsolidatedPdf(consolidated: ConsolidatedAnalysis): void {
     });
   }
 
-  if (analysis.recurring.length > 0) {
+  if (recurring.length > 0) {
     y = pageBreak(doc, y);
     y = addTable(doc, {
       startY: y,
-      title: "Recurring payments",
+      title: `Recurring payments (top ${recurringLimit})`,
       head: ["Description", "Type", "Frequency", "Occurrences", "Average", "Total", "Last date", "Next expected"],
-      body: analysis.recurring.map((row) => [
+      body: recurring.map((row) => [
         row.description,
         row.type,
         row.frequency,

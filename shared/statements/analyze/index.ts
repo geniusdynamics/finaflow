@@ -397,7 +397,7 @@ function feeTypeLabel(details: string): string {
 }
 
 function contactKey(row: ParsedStatementRow): string {
-  return (row.counterpartyName ?? row.details.split(" - ").pop() ?? "Unknown").trim();
+  return (row.counterpartyName ?? row.counterpartyId ?? row.details.split(" - ").pop() ?? "Unknown").trim();
 }
 
 function groupRows(rows: ParsedStatementRow[], keyOf: (row: ParsedStatementRow) => string): Map<string, ParsedStatementRow[]> {
