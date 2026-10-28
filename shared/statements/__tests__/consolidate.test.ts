@@ -3,9 +3,11 @@
 
 import { describe, expect, it } from "vitest";
 import { parseKcbBankStatement } from "../parsers/kcb";
+import { parseMpesaStatement } from "../parsers/mpesa";
 import { buildStatementAnalysis } from "../analyze";
 import { consolidateStatements } from "../consolidate";
 import { syntheticKcbFebruaryStatement, syntheticKcbStatement } from "../__fixtures__/kcb";
+import { syntheticMpesaDocument } from "../__fixtures__/synthetic";
 
 const january = parseKcbBankStatement(syntheticKcbStatement());
 const february = parseKcbBankStatement(syntheticKcbFebruaryStatement());
@@ -87,5 +89,24 @@ describe("consolidated bank statement analysis", () => {
     expect(consolidated.analysis.summary.totalIn).toBe("10000.00");
     expect(consolidated.analysis.summary.totalOut).toBe("5057.50");
     expect(consolidated.analysis.breakdown.monthly).toHaveLength(1);
+  });
+
+  it("gives M-PESA statements the same consolidated report and identity", () => {
+    const mpesa = parseMpesaStatement(syntheticMpesaDocument());
+    const consolidated = consolidateStatements([
+      { fileName: "mpesa.pdf", parsed: mpesa },
+      { fileName: "mpesa-copy.pdf", parsed: mpesa },
+    ]);
+
+    expect(consolidated.fileCount).toBe(2);
+    expect(consolidated.banks).toEqual(["M-PESA"]);
+    expect(consolidated.duplicateRows).toBe(mpesa.rows.length);
+    expect(consolidated.analysis.summary.rowCount).toBe(mpesa.rows.length);
+    expect(consolidated.files[0]).toMatchObject({
+      provider: "mpesa",
+      accountNumber: mpesa.metadata.mobileNumber ?? null,
+    });
+    expect(consolidated.analysis.breakdown.monthly.length).toBeGreaterThan(0);
+    expect(consolidated.analysis.moneyIn.byChannel?.length).toBeGreaterThan(0);
   });
 });

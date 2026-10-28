@@ -3,6 +3,7 @@
 
 import type { ConsolidatedReport } from "./consolidate";
 import { groupContacts } from "./group";
+import { providerDisplayName } from "./provider";
 
 export interface AnalysisSheet {
   name: string;
@@ -49,10 +50,10 @@ export function buildAnalysisSheets(consolidated: ConsolidatedReport): AnalysisS
     },
     {
       name: "Coverage",
-      columns: ["File", "Bank", "Account", "Period", "Rows", "In", "Out", "Fees", "Net", "Reconciled", "Balance gaps"],
+      columns: ["File", "Source", "Account", "Period", "Rows", "In", "Out", "Fees", "Net", "Reconciled", "Balance gaps"],
       rows: files.map((file) => [
         file.fileName,
-        file.bankName ?? "",
+        file.bankName ?? providerDisplayName(file.provider),
         [file.accountNumber, file.accountName].filter(Boolean).join(" · "),
         period(file.periodStart, file.periodEnd),
         file.rowCount,
