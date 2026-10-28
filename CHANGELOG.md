@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased] — M-PESA analysis parity with bank statements
+
+### Added
+- **Consolidated M-PESA analysis** — the public M-PESA tool now combines every uploaded PDF or CSV into one deduplicated view, with per-file coverage, reconciliation and balance continuity instead of a per-file summary.
+- **Full M-PESA reports** — the same PDF analysis, 13-sheet Excel workbook and CSV bundle as the bank tool, using grouped parties in the PDF and both exact and grouped sheets in downloads.
+- **Complete M-PESA sections** — every month, contact, category, fee type, recurring payment, paybill/till shortcode and anomaly is included; the money-in source list now uses the consolidated analysis rather than a per-file top-20.
+- **In-app statement detail** — signed-in statement detail now renders the full consolidated analysis panel for M-PESA and bank imports, not just the compact summary.
+- **M-PESA categorization depth** — supplier/building-material merchants now map to `supplies`, and merchant rules apply to all outbound M-PESA rows rather than only paybills and tills.
+
+### Changed
+- **Provider-aware coverage** — coverage tables and report sheets label the source as `M-PESA`, `Airtel Money`, `SasaPay` or the bank name, and use the M-PESA mobile number/customer name as the account identity.
+- **M-PESA JSON** — includes the consolidated analysis alongside the per-file payload.
+
+### Tested
+- `shared/statements/__tests__/consolidate.test.ts` and `mpesa.test.ts` — **35 pass**, including M-PESA consolidation, deduplication, provider identity and money-in channels.
+- `npm run typecheck`, `npm run lint` (0 errors), `npm run build`.
+
 ## [Unreleased] — Statement tagging, bill linking and subscriber reports
 
 ### Added

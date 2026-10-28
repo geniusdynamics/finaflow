@@ -1,9 +1,10 @@
-// ABOUTME: Detailed cross-file bank statement analysis for the public converter.
+// ABOUTME: Detailed cross-file statement analysis for the public converters.
 // ABOUTME: Shows every contact, category and month rather than truncating to a dashboard-sized preview.
 
 import { useState } from "react";
-import type { ConsolidatedAnalysis } from "@shared/statements/consolidate";
+import type { ConsolidatedReport } from "@shared/statements/consolidate";
 import { groupContacts } from "@shared/statements/group";
+import { providerDisplayName } from "@shared/statements/provider";
 import { formatKES } from "@/lib/utils";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
@@ -49,7 +50,7 @@ function Head({ columns }: { columns: Array<[string, boolean?]> }) {
   );
 }
 
-export function ConsolidatedAnalysisPanel({ consolidated }: { consolidated: ConsolidatedAnalysis }) {
+export function ConsolidatedAnalysisPanel({ consolidated }: { consolidated: ConsolidatedReport }) {
   const { analysis, files } = consolidated;
   const [inMode, setInMode] = useState<"exact" | "grouped">("exact");
   const [outMode, setOutMode] = useState<"exact" | "grouped">("exact");
@@ -81,7 +82,7 @@ export function ConsolidatedAnalysisPanel({ consolidated }: { consolidated: Cons
       <div className="flex flex-wrap items-center gap-2 rounded-lg bg-[#F5EDE6] px-3 py-2 text-xs text-[#5C5853]">
         <span>{consolidated.periodStart ?? "?"} → {consolidated.periodEnd ?? "?"}</span>
         <span>·</span>
-        <span>{consolidated.banks.join(", ") || "Multiple banks"}</span>
+        <span>{consolidated.banks.join(", ") || "Multiple sources"}</span>
         <span>·</span>
         <span>{analysis.summary.avgTransactionsPerDay.toLocaleString()} transactions/day</span>
         <span>·</span>
@@ -90,12 +91,12 @@ export function ConsolidatedAnalysisPanel({ consolidated }: { consolidated: Cons
 
       <Section title="Statement coverage" hint="Each uploaded file stays visible, including its own reconciliation and balance gaps.">
         <Table>
-          <Head columns={[["File"], ["Bank"], ["Account"], ["Period"], ["Rows", true], ["In", true], ["Out", true], ["Fees", true], ["Net", true], ["Reconciled"], ["Gaps", true]]} />
+          <Head columns={[["File"], ["Source"], ["Account"], ["Period"], ["Rows", true], ["In", true], ["Out", true], ["Fees", true], ["Net", true], ["Reconciled"], ["Gaps", true]]} />
           <tbody>
             {files.map((file) => (
               <tr key={file.fileName} className="border-t border-[#E8E0D8]">
                 <td className="px-3 py-2 font-medium text-[#2D2A26]">{file.fileName}</td>
-                <td className="px-3 py-2">{file.bankName ?? "—"}</td>
+                <td className="px-3 py-2">{file.bankName ?? providerDisplayName(file.provider)}</td>
                 <td className="px-3 py-2">{[file.accountNumber, file.accountName].filter(Boolean).join(" · ") || "—"}</td>
                 <td className="px-3 py-2">{file.periodStart ?? "?"} → {file.periodEnd ?? "?"}</td>
                 <td className="px-3 py-2 text-right font-mono">{file.rowCount.toLocaleString()}</td>

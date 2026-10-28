@@ -5,6 +5,7 @@ import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { StatementAnalysisPanel } from "./StatementAnalysisPanel";
+import { ConsolidatedAnalysisPanel } from "./ConsolidatedAnalysisPanel";
 import { CategoryCell } from "./CategoryCell";
 import { formatKES } from "@/lib/utils";
 import { isStatementAnalysis, type StatementAnalysis } from "@shared/statements/analyze";
@@ -243,7 +244,9 @@ export function StatementDetail({ importId, onClose }: Props) {
       </div>
       {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
-      {analysis ? (
+      {liveReport ? (
+        <ConsolidatedAnalysisPanel consolidated={liveReport as ConsolidatedReport} />
+      ) : analysis ? (
         <StatementAnalysisPanel analysis={analysis} />
       ) : (
         <p className="rounded bg-yellow-50 px-3 py-2 text-sm text-yellow-800">
