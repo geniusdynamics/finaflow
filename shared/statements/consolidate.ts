@@ -43,6 +43,8 @@ export interface ConsolidatedAnalysis {
   banks: string[];
   periodStart: string | null;
   periodEnd: string | null;
+  /** Deduplicated rows in chronological order, used by the public analysis API. */
+  transactions: ParsedStatementRow[];
 }
 
 function unique(values: string[]): string[] {
@@ -66,12 +68,8 @@ export function consolidateStatements(
   let duplicateRows = 0;
 
   for (const input of inputs) {
-    const accountKey =
-      input.parsed.metadata.accountNumber
-      ?? input.parsed.metadata.accountName
-      ?? input.fileName;
     for (const row of input.parsed.rows) {
-      const key = `${input.parsed.provider}|${accountKey}|${row.externalId}`;
+      const key = `${input.parsed.provider}|${row.externalId}`;
       if (seen.has(key)) {
         duplicateRows++;
         continue;
@@ -189,5 +187,6 @@ export function consolidateStatements(
     banks,
     periodStart,
     periodEnd,
+    transactions: orderedRows,
   };
 }

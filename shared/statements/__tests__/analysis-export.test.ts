@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { parseKcbBankStatement } from "../parsers/kcb";
 import { consolidateStatements } from "../consolidate";
-import { buildAnalysisSheets } from "../../../src/lib/statements/analysis-export";
+import { buildAnalysisSheets } from "../analysis-sheets";
 import { syntheticKcbFebruaryStatement, syntheticKcbStatement } from "../__fixtures__/kcb";
 
 describe("analysis export sheets", () => {

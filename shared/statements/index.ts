@@ -13,5 +13,6 @@ export * from "./categorize/taxonomy";
 export * from "./analyze";
 export * from "./consolidate";
 export * from "./group";
+export * from "./analysis-sheets";
 export * from "./export/csv";
 export * from "./export/json";

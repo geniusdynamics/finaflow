@@ -211,6 +211,104 @@ describe("v1 statements REST API", () => {
     expect(body.data.totals).toMatchObject({ totalIn: "1751.37", totalOut: "657.00" });
   });
 
+  it("returns a consolidated AI-ready analysis with report sheets", async () => {
+    const parsed = parseMpesaStatement(syntheticMpesaDocument());
+    const csv = buildStatementCsv(
+      parsed.rows.map((row) => ({
+        receiptNo: row.groupId,
+        date: row.date,
+        time: row.time,
+        details: row.details,
+        status: row.status,
+        paidIn: row.paidIn,
+        withdrawn: row.withdrawn,
+        balance: row.balance,
+        direction: row.direction,
+        txnType: row.txnType,
+        rail: row.rail,
+        groupId: row.groupId,
+        counterpartyName: row.counterpartyName,
+      })),
+      { sortOrder: "asc" },
+    );
+    const contentBase64 = Buffer.from(`\uFEFF${csv}`, "utf8").toString("base64");
+
+    const response = await app.request("/statements/analyze/full", {
+      method: "POST",
+      headers: auth(readKeyA),
+      body: JSON.stringify({
+        files: [
+          { fileName: "first.csv", contentBase64 },
+          { fileName: "duplicate.csv", contentBase64 },
+        ],
+        includeTransactions: true,
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      data: {
+        schemaVersion: string;
+        analysis: { summary: { totalIn: string; totalOut: string }; balance?: unknown };
+        coverage: Array<{ fileName: string }>;
+        sheets: Array<{ name: string; columns: string[]; rows: unknown[][] }>;
+        transactions: Array<{ externalId: string }>;
+        duplicateRows: number;
+      };
+    };
+    expect(body.data.schemaVersion).toBe("2026-10-28");
+    expect(body.data.analysis.summary.totalIn).toBe("1751.37");
+    expect(body.data.analysis.summary.totalOut).toBe("657.00");
+    expect(body.data.analysis.balance).toBeUndefined();
+    expect(body.data.coverage).toHaveLength(2);
+    expect(body.data.duplicateRows).toBe(5);
+    expect(body.data.transactions).toHaveLength(5);
+    expect(body.data.sheets.some((sheet) => sheet.name === "Money In - Exact")).toBe(true);
+    expect(body.data.sheets.some((sheet) => sheet.name === "Monthly")).toBe(true);
+
+    const forbidden = await app.request("/statements/analyze/full", {
+      method: "POST",
+      headers: auth(writeKeyA),
+      body: JSON.stringify({ files: [{ fileName: "first.csv", contentBase64 }] }),
+    });
+    expect(forbidden.status).toBe(403);
+  });
+
+  it("accepts multipart statement uploads for the public analysis endpoint", async () => {
+    const parsed = parseMpesaStatement(syntheticMpesaDocument());
+    const csv = buildStatementCsv(
+      parsed.rows.map((row) => ({
+        receiptNo: row.groupId,
+        date: row.date,
+        time: row.time,
+        details: row.details,
+        status: row.status,
+        paidIn: row.paidIn,
+        withdrawn: row.withdrawn,
+        balance: row.balance,
+        direction: row.direction,
+        txnType: row.txnType,
+        rail: row.rail,
+        groupId: row.groupId,
+        counterpartyName: row.counterpartyName,
+      })),
+      { sortOrder: "asc" },
+    );
+    const form = new FormData();
+    form.set("files", new File([`\uFEFF${csv}`], "statement.csv", { type: "text/csv" }));
+    form.set("includeTransactions", "true");
+
+    const response = await app.request("/statements/analyze/full", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${readKeyA}` },
+      body: form,
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { data: { files: Array<{ fileName: string }>; transactions: unknown[] } };
+    expect(body.data.files[0].fileName).toBe("statement.csv");
+    expect(body.data.transactions).toHaveLength(5);
+  });
+
   it("rejects invalid parse and import payloads", async () => {
     const parse = await app.request("/statements/parse", {
       method: "POST",
