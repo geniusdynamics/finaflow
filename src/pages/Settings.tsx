@@ -12,7 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Settings as SettingsIcon, Camera, Briefcase, Shield, Crown, Award, ArrowUpCircle, ArrowDownCircle, Users, MapPin, Gift, Clock, Key, Trash2, Plus, Copy, CheckCircle, Webhook, AlertCircle, Plug, MessageSquare, Eye, RefreshCw, DollarSign, Wallet, Smartphone, Activity, AlertCircle as AlertCircleIcon, CheckCircle2, ChevronRight, CalendarDays } from "lucide-react";
+import { Settings as SettingsIcon, Camera, Briefcase, Shield, Crown, Award, ArrowUpCircle, ArrowDownCircle, Users, MapPin, Gift, Clock, Key, Trash2, Plus, Copy, CheckCircle, Webhook, AlertCircle, Plug, MessageSquare, Eye, RefreshCw, DollarSign, Wallet, Smartphone, Activity, AlertCircle as AlertCircleIcon, CheckCircle2, ChevronRight, CalendarDays, Bot, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { CurrencyCombobox } from "@/components/ui/currency-combobox";
 
@@ -92,7 +92,9 @@ export function Settings() {
   const [hookOpen, setHookOpen] = useState(false);
   const [newKey, setNewKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [keyForm, setKeyForm] = useState({ name: "", scopes: ["read"] as string[] });
+  const [copiedEnv, setCopiedEnv] = useState(false);
+  const [keyPreset, setKeyPreset] = useState<"mcp" | "custom">("custom");
+  const [keyForm, setKeyForm] = useState({ name: "", scopes: [] as string[] });
   const [hookForm, setHookForm] = useState({ name: "", url: "", events: ["bill.overdue"] as string[], secret: "" });
   const [selectedHook, setSelectedHook] = useState<number | null>(null);
 
@@ -152,6 +154,7 @@ export function Settings() {
 
   // Integrations queries and mutations
   const { data: keys, refetch: refetchKeys } = trpc.integrations.listKeys.useQuery();
+  const { data: scopeCatalog } = trpc.integrations.scopeCatalog.useQuery();
   const { data: hooks, refetch: refetchHooks } = trpc.integrations.listWebhooks.useQuery();
   const { data: deliveries } = trpc.integrations.listDeliveries.useQuery(
     { webhookId: selectedHook ?? 0, limit: 50 },
@@ -159,7 +162,7 @@ export function Settings() {
   );
 
   const createKey = trpc.integrations.createKey.useMutation({
-    onSuccess: (data) => { setNewKey(data.key); setKeyOpen(false); setKeyForm({ name: "", scopes: ["read"] }); refetchKeys(); toast.success("API key created — copy it now!"); },
+    onSuccess: (data) => { setNewKey(data.key); setKeyOpen(false); setKeyPreset("custom"); setKeyForm({ name: "", scopes: [] }); refetchKeys(); toast.success("API key created — copy it now!"); },
     onError: (err) => toast.error(err.message),
   });
   const revokeKey = trpc.integrations.revokeKey.useMutation({ onSuccess: () => { refetchKeys(); toast.success("Key revoked"); } });
@@ -184,6 +187,26 @@ export function Settings() {
 
   const copyKey = () => {
     if (newKey) { navigator.clipboard.writeText(newKey); setCopied(true); setTimeout(() => setCopied(false), 2000); }
+  };
+
+  const openKeyDialog = (preset: "mcp" | "custom") => {
+    setKeyPreset(preset);
+    setNewKey(null);
+    setCopied(false);
+    setCopiedEnv(false);
+    setKeyForm({
+      name: preset === "mcp" ? "MCP Server" : "",
+      scopes: preset === "mcp" ? [...(scopeCatalog?.mcp ?? [])] : [],
+    });
+    setKeyOpen(true);
+  };
+
+  const copyMcpEnv = () => {
+    if (!newKey) return;
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "https://finaflow.genius.africa";
+    navigator.clipboard.writeText(`FINAFLOW_BASE_URL=${baseUrl}\nFINAFLOW_API_KEY=${newKey}`);
+    setCopiedEnv(true);
+    setTimeout(() => setCopiedEnv(false), 2000);
   };
 
   const allPlans: PlanKey[] = ["free", "starter", "growth", "pro"];
@@ -874,27 +897,33 @@ export function Settings() {
               </CardContent>
             </Card>
 
+            <Card className="border-[#E8E0D8]">
+              <CardContent className="py-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#2D2A26]/10">
+                    <Bot className="h-5 w-5 text-[#2D2A26]" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-[#2D2A26]">MCP Server <span className="ml-1 rounded bg-[#C73E1D]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#C73E1D]">AI</span></p>
+                    <p className="text-xs text-[#8D8A87]">Connect Claude, Cursor or OpenCode to analyse statements, tag transactions and link bills.</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <a href="/docs/mcp" target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline" size="sm" className="border-[#E8E0D8]">
+                      Setup guide <ChevronRight className="ml-1 h-3 w-3" />
+                    </Button>
+                  </a>
+                  <Button size="sm" className="bg-[#C73E1D]" onClick={() => openKeyDialog("mcp")} disabled={!scopeCatalog}>
+                    <Key className="mr-1 h-3 w-3" /> Create MCP key
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card className="border-[#E8E0D8]"><CardHeader className="pb-3 flex flex-row items-center justify-between">
               <CardTitle className="font-serif text-lg flex items-center gap-2"><Key className="h-5 w-5 text-[#D4A854]"/> API Keys</CardTitle>
-              <Dialog open={keyOpen} onOpenChange={setKeyOpen}><DialogTrigger asChild><Button size="sm" className="bg-[#C73E1D]"><Plus className="mr-1 h-3 w-3" />New Key</Button></DialogTrigger>
-                <DialogContent className="bg-white"><DialogHeader><DialogTitle className="font-serif text-xl">Create API Key</DialogTitle></DialogHeader>
-                  <form onSubmit={e => { e.preventDefault(); createKey.mutate(keyForm); }} className="space-y-3">
-                    <div><Label>Name</Label><Input value={keyForm.name} onChange={e => setKeyForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. POS Integration" required /></div>
-                    <div><Label>Scopes</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {["read", "write", "sales", "expenses", "webhooks"].map(s => (
-                          <label key={s} className="flex items-center gap-1 rounded-full border border-[#E8E0D8] px-3 py-1 text-xs cursor-pointer">
-                            <input type="checkbox" checked={keyForm.scopes.includes(s)} onChange={e => {
-                              setKeyForm(p => ({ ...p, scopes: e.target.checked ? [...p.scopes, s] : p.scopes.filter(x => x !== s) }));
-                            }} /> {s}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    <Button type="submit" className="w-full bg-[#C73E1D]" disabled={createKey.isPending}>Generate Key</Button>
-                  </form>
-                </DialogContent>
-              </Dialog>
+              <Button size="sm" className="bg-[#C73E1D]" onClick={() => openKeyDialog("custom")}><Plus className="mr-1 h-3 w-3" />New Key</Button>
             </CardHeader>
               <CardContent>
                 {newKey && (
@@ -903,6 +932,20 @@ export function Settings() {
                     <div className="mt-1 flex items-center gap-2">
                       <code className="flex-1 rounded bg-white px-2 py-1 text-xs font-mono text-[#2D2A26]">{newKey}</code>
                       <Button size="sm" variant="ghost" onClick={copyKey}>{copied ? <CheckCircle className="h-4 w-4 text-[#2E7D32]" /> : <Copy className="h-4 w-4" />}</Button>
+                    </div>
+                    <div className="mt-3 rounded-lg border border-[#E8E0D8] bg-white p-3">
+                      <p className="text-xs font-medium uppercase tracking-wider text-[#8D8A87]">MCP server environment</p>
+                      <code className="mt-1 block break-all text-xs font-mono text-[#2D2A26]">FINAFLOW_BASE_URL={typeof window !== "undefined" ? window.location.origin : "https://finaflow.genius.africa"}</code>
+                      <code className="block break-all text-xs font-mono text-[#2D2A26]">FINAFLOW_API_KEY={newKey}</code>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button size="sm" variant="outline" onClick={copyMcpEnv}>
+                          {copiedEnv ? <CheckCircle className="mr-1 h-3 w-3 text-[#2E7D32]" /> : <Copy className="mr-1 h-3 w-3" />}
+                          Copy MCP environment
+                        </Button>
+                        <a href="/docs/mcp" target="_blank" rel="noopener noreferrer">
+                          <Button size="sm" variant="ghost">Open setup guide <ChevronRight className="ml-1 h-3 w-3" /></Button>
+                        </a>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -919,9 +962,95 @@ export function Settings() {
                   {(!keys || keys.length === 0) && <p className="text-sm text-[#8D8A87]">No API keys yet.</p>}
                 </div>
               </CardContent>
+              <Dialog open={keyOpen} onOpenChange={setKeyOpen}>
+                <DialogContent className="max-h-[85vh] overflow-y-auto bg-white">
+                  <DialogHeader><DialogTitle className="font-serif text-xl">Create API Key</DialogTitle></DialogHeader>
+                  <form onSubmit={e => { e.preventDefault(); createKey.mutate(keyForm); }} className="space-y-4">
+                    <div>
+                      <Label>Name</Label>
+                      <Input value={keyForm.name} onChange={e => setKeyForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. MCP Server" required />
+                    </div>
+                    <div>
+                      <Label>Preset</Label>
+                      <div className="mt-1 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setKeyPreset("mcp");
+                            setKeyForm(p => ({ ...p, scopes: [...(scopeCatalog?.mcp ?? [])] }));
+                          }}
+                          className={`rounded-lg border px-3 py-2 text-left text-xs ${keyPreset === "mcp" ? "border-[#C73E1D] bg-[#C73E1D]/5" : "border-[#E8E0D8]"}`}
+                        >
+                          <span className="block font-medium text-[#2D2A26]">MCP server</span>
+                          <span className="text-[#8D8A87]">All tools, including statement tagging.</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setKeyPreset("custom")}
+                          className={`rounded-lg border px-3 py-2 text-left text-xs ${keyPreset === "custom" ? "border-[#C73E1D] bg-[#C73E1D]/5" : "border-[#E8E0D8]"}`}
+                        >
+                          <span className="block font-medium text-[#2D2A26]">Custom</span>
+                          <span className="text-[#8D8A87]">Choose individual scopes.</span>
+                        </button>
+                      </div>
+                    </div>
+                    {keyPreset === "mcp" ? (
+                      <div className="rounded-lg border border-[#E8E0D8] p-3">
+                        <p className="text-xs text-[#8D8A87]">
+                          Grants {keyForm.scopes.length} scopes: read/write across accounts, suppliers, categories, bills and sales, plus statement analysis, tagging and linking.
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {keyForm.scopes.map(scope => (
+                            <span key={scope} className="rounded-full bg-[#F5EDE6] px-2 py-0.5 text-[10px] font-mono text-[#5C5853]">{scope}</span>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <Label>Scopes</Label>
+                          <button
+                            type="button"
+                            className="text-xs text-[#C73E1D] hover:underline"
+                            onClick={() => setKeyForm(p => ({
+                              ...p,
+                              scopes: (scopeCatalog?.scopes ?? []).filter(s => s.id.endsWith(":read")).map(s => s.id),
+                            }))}
+                          >
+                            Select read-only
+                          </button>
+                        </div>
+                        <div className="mt-1 max-h-60 space-y-1 overflow-y-auto rounded-lg border border-[#E8E0D8] p-2">
+                          {(scopeCatalog?.scopes ?? []).map(scope => (
+                            <label key={scope.id} className="flex items-start gap-2 rounded px-1 py-1 text-xs hover:bg-[#F5EDE6]">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5"
+                                checked={keyForm.scopes.includes(scope.id)}
+                                onChange={e => {
+                                  setKeyForm(p => ({
+                                    ...p,
+                                    scopes: e.target.checked ? [...p.scopes, scope.id] : p.scopes.filter(x => x !== scope.id),
+                                  }));
+                                }}
+                              />
+                              <span className="min-w-0">
+                                <span className="block font-mono text-[#2D2A26]">{scope.id}</span>
+                                <span className="block text-[#8D8A87]">{scope.description}</span>
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <Button type="submit" className="w-full bg-[#C73E1D]" disabled={createKey.isPending || !keyForm.name.trim() || keyForm.scopes.length === 0}>
+                      {createKey.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                      Generate Key
+                    </Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </Card>
-
-            {/* Webhooks */}
             <Card className="border-[#E8E0D8]"><CardHeader className="pb-3 flex flex-row items-center justify-between">
               <CardTitle className="font-serif text-lg flex items-center gap-2"><Webhook className="h-5 w-5 text-[#8D8A87]"/> Webhooks</CardTitle>
               <Dialog open={hookOpen} onOpenChange={setHookOpen}><DialogTrigger asChild><Button size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" />Add Webhook</Button></DialogTrigger>
