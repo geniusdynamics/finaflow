@@ -1,4 +1,4 @@
-// ABOUTME: Consolidates several parsed bank statements into one deduplicated, detailed analysis.
+// ABOUTME: Consolidates several parsed statements into one deduplicated, detailed analysis.
 // ABOUTME: Keeps per-file coverage/reconciliation alongside the combined cash-flow view.
 
 import { subtractAmounts, sumAmounts } from "./normalize/amount";
@@ -8,10 +8,12 @@ import {
   type AnalysisBalance,
   type StatementAnalysis,
 } from "./analyze";
+import { providerDisplayName } from "./provider";
 import type { ParsedStatement, ParsedStatementRow } from "./types";
 
 export interface ConsolidatedFileSummary {
   fileName: string;
+  provider: ParsedStatement["provider"];
   bankName: string | null;
   accountNumber: string | null;
   accountName: string | null;
@@ -88,7 +90,9 @@ export function consolidateStatements(
     || a.rowIndex - b.rowIndex,
   ).map((row, index) => ({ ...row, rowIndex: index }));
 
-  const banks = unique(inputs.map((input) => input.parsed.metadata.bankName ?? ""));
+  const banks = unique(
+    inputs.map((input) => input.parsed.metadata.bankName ?? providerDisplayName(input.parsed.provider)),
+  );
   const periodStart = inputs
     .map((input) => input.parsed.metadata.periodStart)
     .filter((value): value is string => Boolean(value))
@@ -99,8 +103,12 @@ export function consolidateStatements(
     .sort()
     .at(-1) ?? orderedRows[orderedRows.length - 1]?.date ?? null;
 
-  const accountNumbers = unique(inputs.map((input) => input.parsed.metadata.accountNumber ?? ""));
-  const accountNames = unique(inputs.map((input) => input.parsed.metadata.accountName ?? ""));
+  const accountNumbers = unique(
+    inputs.map((input) => input.parsed.metadata.accountNumber ?? input.parsed.metadata.mobileNumber ?? ""),
+  );
+  const accountNames = unique(
+    inputs.map((input) => input.parsed.metadata.accountName ?? input.parsed.metadata.customerName ?? ""),
+  );
 
   const allHaveSummary = inputs.every((input) => Boolean(input.parsed.statementSummary));
   const statementSummary = allHaveSummary
@@ -166,9 +174,10 @@ export function consolidateStatements(
     });
     return {
       fileName: input.fileName,
+      provider: input.parsed.provider,
       bankName: input.parsed.metadata.bankName ?? null,
-      accountNumber: input.parsed.metadata.accountNumber ?? null,
-      accountName: input.parsed.metadata.accountName ?? null,
+      accountNumber: input.parsed.metadata.accountNumber ?? input.parsed.metadata.mobileNumber ?? null,
+      accountName: input.parsed.metadata.accountName ?? input.parsed.metadata.customerName ?? null,
       periodStart: input.parsed.metadata.periodStart ?? null,
       periodEnd: input.parsed.metadata.periodEnd ?? null,
       rowCount: input.parsed.rows.length,

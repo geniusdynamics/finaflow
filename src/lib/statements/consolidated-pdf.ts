@@ -1,4 +1,4 @@
-// ABOUTME: Client-side PDF export for the public consolidated bank statement analysis.
+// ABOUTME: Client-side PDF export for the public consolidated statement analysis.
 // ABOUTME: Uses jsPDF + autoTable so the full detailed report is generated in the browser.
 
 import { jsPDF } from "jspdf";
@@ -6,6 +6,7 @@ import autoTable from "jspdf-autotable";
 import { formatKES } from "@/lib/utils";
 import type { ConsolidatedAnalysis, ConsolidatedReport } from "@shared/statements/consolidate";
 import { groupContacts } from "@shared/statements/group";
+import { providerDisplayName } from "@shared/statements/provider";
 
 const MARGIN = 32;
 const ACCENT: [number, number, number] = [199, 62, 29];
@@ -144,10 +145,10 @@ export function saveConsolidatedPdf(consolidated: ConsolidatedReport): void {
   y = addTable(doc, {
     startY: y,
     title: "Statement coverage",
-    head: ["File", "Bank", "Account", "Period", "Rows", "In", "Out", "Fees", "Net", "Reconciled", "Balance gaps"],
+    head: ["File", "Source", "Account", "Period", "Rows", "In", "Out", "Fees", "Net", "Reconciled", "Balance gaps"],
     body: files.map((file) => [
       file.fileName,
-      file.bankName ?? "—",
+      file.bankName ?? providerDisplayName(file.provider),
       [file.accountNumber, file.accountName].filter(Boolean).join(" · ") || "—",
       `${file.periodStart ?? "?"}\nto ${file.periodEnd ?? "?"}`,
       file.rowCount.toLocaleString(),

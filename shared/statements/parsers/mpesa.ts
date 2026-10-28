@@ -108,6 +108,7 @@ const CATEGORY_BY_RAIL: Partial<Record<MpesaRail, string>> = {
 const MERCHANT_RULES: Array<{ re: RegExp; key: string; confidence: number }> = [
   { re: /\b(KPLC|KENYA POWER|ELECTRICITY|UTILITY METERING|\bWATER\b|NWSC|ZUKU|DSTV|ECITIZEN|\bKRA\b|\bSHA\b|NHIF|NSSF|INTERNET)\b/i, key: "utilities", confidence: 0.85 },
   { re: /\b(TOTAL|SHELL|VIVO|RUBIS|PETROLEUM|FUEL|MOZAM ENERGY)\b/i, key: "fuel", confidence: 0.8 },
+  { re: /\b(CEMENT|BAMBURI|HARDWARE|STEEL|BUILDING MATERIALS|SUPPLIES)\b/i, key: "supplies", confidence: 0.75 },
   { re: /\b(NAIVAS|QUICKMART|CARREFOUR|CHANDARANA|SUPERMARKET|TANDOORI|RESTAURANT|CAFE|HOTEL|BUTCHERY|BAKERY|MARKET)\b/i, key: "food", confidence: 0.7 },
   { re: /\b(RENT|LANDLORD|PROPERTY|APARTMENT)\b/i, key: "rent", confidence: 0.7 },
   { re: /\b(SALARY|PAYROLL|WAGES)\b/i, key: "salaries", confidence: 0.8 },
@@ -150,7 +151,7 @@ export function classifyMpesaDetails(
   let categoryKey = CATEGORY_BY_RAIL[rail] ?? null;
   let categoryConfidence = categoryKey ? 0.9 : 0;
 
-  if (!categoryKey && (rail === "paybill" || rail === "till")) {
+  if (!categoryKey && direction !== "in") {
     for (const rule of MERCHANT_RULES) {
       if (rule.re.test(d)) {
         categoryKey = rule.key;

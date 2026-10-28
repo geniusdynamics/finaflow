@@ -1,13 +1,13 @@
-// ABOUTME: Public, no-upload M-PESA statement converter: parses PDFs in the browser and downloads CSV/JSON.
-// ABOUTME: No API calls, no storage, no account. Reuses the shared parser, analysis and CSV export code.
+// ABOUTME: Public, no-upload M-PESA statement converter and analysis tool.
+// ABOUTME: Consolidates multiple PDFs/CSVs into one detailed report with PDF, Excel and CSV exports.
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import Decimal from "decimal.js";
 import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { parseMpesaStatement } from "@shared/statements/parsers/mpesa";
 import { buildDelimitedDocument } from "@shared/statements/table/delimited";
 import { buildStatementAnalysis, type StatementAnalysis } from "@shared/statements/analyze";
+import { consolidateStatements, type ConsolidatedAnalysis } from "@shared/statements/consolidate";
 import { buildStatementCsv, type ExportTransaction } from "@shared/statements/export/csv";
 import { CATEGORY_KEY_LABELS } from "@shared/statements/categorize/taxonomy";
 import { StatementError } from "@shared/statements/errors";
@@ -17,10 +17,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToolHeader } from "@/components/tools/ToolHeader";
+import { ConsolidatedAnalysisPanel } from "@/components/statements/ConsolidatedAnalysisPanel";
 import {
   AlertCircle,
   CheckCircle2,
   Download,
+  FileArchive,
+  FileDown,
+  FileSpreadsheet,
   FileText,
   Loader2,
   Lock,
@@ -88,48 +92,34 @@ export default function MpesaStatementConverter() {
   const [password, setPassword] = useState("");
   const [converted, setConverted] = useState<ConvertedFile[]>([]);
   const [busy, setBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState<"xlsx" | "csv" | null>(null);
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const aggregate = useMemo(() => {
-    const rows = converted.reduce((sum, file) => sum + file.analysis.summary.rowCount, 0);
-    const totalIn = converted.reduce((sum, file) => sum.plus(file.analysis.summary.totalIn), new Decimal(0));
-    const totalOut = converted.reduce((sum, file) => sum.plus(file.analysis.summary.totalOut), new Decimal(0));
-    const fees = converted.reduce((sum, file) => sum.plus(file.analysis.summary.totalFees), new Decimal(0));
-    const categories = new Map<string, Decimal>();
-    for (const file of converted) {
-      for (const category of file.analysis.categories) {
-        categories.set(category.name, (categories.get(category.name) ?? new Decimal(0)).plus(category.totalOut));
-      }
-    }
-    const incomeChannels = new Map<string, { label: string; count: number; total: Decimal }>();
-    for (const file of converted) {
-      for (const channel of file.analysis.moneyIn.byChannel ?? []) {
-        const entry = incomeChannels.get(channel.key) ?? { label: channel.label, count: 0, total: new Decimal(0) };
-        entry.count += channel.count;
-        entry.total = entry.total.plus(channel.total);
-        incomeChannels.set(channel.key, entry);
-      }
-    }
-    return {
-      rows,
-      totalIn: totalIn.toFixed(2),
-      totalOut: totalOut.toFixed(2),
-      fees: fees.toFixed(2),
-      categories: [...categories.entries()]
-        .map(([name, total]) => [name, total.toNumber()] as const)
-        .sort((a, b) => b[1] - a[1]),
-      incomeChannels: [...incomeChannels.entries()]
-        .map(([key, entry]) => ({
-          key,
-          label: entry.label,
-          count: entry.count,
-          total: entry.total.toFixed(2),
-          share: totalIn.isZero() ? 0 : entry.total.div(totalIn).mul(100).toDecimalPlaces(2).toNumber(),
-        }))
-        .sort((a, b) => new Decimal(b.total).comparedTo(a.total)),
-    };
+  const consolidated = useMemo<ConsolidatedAnalysis | null>(() => {
+    if (converted.length === 0) return null;
+    return consolidateStatements(
+      converted.map((file) => ({ fileName: file.fileName, parsed: file.parsed, analysis: file.analysis })),
+      {
+        categoryOf: (row) => ({
+          id: null,
+          name: row.categoryKey ? CATEGORY_KEY_LABELS[row.categoryKey] ?? row.categoryKey : "No category",
+        }),
+      },
+    );
   }, [converted]);
+
+  const aggregate = useMemo(() => {
+    const analysis = consolidated?.analysis;
+    return {
+      rows: analysis?.summary.rowCount ?? 0,
+      totalIn: analysis?.summary.totalIn ?? "0.00",
+      totalOut: analysis?.summary.totalOut ?? "0.00",
+      fees: analysis?.summary.totalFees ?? "0.00",
+      net: analysis?.summary.net ?? "0.00",
+    };
+  }, [consolidated]);
 
   async function convert() {
     if (files.length === 0) return;
@@ -190,6 +180,18 @@ export default function MpesaStatementConverter() {
   function downloadJson() {
     const payload = {
       generatedAt: new Date().toISOString(),
+      consolidated: consolidated
+        ? {
+            fileCount: consolidated.fileCount,
+            totalRowCount: consolidated.totalRowCount,
+            duplicateRows: consolidated.duplicateRows,
+            banks: consolidated.banks,
+            periodStart: consolidated.periodStart,
+            periodEnd: consolidated.periodEnd,
+            analysis: consolidated.analysis,
+            files: consolidated.files,
+          }
+        : null,
       files: converted.map((file) => ({
         meta: {
           fileName: file.fileName,
@@ -211,6 +213,48 @@ export default function MpesaStatementConverter() {
     );
   }
 
+  async function downloadPdf() {
+    if (!consolidated) return;
+    setPdfBusy(true);
+    setError(null);
+    try {
+      const { saveConsolidatedPdf } = await import("@/lib/statements/consolidated-pdf");
+      saveConsolidatedPdf(consolidated);
+    } catch (pdfError) {
+      setError(pdfError instanceof Error ? `Could not generate the PDF: ${pdfError.message}` : "Could not generate the PDF.");
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
+  async function downloadXlsx() {
+    if (!consolidated) return;
+    setExportBusy("xlsx");
+    setError(null);
+    try {
+      const { saveConsolidatedXlsx } = await import("@/lib/statements/analysis-export");
+      await saveConsolidatedXlsx(consolidated);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? `Could not generate the Excel workbook: ${exportError.message}` : "Could not generate the Excel workbook.");
+    } finally {
+      setExportBusy(null);
+    }
+  }
+
+  async function downloadCsvBundle() {
+    if (!consolidated) return;
+    setExportBusy("csv");
+    setError(null);
+    try {
+      const { saveConsolidatedCsvBundle } = await import("@/lib/statements/analysis-export");
+      await saveConsolidatedCsvBundle(consolidated);
+    } catch (exportError) {
+      setError(exportError instanceof Error ? `Could not generate the CSV bundle: ${exportError.message}` : "Could not generate the CSV bundle.");
+    } finally {
+      setExportBusy(null);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF7F2] text-[#2D2A26]">
       <ToolHeader active="converter" />
@@ -219,11 +263,13 @@ export default function MpesaStatementConverter() {
         <div className="max-w-2xl">
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-[#C73E1D]">Free tool · no account</p>
           <h1 className="mt-2 font-serif text-3xl font-bold tracking-tight text-[#2D2A26] sm:text-4xl">
-            M-PESA statement to CSV
+            M-PESA statement analysis
           </h1>
           <p className="mt-3 text-[#5C5853]">
-            Unlock an M-PESA statement PDF and download a clean CSV or JSON. Everything runs in your browser —
-            the file and password never leave your device.
+            Unlock one or more M-PESA statements and download a consolidated analysis as PDF, plus a multi-sheet
+            Excel workbook, a CSV bundle, transactions CSV or JSON. Every file is combined into one view while keeping
+            its own coverage and reconciliation. Everything runs in your browser — the files and password never leave
+            your device.
           </p>
           <p className="mt-3 flex items-center gap-2 text-sm text-[#2E7D32]">
             <ShieldCheck className="h-4 w-4" /> Processed on this device. Nothing uploaded, nothing stored.
@@ -290,9 +336,9 @@ export default function MpesaStatementConverter() {
               <div className="mt-5 space-y-3">
                 <div className="flex items-center gap-2 text-sm text-[#2E7D32]">
                   <CheckCircle2 className="h-4 w-4" />
-                  {converted.length} file{converted.length === 1 ? "" : "s"} converted · {aggregate.rows} transactions
+                  {converted.length} file{converted.length === 1 ? "" : "s"} converted · {aggregate.rows.toLocaleString()} transactions
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="grid grid-cols-2 gap-2 text-center">
                   <div className="rounded-lg bg-[#F5EDE6] p-2">
                     <p className="text-xs uppercase tracking-wider text-[#8D8A87]">In</p>
                     <p className="font-mono text-sm font-semibold text-[#2E7D32]">{formatKES(aggregate.totalIn)}</p>
@@ -305,17 +351,33 @@ export default function MpesaStatementConverter() {
                     <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Fees</p>
                     <p className="font-mono text-sm font-semibold text-[#8D6E00]">{formatKES(aggregate.fees)}</p>
                   </div>
+                  <div className="rounded-lg bg-[#F5EDE6] p-2">
+                    <p className="text-xs uppercase tracking-wider text-[#8D8A87]">Net</p>
+                    <p className="font-mono text-sm font-semibold text-[#2D2A26]">{formatKES(aggregate.net)}</p>
+                  </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button onClick={downloadCsv} className="bg-[#2D2A26] hover:bg-[#2D2A26]/90">
-                    <Download className="mr-2 h-4 w-4" /> CSV
+                  <Button onClick={downloadPdf} disabled={pdfBusy} className="bg-[#C73E1D] hover:bg-[#C73E1D]/90">
+                    {pdfBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                    {pdfBusy ? "Preparing PDF…" : "PDF analysis"}
+                  </Button>
+                  <Button onClick={downloadXlsx} disabled={exportBusy !== null} variant="outline">
+                    {exportBusy === "xlsx" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-2 h-4 w-4" />}
+                    {exportBusy === "xlsx" ? "Preparing…" : "Excel analysis"}
+                  </Button>
+                  <Button onClick={downloadCsvBundle} disabled={exportBusy !== null} variant="outline">
+                    {exportBusy === "csv" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileArchive className="mr-2 h-4 w-4" />}
+                    {exportBusy === "csv" ? "Preparing…" : "Analysis CSV bundle"}
+                  </Button>
+                  <Button onClick={downloadCsv} variant="outline">
+                    <Download className="mr-2 h-4 w-4" /> Transactions CSV
                   </Button>
                   <Button variant="outline" onClick={downloadJson}>
                     <Download className="mr-2 h-4 w-4" /> JSON
                   </Button>
                 </div>
                 <p className="text-xs text-[#8D8A87]">
-                  The CSV opens directly in Excel or Google Sheets (UTF-8 BOM, plain amounts).
+                  PDF uses grouped parties; the Excel workbook and CSV bundle include both exact and grouped sheets for every report.
                 </p>
               </div>
             )}
@@ -326,9 +388,10 @@ export default function MpesaStatementConverter() {
               <h2 className="font-serif text-lg font-semibold">What you get</h2>
               <ul className="mt-3 space-y-2 text-sm text-[#5C5853]">
                 <li>· Every transaction with receipt, time, details, paid in, withdrawn and running balance</li>
-                <li>· Charges kept as their own rows, so fee totals are explicit</li>
-                <li>· A financial summary, money-in sources, category hints and balance checks</li>
-                <li>· CSV for Excel/Sheets, JSON for scripts and integrations</li>
+                <li>· Charges, Fuliza draws/repayments and reversals kept as their own rows</li>
+                <li>· One consolidated view across every uploaded statement, with cross-file duplicate detection</li>
+                <li>· All contacts, categories, fee types, recurring payments, paybill/till shortcodes and every calendar month</li>
+                <li>· PDF analysis, a multi-sheet Excel workbook, a CSV bundle, transactions CSV and JSON</li>
               </ul>
             </div>
             <div className="rounded-xl border border-[#E8E0D8] bg-white p-5">
@@ -344,46 +407,22 @@ export default function MpesaStatementConverter() {
           </section>
         </div>
 
-        {converted.length > 0 && (aggregate.incomeChannels.length > 0 || aggregate.categories.length > 0) && (
-          <section className="mt-8 grid gap-4 md:grid-cols-2">
-            {aggregate.incomeChannels.length > 0 && (
-              <div className="rounded-xl border border-[#E8E0D8] bg-white p-5">
-                <h2 className="font-serif text-lg font-semibold">Money in by source</h2>
-                <p className="mt-1 text-xs text-[#8D8A87]">
-                  Where the inflows came from: agent deposits, received money and other channels.
+        {consolidated && (
+          <section className="mt-8 space-y-4">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 className="font-serif text-xl font-semibold text-[#2D2A26]">Consolidated analysis</h2>
+                <p className="text-sm text-[#8D8A87]">
+                  One view across all {consolidated.fileCount} uploaded statement{consolidated.fileCount === 1 ? "" : "s"}.
+                  Every month, contact, category and fee is included.
                 </p>
-                <div className="mt-3 space-y-2">
-                  {aggregate.incomeChannels.map((channel) => (
-                    <div key={channel.key} className="flex items-center justify-between rounded-lg bg-[#F5EDE6] px-3 py-2 text-sm">
-                      <span className="min-w-0 truncate">
-                        {channel.label}
-                        <span className="ml-2 text-xs text-[#8D8A87]">
-                          {channel.count} · {channel.share.toFixed(1)}%
-                        </span>
-                      </span>
-                      <span className="ml-2 shrink-0 font-mono text-[#2E7D32]">{formatKES(channel.total)}</span>
-                    </div>
-                  ))}
-                </div>
               </div>
-            )}
-
-            {aggregate.categories.length > 0 && (
-              <div className="rounded-xl border border-[#E8E0D8] bg-white p-5">
-                <h2 className="font-serif text-lg font-semibold">Spending hints</h2>
-                <p className="mt-1 text-xs text-[#8D8A87]">
-                  Merchant-based hints only; rows without a confident match stay uncategorised.
-                </p>
-                <div className="mt-3 space-y-2">
-                  {aggregate.categories.slice(0, 10).map(([name, total]) => (
-                    <div key={name} className="flex items-center justify-between rounded-lg bg-[#F5EDE6] px-3 py-2 text-sm">
-                      <span className="min-w-0 truncate">{name}</span>
-                      <span className="ml-2 shrink-0 font-mono text-[#5C5853]">{formatKES(total.toFixed(2))}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+              <Button onClick={downloadPdf} disabled={pdfBusy} className="bg-[#C73E1D] hover:bg-[#C73E1D]/90">
+                {pdfBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
+                {pdfBusy ? "Preparing PDF…" : "Download PDF"}
+              </Button>
+            </div>
+            <ConsolidatedAnalysisPanel consolidated={consolidated} />
           </section>
         )}
 
