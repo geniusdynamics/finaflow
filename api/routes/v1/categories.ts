@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import type { ApiKeyVariables } from "../../lib/api-key-middleware";
 import { resolveApiKeyMiddleware } from "../../lib/api-key-middleware";
 import { successResponse, paginatedResponse, errorResponse } from "../../lib/api-response";
-import { listCategories, upsertCategory, logIntegration } from "../../lib/integration-service";
+import { listCategories, upsertCategory, archiveCategory, logIntegration } from "../../lib/integration-service";
 import { paginationQuerySchema, upsertCategorySchema } from "../../schemas";
 
 const categories = new Hono<{ Variables: ApiKeyVariables }>();
@@ -60,6 +60,22 @@ categories.post("/", resolveApiKeyMiddleware("categories:write"), async (c) => {
       { error: message },
     );
     return errorResponse(c, status as 400 | 500, status === 400 ? "VALIDATION_ERROR" : "INTERNAL_ERROR", message);
+  }
+});
+
+categories.delete("/:id", resolveApiKeyMiddleware("categories:write"), async (c) => {
+  try {
+    const apiKey = c.get("apiKey");
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id) || id <= 0) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", "Invalid category id");
+    }
+    const archived = await archiveCategory(apiKey.businessId, id);
+    if (!archived) return errorResponse(c, 404, "NOT_FOUND", "Category not found");
+    logIntegration({ businessId: apiKey.businessId, apiKey }, "archiveCategory", "success", { categoryId: id });
+    return successResponse(c, { id, archived: true });
+  } catch (err) {
+    return errorResponse(c, 500, "INTERNAL_ERROR", err instanceof Error ? err.message : "Internal server error");
   }
 });
 

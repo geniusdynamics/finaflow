@@ -6,7 +6,7 @@ import type { ApiKeyVariables } from "../../lib/api-key-middleware";
 import { resolveApiKeyMiddleware } from "../../lib/api-key-middleware";
 import { successResponse, paginatedResponse, errorResponse } from "../../lib/api-response";
 import { ingestDailySales } from "../../lib/daily-sales-ingestion";
-import { listDailySales } from "../../lib/integration-service";
+import { listDailySales, getDailySale, deleteDailySale } from "../../lib/integration-service";
 import { dailySalesIngestSchema } from "../../schemas";
 
 const dailySales = new Hono<{ Variables: ApiKeyVariables }>();
@@ -37,6 +37,36 @@ dailySales.get("/", resolveApiKeyMiddleware("sales:read"), async (c) => {
     });
   } catch (err) {
     Sentry.captureException(err);
+    return errorResponse(c, 500, "INTERNAL_ERROR", err instanceof Error ? err.message : "Internal server error");
+  }
+});
+
+dailySales.get("/:id", resolveApiKeyMiddleware("sales:read"), async (c) => {
+  try {
+    const apiKey = c.get("apiKey");
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id) || id <= 0) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", "Invalid daily sale id");
+    }
+    const sale = await getDailySale(apiKey.businessId, id);
+    if (!sale) return errorResponse(c, 404, "NOT_FOUND", "Daily sale not found");
+    return successResponse(c, sale);
+  } catch (err) {
+    return errorResponse(c, 500, "INTERNAL_ERROR", err instanceof Error ? err.message : "Internal server error");
+  }
+});
+
+dailySales.delete("/:id", resolveApiKeyMiddleware("sales:write"), async (c) => {
+  try {
+    const apiKey = c.get("apiKey");
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id) || id <= 0) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", "Invalid daily sale id");
+    }
+    const deleted = await deleteDailySale(apiKey.businessId, id);
+    if (!deleted) return errorResponse(c, 404, "NOT_FOUND", "Daily sale not found");
+    return successResponse(c, { id, deleted: true });
+  } catch (err) {
     return errorResponse(c, 500, "INTERNAL_ERROR", err instanceof Error ? err.message : "Internal server error");
   }
 });

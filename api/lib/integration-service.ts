@@ -16,14 +16,18 @@ import {
   ledgerEntries,
   bills,
   billItems,
+  billPayments,
   expenses,
   subscriptions,
   subscriptionPayments,
   dailySales,
   dailySalePayments,
+  statementImports,
+  mobileWalletTransactions,
   type AccountType,
   type AccountSubType,
 } from "@db/schema";
+import { payBill } from "./bill-payment";
 import crypto from "crypto";
 
 const INTEGRATION_ALLOWED_ROLES = new Set([
@@ -260,11 +264,215 @@ export async function getBill(businessId: number, billId: number) {
   return rows[0] ?? null;
 }
 
+/** List recorded payments for one bill. */
+export async function listBillPayments(businessId: number, billId: number) {
+  const bill = await getBill(businessId, billId);
+  if (!bill) return null;
+  return getDb()
+    .select()
+    .from(billPayments)
+    .where(and(eq(billPayments.billId, billId), isNull(billPayments.deletedAt)))
+    .orderBy(desc(billPayments.paymentDate), desc(billPayments.id));
+}
+
+/**
+ * The user an API-key action is attributed to: the API key's creator when known,
+ * otherwise the first active member of the business.
+ */
+export async function resolveActingUserId(
+  businessId: number,
+  preferredUserId?: number | null,
+): Promise<number | null> {
+  const db = getDb();
+  if (preferredUserId) {
+    const [preferred] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.id, preferredUserId), isNull(users.deletedAt)))
+      .limit(1);
+    if (preferred) return preferred.id;
+  }
+  const [member] = await db
+    .select({ userId: userBusinesses.userId })
+    .from(userBusinesses)
+    .innerJoin(users, eq(users.id, userBusinesses.userId))
+    .where(
+      and(
+        eq(userBusinesses.businessId, businessId),
+        eq(userBusinesses.isActive, true),
+        eq(users.isActive, true),
+        isNull(users.deletedAt),
+      ),
+    )
+    .orderBy(userBusinesses.id)
+    .limit(1);
+  return member?.userId ?? null;
+}
+
+/** Record a bill payment through the same accounting path as the in-app router. */
+export async function payBillForBusiness(
+  businessId: number,
+  input: {
+    billId: number;
+    paymentMethod: "cash" | "wallet" | "bank_transfer" | "card";
+    amount: string;
+    paymentDate: string;
+    reference?: string;
+    notes?: string;
+    accountId?: number;
+    liabilityAccountId?: number;
+    categoryId?: number;
+  },
+) {
+  const db = getDb();
+  const [bill] = await db
+    .select()
+    .from(bills)
+    .where(and(eq(bills.id, input.billId), eq(bills.businessId, businessId), isNull(bills.deletedAt)))
+    .limit(1);
+  if (!bill) throw new Error("Bill not found");
+  if (!bill.locationId) throw new Error("Bill has no location");
+
+  const itemCategories = await db
+    .select({ categoryId: billItems.categoryId })
+    .from(billItems)
+    .where(and(eq(billItems.billId, input.billId), isNull(billItems.deletedAt)));
+  const categoryId = input.categoryId ?? bill.categoryId ?? itemCategories.find((item) => item.categoryId)?.categoryId;
+  if (!categoryId) {
+    throw new Error("A category must be assigned to the bill or passed as categoryId before payment.");
+  }
+  if (input.categoryId) {
+    const [category] = await db
+      .select({ id: expenseCategories.id })
+      .from(expenseCategories)
+      .where(
+        and(
+          eq(expenseCategories.id, input.categoryId),
+          eq(expenseCategories.businessId, businessId),
+          isNull(expenseCategories.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!category) throw new Error("Category not found for this business.");
+  }
+
+  for (const accountId of [input.accountId, input.liabilityAccountId]) {
+    if (!accountId) continue;
+    const [account] = await db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(and(eq(accounts.id, accountId), eq(accounts.businessId, businessId), isNull(accounts.deletedAt)))
+      .limit(1);
+    if (!account) throw new Error("Payment account not found for this business.");
+  }
+
+  const enteredBy = await resolveActingUserId(businessId);
+  if (!enteredBy) {
+    throw new Error("No active user is available to attribute this payment to.");
+  }
+
+  return db.transaction((tx) => payBill({
+    db: tx,
+    billId: input.billId,
+    paymentMethod: input.paymentMethod,
+    amount: input.amount,
+    paymentDate: input.paymentDate,
+    reference: input.reference,
+    notes: input.notes,
+    accountId: input.accountId,
+    liabilityAccountId: input.liabilityAccountId,
+    categoryId,
+    enteredBy,
+    businessId,
+    locationId: bill.locationId!,
+    supplierId: bill.supplierId,
+    billNumber: bill.billNumber,
+    description: bill.description,
+  }));
+}
+
+/** Account detail, including operational accounts and CoA rows. */
+export async function getAccount(businessId: number, accountId: number) {
+  const db = getDb();
+  const [row] = await db
+    .select()
+    .from(accounts)
+    .where(and(eq(accounts.id, accountId), eq(accounts.businessId, businessId), isNull(accounts.deletedAt)))
+    .limit(1);
+  return row ?? null;
+}
+
+/** Update the safe external fields on an account; ownership is checked first. */
+export async function updateAccount(
+  businessId: number,
+  accountId: number,
+  input: {
+    name?: string;
+    accountCode?: string;
+    accountNumber?: string;
+    isActive?: boolean;
+    isPaymentMethod?: boolean;
+  },
+) {
+  const existing = await getAccount(businessId, accountId);
+  if (!existing) return null;
+  const [updated] = await getDb()
+    .update(accounts)
+    .set(input)
+    .where(eq(accounts.id, accountId))
+    .returning();
+  return updated ?? null;
+}
+
+/** Soft-delete a category owned by the business. */
+export async function archiveCategory(businessId: number, categoryId: number) {
+  const [updated] = await getDb()
+    .update(expenseCategories)
+    .set({ deletedAt: new Date(), isActive: false })
+    .where(
+      and(
+        eq(expenseCategories.id, categoryId),
+        eq(expenseCategories.businessId, businessId),
+        isNull(expenseCategories.deletedAt),
+      ),
+    )
+    .returning({ id: expenseCategories.id });
+  return updated?.id ?? null;
+}
+
+/** Link every imported row in a statement import to a bank/account record. */
+export async function linkStatementAccount(businessId: number, importId: number, accountId: number) {
+  const db = getDb();
+  const [record] = await db
+    .select({ id: statementImports.id, locationId: statementImports.locationId })
+    .from(statementImports)
+    .where(and(eq(statementImports.id, importId), eq(statementImports.businessId, businessId), isNull(statementImports.deletedAt)))
+    .limit(1);
+  if (!record) throw new Error("Statement import not found");
+  const account = await getAccount(businessId, accountId);
+  if (!account) throw new Error("Bank account not found for this business");
+  if (account.locationId && account.locationId !== record.locationId) {
+    throw new Error("Bank account does not belong to the statement location");
+  }
+  const rows = await db
+    .update(mobileWalletTransactions)
+    .set({ sourceAccountId: accountId })
+    .where(
+      and(
+        eq(mobileWalletTransactions.statementImportId, importId),
+        isNull(mobileWalletTransactions.deletedAt),
+      ),
+    )
+    .returning({ id: mobileWalletTransactions.id });
+  return { linked: rows.length };
+}
+
 /** List daily sales with payment channels for pull sync, reporting and AI tools. */
 export async function listDailySales(
   businessId: number,
   options: {
     locationId?: number;
+    dailySaleId?: number;
     dateFrom?: string;
     dateTo?: string;
     updatedSince?: string;
@@ -286,6 +494,7 @@ export async function listDailySales(
 
   const scopedLocationIds = options.locationId ? [options.locationId] : locationIds;
   const conditions = [inArray(dailySales.locationId, scopedLocationIds), isNull(dailySales.deletedAt)];
+  if (options.dailySaleId) conditions.push(eq(dailySales.id, options.dailySaleId));
   if (options.dateFrom) conditions.push(sql`${dailySales.saleDate} >= ${options.dateFrom}`);
   if (options.dateTo) conditions.push(sql`${dailySales.saleDate} <= ${options.dateTo}`);
   if (options.updatedSince) conditions.push(gt(dailySales.updatedAt, new Date(options.updatedSince)));
@@ -330,6 +539,22 @@ export async function listDailySales(
     })),
     total,
   };
+}
+
+export async function getDailySale(businessId: number, dailySaleId: number) {
+  const result = await listDailySales(businessId, { dailySaleId, limit: 1, offset: 0 });
+  return result.items[0] ?? null;
+}
+
+export async function deleteDailySale(businessId: number, dailySaleId: number) {
+  const sale = await getDailySale(businessId, dailySaleId);
+  if (!sale) return null;
+  const [updated] = await getDb()
+    .update(dailySales)
+    .set({ deletedAt: new Date() })
+    .where(eq(dailySales.id, dailySaleId))
+    .returning({ id: dailySales.id });
+  return updated?.id ?? null;
 }
 
 /** List expenses for FinaBill pull sync (billId lets FinaBill skip bill-payment expenses). */

@@ -1,9 +1,10 @@
 // ABOUTME: /api/v1/accounts — list accounts, upsert CoA entries, and read account transactions.
 import { Hono } from "hono";
+import { z } from "zod";
 import type { ApiKeyVariables } from "../../lib/api-key-middleware";
 import { resolveApiKeyMiddleware } from "../../lib/api-key-middleware";
 import { paginatedResponse, successResponse, errorResponse } from "../../lib/api-response";
-import { listAccounts, listAccountTransactions, upsertAccount, logIntegration } from "../../lib/integration-service";
+import { listAccounts, listAccountTransactions, upsertAccount, getAccount, updateAccount, logIntegration } from "../../lib/integration-service";
 import { listAccountsQuerySchema, listAccountTransactionsQuerySchema, upsertAccountSchema } from "../../schemas";
 
 const accounts = new Hono<{ Variables: ApiKeyVariables }>();
@@ -43,6 +44,49 @@ accounts.post("/", resolveApiKeyMiddleware("accounts:write"), async (c) => {
     return successResponse(c, result, result.created ? 201 : 200);
   } catch (err) {
     logIntegration({ businessId: c.get("apiKey")?.businessId, apiKey: c.get("apiKey") }, "upsertAccount", "failed", { error: String(err) });
+    return errorResponse(c, 500, "INTERNAL_ERROR", err instanceof Error ? err.message : "Internal server error");
+  }
+});
+
+accounts.get("/:id", resolveApiKeyMiddleware("accounts:read"), async (c) => {
+  try {
+    const apiKey = c.get("apiKey");
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id) || id <= 0) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", "Invalid account id");
+    }
+    const account = await getAccount(apiKey.businessId, id);
+    if (!account) return errorResponse(c, 404, "NOT_FOUND", "Account not found");
+    return successResponse(c, account);
+  } catch (err) {
+    return errorResponse(c, 500, "INTERNAL_ERROR", err instanceof Error ? err.message : "Internal server error");
+  }
+});
+
+const updateAccountSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  accountCode: z.string().max(20).optional(),
+  accountNumber: z.string().max(100).optional(),
+  isActive: z.boolean().optional(),
+  isPaymentMethod: z.boolean().optional(),
+});
+
+accounts.patch("/:id", resolveApiKeyMiddleware("accounts:write"), async (c) => {
+  try {
+    const apiKey = c.get("apiKey");
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id) || id <= 0) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", "Invalid account id");
+    }
+    const parsed = updateAccountSchema.safeParse(await c.req.json());
+    if (!parsed.success) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join(", "));
+    }
+    const account = await updateAccount(apiKey.businessId, id, parsed.data);
+    if (!account) return errorResponse(c, 404, "NOT_FOUND", "Account not found");
+    logIntegration({ businessId: apiKey.businessId, apiKey }, "updateAccount", "success", { accountId: id });
+    return successResponse(c, account);
+  } catch (err) {
     return errorResponse(c, 500, "INTERNAL_ERROR", err instanceof Error ? err.message : "Internal server error");
   }
 });
