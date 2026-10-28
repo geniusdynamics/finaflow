@@ -15,12 +15,24 @@ export interface GroupedContactRow extends ContactRow {
  * Normalises a printed counterparty so variants such as
  * `G BAMBURI CE MENT PUBLIC LIMITED FT2604` and `H BAMBURI CE MENT PUBLIC LIMITED FT2604`
  * land in the same group.
+ *
+ * Bank narrations that describe an operation rather than a counterparty collapse to the
+ * operation head — every `CASH WITHDRAWAL ...` line becomes `CASH WITHDRAWAL` — while the
+ * exact-name reports keep the full narration.
  */
 export function normalisePartyName(raw: string): string {
   const original = raw.replace(/\s+/g, " ").trim().toUpperCase();
+  const operation = original.match(/^(CASH WITHDRAWAL|CASH DEPOSIT)\b/);
+  if (operation) return operation[1];
+
   let name = original
     .replace(/[#*]/g, " ")
-    .replace(/\b(?:FT[A-Z0-9]{4,}|TT[A-Z0-9]{4,}|U[A-Z0-9]{8,}|MBN[A-Z0-9]{8,}|CHQ\d{4,})\b/g, " ")
+    .replace(/\b(?:FT[A-Z0-9]{4,}|TT[A-Z0-9]{4,}|U[A-Z0-9]{8,}|MBN[A-Z0-9]{8,})\b/g, " ")
+    .replace(/\bF\s+T\d{4,}\b/g, " ")
+    .replace(/\bCHQ\s?\d+\b/g, " ")
+    .replace(/\bAT-?T\b/g, " ")
+    // Mixed letter/digit tokens are transaction references (WNCTR416, FT26083, CHQ28).
+    .replace(/\b(?=[A-Z0-9-]*\d)[A-Z][A-Z0-9-]{3,}\b/g, " ")
     .replace(/\b(?:2547\d{8}|07\d{8})\b/g, " ")
     .replace(/\b\d{4,}\b/g, " ")
     .replace(/\bAC-?\d+\b/g, " ")
@@ -29,7 +41,10 @@ export function normalisePartyName(raw: string): string {
   name = name
     .replace(/^(?:MPES|MPESA|M-?PES|LIPANA KCB|BANK TO MOBILE|BILLPAY|AIRTEL MONEY|CUSTOMER TRANSFER|FUNDS RECEIVED|TRANSFER|PAYMENT)\b/, "")
     .trim();
+  const operationAfterPrefix = name.match(/^(CASH WITHDRAWAL|CASH DEPOSIT)\b/);
+  if (operationAfterPrefix) return operationAfterPrefix[1];
   name = name.replace(/^(?:[A-Z]\s+)+(?=[A-Z]{2,})/, "");
+  name = name.replace(/\s+\b[A-Z]\b$/, "");
   name = name.replace(/^[-:]+|[-:]+$/g, "").replace(/\s+/g, " ").trim();
   return name.length >= 2 ? name : original;
 }

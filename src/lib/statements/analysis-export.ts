@@ -1,7 +1,7 @@
 // ABOUTME: Browser download adapters for the shared consolidated analysis report sheets.
 // ABOUTME: Excel uses one worksheet per report; the CSV option bundles one CSV per report in a ZIP.
 
-import type { ConsolidatedAnalysis } from "@shared/statements/consolidate";
+import type { ConsolidatedReport } from "@shared/statements/consolidate";
 import { buildAnalysisSheets, type AnalysisSheet } from "@shared/statements/analysis-sheets";
 
 export { buildAnalysisSheets, type AnalysisSheet };
@@ -30,7 +30,7 @@ function slug(value: string): string {
   return value.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
-export async function saveConsolidatedXlsx(consolidated: ConsolidatedAnalysis): Promise<void> {
+export async function saveConsolidatedXlsx(consolidated: ConsolidatedReport): Promise<void> {
   const ExcelJS = (await import("exceljs")).default;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "FinaFlow";
@@ -56,7 +56,7 @@ export async function saveConsolidatedXlsx(consolidated: ConsolidatedAnalysis): 
   );
 }
 
-export async function saveConsolidatedCsvBundle(consolidated: ConsolidatedAnalysis): Promise<void> {
+export async function saveConsolidatedCsvBundle(consolidated: ConsolidatedReport): Promise<void> {
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
   for (const sheet of buildAnalysisSheets(consolidated)) {

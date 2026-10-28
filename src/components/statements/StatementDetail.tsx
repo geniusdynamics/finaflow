@@ -5,9 +5,11 @@ import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { StatementAnalysisPanel } from "./StatementAnalysisPanel";
+import { CategoryCell } from "./CategoryCell";
 import { formatKES } from "@/lib/utils";
 import { isStatementAnalysis, type StatementAnalysis } from "@shared/statements/analyze";
-import { Download, Loader2, X } from "lucide-react";
+import type { ConsolidatedReport } from "@shared/statements/consolidate";
+import { Download, FileSpreadsheet, FileText, Loader2, X } from "lucide-react";
 
 interface Props {
   importId: number;
@@ -51,11 +53,37 @@ export function StatementDetail({ importId, onClose }: Props) {
   const [dateFormat, setDateFormat] = useState<"iso" | "dd-mmm-yyyy" | "dd/mm/yyyy">("iso");
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [reportBusy, setReportBusy] = useState<"pdf" | "xlsx" | "csv" | null>(null);
   const utils = trpc.useUtils();
 
   const { data, isPending } = trpc.wallet.statements.get.useQuery({ importId, limit: 200 });
-  const rawAnalysis = data?.import.analysis ?? null;
+  const { data: liveReport } = trpc.wallet.statements.analyze.useQuery({ importId });
+  const { data: categories } = trpc.expenses.categories.useQuery();
+  const rawAnalysis = liveReport?.analysis ?? data?.import.analysis ?? null;
   const analysis: StatementAnalysis | null = isStatementAnalysis(rawAnalysis) ? rawAnalysis : null;
+
+  async function downloadReport(kind: "pdf" | "xlsx" | "csv") {
+    if (!liveReport) return;
+    setError(null);
+    setReportBusy(kind);
+    try {
+      const report = liveReport as ConsolidatedReport;
+      if (kind === "pdf") {
+        const { saveConsolidatedPdf } = await import("@/lib/statements/consolidated-pdf");
+        saveConsolidatedPdf(report);
+      } else if (kind === "xlsx") {
+        const { saveConsolidatedXlsx } = await import("@/lib/statements/analysis-export");
+        await saveConsolidatedXlsx(report);
+      } else {
+        const { saveConsolidatedCsvBundle } = await import("@/lib/statements/analysis-export");
+        await saveConsolidatedCsvBundle(report);
+      }
+    } catch (reportError) {
+      setError(reportError instanceof Error ? reportError.message : "Could not generate the report.");
+    } finally {
+      setReportBusy(null);
+    }
+  }
 
   async function exportFile() {
     setError(null);
@@ -178,6 +206,41 @@ export function StatementDetail({ importId, onClose }: Props) {
           Export
         </Button>
       </div>
+      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-[#E8E0D8] p-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-[#2D2A26]">Full analysis report</p>
+          <p className="text-xs text-[#8D8A87]">
+            Consolidated analysis with live categories and tags, 13 report sheets and per-statement coverage.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!liveReport || reportBusy !== null}
+          onClick={() => void downloadReport("pdf")}
+        >
+          {reportBusy === "pdf" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileText className="mr-2 h-4 w-4" />}
+          PDF
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!liveReport || reportBusy !== null}
+          onClick={() => void downloadReport("xlsx")}
+        >
+          {reportBusy === "xlsx" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheet className="mr-2 h-4 w-4" />}
+          Excel
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={!liveReport || reportBusy !== null}
+          onClick={() => void downloadReport("csv")}
+        >
+          {reportBusy === "csv" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+          CSV bundle
+        </Button>
+      </div>
       {error && <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       {analysis ? (
@@ -214,7 +277,20 @@ export function StatementDetail({ importId, onClose }: Props) {
                     <td className={`whitespace-nowrap px-2 py-1.5 text-right font-mono ${row.direction === "in" ? "text-[#2E7D32]" : "text-[#D32F2F]"}`}>
                       {row.direction === "in" ? "+" : "-"}{formatKES(amount.toFixed(2))}
                     </td>
-                    <td className="px-2 py-1.5 text-[#8D8A87]">{row.categoryName ?? "No category"}</td>
+                    <td className="px-2 py-1.5 text-[#8D8A87]">
+                      <CategoryCell
+                        walletTxnId={row.id}
+                        categoryId={row.categoryId ?? null}
+                        categoryName={row.categoryName ?? null}
+                        partyName={row.partyName ?? null}
+                        description={row.description ?? null}
+                        categories={categories}
+                        onSaved={() => {
+                          void utils.wallet.statements.get.invalidate({ importId, limit: 200 });
+                          void utils.wallet.statements.analyze.invalidate({ importId });
+                        }}
+                      />
+                    </td>
                   </tr>
                 );
               })}

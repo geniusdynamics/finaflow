@@ -4,7 +4,7 @@
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatKES } from "@/lib/utils";
-import type { ConsolidatedAnalysis } from "@shared/statements/consolidate";
+import type { ConsolidatedAnalysis, ConsolidatedReport } from "@shared/statements/consolidate";
 import { groupContacts } from "@shared/statements/group";
 
 const MARGIN = 32;
@@ -77,7 +77,7 @@ function monthlyRows(rows: ConsolidatedAnalysis["analysis"]["breakdown"]["monthl
   return rows.map((row) => [row.label, row.count.toLocaleString(), formatKES(row.totalIn), formatKES(row.totalOut), formatKES(row.net)]);
 }
 
-export function saveConsolidatedPdf(consolidated: ConsolidatedAnalysis): void {
+export function saveConsolidatedPdf(consolidated: ConsolidatedReport): void {
   const { analysis, files } = consolidated;
   const balanceGaps = files.reduce((sum, file) => sum + file.balance.continuity.unexplained, 0);
   const contactLimit = 100;
