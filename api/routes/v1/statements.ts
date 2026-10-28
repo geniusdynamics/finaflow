@@ -23,6 +23,11 @@ import {
 } from "../../lib/statements/service";
 import { exportStatementImport } from "../../lib/statements/export-service";
 import { analyzePublicStatements } from "../../lib/statements/public-analysis";
+import { analyzeStatementImport } from "../../lib/statements/stored-analysis";
+import { linkWalletTransactionToBill, tagWalletTransactions } from "../../lib/statements/tagging";
+import { setWalletCategory } from "../../lib/statements/categories";
+import { linkStatementAccount } from "../../lib/integration-service";
+import { buildAnalysisSheets } from "@shared/statements/analysis-sheets";
 import { StatementError } from "@shared/statements/errors";
 
 const statements = new Hono<{ Variables: ApiKeyVariables }>();
@@ -352,10 +357,149 @@ statements.get("/imports/:id", resolveApiKeyMiddleware("statements:read"), async
     const id = Number(c.req.param("id"));
     if (!Number.isFinite(id)) return errorResponse(c, 400, "VALIDATION_ERROR", "Invalid import id.");
 
-    const result = await getStatementImport({ businessId: apiKey.businessId, importId: id, limit: 500 });
+    const limit = Math.min(Math.max(Number(c.req.query("limit") ?? 500), 1), 1000);
+    const offset = Math.max(Number(c.req.query("offset") ?? 0), 0);
+    const result = await getStatementImport({ businessId: apiKey.businessId, importId: id, limit, offset });
     if (!result) return errorResponse(c, 404, "NOT_FOUND", "Statement import not found.");
     return successResponse(c, result);
   } catch (error) {
+    return statementFailure(c, error);
+  }
+});
+
+statements.get("/imports/:id/analysis", resolveApiKeyMiddleware("statements:read"), async (c) => {
+  try {
+    const apiKey = c.get("apiKey");
+    const id = Number(c.req.param("id"));
+    if (!Number.isFinite(id)) return errorResponse(c, 400, "VALIDATION_ERROR", "Invalid import id.");
+
+    const consolidated = await analyzeStatementImport({ businessId: apiKey.businessId, importId: id });
+    if (!consolidated) return errorResponse(c, 404, "NOT_FOUND", "Statement import not found.");
+
+    return successResponse(c, {
+      generatedAt: new Date().toISOString(),
+      analysis: consolidated.analysis,
+      files: consolidated.files,
+      fileCount: consolidated.fileCount,
+      totalRowCount: consolidated.totalRowCount,
+      duplicateRows: consolidated.duplicateRows,
+      banks: consolidated.banks,
+      periodStart: consolidated.periodStart,
+      periodEnd: consolidated.periodEnd,
+      sheets: buildAnalysisSheets(consolidated),
+    });
+  } catch (error) {
+    return statementFailure(c, error);
+  }
+});
+
+statements.post("/imports/:id/link-account", resolveApiKeyMiddleware("statements:write"), async (c) => {
+  try {
+    const apiKey = c.get("apiKey");
+    const id = Number(c.req.param("id"));
+    if (!Number.isFinite(id)) return errorResponse(c, 400, "VALIDATION_ERROR", "Invalid import id.");
+    const body = await c.req.json();
+    const parsed = z.object({ accountId: z.number().int().positive() }).safeParse(body);
+    if (!parsed.success) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", "accountId is required.");
+    }
+    const result = await linkStatementAccount(apiKey.businessId, id, parsed.data.accountId);
+    return successResponse(c, result);
+  } catch (error) {
+    return statementFailure(c, error);
+  }
+});
+
+statements.patch("/transactions/:id/category", resolveApiKeyMiddleware("statements:write"), async (c) => {
+  try {
+    const apiKey = c.get("apiKey");
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id) || id <= 0) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", "Invalid transaction id.");
+    }
+    const parsed = z
+      .object({
+        categoryId: z.number().int().positive().nullable(),
+        rememberMerchant: z.boolean().optional(),
+      })
+      .safeParse(await c.req.json());
+    if (!parsed.success) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", parsed.error.issues.map((issue) => issue.message).join(", "));
+    }
+    const result = await setWalletCategory({
+      businessId: apiKey.businessId,
+      walletTxnId: id,
+      categoryId: parsed.data.categoryId,
+      rememberMerchant: parsed.data.rememberMerchant,
+    });
+    if (!result) return errorResponse(c, 404, "NOT_FOUND", "Statement transaction not found.");
+    return successResponse(c, { id, ...result });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("does not belong")) return errorResponse(c, 400, "VALIDATION_ERROR", message);
+    return statementFailure(c, error);
+  }
+});
+
+statements.post("/transactions/tag", resolveApiKeyMiddleware("statements:write"), async (c) => {
+  try {
+    const apiKey = c.get("apiKey");
+    const parsed = z
+      .object({
+        transactionIds: z.array(z.number().int().positive()).min(1).max(500),
+        categoryId: z.number().int().positive().nullable(),
+        rememberMerchant: z.boolean().optional(),
+      })
+      .safeParse(await c.req.json());
+    if (!parsed.success) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", parsed.error.issues.map((issue) => issue.message).join(", "));
+    }
+    const result = await tagWalletTransactions({
+      businessId: apiKey.businessId,
+      transactionIds: parsed.data.transactionIds,
+      categoryId: parsed.data.categoryId,
+      rememberMerchant: parsed.data.rememberMerchant,
+    });
+    return successResponse(c, result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("does not belong")) return errorResponse(c, 400, "VALIDATION_ERROR", message);
+    return statementFailure(c, error);
+  }
+});
+
+statements.post("/transactions/:id/link-bill", resolveApiKeyMiddleware("statements:write"), async (c) => {
+  try {
+    const apiKey = c.get("apiKey");
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id) || id <= 0) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", "Invalid transaction id.");
+    }
+    const parsed = z
+      .object({
+        billId: z.number().int().positive(),
+        postPayment: z.boolean().optional(),
+        categoryId: z.number().int().positive().optional(),
+      })
+      .safeParse(await c.req.json());
+    if (!parsed.success) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", parsed.error.issues.map((issue) => issue.message).join(", "));
+    }
+    const result = await linkWalletTransactionToBill({
+      businessId: apiKey.businessId,
+      transactionId: id,
+      billId: parsed.data.billId,
+      postPayment: parsed.data.postPayment,
+      categoryId: parsed.data.categoryId,
+    });
+    if (!result) return errorResponse(c, 404, "NOT_FOUND", "Statement transaction not found.");
+    return successResponse(c, result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message === "Bill not found") return errorResponse(c, 404, "NOT_FOUND", message);
+    if (/categor|account|outgoing|no active user/i.test(message)) {
+      return errorResponse(c, 400, "VALIDATION_ERROR", message);
+    }
     return statementFailure(c, error);
   }
 });

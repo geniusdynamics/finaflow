@@ -6,10 +6,10 @@ import { and, eq, isNull } from "drizzle-orm";
 import type { ApiKeyVariables } from "../../lib/api-key-middleware";
 import { resolveApiKeyMiddleware } from "../../lib/api-key-middleware";
 import { paginatedResponse, successResponse, errorResponse } from "../../lib/api-response";
-import { listSubscriptions, listSubscriptionPayments, logIntegration } from "../../lib/integration-service";
+import { listSubscriptions, listSubscriptionPayments, logIntegration, resolveActingUserId } from "../../lib/integration-service";
 import { updatedSinceQuerySchema } from "../../schemas";
 import { getDb } from "../../queries/connection";
-import { subscriptions as subscriptionsTable, userBusinesses, users } from "@db/schema";
+import { subscriptions as subscriptionsTable } from "@db/schema";
 import { recordPaymentInTx } from "../../lib/subscription-service";
 
 const subscriptions = new Hono<{ Variables: ApiKeyVariables }>();
@@ -129,19 +129,5 @@ subscriptions.post("/:id/payments", resolveApiKeyMiddleware("subscriptions:write
 });
 
 /** The user an API-key action is attributed to: the creator, else an owner/admin of the business. */
-async function resolveActingUserId(businessId: number, createdBy: number | null): Promise<number | null> {
-  const db = getDb();
-  if (createdBy) {
-    const [creator] = await db.select({ id: users.id }).from(users).where(eq(users.id, createdBy)).limit(1);
-    if (creator) return creator.id;
-  }
-  const [member] = await db
-    .select({ userId: userBusinesses.userId })
-    .from(userBusinesses)
-    .innerJoin(users, eq(users.id, userBusinesses.userId))
-    .where(and(eq(userBusinesses.businessId, businessId), eq(userBusinesses.isActive, true), eq(users.isActive, true)))
-    .limit(1);
-  return member?.userId ?? null;
-}
 
 export default subscriptions;

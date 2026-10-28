@@ -1,18 +1,46 @@
 # Changelog
 
+## [Unreleased] — Statement tagging, bill linking and subscriber reports
+
+### Added
+- **Stored statement analysis** — `GET /api/v1/statements/imports/{id}/analysis` rebuilds the consolidated analysis, coverage and all report sheets from the rows already stored. Categories come from the database, so manual or AI tagging is reflected without re-importing.
+- **Transaction tagging** — `POST /api/v1/statements/transactions/tag` tags up to 500 rows at once and `PATCH /api/v1/statements/transactions/{id}/category` tags one row. Clearing a tag is `categoryId: null`; `rememberMerchant` learns a category rule.
+- **Bill linking** — `POST /api/v1/statements/transactions/{id}/link-bill` matches an imported transaction to a bill. It records the link only by default; `postPayment: true` also posts the payment through the same accounting path as the app.
+- **Subscriber report downloads** — statement detail now rebuilds the live analysis and offers the same PDF, 13-sheet Excel workbook and CSV bundle as the public tool, with the existing row export still available.
+- **Inline tagging in statement detail** — the category column is editable, and saving a category refreshes both the row list and the live analysis.
+- **MCP tagging and linking tools** — `analyze_statement_import`, `tag_statement_transactions` and `link_transaction_to_bill` bring the MCP server to 32 tools.
+
+### Changed
+- **Grouped party references** — grouped money-in/out tables now remove separated KCB references such as `F T26083` and mixed letter/digit codes such as `WNCTR416`, so `COAST META LS TRADERS LIMITED F T26285` rolls up to `COAST META LS TRADERS LIMITED`.
+- **Cash narration grouping** — every `CASH WITHDRAWAL …` narration groups under `CASH WITHDRAWAL` (and `CASH DEPOSIT …` under `CASH DEPOSIT`), while exact-name views and exports keep the full narration.
+
+### Tested
+- `shared/statements/__tests__/group.test.ts` — **5 pass**, covering the `COAST META` references and cash-withdrawal narrations.
+- `api/__tests__/statements-v1.test.ts` — **11 pass**, including live analysis after tagging, bulk tagging, tag clearing and bill linking.
+- `api/__tests__/v1-writes.test.ts` — **3 pass**, including bill payments attributed to a real user, category archiving and daily-sales detail/delete.
+- `mcp` — typecheck and build pass; tool registration verified with **32 tools**.
+- OpenAPI YAML parses with **34 paths**.
+
 ## [Unreleased] — Public statement analysis API and MCP brief
 
 ### Added
 - **`POST /api/v1/statements/analyze/full`** — stateless public analysis for one or more PDF/CSV statements. Returns a consolidated analysis, per-file coverage, every Excel report sheet as JSON, optional deduplicated transactions, a data dictionary and warnings. Requires `statements:read`; no location or database write is needed.
 - **`GET /api/v1/daily-sales`** — read daily sales with date/location/batch filters, pagination and payment-channel rows. Adds the `sales:read` scope and grants it to legacy `read` aliases and Fina Connect defaults.
 - **`GET /api/v1/bills/{id}`** — bill detail with line items, supplier, paid amount and balance.
-- **MCP implementation brief** — `docs/mcp-server.md` covers transports, auth/scopes, tools, resources, prompts, safety, testing, deployment and the planned tax-agent workflow. `docs/mcp-tools.json` is a machine-readable tool manifest.
-- **API gap audit** — `docs/api-reference/gap-audit.md` maps current coverage and prioritises bill payments, expense writes, bank-account detail/relinking, category archive, tax records and reconciliation matches.
+- **Bill payments** — `GET/POST /api/v1/bills/{id}/payments` records payments through the same accounting path as the app.
+- **Account detail/update** — `GET/PATCH /api/v1/accounts/{id}` for operational accounts and bank accounts.
+- **Statement relinking** — `POST /api/v1/statements/imports/{id}/link-account` links every imported row to a bank account.
+- **Category archive** — `DELETE /api/v1/categories/{id}`.
+- **Daily sales detail/delete** — `GET/DELETE /api/v1/daily-sales/{id}`.
+- **MCP server scaffold** — `mcp/` is a standalone TypeScript MCP package with 29 tools covering reads, statement analysis and confirmed writes. `docs/mcp-server.md` documents transports, tools, resources, prompts, safety, testing and the tax-agent roadmap; `docs/mcp-tools.json` is the tool manifest.
+- **API gap audit** — `docs/api-reference/gap-audit.md` maps current coverage and prioritises the remaining expense-write, tax-record, attachment, webhook and report APIs.
 
 ### Tested
-- `api/__tests__/statements-v1.test.ts` — **8 pass**, including JSON and multipart public analysis, cross-file deduplication, report sheets and scope enforcement.
-- `api/__tests__/integration-finabill.test.ts` — **10 pass**, including daily sales read with payment channels.
-- `npm run typecheck`, `npm run lint` (0 errors), OpenAPI YAML parse (25 paths).
+- `shared/statements/__tests__` — **65 pass**.
+- `api/__tests__/statements-v1.test.ts` — **9 pass**, including JSON/multipart public analysis, report sheets, scope enforcement, statement-to-account linking and account detail/update.
+- `api/__tests__/integration-finabill.test.ts` — **10 pass**, including daily-sales read with payment channels.
+- `mcp` — typecheck and build pass; tool registration verified with **29 tools**.
+- `npm run typecheck`, `npm run lint` (0 errors), OpenAPI YAML parse (30 paths).
 
 ## [Unreleased] — Bank statement import (KCB)
 

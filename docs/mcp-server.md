@@ -103,6 +103,11 @@ Map API errors to MCP tool errors:
 
 ## 5. Tools
 
+The `mcp/` package in this repo currently implements the 32 tools listed in
+`docs/mcp-tools.json`. The tables below describe the full planned surface; entries not in
+that manifest (`create_bank_account`, `export_statement`, `record_subscription_payment`)
+are specified here for the next iteration.
+
 ### 5.1 Connection and reference data
 
 | Tool | Endpoint | Scope | Writes |
@@ -111,11 +116,14 @@ Map API errors to MCP tool errors:
 | `get_business_profile` | `GET /business/profile` | `business:read` | No |
 | `list_locations` | `GET /locations` | `locations:read` | No |
 | `list_accounts` | `GET /accounts` | `accounts:read` | No |
+| `get_account` | `GET /accounts/{id}` | `accounts:read` | No |
+| `update_account` | `PATCH /accounts/{id}` | `accounts:write` | Yes |
 | `get_account_transactions` | `GET /accounts/{id}/transactions` | `accounts:read` | No |
 | `upsert_account` | `POST /accounts` | `accounts:write` | Yes |
 | `create_bank_account` | `POST /accounts` with `type=bank_account` | `accounts:write` | Yes |
 | `list_categories` | `GET /categories` | `categories:read` | No |
 | `upsert_category` | `POST /categories` | `categories:write` | Yes |
+| `archive_category` | `DELETE /categories/{id}` | `categories:write` | Yes |
 | `list_suppliers` | `GET /suppliers` | `suppliers:read` | No |
 | `upsert_supplier` | `POST /suppliers` | `suppliers:write` | Yes |
 
@@ -125,9 +133,13 @@ Map API errors to MCP tool errors:
 |---|---|---|---|
 | `list_bills` | `GET /bills` | `bills:read` | No |
 | `get_bill` | `GET /bills/{id}` | `bills:read` | No |
+| `list_bill_payments` | `GET /bills/{id}/payments` | `bills:read` | No |
+| `record_bill_payment` | `POST /bills/{id}/payments` | `bills:write` | Yes |
 | `upsert_bill` | `POST /bills` | `bills:write` | Yes |
 | `list_expenses` | `GET /expenses` | `expenses:read` | No |
 | `list_daily_sales` | `GET /daily-sales` | `sales:read` | No |
+| `get_daily_sale` | `GET /daily-sales/{id}` | `sales:read` | No |
+| `delete_daily_sale` | `DELETE /daily-sales/{id}` | `sales:write` | Yes |
 | `ingest_daily_sales` | `POST /daily-sales` | `sales:write` | Yes |
 
 ### 5.3 Statements and AI analysis
@@ -199,7 +211,20 @@ Other statement tools:
 | `import_statements` | `POST /statements/import` | `statements:write` | Yes |
 | `list_statement_imports` | `GET /statements/imports` | `statements:read` | No |
 | `get_statement_import` | `GET /statements/imports/{id}` | `statements:read` | No |
+| `analyze_statement_import` | `GET /statements/imports/{id}/analysis` | `statements:read` | No |
+| `link_statement_account` | `POST /statements/imports/{id}/link-account` | `statements:write` | Yes |
+| `tag_statement_transactions` | `POST /statements/transactions/tag` | `statements:write` | Yes |
+| `link_transaction_to_bill` | `POST /statements/transactions/{id}/link-bill` | `statements:write` | Yes |
 | `export_statement` | `GET /statements/imports/{id}/export?format=csv|xlsx|json` | `statements:read` | No |
+
+Tagging and reconciliation workflow:
+
+1. `get_statement_import` returns rows with their database `id`, `categoryId`, `isLinked` and `linkedBillId`.
+2. `analyze_statement_import` rebuilds the report from live categories, so tags appear in the category sheet immediately.
+3. `tag_statement_transactions` assigns one category to up to 500 rows; `categoryId: null` clears it.
+4. `link_transaction_to_bill` records a match only by default. Pass `postPayment: true` only
+   when the bill has not already been paid in FinaFlow, because that posts the payment and
+   creates its expense.
 
 ### 5.4 Subscriptions
 
@@ -335,9 +360,13 @@ coverage metadata so the model can distinguish bank movement from accounting rec
 
 ## 12. Open items
 
-- Bill payment and expense-write APIs.
-- Bank-account detail/update and statement relinking.
+- Expense-write API.
 - Tax-record model and endpoints.
 - Outbound webhook subscription management.
 - Attachment upload for receipts.
-- A machine-readable tool manifest generated from the OpenAPI document.
+- Linking a statement row to an existing expense (bill linking is implemented).
+- A hosted Streamable HTTP deployment and per-request key resolution.
+
+The initial `mcp/` package implements 32 tools: the read catalog above plus confirmed
+writes for accounts, categories, suppliers, bills, bill payments, daily sales,
+statement import/linking/tagging and statement analysis.

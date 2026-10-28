@@ -15,6 +15,7 @@ import {
   undoStatementImport,
 } from "./lib/statements/service";
 import { exportStatementImport } from "./lib/statements/export-service";
+import { analyzeStatementImport } from "./lib/statements/stored-analysis";
 import { deleteCategoryRule, listCategoryRules, setWalletCategory } from "./lib/statements/categories";
 import { StatementError } from "@shared/statements/errors";
 
@@ -210,6 +211,29 @@ export const statementsRouter = createRouter({
         }
         await requireAuthorizedLocation(ctx, result.import.locationId);
         return result;
+      } catch (error) {
+        rethrow(error);
+      }
+    }),
+
+  analyze: walletQuery
+    .input(z.object({ importId: z.number() }))
+    .query(async ({ input, ctx }) => {
+      try {
+        const businessId = businessIdOf(ctx);
+        const record = await getStatementImport({ businessId, importId: input.importId, limit: 1 });
+        if (!record) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Statement import not found." });
+        }
+        await requireAuthorizedLocation(ctx, record.import.locationId);
+
+        const consolidated = await analyzeStatementImport({ businessId, importId: input.importId });
+        if (!consolidated) {
+          throw new TRPCError({ code: "NOT_FOUND", message: "Statement import not found." });
+        }
+        const { transactions: _transactions, ...report } = consolidated;
+        void _transactions;
+        return report;
       } catch (error) {
         rethrow(error);
       }

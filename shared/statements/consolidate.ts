@@ -47,6 +47,9 @@ export interface ConsolidatedAnalysis {
   transactions: ParsedStatementRow[];
 }
 
+/** The report payload without row-level transactions, for storage and transport. */
+export type ConsolidatedReport = Omit<ConsolidatedAnalysis, "transactions">;
+
 function unique(values: string[]): string[] {
   return [...new Set(values.filter((value) => value.trim().length > 0))];
 }

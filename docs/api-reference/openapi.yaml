@@ -126,6 +126,49 @@ paths:
         "400":
           $ref: "#/components/responses/ErrorResponse"
 
+  /accounts/{id}:
+    get:
+      operationId: getAccount
+      summary: Get one account or bank account
+      tags: [Accounts]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["accounts:read"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Account detail }
+        "404": { description: Account not found }
+    patch:
+      operationId: updateAccount
+      summary: Update an account
+      tags: [Accounts]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["accounts:write"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string, maxLength: 100 }
+                accountCode: { type: string, maxLength: 20 }
+                accountNumber: { type: string, maxLength: 100 }
+                isActive: { type: boolean }
+                isPaymentMethod: { type: boolean }
+      responses:
+        "200": { description: Account updated }
+        "404": { description: Account not found }
   /accounts/{id}/transactions:
     get:
       operationId: listAccountTransactions
@@ -475,6 +518,22 @@ paths:
         "400":
           $ref: "#/components/responses/ValidationError"
 
+  /categories/{id}:
+    delete:
+      operationId: archiveCategory
+      summary: Archive an expense category
+      tags: [Categories]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["categories:write"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Category archived }
+        "404": { description: Category not found }
   /business/profile:
     get:
       operationId: getBusinessProfile
@@ -620,6 +679,55 @@ paths:
           description: Bill with line items
         "404":
           $ref: "#/components/responses/ValidationError"
+  /bills/{id}/payments:
+    get:
+      operationId: listBillPayments
+      summary: List payments for a bill
+      tags: [Bills]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["bills:read"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Bill payments }
+        "404": { description: Bill not found }
+    post:
+      operationId: payBill
+      summary: Record a bill payment
+      description: Posts the payment, ledger entries and optional bill-payment expense using the same accounting path as the app.
+      tags: [Bills]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["bills:write"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paymentMethod, amount, paymentDate]
+              properties:
+                paymentMethod: { type: string, enum: [cash, wallet, bank_transfer, card] }
+                amount: { type: string }
+                paymentDate: { type: string, format: date }
+                reference: { type: string }
+                notes: { type: string }
+                accountId: { type: integer }
+                liabilityAccountId: { type: integer }
+                categoryId: { type: integer, description: Required when the bill or its line items have no category }
+      responses:
+        "201": { description: Payment recorded }
+        "400": { description: Invalid payment }
+        "404": { description: Bill not found }
   /daily-sales:
     get:
       operationId: listDailySales
@@ -692,6 +800,37 @@ paths:
         "400":
           $ref: "#/components/responses/ValidationError"
 
+  /daily-sales/{id}:
+    get:
+      operationId: getDailySale
+      summary: Get a daily sales batch
+      tags: [Daily Sales]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["sales:read"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Daily sale with payment channels }
+        "404": { description: Daily sale not found }
+    delete:
+      operationId: deleteDailySale
+      summary: Soft-delete a daily sales batch
+      tags: [Daily Sales]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["sales:write"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Daily sale deleted }
+        "404": { description: Daily sale not found }
   /statements/parse:
     post:
       operationId: parseStatement
@@ -999,6 +1138,12 @@ paths:
           name: id
           required: true
           schema: { type: integer }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 1000, default: 500 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
       responses:
         "200":
           description: Import detail
@@ -1010,6 +1155,137 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /statements/imports/{id}/analysis:
+    get:
+      operationId: analyzeStatementImport
+      summary: Rebuild the consolidated analysis for a stored import
+      description: Uses the statement's live categories and tags, so analysis reflects later tagging without re-importing.
+      tags: [Statements]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["statements:read"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200": { description: Consolidated analysis, coverage and report sheets }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /statements/transactions/tag:
+    post:
+      operationId: tagStatementTransactions
+      summary: Tag many statement transactions with one category
+      description: Applies a category to up to 500 rows. Rows outside the business are reported in `missing` and left unchanged.
+      tags: [Statements]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["statements:write"]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [transactionIds, categoryId]
+              properties:
+                transactionIds:
+                  type: array
+                  maxItems: 500
+                  items: { type: integer }
+                categoryId:
+                  type: integer
+                  nullable: true
+                  description: Null clears the category
+                rememberMerchant: { type: boolean }
+      responses:
+        "200": { description: Tagging result with updated and missing counts }
+        "400": { description: Invalid payload or foreign category }
+
+  /statements/transactions/{id}/category:
+    patch:
+      operationId: setStatementTransactionCategory
+      summary: Tag one statement transaction
+      tags: [Statements]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["statements:write"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [categoryId]
+              properties:
+                categoryId: { type: integer, nullable: true }
+                rememberMerchant: { type: boolean }
+      responses:
+        "200": { description: Category updated }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /statements/transactions/{id}/link-bill:
+    post:
+      operationId: linkTransactionToBill
+      summary: Link a statement transaction to a bill
+      description: Records the match only by default. Set postPayment=true to also post the payment through the accounting path.
+      tags: [Statements]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["statements:write"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [billId]
+              properties:
+                billId: { type: integer }
+                postPayment: { type: boolean, default: false }
+                categoryId: { type: integer }
+      responses:
+        "200": { description: Linked transaction and optional payment }
+        "400": { description: Invalid link or uncategorised bill }
+        "404": { description: Transaction or bill not found }
+
+  /statements/imports/{id}/link-account:
+    post:
+      operationId: linkStatementAccount
+      summary: Link imported statement rows to a bank account
+      description: Sets sourceAccountId on every non-deleted row in the import. The account must belong to the same business and location.
+      tags: [Statements]
+      security:
+        - BearerAuth: []
+        - ScopeAuth: ["statements:write"]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [accountId]
+              properties:
+                accountId: { type: integer }
+      responses:
+        "200": { description: Rows linked }
+        "404": { description: Import or account not found }
   /statements/imports/{id}/export:
     get:
       operationId: exportStatementImport

@@ -32,6 +32,39 @@ describe("party grouping", () => {
     });
   });
 
+  it("collapses transaction-reference variants onto the printed party name", () => {
+    const grouped = groupContacts([
+      row("COAST META LS TRADERS LIMITED F T26083", "500000.00"),
+      row("COAST META LS TRADERS LIMITED F T26125", "500000.00"),
+      row("COAST META LS TRADERS LIMITED F T26156", "500000.00"),
+      row("COAST META LS TRADERS LIMITED F T26160", "500000.00"),
+      row("COAST META LS TRADERS LIMITED F T26250", "500000.00"),
+      row("COAST META LS TRADERS LIMITED F T26282", "500000.00"),
+      row("COAST META LS TRADERS LIMITED F T26285", "500000.00"),
+    ]);
+
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0]).toMatchObject({
+      name: "COAST META LS TRADERS LIMITED",
+      count: 7,
+      total: "3500000.00",
+    });
+  });
+
+  it("groups cash withdrawal narrations under the operation head", () => {
+    const exact = [
+      row("CASH WITHDRAWAL CHQ2 S TOCK PURCHASE AT-T WNCTR416", "900000.00"),
+      row("CASH WITHDRAWAL CHQ10 8 BUSINESS RESTOCKI NG AT-TW", "450000.00"),
+    ];
+    const grouped = groupContacts(exact);
+
+    expect(grouped).toHaveLength(1);
+    expect(grouped[0]).toMatchObject({ name: "CASH WITHDRAWAL", count: 2, total: "1350000.00" });
+    expect(grouped[0].aliases).toEqual(exact.map((item) => item.name).sort());
+    // The exact-name report keeps every narration untouched.
+    expect(exact[0].name).toBe("CASH WITHDRAWAL CHQ2 S TOCK PURCHASE AT-T WNCTR416");
+  });
+
   it("leaves names without a removable prefix alone", () => {
     expect(normalisePartyName("MEGHA MAR KETING EA LIMITED")).toBe("MEGHA MAR KETING EA LIMITED");
     expect(normalisePartyName("APEX STEEL LIMITED")).toBe("APEX STEEL LIMITED");

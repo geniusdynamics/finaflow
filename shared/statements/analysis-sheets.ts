@@ -1,7 +1,7 @@
 // ABOUTME: Pure report-sheet builder shared by the browser exports and the public statement API.
 // ABOUTME: One sheet per analysis section, with numeric amounts for downstream analysis.
 
-import type { ConsolidatedAnalysis } from "./consolidate";
+import type { ConsolidatedReport } from "./consolidate";
 import { groupContacts } from "./group";
 
 export interface AnalysisSheet {
@@ -18,7 +18,7 @@ function period(start: string | null, end: string | null): string {
   return `${start ?? "?"} to ${end ?? "?"}`;
 }
 
-export function buildAnalysisSheets(consolidated: ConsolidatedAnalysis): AnalysisSheet[] {
+export function buildAnalysisSheets(consolidated: ConsolidatedReport): AnalysisSheet[] {
   const { analysis, files } = consolidated;
   const groupedIn = groupContacts(analysis.moneyIn.bySource);
   const groupedOut = groupContacts(analysis.moneyOut.byDestination);

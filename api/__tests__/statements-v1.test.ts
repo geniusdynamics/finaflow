@@ -7,6 +7,8 @@ import { eq, sql } from "drizzle-orm";
 import { getDb } from "../queries/connection";
 import {
   apiKeys,
+  accounts,
+  bills,
   businesses,
   expenseCategories,
   locations,
@@ -20,6 +22,7 @@ import {
 import { generateApiKey, getKeyPrefix, hashApiKey } from "../lib/api-key-auth";
 import type { ApiKeyVariables } from "../lib/api-key-middleware";
 import statementsV1 from "../routes/v1/statements";
+import accountsV1 from "../routes/v1/accounts";
 import { parseMpesaStatement } from "@shared/statements/parsers/mpesa";
 import { syntheticMpesaDocument } from "@shared/statements/__fixtures__/synthetic";
 import { buildStatementCsv } from "@shared/statements/export/csv";
@@ -55,7 +58,12 @@ describe("v1 statements REST API", () => {
   let readKeyA = "";
   let writeKeyA = "";
   let readKeyB = "";
+  let accountsKeyA = "";
+  let bankAccountId = 0;
   let importId = 0;
+  let feeCategoryId = 0;
+  let taggedTxnId = 0;
+  let billId = 0;
   let app: Hono<{ Variables: ApiKeyVariables }>;
 
   beforeAll(async () => {
@@ -80,6 +88,16 @@ describe("v1 statements REST API", () => {
     [bizB] = await db.insert(businesses).values({ accountId: "STMTV1_B", name: "Statement V1 B", slug: "STMTV1_B_main", plan: "pro", isActive: true } as never).returning();
     [locA] = await db.insert(locations).values({ businessId: bizA.id, name: "V1 Statement A", slug: "stmtv1-a", isActive: true } as never).returning();
     [locB] = await db.insert(locations).values({ businessId: bizB.id, name: "V1 Statement B", slug: "stmtv1-b", isActive: true } as never).returning();
+    const [bankAccount] = (await db.insert(accounts).values({
+      businessId: bizA.id,
+      locationId: locA.id,
+      name: "V1 Bank Account",
+      type: "bank_account",
+      accountNumber: "0011223344",
+      currentBalance: "0.00",
+      isActive: true,
+    }).returning()) as Array<typeof accounts.$inferSelect>;
+    bankAccountId = bankAccount.id;
 
     const [owner] = await db.insert(users).values({ username: "stmt-v1-owner", name: "V1 Owner", role: "owner", isActive: true, currentBusinessId: bizA.id } as never).returning();
     await db.insert(userBusinesses).values({ userId: owner.id, businessId: bizA.id, role: "owner", isActive: true } as never);
@@ -90,6 +108,7 @@ describe("v1 statements REST API", () => {
     readKeyA = await createKey(bizA.id, "Statement read A", ["statements:read"]);
     writeKeyA = await createKey(bizA.id, "Statement write A", ["statements:write"]);
     readKeyB = await createKey(bizB.id, "Statement read B", ["statements:read"]);
+    accountsKeyA = await createKey(bizA.id, "Accounts A", ["accounts:read", "accounts:write"]);
 
     const parsed = parseMpesaStatement(syntheticMpesaDocument());
     const context = await loadCategoryContext(bizA.id, locA.id, "mpesa");
@@ -112,9 +131,11 @@ describe("v1 statements REST API", () => {
     importId = created.importId!;
     expect(importId).toBeGreaterThan(0);
     expect(fees.id).toBeGreaterThan(0);
+    feeCategoryId = fees.id;
 
     app = new Hono<{ Variables: ApiKeyVariables }>();
     app.route("/statements", statementsV1);
+    app.route("/accounts", accountsV1);
   });
 
   afterAll(async () => {
@@ -122,9 +143,11 @@ describe("v1 statements REST API", () => {
     await db.delete(mobileWalletTransactions).where(eq(mobileWalletTransactions.locationId, locB.id));
     await db.delete(statementImports).where(eq(statementImports.businessId, bizA.id));
     await db.delete(walletCategoryRules).where(eq(walletCategoryRules.businessId, bizA.id));
+    await db.delete(bills).where(eq(bills.businessId, bizA.id));
     await db.delete(expenseCategories).where(eq(expenseCategories.businessId, bizA.id));
     await db.delete(apiKeys).where(eq(apiKeys.businessId, bizA.id));
     await db.delete(apiKeys).where(eq(apiKeys.businessId, bizB.id));
+    await db.delete(accounts).where(eq(accounts.businessId, bizA.id));
     await db.delete(userBusinesses).where(eq(userBusinesses.businessId, bizA.id));
     await db.delete(locations).where(eq(locations.businessId, bizA.id));
     await db.delete(locations).where(eq(locations.businessId, bizB.id));
@@ -307,6 +330,120 @@ describe("v1 statements REST API", () => {
     const body = (await response.json()) as { data: { files: Array<{ fileName: string }>; transactions: unknown[] } };
     expect(body.data.files[0].fileName).toBe("statement.csv");
     expect(body.data.transactions).toHaveLength(5);
+  });
+
+  it("links statement rows to a bank account and exposes account detail/update", async () => {
+    const link = await app.request(`/statements/imports/${importId}/link-account`, {
+      method: "POST",
+      headers: auth(writeKeyA),
+      body: JSON.stringify({ accountId: bankAccountId }),
+    });
+    expect(link.status).toBe(200);
+    const linkBody = (await link.json()) as { data: { linked: number } };
+    expect(linkBody.data.linked).toBe(5);
+
+    const rows = await db
+      .select({ sourceAccountId: mobileWalletTransactions.sourceAccountId })
+      .from(mobileWalletTransactions)
+      .where(eq(mobileWalletTransactions.statementImportId, importId));
+    expect(rows.every((row) => row.sourceAccountId === bankAccountId)).toBe(true);
+
+    const detail = await app.request(`/accounts/${bankAccountId}`, { headers: auth(accountsKeyA) });
+    expect(detail.status).toBe(200);
+    const detailBody = (await detail.json()) as { data: { name: string; type: string } };
+    expect(detailBody.data).toMatchObject({ name: "V1 Bank Account", type: "bank_account" });
+
+    const update = await app.request(`/accounts/${bankAccountId}`, {
+      method: "PATCH",
+      headers: auth(accountsKeyA),
+      body: JSON.stringify({ name: "V1 Bank Account Updated" }),
+    });
+    expect(update.status).toBe(200);
+    const updateBody = (await update.json()) as { data: { name: string } };
+    expect(updateBody.data.name).toBe("V1 Bank Account Updated");
+  });
+
+  it("tags transactions and rebuilds the stored analysis from live categories", async () => {
+    const [txn] = await db
+      .select({ id: mobileWalletTransactions.id })
+      .from(mobileWalletTransactions)
+      .where(eq(mobileWalletTransactions.statementImportId, importId))
+      .limit(1);
+    taggedTxnId = txn.id;
+
+    const tag = await app.request("/statements/transactions/tag", {
+      method: "POST",
+      headers: auth(writeKeyA),
+      body: JSON.stringify({ transactionIds: [taggedTxnId], categoryId: feeCategoryId }),
+    });
+    expect(tag.status).toBe(200);
+    const tagBody = (await tag.json()) as { data: { updated: number; missing: number[] } };
+    expect(tagBody.data).toMatchObject({ updated: 1, missing: [] });
+
+    const analysis = await app.request(`/statements/imports/${importId}/analysis`, { headers: auth(readKeyA) });
+    expect(analysis.status).toBe(200);
+    const analysisBody = (await analysis.json()) as {
+      data: {
+        analysis: { summary: { rowCount: number }; categories: Array<{ categoryId: number | null; count: number }> };
+        sheets: Array<{ name: string }>;
+        files: Array<{ fileName: string; totalIn: string }>;
+      };
+    };
+    expect(analysisBody.data.analysis.summary.rowCount).toBe(5);
+    expect(analysisBody.data.sheets.length).toBeGreaterThan(0);
+    expect(analysisBody.data.files[0].fileName).toBe("v1-statement.pdf");
+    expect(
+      analysisBody.data.analysis.categories.some((category) => category.categoryId === feeCategoryId && category.count > 0),
+    ).toBe(true);
+
+    const clear = await app.request(`/statements/transactions/${taggedTxnId}/category`, {
+      method: "PATCH",
+      headers: auth(writeKeyA),
+      body: JSON.stringify({ categoryId: null }),
+    });
+    expect(clear.status).toBe(200);
+    const cleared = await db
+      .select({ categoryId: mobileWalletTransactions.categoryId, source: mobileWalletTransactions.classificationSource })
+      .from(mobileWalletTransactions)
+      .where(eq(mobileWalletTransactions.id, taggedTxnId));
+    expect(cleared[0]).toMatchObject({ categoryId: null, source: "none" });
+  });
+
+  it("links a statement transaction to a bill without posting a second payment", async () => {
+    const [bill] = (await db
+      .insert(bills)
+      .values({
+        businessId: bizA.id,
+        locationId: locA.id,
+        description: "Stationery",
+        amount: "100.00",
+        amountPaid: "0.00",
+        balanceDue: "100.00",
+        issueDate: "2026-10-01",
+        dueDate: "2026-10-31",
+        status: "pending",
+        categoryId: feeCategoryId,
+      } as never)
+      .returning()) as Array<typeof bills.$inferSelect>;
+    billId = bill.id;
+
+    const link = await app.request(`/statements/transactions/${taggedTxnId}/link-bill`, {
+      method: "POST",
+      headers: auth(writeKeyA),
+      body: JSON.stringify({ billId }),
+    });
+    expect(link.status).toBe(200);
+    const linkBody = (await link.json()) as {
+      data: { transaction: { isLinked: boolean; linkedBillId: number }; payment: null };
+    };
+    expect(linkBody.data.transaction).toMatchObject({ isLinked: true, linkedBillId: billId });
+    expect(linkBody.data.payment).toBeNull();
+
+    const [stored] = await db
+      .select({ isLinked: mobileWalletTransactions.isLinked, linkedBillId: mobileWalletTransactions.linkedBillId })
+      .from(mobileWalletTransactions)
+      .where(eq(mobileWalletTransactions.id, taggedTxnId));
+    expect(stored).toMatchObject({ isLinked: true, linkedBillId: billId });
   });
 
   it("rejects invalid parse and import payloads", async () => {

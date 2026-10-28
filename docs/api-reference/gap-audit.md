@@ -39,20 +39,28 @@ what remains intentionally deferred.
 `statements:read` now covers both stored imports and stateless analysis. `sales:read`
 is a new scope; legacy `read` keys resolve to it, and new Fina Connect keys include it.
 
+## Implemented follow-up
+
+These audit items are now live in the v1 surface:
+
+- **Bill payments** — `GET/POST /bills/{id}/payments`.
+- **Bank account detail/update** — `GET/PATCH /accounts/{id}`.
+- **Statement relinking** — `POST /statements/imports/{id}/link-account`.
+- **Category archive** — `DELETE /categories/{id}`.
+- **Daily sales detail/delete** — `GET/DELETE /daily-sales/{id}`.
+- **Stored statement analysis** — `GET /statements/imports/{id}/analysis` rebuilds the consolidated report from live categories, so tagging changes the analysis without re-importing.
+- **Transaction tagging** — `PATCH /statements/transactions/{id}/category` and `POST /statements/transactions/tag`.
+- **Bill linking** — `POST /statements/transactions/{id}/link-bill` records a match; `postPayment: true` posts the payment through the accounting path.
+
 ## Important remaining gaps
 
 Prioritised for bookkeeping, tax and AI use:
 
 | Priority | Gap | Recommended API | Reason |
 |---|---|---|---|
-| P1 | Bill payments | `POST /bills/{id}/payments`, `GET /bills/{id}/payments` | Needed for payables ageing and bank reconciliation |
 | P1 | Expense creation | `POST /expenses` | Pull-only means external tools cannot post expenses |
-| P1 | Bank account detail/update | `GET /accounts/{id}`, `PATCH /accounts/{id}` | Bank statements need an account identity for reconciliation |
-| P1 | Statement-to-account link | `POST /statements/{importId}/link-account` | Current imports can link rows on import, but history cannot be relinked |
-| P2 | Category archive | `DELETE /categories/{id}` | Upsert covers edits; safe deactivation is missing |
-| P2 | Daily sales detail/delete | `GET /daily-sales/{id}`, `DELETE /daily-sales/{id}` | Read list exists; correcting a batch is app-only |
 | P2 | Tax records | `GET/POST /tax/records`, `GET /tax/summary` | Required for the planned tax-analysis agent |
-| P2 | Reconciliation matches | `GET/POST /reconciliations` | Link statement rows to bills/expenses explicitly |
+| P2 | Reconciliation matches | `POST /statements/transactions/{id}/link-expense` | Bill linking exists; linking a row to an existing expense is still app-only |
 | P3 | Attachments | `POST /attachments`, `GET /attachments/{id}` | Receipts and supporting documents for tax |
 | P3 | Webhook subscriptions | `GET/POST/DELETE /webhooks` | Incoming receivers exist; outbound subscriptions are app-only |
 | P3 | Reports | `GET /reports/income-statement`, `GET /reports/cashflow` | Agents need accountant-ready outputs |

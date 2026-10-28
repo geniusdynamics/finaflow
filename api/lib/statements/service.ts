@@ -820,6 +820,7 @@ export async function getStatementImport(input: {
       txnType: mobileWalletTransactions.txnType,
       direction: mobileWalletTransactions.direction,
       partyName: mobileWalletTransactions.partyName,
+      partyIdentifier: mobileWalletTransactions.partyIdentifier,
       description: mobileWalletTransactions.description,
       amount: mobileWalletTransactions.amount,
       balance: mobileWalletTransactions.balance,
@@ -827,6 +828,11 @@ export async function getStatementImport(input: {
       categoryName: expenseCategories.name,
       classificationSource: mobileWalletTransactions.classificationSource,
       status: mobileWalletTransactions.status,
+      isLinked: mobileWalletTransactions.isLinked,
+      isReconciled: mobileWalletTransactions.isReconciled,
+      linkedBillId: mobileWalletTransactions.linkedBillId,
+      linkedExpenseId: mobileWalletTransactions.linkedExpenseId,
+      sourceAccountId: mobileWalletTransactions.sourceAccountId,
     })
     .from(mobileWalletTransactions)
     .leftJoin(expenseCategories, eq(mobileWalletTransactions.categoryId, expenseCategories.id))
