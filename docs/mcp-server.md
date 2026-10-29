@@ -4,6 +4,8 @@ This document is the implementation brief for a Model Context Protocol (MCP) ser
 that exposes FinaFlow to AI models and agents. It is deliberately API-first: the MCP
 server is a thin, typed, auditable wrapper over `/api/v1`.
 
+The user-facing setup guide is [`docs/mcp.md`](./mcp.md), published at `/docs/mcp`.
+
 ## 1. Purpose
 
 The server should let an AI assistant answer questions such as:
