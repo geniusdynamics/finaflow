@@ -56,13 +56,13 @@ describe("handleWalletWebhook", () => {
     expect(result.body).toContain("Unknown provider");
   });
 
-  it("returns 200 for processed webhook", async () => {
+  it("rejects a processed webhook without stored tenant ownership", async () => {
     const result = await handleWalletWebhook({
       provider: "webhook_mock",
       rawBody: JSON.stringify({ event: "payment", amount: 500 }),
       headers: { "x-signature": "abc123" },
     });
-    expect(result.status).toBe(200);
-    expect(result.body).toContain("received");
+    expect(result.status).toBe(404);
+    expect(result.body).toContain("ownership could not be resolved");
   });
 });

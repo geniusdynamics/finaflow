@@ -1,3 +1,4 @@
+import { assertBusinessOperational } from "./account-access";
 import bcrypt from "bcryptjs";
 import { eq, and, isNull, sql } from "drizzle-orm";
 import { getDb } from "../queries/connection";
@@ -75,6 +76,7 @@ export async function resolveApiKey(rawKey: string): Promise<ResolvedApiKey | nu
 
   for (const candidate of candidates) {
     if (await verifyApiKey(rawKey, candidate.keyHash)) {
+      await assertBusinessOperational(candidate.businessId);
       await db
         .update(apiKeys)
         .set({ lastUsedAt: new Date() })
@@ -98,6 +100,7 @@ export async function resolveApiKey(rawKey: string): Promise<ResolvedApiKey | nu
 
   if (shaRows[0]) {
     const legacy = shaRows[0];
+    await assertBusinessOperational(legacy.businessId);
     // Upgrade the legacy key to bcrypt on first successful use.
     const bcryptHash = await hashApiKey(rawKey, env.bcryptRounds);
     await db

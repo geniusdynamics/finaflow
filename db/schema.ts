@@ -128,6 +128,7 @@ export const customerAccounts = pgTable("customer_accounts", {
   subscriptionStatus: varchar("subscriptionStatus", { length: 20 }).default("active").notNull(),
   subscriptionExpiry: date("subscriptionExpiry"),
   isActive: boolean("isActive").default(true).notNull(),
+  billingHoldAt: timestamp("billingHoldAt"),
   migratedAt: timestamp("migratedAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
@@ -2127,3 +2128,22 @@ export const externalSyncConfig = pgTable("external_sync_config", {
 }));
 
 export type ExternalSyncConfig = typeof externalSyncConfig.$inferSelect;
+
+// Account holders request manual renewal verification for the current billing hold.
+export const accountRenewalRequests = pgTable("account_renewal_requests", {
+  id: serial("id").primaryKey(),
+  accountRefId: bigint("accountRefId", { mode: "number" }).notNull().references(() => customerAccounts.id),
+  holdAt: timestamp("holdAt").notNull(),
+  requestedBy: bigint("requestedBy", { mode: "number" }).notNull().references(() => users.id),
+  paymentReference: varchar("paymentReference", { length: 255 }),
+  note: text("note"),
+  status: varchar("status", { length: 20 }).notNull().default("pending"),
+  reviewedBy: bigint("reviewedBy", { mode: "number" }).references(() => users.id),
+  reviewReason: text("reviewReason"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  reviewedAt: timestamp("reviewedAt"),
+}, (table) => ({
+  pendingAccount: uniqueIndex("idx_renewal_pending_account").on(table.accountRefId).where(sql`${table.status} = 'pending'`),
+  accountIdx: index("idx_renewal_account").on(table.accountRefId),
+  statusIdx: index("idx_renewal_status").on(table.status),
+}));

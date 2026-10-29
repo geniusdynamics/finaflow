@@ -1,3 +1,4 @@
+import { assertUserCanAuthenticate, assertPrincipalCanAuthenticate, assertBusinessOperational } from "./lib/account-access";
 import { z } from "zod";
 import { createRouter, publicQuery, getRolePermissionsWithCache, loadRolePermissionsFromDb } from "./middleware";
 import { getDb } from "./queries/connection";
@@ -38,6 +39,7 @@ const JWT_ALG = "HS256";
 const JWT_SECRET = new TextEncoder().encode(env.appSecret);
 
 async function signLocalToken(payload: { userId: number; username: string }, expiresIn: string = "30d"): Promise<string> {
+  await assertPrincipalCanAuthenticate(payload.userId);
   return new jose.SignJWT(payload as unknown as jose.JWTPayload)
     .setProtectedHeader({ alg: JWT_ALG })
     .setIssuedAt()
@@ -48,6 +50,7 @@ async function signLocalToken(payload: { userId: number; username: string }, exp
 export async function verifyLocalToken(token: string): Promise<{ userId: number; username: string } | null> {
   try {
     const { payload } = await jose.jwtVerify(token, JWT_SECRET, { algorithms: [JWT_ALG], clockTolerance: 60 });
+    await assertPrincipalCanAuthenticate(Number(payload.userId));
     return payload as unknown as { userId: number; username: string };
   } catch {
     return null;
@@ -343,6 +346,7 @@ export const localAuthRouter = createRouter({
       if (!user.passwordHash) throw new Error("Invalid username or password");
       const valid = await verifyPassword(input.password, user.passwordHash);
       if (!valid) throw new Error("Invalid username or password");
+      const accountAccess = await assertUserCanAuthenticate(user);
 
       const junctions = await db.select().from(userBusinesses)
         .where(and(eq(userBusinesses.userId, user.id), eq(userBusinesses.isActive, true)));
@@ -398,6 +402,7 @@ export const localAuthRouter = createRouter({
           currentBusiness, businessIds: bizIds, accountId: currentBusiness?.accountId ?? user.accountId ?? accountId,
           accountRefId,
           permissions,
+          accountAccess,
           isSuperAdmin: accountId === env.superAdminAccount,
         }
       };
@@ -480,6 +485,7 @@ export const localAuthRouter = createRouter({
     }
 
     return {
+      accountAccess: await assertUserCanAuthenticate(user),
       id: user.id, name: user.name, username: user.username, role: user.role,
       email: user.email, phone: user.phone, locationId: user.locationId,
       isActive: user.isActive,
@@ -518,6 +524,7 @@ export const localAuthRouter = createRouter({
       const biz = await db.select().from(businesses)
         .where(and(eq(businesses.id, input.businessId), isNull(businesses.deletedAt))).limit(1);
       if (!biz[0]) throw new Error("Business not found");
+      await assertBusinessOperational(input.businessId);
 
       await db.update(users).set({
         currentBusinessId: input.businessId,
@@ -1231,6 +1238,7 @@ export const localAuthRouter = createRouter({
 
     await db.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.id, stored[0].id));
 
+    await assertPrincipalCanAuthenticate(stored[0].userId);
     const newToken = await signLocalToken({ userId: stored[0].userId, username: "" }, "15m");
     const newCsrf = generateCsrfToken();
     setAuthCookies(ctx, newToken, newCsrf);

@@ -268,6 +268,7 @@ async function ensureTestDatabase(): Promise<void> {
       "0032_subscription_posting_default_bill.sql",
       "0033_statement_imports.sql",
       "0034_audit_download_action.sql",
+      "0035_admin_support.sql",
     ]) {
       const p = path.resolve(import.meta.dirname, `../../db/migrations/${file}`);
       if (fs.existsSync(p)) {
@@ -333,4 +334,3 @@ beforeAll(async () => {
 // Pool is not explicitly closed here because this is a shared setup file loaded for every test suite.
 // Closing the singleton pool in afterAll while other suites are still running causes connection errors.
 // Connections are cleaned up when the Node process exits after all tests complete.
-

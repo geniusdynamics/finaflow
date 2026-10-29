@@ -4,6 +4,46 @@ Chronological log of agent work batches. Each entry records what was done and th
 
 ---
 
+## 2026-10-30 — Billing recovery browser QA
+
+Completed a narrow in-app browser pass at approximately 430 × 550 using only disposable fixtures in `finaflow_test`. The held owner was redirected to `/billing`; dismissing the popup kept recovery visible, and attempting Dashboard reopened the popup without mounting the blocked route. The owner submitted a test-only payment reference and note, which appeared as pending in the admin renewal queue and account detail. Admin verification with a reason approved the request and cleared the billing hold. A fresh owner sign-in returned to Dashboard. No payment was collected and no email was sent. Browser console error/warning capture was empty while the server was live; observed tRPC reads and support/recovery mutations returned 200. An initial sign-in attempt against the previously selected wrong fixture account returned 500; selecting the matching account succeeded.
+
+Removed the exact disposable fixture accounts, users, businesses, memberships, renewal row, sessions (via user cascade), and seven fixture audit rows inside a guarded transaction. Verified `finaflow_test` contains zero rows for the fixture account IDs/usernames/business slugs, renewal reference, and actor IDs. Closed the temporary browser tab and stopped the server.
+
+Files rechecked in this browser QA batch: `src/components/admin/AdminWorkspace.tsx`, `WORKFLOW-LOG.md`, and `CHANGELOG.md`. The plan selector now follows the selected account's loaded plan; browser state showed `starter` for the starter fixture. After this adjustment, `npm run check`, focused ESLint for `AdminWorkspace.tsx`, and `git diff --check` passed.
+
+Verification limits: browser coverage remains at the narrow viewport; desktop layout, SMTP failed-save preservation, keyboard-only navigation, and the full test suite remain unverified. The full test run previously cycled for about six minutes without reporting a completed test file and was stopped; focused suites passed 41/41 tests. `npm run lint` passed with 341 warnings and 0 errors; `npm run build` passed with stale Browserslist data and oversized-chunk warnings.
+
+## 2026-10-30 — Browser QA for super-admin workspace
+
+Ran the current source on `127.0.0.1:3201` with `DATABASE_URL` pinned to the dedicated `finaflow_test` database and a disposable super-admin fixture. At the in-app browser's narrow viewport (about 430 × 550), checked Accounts, Users, Overview, Usage & Plans, Communications (Email logs, Broadcasts, SMTP), and Audit. Account selection and return preserved the search filter; refresh restored the search from the URL; browser Back restored the prior section. Admin tRPC reads returned 200 in the server log. The responsive directory rendered as stacked cards with horizontal section navigation.
+
+Browser finding fixed: the Users section reused the “Search customers” placeholder. `src/components/admin/AdminWorkspace.tsx` now displays “Search users” there; verified it in the browser after HMR.
+
+During the broadcast confirmation check, browser automation accepted the confirmation and created one test broadcast. The test database had no SMTP configuration; the server logged eight skipped email attempts and no deliveries. Removed the uniquely titled broadcast, its eight skipped email-log rows, and the disposable account/business/user/session/login-audit rows in one guarded transaction; verified the exact test IDs and broadcast title now have zero rows. No email was delivered externally.
+
+Files modified in this QA batch: `src/components/admin/AdminWorkspace.tsx`, `WORKFLOW-LOG.md`, and `CHANGELOG.md`.
+
+Verification limits: only the narrow in-app browser viewport was available; desktop layout, billing recovery/popup flow, and SMTP save failure remain unverified. Browser console inspection after shutdown showed repeated `Failed to fetch` retries because the temporary tab remained open after the dev server stopped; closing the tab ended those retries. No console capture was collected while the server was live. `git diff --check`, focused ESLint, `npm run check`, `npm run build`, and `npm run lint` passed. Build warnings: stale Browserslist data and oversized chunks. Lint reported 341 warnings and 0 errors. Targeted reruns passed the three previously failing files (12/12) and the five admin/access suites (29/29). Full `npm test` did not complete: after roughly six minutes it had not reported any test file while workers continued to cycle, so it was stopped to release the test database. The earlier failures were not reproduced in the targeted rerun; the full suite remains unverified.
+
+## 2026-10-29 — Super-admin operations and recovery implementation
+
+Implemented the approved admin directories, account actions, manual renewal review and restricted recovery screen. Added canonical billing-hold enforcement across shared procedures, authentication and integration entrypoints. Fixed completed-session reporting, numeric aggregates and broadcast linkage. Verification is in progress; this entry does not claim release readiness.
+
+Files added: `api/admin-support-router.ts`, `api/lib/account-access.ts`, `db/migrations/0035_admin_support.sql`, `src/components/admin/AdminWorkspace.tsx`, `src/pages/Billing.tsx`, and focused tests under `api/__tests__/` and `src/pages/__tests__/AdminWorkspace.test.tsx`.
+
+Files modified: `api/admin-router.ts`, `api/router.ts`, `api/middleware.ts`, `api/local-auth-router.ts`, `api/lib/api-key-auth.ts`, `api/lib/integrations/connect-service.ts`, `api/lib/mobile-wallet/webhook-handler.ts`, `api/lib/webhook-dispatcher.ts`, `api/routes/v1/webhooks.ts`, `api/test/setup.ts`, `db/schema.ts`, `db/migrations/meta/_journal.json`, `src/App.tsx`, `src/components/ProtectedRoute.tsx`, `src/hooks/useAuth.ts`, `src/pages/Admin.tsx`, `src/providers/trpc.tsx`, `CHANGELOG.md`, and `WORKFLOW-LOG.md`.
+
+Verified so far: existing admin suite 15/15; directory rendering tests 4/4; access policy tests 3/3 and procedure enforcement tests 3/3; support lifecycle tests passed before an additional rollback case was added. Next: finish final checks, review, browser QA, and commit the verified change.
+
+## 2026-10-29 — Admin workspace implementation started
+
+### What was done
+Updated `src/pages/Admin.tsx` to retain the SMTP configuration draft after a failed save and clear it after success. Added the corresponding changelog entry in `CHANGELOG.md` and this record in `WORKFLOW-LOG.md`.
+
+### Next steps
+Complete the approved super-admin workspace, billing hold and recovery flows, and their regression tests. Verify the SMTP form in a browser and run the planned project checks.
+
 ## 2026-10-16 — Subscription Management: spec audit + full implementation (P1–P4)
 
 ### What was done
