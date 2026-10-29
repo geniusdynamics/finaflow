@@ -11,6 +11,7 @@ import type { ResolvedApiKey } from "./lib/api-key-auth";
 import { hasScope } from "./lib/api-scopes";
 import type { ApiScope } from "./lib/api-scopes";
 import { env } from "./lib/env";
+import { getAccountAccess, assertBusinessOperational, billingHoldError } from "./lib/account-access";
 
 export const ErrorMessages = {
   unknownError: "Unknown error",
@@ -275,7 +276,23 @@ const t = initTRPC.context<TrpcCtx>().create({
 });
 
 export const createRouter = t.router;
-export const publicQuery = t.procedure;
+const recoveryPaths = new Set(["localAuth.me", "localAuth.refresh", "localAuth.logout", "localAuth.logoutAll", "localAuth.changePassword", "localAuth.migratePassword", "localAuth.switchBusiness", "businesses.switch"]);
+const baseProcedure = t.procedure.use(async (opts) => {
+  const user = opts.ctx.user;
+  const recovery = recoveryPaths.has(opts.path) || opts.path.startsWith("billing.");
+  if (user) {
+    const access = await getAccountAccess({ accountId: user.accountId ?? null, role: user.role, isActive: user.isActive !== false, deletedAt: user.deletedAt instanceof Date ? user.deletedAt : null });
+    if (access.mode === "blocked" && !["localAuth.logout", "localAuth.logoutAll"].includes(opts.path)) throw billingHoldError();
+    if (access.mode === "billing_only" && !recovery) throw billingHoldError();
+    const rawInput = await opts.getRawInput();
+    if (rawInput && typeof rawInput === "object" && "businessId" in rawInput && Number.isInteger(rawInput.businessId) && typeof rawInput.businessId === "number") await assertBusinessOperational(rawInput.businessId);
+    const businessId = user.currentBusiness?.id ?? user.currentBusinessId;
+    if (!recovery && businessId) await assertBusinessOperational(businessId);
+  }
+  if (opts.ctx.apiKey) await assertBusinessOperational(opts.ctx.apiKey.businessId);
+  return opts.next();
+});
+export const publicQuery = baseProcedure;
 
 // Auth middleware
 const requireAuth = t.middleware(async (opts) => {
@@ -416,25 +433,25 @@ export async function checkUserLimit(businessId: number, requestedCount: number 
   return result.allowed;
 }
 
-export const authedQuery = t.procedure.use(requireAuth);
+export const authedQuery = baseProcedure.use(requireAuth);
 
 // Permission-protected procedures
-export const salesQuery = t.procedure.use(requirePermission(PERMISSIONS.SALES_VIEW));
-export const salesViewOwn = t.procedure.use(requirePermission(PERMISSIONS.SALES_VIEW_OWN));
-export const salesCreate = t.procedure.use(requirePermission(PERMISSIONS.SALES_CREATE));
-export const expenseQuery = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_VIEW));
-export const expenseViewOwn = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_VIEW_OWN));
-export const expenseCreate = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_CREATE));
-export const expenseViewOrCreate = t.procedure.use(requireAnyPermission([PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE]));
-export const expenseManage = t.procedure.use(requirePermission(PERMISSIONS.EXPENSES_MANAGE));
-export const billQuery = t.procedure.use(requirePermission(PERMISSIONS.BILLS_VIEW));
-export const billCreate = t.procedure.use(requirePermission(PERMISSIONS.BILLS_CREATE));
-export const billPay = t.procedure.use(requirePermission(PERMISSIONS.BILLS_PAY));
-export const billAccess = t.procedure.use(requireAnyPermission([PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE, PERMISSIONS.BILLS_PAY]));
-export const supplierQuery = t.procedure.use(requirePermission(PERMISSIONS.SUPPLIERS_VIEW));
-export const supplierManage = t.procedure.use(requirePermission(PERMISSIONS.SUPPLIERS_MANAGE));
-export const accountQuery = t.procedure.use(requirePermission(PERMISSIONS.ACCOUNTS_VIEW));
-export const accountManage = t.procedure.use(requirePermission(PERMISSIONS.ACCOUNTS_MANAGE));
+export const salesQuery = baseProcedure.use(requirePermission(PERMISSIONS.SALES_VIEW));
+export const salesViewOwn = baseProcedure.use(requirePermission(PERMISSIONS.SALES_VIEW_OWN));
+export const salesCreate = baseProcedure.use(requirePermission(PERMISSIONS.SALES_CREATE));
+export const expenseQuery = baseProcedure.use(requirePermission(PERMISSIONS.EXPENSES_VIEW));
+export const expenseViewOwn = baseProcedure.use(requirePermission(PERMISSIONS.EXPENSES_VIEW_OWN));
+export const expenseCreate = baseProcedure.use(requirePermission(PERMISSIONS.EXPENSES_CREATE));
+export const expenseViewOrCreate = baseProcedure.use(requireAnyPermission([PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE]));
+export const expenseManage = baseProcedure.use(requirePermission(PERMISSIONS.EXPENSES_MANAGE));
+export const billQuery = baseProcedure.use(requirePermission(PERMISSIONS.BILLS_VIEW));
+export const billCreate = baseProcedure.use(requirePermission(PERMISSIONS.BILLS_CREATE));
+export const billPay = baseProcedure.use(requirePermission(PERMISSIONS.BILLS_PAY));
+export const billAccess = baseProcedure.use(requireAnyPermission([PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE, PERMISSIONS.BILLS_PAY]));
+export const supplierQuery = baseProcedure.use(requirePermission(PERMISSIONS.SUPPLIERS_VIEW));
+export const supplierManage = baseProcedure.use(requirePermission(PERMISSIONS.SUPPLIERS_MANAGE));
+export const accountQuery = baseProcedure.use(requirePermission(PERMISSIONS.ACCOUNTS_VIEW));
+export const accountManage = baseProcedure.use(requirePermission(PERMISSIONS.ACCOUNTS_MANAGE));
 const requireAccountManageOrApiKey = t.middleware(async (opts) => {
   if (opts.ctx.user) {
     await loadRolePermissionsFromDb();
@@ -456,40 +473,40 @@ const requireAccountManageOrApiKey = t.middleware(async (opts) => {
   throw new TRPCError({ code: "FORBIDDEN", message: ErrorMessages.insufficientRole });
 });
 
-export const accountManageOrApiKey = t.procedure.use(requireAccountManageOrApiKey);
-export const payrollQuery = t.procedure.use(requirePermission(PERMISSIONS.PAYROLL_VIEW));
-export const payrollProcess = t.procedure.use(requirePermission(PERMISSIONS.PAYROLL_PROCESS));
-export const mpesaQuery = t.procedure.use(requirePermission(PERMISSIONS.MPESA_VIEW));
-export const mpesaImport = t.procedure.use(requirePermission(PERMISSIONS.MPESA_IMPORT));
-export const walletQuery = t.procedure.use(requirePermission(PERMISSIONS.WALLET_VIEW));
-export const walletImport = t.procedure.use(requirePermission(PERMISSIONS.WALLET_IMPORT));
-export const walletAdmin = t.procedure.use(requirePermission(PERMISSIONS.WALLET_ADMIN));
-export const reportQuery = t.procedure.use(requirePermission(PERMISSIONS.REPORTS_VIEW));
-export const userManage = t.procedure.use(requirePermission(PERMISSIONS.USERS_MANAGE));
-export const settingsManage = t.procedure.use(requirePermission(PERMISSIONS.SETTINGS_MANAGE));
-export const feedbackManage = t.procedure.use(requirePermission(PERMISSIONS.FEEDBACK_MANAGE));
-export const businessManage = t.procedure.use(requirePermission(PERMISSIONS.BUSINESS_MANAGE));
-export const inquiryView = t.procedure.use(requirePermission(PERMISSIONS.INQUIRY_VIEW));
-export const purchaseOrdersView = t.procedure.use(requirePermission(PERMISSIONS.PURCHASE_ORDERS_VIEW));
-export const purchaseOrdersManage = t.procedure.use(requirePermission(PERMISSIONS.PURCHASE_ORDERS_MANAGE));
-export const calendarView = t.procedure.use(requirePermission(PERMISSIONS.CALENDAR_VIEW));
-export const budgetManage = t.procedure.use(requirePermission(PERMISSIONS.BUDGET_MANAGE));
-export const cogsManage = t.procedure.use(requirePermission(PERMISSIONS.COGS_MANAGE));
-export const alertsConfig = t.procedure.use(requirePermission(PERMISSIONS.ALERTS_CONFIG));
-export const ledgerView = t.procedure.use(requirePermission(PERMISSIONS.LEDGER_VIEW));
-export const resetTransactions = t.procedure.use(requirePermission(PERMISSIONS.RESET_TRANSACTIONS));
-export const apiKeysManage = t.procedure.use(requirePermission(PERMISSIONS.API_KEYS_MANAGE));
-export const webhooksManage = t.procedure.use(requirePermission(PERMISSIONS.WEBHOOKS_MANAGE));
-export const integrationsManage = t.procedure.use(requirePermission(PERMISSIONS.INTEGRATIONS_MANAGE));
-export const partnerView = t.procedure.use(requirePermission(PERMISSIONS.PARTNER_VIEW));
-export const debtsView = t.procedure.use(requirePermission(PERMISSIONS.DEBTS_VIEW));
-export const debtsManage = t.procedure.use(requirePermission(PERMISSIONS.DEBTS_MANAGE));
-export const paymentMethodsView = t.procedure.use(requirePermission(PERMISSIONS.PAYMENT_METHODS_VIEW));
-export const paymentMethodsManage = t.procedure.use(requirePermission(PERMISSIONS.PAYMENT_METHODS_MANAGE));
-export const expenseCategoriesManage = t.procedure.use(requirePermission(PERMISSIONS.EXPENSE_CATEGORIES_MANAGE));
-export const subscriptionsView = t.procedure.use(requirePermission(PERMISSIONS.SUBSCRIPTIONS_VIEW));
-export const subscriptionsManage = t.procedure.use(requirePermission(PERMISSIONS.SUBSCRIPTIONS_MANAGE));
-export const subscriptionsPay = t.procedure.use(requirePermission(PERMISSIONS.SUBSCRIPTIONS_PAY));
+export const accountManageOrApiKey = baseProcedure.use(requireAccountManageOrApiKey);
+export const payrollQuery = baseProcedure.use(requirePermission(PERMISSIONS.PAYROLL_VIEW));
+export const payrollProcess = baseProcedure.use(requirePermission(PERMISSIONS.PAYROLL_PROCESS));
+export const mpesaQuery = baseProcedure.use(requirePermission(PERMISSIONS.MPESA_VIEW));
+export const mpesaImport = baseProcedure.use(requirePermission(PERMISSIONS.MPESA_IMPORT));
+export const walletQuery = baseProcedure.use(requirePermission(PERMISSIONS.WALLET_VIEW));
+export const walletImport = baseProcedure.use(requirePermission(PERMISSIONS.WALLET_IMPORT));
+export const walletAdmin = baseProcedure.use(requirePermission(PERMISSIONS.WALLET_ADMIN));
+export const reportQuery = baseProcedure.use(requirePermission(PERMISSIONS.REPORTS_VIEW));
+export const userManage = baseProcedure.use(requirePermission(PERMISSIONS.USERS_MANAGE));
+export const settingsManage = baseProcedure.use(requirePermission(PERMISSIONS.SETTINGS_MANAGE));
+export const feedbackManage = baseProcedure.use(requirePermission(PERMISSIONS.FEEDBACK_MANAGE));
+export const businessManage = baseProcedure.use(requirePermission(PERMISSIONS.BUSINESS_MANAGE));
+export const inquiryView = baseProcedure.use(requirePermission(PERMISSIONS.INQUIRY_VIEW));
+export const purchaseOrdersView = baseProcedure.use(requirePermission(PERMISSIONS.PURCHASE_ORDERS_VIEW));
+export const purchaseOrdersManage = baseProcedure.use(requirePermission(PERMISSIONS.PURCHASE_ORDERS_MANAGE));
+export const calendarView = baseProcedure.use(requirePermission(PERMISSIONS.CALENDAR_VIEW));
+export const budgetManage = baseProcedure.use(requirePermission(PERMISSIONS.BUDGET_MANAGE));
+export const cogsManage = baseProcedure.use(requirePermission(PERMISSIONS.COGS_MANAGE));
+export const alertsConfig = baseProcedure.use(requirePermission(PERMISSIONS.ALERTS_CONFIG));
+export const ledgerView = baseProcedure.use(requirePermission(PERMISSIONS.LEDGER_VIEW));
+export const resetTransactions = baseProcedure.use(requirePermission(PERMISSIONS.RESET_TRANSACTIONS));
+export const apiKeysManage = baseProcedure.use(requirePermission(PERMISSIONS.API_KEYS_MANAGE));
+export const webhooksManage = baseProcedure.use(requirePermission(PERMISSIONS.WEBHOOKS_MANAGE));
+export const integrationsManage = baseProcedure.use(requirePermission(PERMISSIONS.INTEGRATIONS_MANAGE));
+export const partnerView = baseProcedure.use(requirePermission(PERMISSIONS.PARTNER_VIEW));
+export const debtsView = baseProcedure.use(requirePermission(PERMISSIONS.DEBTS_VIEW));
+export const debtsManage = baseProcedure.use(requirePermission(PERMISSIONS.DEBTS_MANAGE));
+export const paymentMethodsView = baseProcedure.use(requirePermission(PERMISSIONS.PAYMENT_METHODS_VIEW));
+export const paymentMethodsManage = baseProcedure.use(requirePermission(PERMISSIONS.PAYMENT_METHODS_MANAGE));
+export const expenseCategoriesManage = baseProcedure.use(requirePermission(PERMISSIONS.EXPENSE_CATEGORIES_MANAGE));
+export const subscriptionsView = baseProcedure.use(requirePermission(PERMISSIONS.SUBSCRIPTIONS_VIEW));
+export const subscriptionsManage = baseProcedure.use(requirePermission(PERMISSIONS.SUBSCRIPTIONS_MANAGE));
+export const subscriptionsPay = baseProcedure.use(requirePermission(PERMISSIONS.SUBSCRIPTIONS_PAY));
 
 // Owner-only middleware
 const requireOwner = t.middleware(async (opts) => {
@@ -502,7 +519,7 @@ const requireOwner = t.middleware(async (opts) => {
   }
   return opts.next({ ctx: { ...opts.ctx, user } });
 });
-export const ownerQuery = t.procedure.use(requireOwner);
+export const ownerQuery = baseProcedure.use(requireOwner);
 
 // Super-admin middleware: grants access to users whose accountId matches SUPER_ADMIN_ACCOUNT env var.
 // Returns 404 (NOT_FOUND) instead of 403 so the route stays hidden from non-admins.
@@ -520,7 +537,7 @@ const requireSuperAdmin = t.middleware(async (opts) => {
   }
   return opts.next({ ctx: { ...opts.ctx, user } });
 });
-export const adminProcedure = t.procedure.use(requireAuth).use(requireSuperAdmin);
+export const adminProcedure = baseProcedure.use(requireAuth).use(requireSuperAdmin);
 
 export async function getEnforceUserLocation(ctx: UserContextCarrier): Promise<boolean> {
   const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;

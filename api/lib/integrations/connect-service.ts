@@ -1,3 +1,4 @@
+import { assertBusinessOperational } from "../account-access";
 // ABOUTME: First-party Fina Connect protocol for mutual app pairing (FinaFlow <-> FinaBill).
 // ABOUTME: Creates short-lived sessions, exchanges API keys, and upserts sibling connections.
 import crypto from "crypto";
@@ -201,6 +202,8 @@ export async function createConnectSession(input: {
   /** Partner system to pair with ("finabill" default, "glomish" supported). */
   targetSystem?: string;
 }) {
+
+  await assertBusinessOperational(input.businessId);
   const db = getDb();
   const targetSystem = input.targetSystem ?? "finabill";
   const pairingCode = generatePairingCode();
@@ -288,6 +291,8 @@ export async function getConnectSessionPublic(sessionPublicId: string) {
     .limit(1);
 
   if (!session) return null;
+  if (!session.initiatorBusinessId) throw new Error("Connect business is missing");
+  await assertBusinessOperational(session.initiatorBusinessId);
   if (session.expiresAt.getTime() < Date.now() && session.status === "pending") {
     await db
       .update(integrationConnectSessions)
@@ -375,6 +380,8 @@ export async function partnerApproveSession(input: {
     throw new Error("Connect session expired");
   }
   if (session.state !== input.state) throw new Error("Invalid connect state");
+  if (!session.initiatorBusinessId) throw new Error("Connect business is missing");
+  await assertBusinessOperational(session.initiatorBusinessId);
 
   const authCode = randomToken(24);
   const existingPayload =
@@ -431,6 +438,8 @@ export async function exchangeConnectSession(input: {
   businessId: number;
   userId: number;
 }) {
+
+  await assertBusinessOperational(input.businessId);
   const db = getDb();
   const [session] = await db
     .select()
@@ -576,6 +585,8 @@ export async function completeReverseConnection(input: {
   targetBusinessId?: number | null;
   targetBusinessName?: string | null;
 }) {
+
+  await assertBusinessOperational(input.businessId);
   const connection = await upsertSiblingConnection({
     businessId: input.businessId,
     targetSystem: input.targetSystem,
@@ -612,6 +623,8 @@ export async function approveAsPartner(input: {
   userId: number;
   scopes?: string[];
 }) {
+
+  await assertBusinessOperational(input.businessId);
   const scopes = input.scopes?.length ? input.scopes : [...DEFAULT_CONNECT_SCOPES];
   const initiatorLabel = input.initiatorSystem ?? "finabill";
   const inbound = await createInboundApiKey(

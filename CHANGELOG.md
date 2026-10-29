@@ -1,5 +1,38 @@
 # Changelog
 
+## [Unreleased] — Super-admin recovery browser verification
+
+### Fixed
+- Keep the plan assignment selector aligned with the selected account's loaded plan.
+
+### Verified
+- Confirmed held-owner recovery, pending renewal review, admin restoration, and fresh owner access in the narrow browser viewport.
+
+## [Unreleased] — Super-admin workspace browser QA
+
+### Fixed
+- Show “Search users” in the user directory instead of “Search customers.”
+
+### Verified
+- Checked all six admin sections and URL-backed account search/selection in a narrow in-app browser viewport.
+
+## [Unreleased] — Super-admin account support and billing recovery
+
+### Added
+- Responsive admin workspace with account and user directories, URL filters, account support actions, renewal review, and audit history.
+- Transactional account billing holds, standard plan and trial adjustments, individual user status controls, and manual renewal requests.
+- Billing recovery page for eligible account holders and shared access enforcement for platform features and integrations.
+- Migration `0035_admin_support.sql` for account holds and renewal review records.
+
+### Fixed
+- Completed sessions remain included in login analytics; aggregate counts return numbers.
+- Owner broadcasts link notifications to their history and report actual email outcomes.
+
+## [Unreleased] — Admin SMTP draft preservation
+
+### Fixed
+- Keep SMTP form values when saving fails; clear them after a successful save.
+
 ## [Unreleased] — MCP setup guide and credentials
 
 ### Added

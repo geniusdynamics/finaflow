@@ -1,3 +1,4 @@
+import { assertBusinessOperational, isBillingHoldError } from "./account-access";
 // ABOUTME: Dispatches outgoing webhooks to subscriber URLs for a business/event.
 // ABOUTME: Signs payloads with HMAC-SHA256, retries failed deliveries with exponential
 // backoff, and persists every attempt to webhookDeliveries.
@@ -78,6 +79,13 @@ async function deliverToWebhook(
   let lastError: string | null = null;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      await assertBusinessOperational(webhook.businessId);
+    } catch (error) {
+      if (!isBillingHoldError(error)) throw error;
+      await recordDelivery(webhook.id, event, payload, null, "ACCOUNT_BILLING_HOLD", "blocked");
+      return;
+    }
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);

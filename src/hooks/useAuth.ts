@@ -1,4 +1,9 @@
-import { trpc, resetQueryClient, setCsrfToken, setAuthToken } from "@/providers/trpc";
+import {
+  trpc,
+  resetQueryClient,
+  setCsrfToken,
+  setAuthToken,
+} from "@/providers/trpc";
 
 export interface AuthUser {
   id: number;
@@ -19,6 +24,12 @@ export interface AuthUser {
   accountId: string | null;
   permissions: string[];
   isSuperAdmin?: boolean;
+  accountAccess?: {
+    mode: "full" | "billing_only" | "blocked";
+    accountId: string | null;
+    canManageBilling: boolean;
+    billingHoldAt: Date | null;
+  };
 }
 
 export function setCsrfFromResponse(token: string | null) {
@@ -38,7 +49,10 @@ export function useAuth() {
     try {
       await logoutMutation.mutateAsync();
     } catch (err) {
-      console.error("[logout] server logout failed, continuing with client logout", err);
+      console.error(
+        "[logout] server logout failed, continuing with client logout",
+        err
+      );
     } finally {
       resetQueryClient();
       setCsrfFromResponse(null);
@@ -49,4 +63,3 @@ export function useAuth() {
 
   return { user: user as AuthUser | null, isLoading, logout };
 }
-
