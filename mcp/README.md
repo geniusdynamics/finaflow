@@ -2,7 +2,13 @@
 
 Minimal Model Context Protocol server over the FinaFlow v1 API.
 
+Full setup, client configuration and troubleshooting: **`/docs/mcp`** in the app, or
+[`docs/mcp.md`](../docs/mcp.md) in the repository.
+
 ## Setup
+
+1. Create an **MCP key** in FinaFlow: Settings → Integrations → MCP Server → Create MCP key.
+2. Build the server:
 
 ```bash
 cd mcp

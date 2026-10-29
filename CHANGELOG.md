@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased] — MCP setup guide and credentials
+
+### Added
+- **`/docs/mcp`** — a step-by-step MCP setup guide covering key creation, build, environment variables, Claude Desktop, Cursor, OpenCode and generic stdio clients, verification, example prompts, safety and troubleshooting.
+- **MCP card in Settings → Integrations** — explains the integration, links to the guide and creates a key with the MCP scope preset in one click.
+- **MCP environment block** — after creating a key, Settings shows the exact `FINAFLOW_BASE_URL` and `FINAFLOW_API_KEY` values with a copy button.
+- **Granular scope catalog** — the API key dialog now lists real `resource:action` scopes with descriptions, a read-only shortcut, and an MCP preset covering accounts, suppliers, categories, bills, expenses, sales, statements and subscriptions.
+- **Docs hub card** — `/docs` now links to the MCP guide, and the docs header includes an MCP link.
+
+### Fixed
+- **Coarse key presets** — the old `sales` and `expenses` options were not valid scopes and granted nothing. The dialog now sends granular scopes.
+- **Docs code blocks** — fenced code in markdown docs is rendered as escaped `<pre><code>` blocks instead of being wrapped in paragraphs or having backticks mangled.
+
+### Tested
+- `api/__tests__/docs-pages.test.ts` — **18 pass**, including `/docs/mcp`, configuration parameters, code-block rendering and navigation.
+- `npm run typecheck`, `npm run lint` (0 errors), `npm run build`.
+
 ## [Unreleased] — M-PESA analysis parity with bank statements
 
 ### Added

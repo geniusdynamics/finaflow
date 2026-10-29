@@ -136,6 +136,7 @@ const docsHeader = `<nav style="position:sticky;top:0;z-index:50;background:#fff
       <div style="display:flex;gap:16px;font-size:14px">
         <a href="/docs" style="color:#8D8A87;text-decoration:none;transition:color .15s">Docs</a>
         <a href="/docs/api" style="color:#8D8A87;text-decoration:none;transition:color .15s">API</a>
+        <a href="/docs/mcp" style="color:#8D8A87;text-decoration:none;transition:color .15s">MCP</a>
       </div>
     </div>
     <div id="nav-auth">
@@ -191,6 +192,11 @@ app.get("/docs", (c) => {
         <p>Incoming and outgoing webhook contract: event catalog, HMAC signature verification, retry policy, and payload schemas.</p>
         <a href="/docs/webhooks" class="link">Read guide &rarr;</a>
       </div>
+      <div class="card">
+        <h2><a href="/docs/mcp">MCP Server</a> <span class="badge">AI</span></h2>
+        <p>Connect Claude, Cursor or another MCP client to FinaFlow. Create a scoped key, configure the server, and call the 32 tools.</p>
+        <a href="/docs/mcp" class="link">Set up MCP &rarr;</a>
+      </div>
     </div>
     <footer>
       <p>FinaFlow &mdash; Financial management for multi-location businesses.</p>
@@ -208,8 +214,16 @@ function renderDocPage(title: string, filename: string): string {
       return `<!DOCTYPE html><html><body>${docsHeader}<div class="container" style="max-width:720px;margin:48px auto;padding:0 24px"><h1>${title}</h1><p>Documentation file not found (${filename}). Ensure docs/ is packaged in the image.</p><p><a href="/docs">Back to docs</a></p></div></body></html>`;
     }
     const md = readFileSync(mdPath, "utf-8");
+    const codeBlocks: string[] = [];
+    const escapeHtml = (value: string) =>
+      value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    // Extract fenced code before inline markdown so backticks and pipes stay literal.
+    const withPlaceholders = md.replace(/```(\w*)\r?\n([\s\S]*?)```/g, (_match, _lang, code: string) => {
+      const index = codeBlocks.push(`<pre><code>${escapeHtml(code)}</code></pre>`) - 1;
+      return `\n@@CODEBLOCK${index}@@\n`;
+    });
     // Simple markdown → HTML: handle headings, bold, code, tables, lists, paragraphs
-    const html = md
+    const html = withPlaceholders
       .replace(/^### (.+)$/gm, '<h3>$1</h3>')
       .replace(/^## (.+)$/gm, '<h2>$1</h2>')
       .replace(/^# (.+)$/gm, '<h1>$1</h1>')
@@ -217,6 +231,7 @@ function renderDocPage(title: string, filename: string): string {
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
       .replace(/^\| (.+)$/gm, (match) => {
+        if (/^\|[\s:|-]+\|$/.test(match.trim())) return "";
         const cells = match.split('|').filter(c => c.trim());
         return '<tr>' + cells.map(c => `<td>${c.trim()}</td>`).join('') + '</tr>';
       })
@@ -225,7 +240,8 @@ function renderDocPage(title: string, filename: string): string {
       .replace(/(<tr>.*<\/tr>\n?)+/g, (match) => `<table>${match}</table>`)
       .replace(/^(?!<[hutlol])(.+)$/gm, '<p>$1</p>')
       .replace(/<p><\/p>/g, '')
-      .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+      .replace(/<p>@@CODEBLOCK(\d+)@@<\/p>/g, (_match, index: string) => codeBlocks[Number(index)] ?? "")
+      .replace(/@@CODEBLOCK(\d+)@@/g, (_match, index: string) => codeBlocks[Number(index)] ?? "");
 
     return `<!DOCTYPE html>
 <html lang="en"><head>
@@ -271,6 +287,10 @@ app.get("/docs/authentication", (c) => {
 
 app.get("/docs/webhooks", (c) => {
   return c.html(renderDocPage("Webhooks", "webhooks.md"));
+});
+
+app.get("/docs/mcp", (c) => {
+  return c.html(renderDocPage("MCP Server", "mcp.md"));
 });
 
 // Scalar docs need CDN scripts — relax CSP for docs routes

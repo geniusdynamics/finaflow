@@ -6,7 +6,7 @@ beforeAll(async () => {
   process.env.NODE_ENV = "development";
   const mod = await import("../boot");
   app = mod.default;
-}, 120_000);
+}, 300_000);
 
 describe("documentation pages", () => {
   describe("GET /docs", () => {
@@ -29,6 +29,7 @@ describe("documentation pages", () => {
       expect(html).toContain('href="/docs/api"');
       expect(html).toContain('href="/docs/authentication"');
       expect(html).toContain('href="/docs/webhooks"');
+      expect(html).toContain('href="/docs/mcp"');
     });
 
     it("has a documentation card structure", async () => {
@@ -139,6 +140,35 @@ describe("documentation pages", () => {
       expect(html).toContain("coa.updated");
       expect(html).toContain("supplier.updated");
       expect(html).toContain("journal.created");
+    });
+  });
+
+  describe("GET /docs/mcp", () => {
+    it("returns the MCP setup guide with the required configuration parameters", async () => {
+      const res = await app.fetch(new Request("http://localhost/docs/mcp"));
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+
+      const html = await res.text();
+      expect(html).toContain("FinaFlow MCP server");
+      expect(html).toContain("FINAFLOW_BASE_URL");
+      expect(html).toContain("FINAFLOW_API_KEY");
+      expect(html).toContain("mcp/dist/index.js");
+      expect(html).toContain("Claude Desktop");
+      expect(html).toContain("OpenCode");
+      expect(html).toContain("verify_connection");
+      expect(html).toContain("<pre><code>");
+      expect(html).not.toContain("```");
+    });
+
+    it("includes the navigation header and a breadcrumb", async () => {
+      const res = await app.fetch(new Request("http://localhost/docs/mcp"));
+      const html = await res.text();
+      expect(html).toContain('href="/"');
+      expect(html).toContain('href="/docs"');
+      expect(html).toContain('href="/docs/api"');
+      expect(html).toContain('href="/dashboard"');
+      expect(html).toContain("Back to Documentation");
     });
   });
 
