@@ -3,6 +3,7 @@
 
 import type { ExtractedDocument, ParsedStatement, StatementParser } from "../types";
 import { UnsupportedStatementError } from "../errors";
+import { detectKenyanBank, parseKenyanBank } from "./kenyan-banks";
 import {
   MPESA_PARSER_ID,
   MPESA_PARSER_VERSION,
@@ -34,7 +35,11 @@ const kcbParser: StatementParser = {
   parse: (doc) => parseKcbBankStatement(doc),
 };
 
-const parsers: StatementParser[] = [mpesaParser, kcbParser];
+const parsers: StatementParser[] = [mpesaParser, kcbParser, ...(["coop", "family"] as const).map((bank): StatementParser => ({
+  id: `${bank}-bank-statement`, version: "1.0.0", provider: "bank",
+  displayName: bank === "coop" ? "Co-operative Bank statement" : "Family Bank statement",
+  detect: (doc) => detectKenyanBank(doc, bank), parse: (doc) => parseKenyanBank(doc, bank),
+}))];
 
 export interface DetectedParser {
   parser: StatementParser;
@@ -63,7 +68,7 @@ export function detectStatementParser(
   }
   if (!best || best.confidence < 0.3) {
     throw new UnsupportedStatementError(
-      "This statement format is not recognised. Supported today: M-PESA statements and KCB bank statements (PDF).",
+      "This statement format is not recognised. Supported today: M-PESA, KCB, Co-operative Bank and Family Bank statements.",
     );
   }
   return best;

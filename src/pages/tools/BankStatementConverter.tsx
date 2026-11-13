@@ -275,7 +275,7 @@ export default function BankStatementConverter() {
                 <div className="min-w-0 flex-1">
                   <Label className="text-sm font-medium">Bank statement PDFs</Label>
                   <p className="mt-1 text-xs text-[#8D8A87]">
-                    KCB online statements are supported today; more banks are coming. Up to 12 files, 10 MB each.
+                    KCB, Co-operative Bank and Family Bank statements are supported. Up to 12 files, 10 MB each.
                   </p>
                   <label className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-[#C73E1D] px-3 py-2 text-sm font-medium text-white hover:bg-[#C73E1D]/90">
                     <FileText className="h-4 w-4" />
@@ -389,8 +389,7 @@ export default function BankStatementConverter() {
             <div className="rounded-xl border border-[#E8E0D8] bg-white p-5">
               <h2 className="font-serif text-lg font-semibold">Supported banks</h2>
               <p className="mt-2 text-sm text-[#5C5853]">
-                <span className="font-medium">KCB</span> online account statements are supported today. The parser is
-                bank-profile based, so other banks can be added without changing the converter or wallet import flow.
+                KCB, Co-operative Bank and Family Bank account statements are supported.
               </p>
               <p className="mt-2 text-xs text-[#8D8A87]">
                 Scanned/image statements are not supported yet.
@@ -409,6 +408,13 @@ export default function BankStatementConverter() {
           </section>
         </div>
 
+        {converted.some(file => file.parsed.warnings.length > 0) && (
+          <section className="mt-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
+            {converted.flatMap(file => file.parsed.warnings.map((warning, index) => (
+              <p key={`${file.fileName}-${index}`}><strong>{file.fileName}:</strong> {warning}</p>
+            )))}
+          </section>
+        )}
         {consolidated && (
           <section className="mt-8 space-y-4">
             <div className="flex flex-wrap items-end justify-between gap-2">
@@ -431,7 +437,7 @@ export default function BankStatementConverter() {
         <section className="mt-8 rounded-xl border border-[#E8E0D8] bg-white p-5">
           <h2 className="font-serif text-lg font-semibold">How to get your statement</h2>
           <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-[#5C5853]">
-            <li>Sign in to KCB online banking or the KCB app.</li>
+            <li>Sign in to your bank's online banking or mobile app.</li>
             <li>Open the account, choose Statements, and select the period.</li>
             <li>Download the PDF statement.</li>
             <li>Select the PDF above and convert. Nothing is uploaded.</li>
