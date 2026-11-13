@@ -1,3 +1,7 @@
+import { assertBusinessOperational, isBillingHoldError } from "../account-access";
+import { getDb } from "../../queries/connection";
+import { mobileWalletTransactions, locations } from "@db/schema";
+import { and, eq, isNull } from "drizzle-orm";
 // ABOUTME: Unified webhook handler that routes incoming provider webhooks to the appropriate wallet provider.
 // ABOUTME: Validates provider registry, delegates to provider's processWebhook, and logs results.
 
@@ -28,9 +32,14 @@ export async function handleWalletWebhook(payload: WalletWebhookPayload): Promis
 
     if (result.processed && result.transaction) {
       const txn = result.transaction;
+      const [owned] = await getDb().select({ locationId: locations.id, businessId: locations.businessId })
+        .from(mobileWalletTransactions).innerJoin(locations, eq(locations.id, mobileWalletTransactions.locationId))
+        .where(and(eq(mobileWalletTransactions.provider, payload.provider), eq(mobileWalletTransactions.providerTxnId, txn.providerTxnId), isNull(mobileWalletTransactions.deletedAt), isNull(locations.deletedAt))).limit(1);
+      if (!owned?.businessId) return { status: 404, body: JSON.stringify({ error: "Transaction ownership could not be resolved" }) };
+      try { await assertBusinessOperational(owned.businessId); } catch (error) { if (!isBillingHoldError(error)) throw error; return { status: 403, body: JSON.stringify({ error: "ACCOUNT_BILLING_HOLD" }) }; }
       try {
         await logWalletTransaction({
-          locationId: 0,
+          locationId: owned.locationId,
           provider: payload.provider,
           providerTxnId: txn.providerTxnId,
           providerRef: txn.providerRef,

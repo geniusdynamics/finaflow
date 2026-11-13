@@ -1,6 +1,7 @@
 // ABOUTME: FinaFlow MCP server entrypoint over stdio.
 // ABOUTME: Requires FINAFLOW_API_KEY and FINAFLOW_BASE_URL; no database or statement files are stored.
 
+import "dotenv/config";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { FinaFlowClient } from "./client.js";

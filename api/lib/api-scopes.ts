@@ -53,6 +53,26 @@ export const DEFAULT_CONNECT_SCOPES: ApiScope[] = [
   "webhooks",
 ];
 
+/** Scopes the FinaFlow MCP server needs for its full tool catalog. */
+export const MCP_SCOPES: ApiScope[] = [
+  "business:read",
+  "locations:read",
+  "accounts:read",
+  "accounts:write",
+  "suppliers:read",
+  "suppliers:write",
+  "categories:read",
+  "categories:write",
+  "bills:read",
+  "bills:write",
+  "expenses:read",
+  "sales:read",
+  "sales:write",
+  "statements:read",
+  "statements:write",
+  "subscriptions:read",
+];
+
 /** Returns true if `scope` is a recognized API scope. */
 export function isValidScope(scope: string): scope is ApiScope {
   return scope in API_SCOPES;

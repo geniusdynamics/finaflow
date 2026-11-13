@@ -11,89 +11,535 @@ import type { Permission } from "@/lib/permissions";
 
 const Home = lazy(() => import("./pages/Home"));
 const MobileMoneyAgents = lazy(() => import("./pages/MobileMoneyAgents"));
-const MpesaStatementConverter = lazy(() => import("./pages/tools/MpesaStatementConverter"));
-const BankStatementConverter = lazy(() => import("./pages/tools/BankStatementConverter"));
+const MpesaStatementConverter = lazy(
+  () => import("./pages/tools/MpesaStatementConverter")
+);
+const BankStatementConverter = lazy(
+  () => import("./pages/tools/BankStatementConverter")
+);
 const StatementGuide = lazy(() => import("./pages/tools/StatementGuide"));
 const Login = lazy(() => import("./pages/Login"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const Unauthorized = lazy(() => import("./pages/Unauthorized"));
-const Dashboard = lazy(() => import("./pages/Dashboard").then(m => ({ default: m.Dashboard })));
-const DailySales = lazy(() => import("./pages/DailySales").then(m => ({ default: m.DailySales })));
-const Expenses = lazy(() => import("./pages/Expenses").then(m => ({ default: m.Expenses })));
-const Suppliers = lazy(() => import("./pages/Suppliers").then(m => ({ default: m.Suppliers })));
-const Bills = lazy(() => import("./pages/Bills").then(m => ({ default: m.Bills })));
-const Accounts = lazy(() => import("./pages/Accounts").then(m => ({ default: m.Accounts })));
-const Payroll = lazy(() => import("./pages/Payroll").then(m => ({ default: m.Payroll })));
-const Wallet = lazy(() => import("./pages/Wallet").then(m => ({ default: m.Wallet })));
-const WalletAdmin = lazy(() => import("./pages/WalletAdmin").then(m => ({ default: m.WalletAdmin })));
-const Calendar = lazy(() => import("./pages/Calendar").then(m => ({ default: m.Calendar })));
-const Reports = lazy(() => import("./pages/Reports").then(m => ({ default: m.Reports })));
-const Users = lazy(() => import("./pages/Users").then(m => ({ default: m.Users })));
-const Locations = lazy(() => import("./pages/Locations").then(m => ({ default: m.Locations })));
-const Settings = lazy(() => import("./pages/Settings").then(m => ({ default: m.Settings })));
+const Dashboard = lazy(() =>
+  import("./pages/Dashboard").then(m => ({ default: m.Dashboard }))
+);
+const DailySales = lazy(() =>
+  import("./pages/DailySales").then(m => ({ default: m.DailySales }))
+);
+const Expenses = lazy(() =>
+  import("./pages/Expenses").then(m => ({ default: m.Expenses }))
+);
+const Suppliers = lazy(() =>
+  import("./pages/Suppliers").then(m => ({ default: m.Suppliers }))
+);
+const Bills = lazy(() =>
+  import("./pages/Bills").then(m => ({ default: m.Bills }))
+);
+const Accounts = lazy(() =>
+  import("./pages/Accounts").then(m => ({ default: m.Accounts }))
+);
+const Payroll = lazy(() =>
+  import("./pages/Payroll").then(m => ({ default: m.Payroll }))
+);
+const Wallet = lazy(() =>
+  import("./pages/Wallet").then(m => ({ default: m.Wallet }))
+);
+const WalletAdmin = lazy(() =>
+  import("./pages/WalletAdmin").then(m => ({ default: m.WalletAdmin }))
+);
+const Calendar = lazy(() =>
+  import("./pages/Calendar").then(m => ({ default: m.Calendar }))
+);
+const Reports = lazy(() =>
+  import("./pages/Reports").then(m => ({ default: m.Reports }))
+);
+const Users = lazy(() =>
+  import("./pages/Users").then(m => ({ default: m.Users }))
+);
+const Locations = lazy(() =>
+  import("./pages/Locations").then(m => ({ default: m.Locations }))
+);
+const Settings = lazy(() =>
+  import("./pages/Settings").then(m => ({ default: m.Settings }))
+);
 const ConnectAuthorize = lazy(() => import("./pages/ConnectAuthorize"));
 const Businesses = lazy(() => import("./pages/Businesses"));
-const BusinessOverview = lazy(() => import("./pages/BusinessOverview").then(m => ({ default: m.BusinessOverview })));
-const BusinessDetails = lazy(() => import("./pages/BusinessDetails").then(m => ({ default: m.BusinessDetails })));
-const PartnerDashboard = lazy(() => import("./pages/PartnerDashboard").then(m => ({ default: m.PartnerDashboard })));
-const Profile = lazy(() => import("./pages/Profile").then(m => ({ default: m.Profile })));
+const BusinessOverview = lazy(() =>
+  import("./pages/BusinessOverview").then(m => ({
+    default: m.BusinessOverview,
+  }))
+);
+const BusinessDetails = lazy(() =>
+  import("./pages/BusinessDetails").then(m => ({ default: m.BusinessDetails }))
+);
+const PartnerDashboard = lazy(() =>
+  import("./pages/PartnerDashboard").then(m => ({
+    default: m.PartnerDashboard,
+  }))
+);
+const Profile = lazy(() =>
+  import("./pages/Profile").then(m => ({ default: m.Profile }))
+);
 const Budgets = lazy(() => import("./pages/Budgets"));
-const Subscriptions = lazy(() => import("./pages/Subscriptions").then(m => ({ default: m.Subscriptions })));
+const Subscriptions = lazy(() =>
+  import("./pages/Subscriptions").then(m => ({ default: m.Subscriptions }))
+);
 const Admin = lazy(() => import("./pages/Admin"));
+const Billing = lazy(() => import("./pages/Billing"));
 
 function SuspendedPage({ children }: { children: React.ReactNode }) {
   return <Suspense fallback={<PageSkeleton />}>{children}</Suspense>;
 }
 
-function ProtectedPage({ children, requiredPermission }: { children: React.ReactNode; requiredPermission?: Permission | Permission[] }) {
-  return <ProtectedRoute requiredPermission={requiredPermission}>{children}</ProtectedRoute>;
+function ProtectedPage({
+  children,
+  requiredPermission,
+}: {
+  children: React.ReactNode;
+  requiredPermission?: Permission | Permission[];
+}) {
+  return (
+    <ProtectedRoute requiredPermission={requiredPermission}>
+      {children}
+    </ProtectedRoute>
+  );
 }
 
 export default function App() {
   return (
     <>
       <Routes>
-        <Route path="/" element={<Suspense fallback={<PageSkeleton />}><Home /></Suspense>} />
-        <Route path="/solutions/mobile-money-agents" element={<Suspense fallback={<PageSkeleton />}><MobileMoneyAgents /></Suspense>} />
-        <Route path="/tools/mpesa-statement-converter" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><MpesaStatementConverter /></Suspense></ErrorBoundary>} />
-        <Route path="/tools/bank-statement-converter" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><BankStatementConverter /></Suspense></ErrorBoundary>} />
-        <Route path="/tools/mpesa-to-excel" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><StatementGuide kind="excel" /></Suspense></ErrorBoundary>} />
-        <Route path="/tools/mpesa-for-accountants" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><StatementGuide kind="accountants" /></Suspense></ErrorBoundary>} />
-        <Route path="/login" element={<Suspense fallback={<PageSkeleton />}><Login /></Suspense>} />
-        <Route path="/forgot-password" element={<Suspense fallback={<PageSkeleton />}><ForgotPassword /></Suspense>} />
-        <Route path="/reset-password" element={<Suspense fallback={<PageSkeleton />}><ResetPassword /></Suspense>} />
-        <Route path="/dashboard" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="dashboard:view"><Dashboard /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/daily-sales" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["sales:view", "sales:create", "sales:view_own"]}><DailySales /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/expenses" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["expenses:view", "expenses:create"]}><Expenses /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/suppliers" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["suppliers:view", "suppliers:manage"]}><Suppliers /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/bills" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["bills:view", "bills:create"]}><Bills /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/accounts" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission={["accounts:view", "accounts:manage"]}><Accounts /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/chart-of-accounts" element={<Navigate to="/accounts?section=chart-of-accounts" replace />} />
-        <Route path="/locations" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><Locations /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/payroll" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="payroll:view"><Payroll /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/wallet" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="wallet:view"><Wallet /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/admin/wallet" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="wallet:admin"><WalletAdmin /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/daily-payments" element={<Navigate to="/calendar?section=payments" replace />} />
-        <Route path="/calendar" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="calendar:view"><Calendar /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/reports" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="reports:view"><Reports /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/budgets" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="budgets:view"><Budgets /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/subscriptions" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="subscriptions:view"><Subscriptions /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/journal-entries" element={<Navigate to="/accounts?section=journal-entries" replace />} />
-        <Route path="/users" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="users:manage"><Users /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/settings" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><Settings /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/integrations/connect" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><ConnectAuthorize /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/integrations/connect/callback" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="settings:manage"><ConnectAuthorize /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/feedback" element={<Navigate to="/settings?tab=feedback" replace />} />
-        <Route path="/businesses" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><Businesses /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/businesses/:id" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><BusinessOverview /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/businesses/:id/details" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="business:manage"><BusinessDetails /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/profile" element={<ErrorBoundary><SuspendedPage><ProtectedPage><Profile /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/partner" element={<ErrorBoundary><SuspendedPage><ProtectedPage requiredPermission="partner:view"><PartnerDashboard /></ProtectedPage></SuspendedPage></ErrorBoundary>} />
-        <Route path="/admin" element={<ErrorBoundary><SuspendedPage><AdminRoute><Admin /></AdminRoute></SuspendedPage></ErrorBoundary>} />
-        <Route path="/unauthorized" element={<Suspense fallback={<PageSkeleton />}><Unauthorized /></Suspense>} />
-        <Route path="*" element={<Suspense fallback={<PageSkeleton />}><NotFound /></Suspense>} />
+        <Route
+          path="/billing"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage>
+                  <Billing />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/"
+          element={
+            <Suspense fallback={<PageSkeleton />}>
+              <Home />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/solutions/mobile-money-agents"
+          element={
+            <Suspense fallback={<PageSkeleton />}>
+              <MobileMoneyAgents />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/tools/mpesa-statement-converter"
+          element={
+            <ErrorBoundary>
+              <Suspense fallback={<PageSkeleton />}>
+                <MpesaStatementConverter />
+              </Suspense>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/tools/bank-statement-converter"
+          element={
+            <ErrorBoundary>
+              <Suspense fallback={<PageSkeleton />}>
+                <BankStatementConverter />
+              </Suspense>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/tools/mpesa-to-excel"
+          element={
+            <ErrorBoundary>
+              <Suspense fallback={<PageSkeleton />}>
+                <StatementGuide kind="excel" />
+              </Suspense>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/tools/mpesa-for-accountants"
+          element={
+            <ErrorBoundary>
+              <Suspense fallback={<PageSkeleton />}>
+                <StatementGuide kind="accountants" />
+              </Suspense>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/login"
+          element={
+            <Suspense fallback={<PageSkeleton />}>
+              <Login />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/forgot-password"
+          element={
+            <Suspense fallback={<PageSkeleton />}>
+              <ForgotPassword />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/reset-password"
+          element={
+            <Suspense fallback={<PageSkeleton />}>
+              <ResetPassword />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/dashboard"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="dashboard:view">
+                  <Dashboard />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/daily-sales"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage
+                  requiredPermission={[
+                    "sales:view",
+                    "sales:create",
+                    "sales:view_own",
+                  ]}
+                >
+                  <DailySales />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/expenses"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage
+                  requiredPermission={["expenses:view", "expenses:create"]}
+                >
+                  <Expenses />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/suppliers"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage
+                  requiredPermission={["suppliers:view", "suppliers:manage"]}
+                >
+                  <Suppliers />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/bills"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage
+                  requiredPermission={["bills:view", "bills:create"]}
+                >
+                  <Bills />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/accounts"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage
+                  requiredPermission={["accounts:view", "accounts:manage"]}
+                >
+                  <Accounts />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/chart-of-accounts"
+          element={
+            <Navigate to="/accounts?section=chart-of-accounts" replace />
+          }
+        />
+        <Route
+          path="/locations"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="settings:manage">
+                  <Locations />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/payroll"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="payroll:view">
+                  <Payroll />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/wallet"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="wallet:view">
+                  <Wallet />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/admin/wallet"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="wallet:admin">
+                  <WalletAdmin />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/daily-payments"
+          element={<Navigate to="/calendar?section=payments" replace />}
+        />
+        <Route
+          path="/calendar"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="calendar:view">
+                  <Calendar />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/reports"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="reports:view">
+                  <Reports />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/budgets"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="budgets:view">
+                  <Budgets />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/subscriptions"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="subscriptions:view">
+                  <Subscriptions />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/journal-entries"
+          element={<Navigate to="/accounts?section=journal-entries" replace />}
+        />
+        <Route
+          path="/users"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="users:manage">
+                  <Users />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="settings:manage">
+                  <Settings />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/integrations/connect"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="settings:manage">
+                  <ConnectAuthorize />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/integrations/connect/callback"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="settings:manage">
+                  <ConnectAuthorize />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/feedback"
+          element={<Navigate to="/settings?tab=feedback" replace />}
+        />
+        <Route
+          path="/businesses"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="business:manage">
+                  <Businesses />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/businesses/:id"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="business:manage">
+                  <BusinessOverview />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/businesses/:id/details"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="business:manage">
+                  <BusinessDetails />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/profile"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage>
+                  <Profile />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/partner"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="partner:view">
+                  <PartnerDashboard />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <AdminRoute>
+                  <Admin />
+                </AdminRoute>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/unauthorized"
+          element={
+            <Suspense fallback={<PageSkeleton />}>
+              <Unauthorized />
+            </Suspense>
+          }
+        />
+        <Route
+          path="*"
+          element={
+            <Suspense fallback={<PageSkeleton />}>
+              <NotFound />
+            </Suspense>
+          }
+        />
       </Routes>
       <Toaster />
     </>

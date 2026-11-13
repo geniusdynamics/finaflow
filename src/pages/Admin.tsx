@@ -1,24 +1,70 @@
 // ABOUTME: Platform admin dashboard for user analytics, account insights, and SMTP configuration.
 import { useState, useMemo } from "react";
-import { Layout } from "@/components/Layout";
+export { default } from "@/components/admin/AdminWorkspace";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
 import {
-  Users, Building, Mail, TrendingUp, Activity, Search, Send, ShieldCheck, Megaphone,
-  ChevronRight, Pencil, KeyRound, Loader2, AlertCircle, Copy, Check,
+  Users,
+  Building,
+  Mail,
+  TrendingUp,
+  Activity,
+  Search,
+  Send,
+  ShieldCheck,
+  Megaphone,
+  ChevronRight,
+  Pencil,
+  KeyRound,
+  Loader2,
+  AlertCircle,
+  Copy,
+  Check,
 } from "lucide-react";
 
 const COLORS = ["#C73E1D", "#D4A854", "#0288D1", "#2E7D32", "#7B1FA2"];
@@ -26,7 +72,11 @@ const COLORS = ["#C73E1D", "#D4A854", "#0288D1", "#2E7D32", "#7B1FA2"];
 function formatDate(value: string | Date | null | undefined): string {
   if (!value) return "—";
   const date = typeof value === "string" ? new Date(value) : value;
-  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function formatDuration(seconds: number | null | undefined): string {
@@ -51,10 +101,14 @@ function timeAgo(value: string | Date | null | undefined): string {
 
 function statusColor(status: string): string {
   switch (status) {
-    case "sent": return "bg-green-100 text-green-800 border-green-200";
-    case "failed": return "bg-red-100 text-red-800 border-red-200";
-    case "skipped": return "bg-yellow-100 text-yellow-800 border-yellow-200";
-    default: return "bg-gray-100 text-gray-800 border-gray-200";
+    case "sent":
+      return "bg-green-100 text-green-800 border-green-200";
+    case "failed":
+      return "bg-red-100 text-red-800 border-red-200";
+    case "skipped":
+      return "bg-yellow-100 text-yellow-800 border-yellow-200";
+    default:
+      return "bg-gray-100 text-gray-800 border-gray-200";
   }
 }
 
@@ -118,59 +172,109 @@ type AccountDetailResult = {
   users: AccountDetailUser[];
 };
 
-type ResetConfirmUser = { id: number; username: string; name: string | null; email: string | null };
+type ResetConfirmUser = {
+  id: number;
+  username: string;
+  name: string | null;
+  email: string | null;
+};
 
-export default function Admin() {
+export function AdminReports({ section }: { section: string }) {
   const [dateRange, setDateRange] = useState({ from: "", to: "" });
   const [search, setSearch] = useState("");
 
-  const rangeParams = useMemo(() => ({
-    from: dateRange.from || undefined,
-    to: dateRange.to || undefined,
-  }), [dateRange]);
+  const rangeParams = useMemo(
+    () => ({
+      from: dateRange.from || undefined,
+      to: dateRange.to || undefined,
+    }),
+    [dateRange]
+  );
 
-  const { data: loginStats, isLoading: loginLoading } = trpc.admin.getLoginStats.useQuery(rangeParams);
-  const { data: activeAccounts, isLoading: accountsLoading } = trpc.admin.getActiveAccounts.useQuery(rangeParams);
-  const { data: newUsers, isLoading: newUsersLoading } = trpc.admin.getNewUsers.useQuery(rangeParams);
-  const { data: sessionDuration, isLoading: durationLoading } = trpc.admin.getSessionDuration.useQuery(rangeParams);
-  const { data: planStats, isLoading: planLoading } = trpc.admin.getPlanStats.useQuery(rangeParams);
-  const { data: accountList, isLoading: accountListLoading } = trpc.admin.getAccountList.useQuery({ search, limit: 50, offset: 0 });
-  const { data: smtpConfig } = trpc.admin.getSmtpConfig.useQuery();
-  const { data: emailStats, isLoading: emailStatsLoading } = trpc.admin.getEmailStats.useQuery(rangeParams);
-  const { data: emailLogs, isLoading: emailLogsLoading } = trpc.admin.getEmailLogs.useQuery({ limit: 50, offset: 0 });
-  const { data: broadcasts, isLoading: broadcastsLoading } = trpc.admin.getOwnerBroadcasts.useQuery({ limit: 20, offset: 0 });
-  const { data: notificationAnalytics, isLoading: analyticsLoading } = trpc.admin.getNotificationAnalytics.useQuery();
+  const { error: loginStatsError, data: loginStats, isLoading: loginLoading } =
+    trpc.admin.getLoginStats.useQuery(rangeParams, {
+      enabled: section === "overview",
+    });
+  const { error: activeAccountsError, data: activeAccounts, isLoading: accountsLoading } =
+    trpc.admin.getActiveAccounts.useQuery(rangeParams, {
+      enabled: section === "overview" || section === "accounts",
+    });
+  const { error: newUsersError, data: newUsers, isLoading: newUsersLoading } =
+    trpc.admin.getNewUsers.useQuery(rangeParams, {
+      enabled: section === "users",
+    });
+  const { error: sessionDurationError, data: sessionDuration, isLoading: durationLoading } =
+    trpc.admin.getSessionDuration.useQuery(rangeParams, {
+      enabled: section === "overview" || section === "users",
+    });
+  const { error: planStatsError, data: planStats, isLoading: planLoading } =
+    trpc.admin.getPlanStats.useQuery(rangeParams, {
+      enabled: section === "plans",
+    });
+  const { error: accountListError, data: accountList, isLoading: accountListLoading } =
+    trpc.admin.getAccountList.useQuery(
+      { search, limit: 50, offset: 0 },
+      { enabled: section === "accounts" }
+    );
+  const { error: smtpConfigError, data: smtpConfig } = trpc.admin.getSmtpConfig.useQuery(undefined, {
+    enabled: section === "smtp",
+  });
+  const { error: emailStatsError, data: emailStats, isLoading: emailStatsLoading } =
+    trpc.admin.getEmailStats.useQuery(rangeParams, {
+      enabled: section === "email",
+    });
+  const { error: emailLogsError, data: emailLogs, isLoading: emailLogsLoading } =
+    trpc.admin.getEmailLogs.useQuery(
+      { limit: 50, offset: 0 },
+      { enabled: section === "email" }
+    );
+  const { error: broadcastsError, data: broadcasts, isLoading: broadcastsLoading } =
+    trpc.admin.getOwnerBroadcasts.useQuery(
+      { limit: 20, offset: 0 },
+      { enabled: section === "broadcast" }
+    );
+  const { error: notificationAnalyticsError, data: notificationAnalytics, isLoading: analyticsLoading } =
+    trpc.admin.getNotificationAnalytics.useQuery(undefined, {
+      enabled: section === "broadcast",
+    });
 
   const updateSmtp = trpc.admin.updateSmtpConfig.useMutation({
-    onSuccess: (res) => {
-      toast.success(`SMTP configuration saved to ${res.source === "database" ? "database" : "environment"}`);
+    onSuccess: res => {
+      toast.success(
+        `SMTP configuration saved to ${res.source === "database" ? "database" : "environment"}`
+      );
       setSmtpWarnings(res.warnings ?? []);
+      setSmtpForm({ host: "", port: "", user: "", pass: "", from: "" });
       utils.admin.getSmtpConfig.invalidate();
     },
-    onError: (err) => toast.error(err.message),
+    onError: err => toast.error(err.message),
   });
   const sendTestEmail = trpc.admin.sendTestEmail.useMutation({
-    onSuccess: (res) => {
+    onSuccess: res => {
       utils.admin.getEmailLogs.invalidate();
       if (res.delivered) {
         setTestEmailError(null);
         toast.success("Test email sent");
       } else {
-        const title = res.skipped ? "SMTP is not configured" : "Test email failed";
-        const detail = res.error || (res.skipped
-          ? "SMTP is not configured. Save your SMTP settings above before sending a test email."
-          : "Test email failed. Check the SMTP host, port, and credentials, then try again.");
+        const title = res.skipped
+          ? "SMTP is not configured"
+          : "Test email failed";
+        const detail =
+          res.error ||
+          (res.skipped
+            ? "SMTP is not configured. Save your SMTP settings above before sending a test email."
+            : "Test email failed. Check the SMTP host, port, and credentials, then try again.");
         setTestEmailError({ title, detail });
         toast.error(title);
       }
     },
-    onError: (err) => {
+    onError: err => {
       setTestEmailError({ title: "Test email failed", detail: err.message });
       toast.error(err.message);
     },
   });
   const sendPasswordReset = trpc.admin.sendPasswordReset.useMutation({
-    onSuccess: (res) => {
+    onSuccess: res => {
       setPendingResetUserId(null);
       setResetConfirmUser(null);
       if (res.delivered) {
@@ -178,7 +282,9 @@ export default function Admin() {
         toast.success("Password reset email sent");
       } else if (res.success) {
         setResetResult({
-          error: res.error || "Email was not delivered (SMTP may not be configured).",
+          error:
+            res.error ||
+            "Email was not delivered (SMTP may not be configured).",
           resetUrl: res.resetUrl ?? "",
         });
         toast.warning("Reset link created — deliver it manually");
@@ -187,7 +293,7 @@ export default function Admin() {
         toast.error(res.error || "Could not send password reset");
       }
     },
-    onError: (err) => {
+    onError: err => {
       setPendingResetUserId(null);
       setResetConfirmUser(null);
       toast.error(err.message);
@@ -195,15 +301,33 @@ export default function Admin() {
   });
   const utils = trpc.useUtils();
 
-  const [smtpForm, setSmtpForm] = useState({ host: "", port: "", user: "", pass: "", from: "" });
+  const [smtpForm, setSmtpForm] = useState({
+    host: "",
+    port: "",
+    user: "",
+    pass: "",
+    from: "",
+  });
   const [testTo, setTestTo] = useState("");
   const [smtpWarnings, setSmtpWarnings] = useState<string[]>([]);
-  const [testEmailError, setTestEmailError] = useState<{ title: string; detail: string } | null>(null);
-  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
-  const [selectedAccount, setSelectedAccount] = useState<SelectedAccountInfo | null>(null);
-  const [resetConfirmUser, setResetConfirmUser] = useState<ResetConfirmUser | null>(null);
-  const [pendingResetUserId, setPendingResetUserId] = useState<number | null>(null);
-  const [resetResult, setResetResult] = useState<{ error: string; resetUrl: string } | null>(null);
+  const [testEmailError, setTestEmailError] = useState<{
+    title: string;
+    detail: string;
+  } | null>(null);
+  const [selectedAccountId, setSelectedAccountId] = useState<string | null>(
+    null
+  );
+  const [selectedAccount, setSelectedAccount] =
+    useState<SelectedAccountInfo | null>(null);
+  const [resetConfirmUser, setResetConfirmUser] =
+    useState<ResetConfirmUser | null>(null);
+  const [pendingResetUserId, setPendingResetUserId] = useState<number | null>(
+    null
+  );
+  const [resetResult, setResetResult] = useState<{
+    error: string;
+    resetUrl: string;
+  } | null>(null);
   const [copied, setCopied] = useState(false);
   const [broadcast, setBroadcast] = useState({
     title: "",
@@ -215,11 +339,18 @@ export default function Admin() {
 
   const accountDetailQuery = trpc.admin.getAccountDetail.useQuery(
     { accountId: selectedAccountId ?? "" },
-    { enabled: selectedAccountId !== null },
+    { enabled: selectedAccountId !== null }
   );
-  const accountDetail = accountDetailQuery.data as AccountDetailResult | undefined;
+  const accountDetail = accountDetailQuery.data as
+    | AccountDetailResult
+    | undefined;
 
-  const isSmtpDirty = smtpForm.host || smtpForm.port || smtpForm.user || smtpForm.pass || smtpForm.from;
+  const isSmtpDirty =
+    smtpForm.host ||
+    smtpForm.port ||
+    smtpForm.user ||
+    smtpForm.pass ||
+    smtpForm.from;
 
   function openAccountDetail(account: SelectedAccountInfo) {
     setSelectedAccount(account);
@@ -255,14 +386,20 @@ export default function Admin() {
   }
 
   const sendBroadcast = trpc.admin.sendOwnerBroadcast.useMutation({
-    onSuccess: (res) => {
+    onSuccess: res => {
       toast.success(`Broadcast sent to ${res.recipientCount} owners`);
-      setBroadcast({ title: "", message: "", channels: { email: true, notification: false, banner: false }, linkUrl: "", linkLabel: "" });
+      setBroadcast({
+        title: "",
+        message: "",
+        channels: { email: true, notification: false, banner: false },
+        linkUrl: "",
+        linkLabel: "",
+      });
       utils.admin.getOwnerBroadcasts.invalidate();
       utils.admin.getNotificationAnalytics.invalidate();
       utils.admin.getEmailStats.invalidate();
     },
-    onError: (err) => toast.error(err.message),
+    onError: err => toast.error(err.message),
   });
 
   function saveSmtp(e: React.FormEvent) {
@@ -274,41 +411,53 @@ export default function Admin() {
       ...(smtpForm.pass ? { pass: smtpForm.pass } : {}),
       ...(smtpForm.from ? { from: smtpForm.from } : {}),
     });
-    setSmtpForm({ host: "", port: "", user: "", pass: "", from: "" });
   }
 
-  const dailyChartData = loginStats?.daily.map((d) => ({
-    date: d.date,
-    logins: d.count,
-    users: d.uniqueUsers,
-  })) ?? [];
+  const dailyChartData =
+    loginStats?.daily.map(d => ({
+      date: d.date,
+      logins: d.count,
+      users: d.uniqueUsers,
+    })) ?? [];
 
-  const planChartData = planStats?.byPlan.map((p) => ({
-    name: p.plan,
-    value: p.count,
-  })) ?? [];
+  const planChartData =
+    planStats?.byPlan.map(p => ({
+      name: p.plan,
+      value: p.count,
+    })) ?? [];
 
   return (
-    <Layout>
-      <div className="mx-auto max-w-7xl px-4 py-6">
-        <div className="mb-6 flex items-center justify-between">
+    <>
+      <div className="space-y-6">
+        {[loginStatsError,activeAccountsError,newUsersError,sessionDurationError,planStatsError,accountListError,smtpConfigError,emailStatsError,emailLogsError,broadcastsError,notificationAnalyticsError].some(Boolean) && <Alert variant="destructive"><AlertTitle>Could not load this section</AlertTitle><AlertDescription>{[loginStatsError,activeAccountsError,newUsersError,sessionDurationError,planStatsError,accountListError,smtpConfigError,emailStatsError,emailLogsError,broadcastsError,notificationAnalyticsError].find(Boolean)?.message}<Button variant="outline" onClick={() => utils.admin.invalidate()}>Retry</Button></AlertDescription></Alert>}
+        <div className="hidden">
           <div>
-            <h1 className="text-2xl font-bold text-[#2D2A26]">Admin Dashboard</h1>
-            <p className="text-sm text-[#8D8A87]">Platform-wide analytics, accounts, and email configuration</p>
+            <h1 className="text-2xl font-bold text-[#2D2A26]">
+              Admin Dashboard
+            </h1>
+            <p className="text-sm text-[#8D8A87]">
+              Platform-wide analytics, accounts, and email configuration
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-5 w-5 text-[#C73E1D]" />
-            <span className="text-sm font-medium text-[#2D2A26]">Super Admin</span>
+            <span className="text-sm font-medium text-[#2D2A26]">
+              Super Admin
+            </span>
           </div>
         </div>
 
-        <div className="mb-6 flex flex-wrap items-end gap-4 rounded-lg border border-[#E8E0D8] bg-white p-4">
+        <div
+          className={`${["overview", "plans", "users", "email"].includes(section) ? "flex" : "hidden"} mb-6 flex-wrap items-end gap-4 rounded-lg border border-[#E8E0D8] bg-white p-4`}
+        >
           <div>
             <Label className="text-xs text-[#8D8A87]">From</Label>
             <Input
               type="date"
-              value={dateRange.from}
-              onChange={(e) => setDateRange((r) => ({ ...r, from: e.target.value }))}
+              aria-label="From date" value={dateRange.from}
+              onChange={e =>
+                setDateRange(r => ({ ...r, from: e.target.value }))
+              }
               className="w-40"
             />
           </div>
@@ -316,8 +465,8 @@ export default function Admin() {
             <Label className="text-xs text-[#8D8A87]">To</Label>
             <Input
               type="date"
-              value={dateRange.to}
-              onChange={(e) => setDateRange((r) => ({ ...r, to: e.target.value }))}
+              aria-label="To date" value={dateRange.to}
+              onChange={e => setDateRange(r => ({ ...r, to: e.target.value }))}
               className="w-40"
             />
           </div>
@@ -330,23 +479,35 @@ export default function Admin() {
           </Button>
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="bg-white border border-[#E8E0D8]">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="accounts">Accounts</TabsTrigger>
-            <TabsTrigger value="users">New Users</TabsTrigger>
-            <TabsTrigger value="plans">Plans & Trials</TabsTrigger>
-            <TabsTrigger value="email">Email Logs</TabsTrigger>
-            <TabsTrigger value="broadcast">Broadcast</TabsTrigger>
-            <TabsTrigger value="smtp">SMTP</TabsTrigger>
-          </TabsList>
-
+        <Tabs value={section} className="space-y-6">
           <TabsContent value="overview" className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <MetricCard title="Total Logins" value={loginStats?.totalLogins ?? 0} icon={<Activity className="h-5 w-5" />} loading={loginLoading} />
-              <MetricCard title="Unique Users" value={loginStats?.uniqueUsers ?? 0} icon={<Users className="h-5 w-5" />} loading={loginLoading} />
-              <MetricCard title="Active Accounts" value={activeAccounts?.length ?? 0} icon={<Building className="h-5 w-5" />} loading={accountsLoading} />
-              <MetricCard title="Avg Session" value={formatDuration(sessionDuration?.overall?.avgDuration ?? 0)} icon={<TrendingUp className="h-5 w-5" />} loading={durationLoading} />
+              <MetricCard
+                title="Total Logins"
+                value={loginStats?.totalLogins ?? 0}
+                icon={<Activity className="h-5 w-5" />}
+                loading={loginLoading}
+              />
+              <MetricCard
+                title="Unique Users"
+                value={loginStats?.uniqueUsers ?? 0}
+                icon={<Users className="h-5 w-5" />}
+                loading={loginLoading}
+              />
+              <MetricCard
+                title="Active Accounts"
+                value={activeAccounts?.length ?? 0}
+                icon={<Building className="h-5 w-5" />}
+                loading={accountsLoading}
+              />
+              <MetricCard
+                title="Avg Session"
+                value={formatDuration(
+                  sessionDuration?.overall?.avgDuration ?? 0
+                )}
+                icon={<TrendingUp className="h-5 w-5" />}
+                loading={durationLoading}
+              />
             </div>
 
             <Card className="border-[#E8E0D8]">
@@ -362,12 +523,22 @@ export default function Admin() {
                         <XAxis dataKey="date" tick={{ fontSize: 12 }} />
                         <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
                         <Tooltip />
-                        <Bar dataKey="logins" fill="#C73E1D" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="users" fill="#D4A854" radius={[4, 4, 0, 0]} />
+                        <Bar
+                          dataKey="logins"
+                          fill="#C73E1D"
+                          radius={[4, 4, 0, 0]}
+                        />
+                        <Bar
+                          dataKey="users"
+                          fill="#D4A854"
+                          radius={[4, 4, 0, 0]}
+                        />
                       </BarChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-[#8D8A87]">No login activity for the selected range</div>
+                    <div className="flex h-full items-center justify-center text-sm text-[#8D8A87]">
+                      No login activity for the selected range
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -391,21 +562,37 @@ export default function Admin() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(activeAccounts ?? []).map((a) => (
+                    {(activeAccounts ?? []).map(a => (
                       <TableRow key={a.accountId ?? "unknown"}>
                         <TableCell>
-                          <div className="font-medium">{a.accountName ?? a.accountId}</div>
-                          <div className="text-xs text-[#8D8A87]">{a.accountId}</div>
+                          <div className="font-medium">
+                            {a.accountName ?? a.accountId}
+                          </div>
+                          <div className="text-xs text-[#8D8A87]">
+                            {a.accountId}
+                          </div>
                         </TableCell>
-                        <TableCell><Badge variant="outline" className="capitalize">{a.plan ?? "—"}</Badge></TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {a.plan ?? "—"}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{a.uniqueUsers}</TableCell>
                         <TableCell>{a.totalLogins}</TableCell>
                         <TableCell>{formatDate(a.lastLogin)}</TableCell>
                       </TableRow>
                     ))}
-                    {!accountsLoading && (activeAccounts ?? []).length === 0 && (
-                      <TableRow><TableCell colSpan={5} className="text-center text-[#8D8A87]">No active accounts in this range</TableCell></TableRow>
-                    )}
+                    {!accountsLoading &&
+                      (activeAccounts ?? []).length === 0 && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={5}
+                            className="text-center text-[#8D8A87]"
+                          >
+                            No active accounts in this range
+                          </TableCell>
+                        </TableRow>
+                      )}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -421,7 +608,7 @@ export default function Admin() {
                   <Input
                     placeholder="Search by account ID or name"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={e => setSearch(e.target.value)}
                     className="max-w-sm"
                   />
                 </div>
@@ -438,7 +625,7 @@ export default function Admin() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(accountList ?? []).map((a) => (
+                    {(accountList ?? []).map(a => (
                       <TableRow key={a.id}>
                         <TableCell>
                           <div className="flex items-center gap-2">
@@ -451,26 +638,51 @@ export default function Admin() {
                               <ChevronRight className="h-4 w-4" />
                             </button>
                             <div>
-                              <div className="font-medium">{a.name ?? a.accountId}</div>
-                              <div className="text-xs text-[#8D8A87]">{a.accountId}</div>
+                              <div className="font-medium">
+                                {a.name ?? a.accountId}
+                              </div>
+                              <div className="text-xs text-[#8D8A87]">
+                                {a.accountId}
+                              </div>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell><Badge variant="outline" className="capitalize">{a.plan}</Badge></TableCell>
-                        <TableCell><Badge variant="outline" className="capitalize">{a.subscriptionStatus}</Badge></TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {a.plan}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="capitalize">
+                            {a.subscriptionStatus}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{a.businessCount}</TableCell>
                         <TableCell>{a.userCount}</TableCell>
                         <TableCell>{formatDate(a.createdAt)}</TableCell>
                         <TableCell className="text-right">
-                          <Button variant="outline" size="sm" className="border-[#E8E0D8]" onClick={() => openAccountDetail(a)}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-[#E8E0D8]"
+                            onClick={() => openAccountDetail(a)}
+                          >
                             Details
                           </Button>
                         </TableCell>
                       </TableRow>
                     ))}
-                    {!accountListLoading && (accountList ?? []).length === 0 && (
-                      <TableRow><TableCell colSpan={7} className="text-center text-[#8D8A87]">No accounts found</TableCell></TableRow>
-                    )}
+                    {!accountListLoading &&
+                      (accountList ?? []).length === 0 && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={7}
+                            className="text-center text-[#8D8A87]"
+                          >
+                            No accounts found
+                          </TableCell>
+                        </TableRow>
+                      )}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -495,21 +707,34 @@ export default function Admin() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(newUsers ?? []).map((u) => (
+                    {(newUsers ?? []).map(u => (
                       <TableRow key={u.id}>
                         <TableCell>
-                          <div className="font-medium">{u.name ?? u.username}</div>
-                          <div className="text-xs text-[#8D8A87]">{u.email}</div>
+                          <div className="font-medium">
+                            {u.name ?? u.username}
+                          </div>
+                          <div className="text-xs text-[#8D8A87]">
+                            {u.email}
+                          </div>
                         </TableCell>
                         <TableCell>{u.accountId}</TableCell>
                         <TableCell>{formatDate(u.createdAt)}</TableCell>
                         <TableCell>{u.loginCount}</TableCell>
                         <TableCell>{formatDate(u.lastLogin)}</TableCell>
-                        <TableCell>{formatDuration(u.avgSessionDuration)}</TableCell>
+                        <TableCell>
+                          {formatDuration(u.avgSessionDuration)}
+                        </TableCell>
                       </TableRow>
                     ))}
                     {!newUsersLoading && (newUsers ?? []).length === 0 && (
-                      <TableRow><TableCell colSpan={6} className="text-center text-[#8D8A87]">No new users in this range</TableCell></TableRow>
+                      <TableRow>
+                        <TableCell
+                          colSpan={6}
+                          className="text-center text-[#8D8A87]"
+                        >
+                          No new users in this range
+                        </TableCell>
+                      </TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -519,9 +744,27 @@ export default function Admin() {
 
           <TabsContent value="plans" className="space-y-6">
             <div className="grid gap-4 md:grid-cols-3">
-              <MetricCard title="Total Accounts" value={planStats?.totalAccounts ?? 0} icon={<Building className="h-5 w-5" />} loading={planLoading} />
-              <MetricCard title="Trial Accounts" value={planStats?.byStatus.find((s) => s.status === "trial")?.count ?? 0} icon={<Activity className="h-5 w-5" />} loading={planLoading} />
-              <MetricCard title="Extended Trials" value={planStats?.extendedTrials ?? 0} icon={<TrendingUp className="h-5 w-5" />} loading={planLoading} />
+              <MetricCard
+                title="Total Accounts"
+                value={planStats?.totalAccounts ?? 0}
+                icon={<Building className="h-5 w-5" />}
+                loading={planLoading}
+              />
+              <MetricCard
+                title="Trial Accounts"
+                value={
+                  planStats?.byStatus.find(s => s.status === "trial")?.count ??
+                  0
+                }
+                icon={<Activity className="h-5 w-5" />}
+                loading={planLoading}
+              />
+              <MetricCard
+                title="Extended Trials"
+                value={planStats?.extendedTrials ?? 0}
+                icon={<TrendingUp className="h-5 w-5" />}
+                loading={planLoading}
+              />
             </div>
 
             <Card className="border-[#E8E0D8]">
@@ -543,14 +786,19 @@ export default function Admin() {
                           label={({ name, value }) => `${name}: ${value}`}
                         >
                           {planChartData.map((_, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={COLORS[index % COLORS.length]}
+                            />
                           ))}
                         </Pie>
                         <Tooltip />
                       </PieChart>
                     </ResponsiveContainer>
                   ) : (
-                    <div className="flex h-full items-center justify-center text-sm text-[#8D8A87]">No plan data available</div>
+                    <div className="flex h-full items-center justify-center text-sm text-[#8D8A87]">
+                      No plan data available
+                    </div>
                   )}
                 </div>
               </CardContent>
@@ -562,8 +810,12 @@ export default function Admin() {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-3">
-                  {(planStats?.byStatus ?? []).map((s) => (
-                    <Badge key={s.status} variant="outline" className="px-3 py-1 text-sm capitalize">
+                  {(planStats?.byStatus ?? []).map(s => (
+                    <Badge
+                      key={s.status}
+                      variant="outline"
+                      className="px-3 py-1 text-sm capitalize"
+                    >
                       {s.status}: {s.count}
                     </Badge>
                   ))}
@@ -574,10 +826,30 @@ export default function Admin() {
 
           <TabsContent value="email" className="space-y-6">
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <MetricCard title="Total Emails" value={emailStats?.total ?? 0} icon={<Mail className="h-5 w-5" />} loading={emailStatsLoading} />
-              <MetricCard title="Sent" value={emailStats?.totalSent ?? 0} icon={<Send className="h-5 w-5" />} loading={emailStatsLoading} />
-              <MetricCard title="Sent Today" value={emailStats?.sentToday ?? 0} icon={<Activity className="h-5 w-5" />} loading={emailStatsLoading} />
-              <MetricCard title="Failed" value={emailStats?.totalFailed ?? 0} icon={<TrendingUp className="h-5 w-5" />} loading={emailStatsLoading} />
+              <MetricCard
+                title="Total Emails"
+                value={emailStats?.total ?? 0}
+                icon={<Mail className="h-5 w-5" />}
+                loading={emailStatsLoading}
+              />
+              <MetricCard
+                title="Sent"
+                value={emailStats?.totalSent ?? 0}
+                icon={<Send className="h-5 w-5" />}
+                loading={emailStatsLoading}
+              />
+              <MetricCard
+                title="Sent Today"
+                value={emailStats?.sentToday ?? 0}
+                icon={<Activity className="h-5 w-5" />}
+                loading={emailStatsLoading}
+              />
+              <MetricCard
+                title="Failed"
+                value={emailStats?.totalFailed ?? 0}
+                icon={<TrendingUp className="h-5 w-5" />}
+                loading={emailStatsLoading}
+              />
             </div>
 
             <Card className="border-[#E8E0D8]">
@@ -586,14 +858,21 @@ export default function Admin() {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-wrap gap-3">
-                  {(emailStats?.byType ?? []).map((t) => (
-                    <Badge key={t.type} variant="outline" className="px-3 py-1 text-sm capitalize">
+                  {(emailStats?.byType ?? []).map(t => (
+                    <Badge
+                      key={t.type}
+                      variant="outline"
+                      className="px-3 py-1 text-sm capitalize"
+                    >
                       {t.type.replace(/_/g, " ")}: {t.count}
                     </Badge>
                   ))}
-                  {!emailStatsLoading && (emailStats?.byType ?? []).length === 0 && (
-                    <span className="text-sm text-[#8D8A87]">No email activity for the selected range</span>
-                  )}
+                  {!emailStatsLoading &&
+                    (emailStats?.byType ?? []).length === 0 && (
+                      <span className="text-sm text-[#8D8A87]">
+                        No email activity for the selected range
+                      </span>
+                    )}
                 </div>
               </CardContent>
             </Card>
@@ -613,28 +892,45 @@ export default function Admin() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(emailLogs ?? []).map((log) => (
+                    {(emailLogs ?? []).map(log => (
                       <TableRow key={log.id}>
-                        <TableCell className="capitalize">{log.type.replace(/_/g, " ")}</TableCell>
+                        <TableCell className="capitalize">
+                          {log.type.replace(/_/g, " ")}
+                        </TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={`capitalize ${statusColor(log.status)}`}>
+                          <Badge
+                            variant="outline"
+                            className={`capitalize ${statusColor(log.status)}`}
+                          >
                             {log.status}
                           </Badge>
                         </TableCell>
                         <TableCell>
                           {log.status === "failed" && log.errorMessage ? (
-                            <span title={log.errorMessage} className="block max-w-[240px] truncate text-xs text-red-700">
+                            <span
+                              title={log.errorMessage}
+                              className="block max-w-[240px] truncate text-xs text-red-700"
+                            >
                               {log.errorMessage}
                             </span>
                           ) : (
                             <span className="text-[#8D8A87]">—</span>
                           )}
                         </TableCell>
-                        <TableCell>{timeAgo(log.sentAt ?? log.createdAt)}</TableCell>
+                        <TableCell>
+                          {timeAgo(log.sentAt ?? log.createdAt)}
+                        </TableCell>
                       </TableRow>
                     ))}
                     {!emailLogsLoading && (emailLogs ?? []).length === 0 && (
-                      <TableRow><TableCell colSpan={4} className="text-center text-[#8D8A87]">No email logs yet</TableCell></TableRow>
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="text-center text-[#8D8A87]"
+                        >
+                          No email logs yet
+                        </TableCell>
+                      </TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -654,16 +950,20 @@ export default function Admin() {
                 <div>
                   <Label>Title</Label>
                   <Input
-                    value={broadcast.title}
-                    onChange={(e) => setBroadcast((b) => ({ ...b, title: e.target.value }))}
+                    aria-label="Broadcast title" value={broadcast.title}
+                    onChange={e =>
+                      setBroadcast(b => ({ ...b, title: e.target.value }))
+                    }
                     placeholder="Announcement title"
                   />
                 </div>
                 <div>
                   <Label>Message</Label>
                   <textarea
-                    value={broadcast.message}
-                    onChange={(e) => setBroadcast((b) => ({ ...b, message: e.target.value }))}
+                    aria-label="Broadcast message" value={broadcast.message}
+                    onChange={e =>
+                      setBroadcast(b => ({ ...b, message: e.target.value }))
+                    }
                     placeholder="Write the message you want to send to all system owners..."
                     rows={5}
                     className="w-full rounded-md border border-[#E8E0D8] bg-white px-3 py-2 text-sm text-[#2D2A26] placeholder:text-[#8D8A87] focus:outline-none focus:ring-2 focus:ring-[#C73E1D]"
@@ -673,16 +973,20 @@ export default function Admin() {
                   <div>
                     <Label>Link URL (optional)</Label>
                     <Input
-                      value={broadcast.linkUrl}
-                      onChange={(e) => setBroadcast((b) => ({ ...b, linkUrl: e.target.value }))}
+                      aria-label="Broadcast link URL" value={broadcast.linkUrl}
+                      onChange={e =>
+                        setBroadcast(b => ({ ...b, linkUrl: e.target.value }))
+                      }
                       placeholder="https://example.com/page"
                     />
                   </div>
                   <div>
                     <Label>Link Label (optional)</Label>
                     <Input
-                      value={broadcast.linkLabel}
-                      onChange={(e) => setBroadcast((b) => ({ ...b, linkLabel: e.target.value }))}
+                      aria-label="Broadcast link label" value={broadcast.linkLabel}
+                      onChange={e =>
+                        setBroadcast(b => ({ ...b, linkLabel: e.target.value }))
+                      }
                       placeholder="Learn more"
                     />
                   </div>
@@ -692,7 +996,12 @@ export default function Admin() {
                     <input
                       type="checkbox"
                       checked={broadcast.channels.email}
-                      onChange={(e) => setBroadcast((b) => ({ ...b, channels: { ...b.channels, email: e.target.checked } }))}
+                      onChange={e =>
+                        setBroadcast(b => ({
+                          ...b,
+                          channels: { ...b.channels, email: e.target.checked },
+                        }))
+                      }
                       className="h-4 w-4 accent-[#C73E1D]"
                     />
                     Email
@@ -701,7 +1010,15 @@ export default function Admin() {
                     <input
                       type="checkbox"
                       checked={broadcast.channels.notification}
-                      onChange={(e) => setBroadcast((b) => ({ ...b, channels: { ...b.channels, notification: e.target.checked } }))}
+                      onChange={e =>
+                        setBroadcast(b => ({
+                          ...b,
+                          channels: {
+                            ...b.channels,
+                            notification: e.target.checked,
+                          },
+                        }))
+                      }
                       className="h-4 w-4 accent-[#C73E1D]"
                     />
                     In-app Notification
@@ -710,7 +1027,12 @@ export default function Admin() {
                     <input
                       type="checkbox"
                       checked={broadcast.channels.banner}
-                      onChange={(e) => setBroadcast((b) => ({ ...b, channels: { ...b.channels, banner: e.target.checked } }))}
+                      onChange={e =>
+                        setBroadcast(b => ({
+                          ...b,
+                          channels: { ...b.channels, banner: e.target.checked },
+                        }))
+                      }
                       className="h-4 w-4 accent-[#C73E1D]"
                     />
                     Popup Banner
@@ -718,21 +1040,45 @@ export default function Admin() {
                 </div>
                 <Button
                   onClick={() => {
-                    const channels = [] as ("email" | "notification" | "banner")[];
+                    if (
+                      !window.confirm(
+                        `Send this broadcast to all owners?\n\n${broadcast.title}\n\n${broadcast.message}`
+                      )
+                    )
+                      return;
+                    const channels = [] as (
+                      | "email"
+                      | "notification"
+                      | "banner"
+                    )[];
                     if (broadcast.channels.email) channels.push("email");
-                    if (broadcast.channels.notification) channels.push("notification");
+                    if (broadcast.channels.notification)
+                      channels.push("notification");
                     if (broadcast.channels.banner) channels.push("banner");
-                    if (channels.length > 0 && broadcast.title && broadcast.message) {
+                    if (
+                      channels.length > 0 &&
+                      broadcast.title &&
+                      broadcast.message
+                    ) {
                       sendBroadcast.mutate({
-                        title: broadcast.title,
-                        message: broadcast.message,
+                        title: broadcast.title.trim(),
+                        message: broadcast.message.trim(),
                         channels,
-                        ...(broadcast.linkUrl ? { linkUrl: broadcast.linkUrl } : {}),
-                        ...(broadcast.linkLabel ? { linkLabel: broadcast.linkLabel } : {}),
+                        ...(broadcast.linkUrl
+                          ? { linkUrl: broadcast.linkUrl }
+                          : {}),
+                        ...(broadcast.linkLabel
+                          ? { linkLabel: broadcast.linkLabel }
+                          : {}),
                       });
                     }
                   }}
-                  disabled={sendBroadcast.isPending || !broadcast.title || !broadcast.message}
+                  disabled={
+                    sendBroadcast.isPending ||
+                    !broadcast.title.trim() ||
+                    !broadcast.message.trim() ||
+                    !Object.values(broadcast.channels).some(Boolean)
+                  }
                   className="bg-[#C73E1D] hover:bg-[#C73E1D]/90"
                 >
                   Send to All Owners
@@ -741,10 +1087,30 @@ export default function Admin() {
             </Card>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <MetricCard title="Broadcasts" value={notificationAnalytics?.totalBroadcasts ?? 0} icon={<Megaphone className="h-5 w-5" />} loading={analyticsLoading} />
-              <MetricCard title="Total Reads" value={notificationAnalytics?.totalReads ?? 0} icon={<Users className="h-5 w-5" />} loading={analyticsLoading} />
-              <MetricCard title="Link Clicks" value={notificationAnalytics?.totalClicks ?? 0} icon={<TrendingUp className="h-5 w-5" />} loading={analyticsLoading} />
-              <MetricCard title="Dismissals" value={notificationAnalytics?.totalDismissals ?? 0} icon={<Activity className="h-5 w-5" />} loading={analyticsLoading} />
+              <MetricCard
+                title="Broadcasts"
+                value={notificationAnalytics?.totalBroadcasts ?? 0}
+                icon={<Megaphone className="h-5 w-5" />}
+                loading={analyticsLoading}
+              />
+              <MetricCard
+                title="Total Reads"
+                value={notificationAnalytics?.totalReads ?? 0}
+                icon={<Users className="h-5 w-5" />}
+                loading={analyticsLoading}
+              />
+              <MetricCard
+                title="Link Clicks"
+                value={notificationAnalytics?.totalClicks ?? 0}
+                icon={<TrendingUp className="h-5 w-5" />}
+                loading={analyticsLoading}
+              />
+              <MetricCard
+                title="Dismissals"
+                value={notificationAnalytics?.totalDismissals ?? 0}
+                icon={<Activity className="h-5 w-5" />}
+                loading={analyticsLoading}
+              />
             </div>
 
             <Card className="border-[#E8E0D8]">
@@ -764,11 +1130,13 @@ export default function Admin() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(notificationAnalytics?.broadcasts ?? []).map((b) => (
+                    {(notificationAnalytics?.broadcasts ?? []).map(b => (
                       <TableRow key={b.id}>
                         <TableCell>
                           <div className="font-medium">{b.title}</div>
-                          <div className="max-w-xs truncate text-xs text-[#8D8A87]">{b.message}</div>
+                          <div className="max-w-xs truncate text-xs text-[#8D8A87]">
+                            {b.message}
+                          </div>
                         </TableCell>
                         <TableCell>{b.recipients}</TableCell>
                         <TableCell>{b.reads}</TableCell>
@@ -777,9 +1145,18 @@ export default function Admin() {
                         <TableCell>{b.clickRate}%</TableCell>
                       </TableRow>
                     ))}
-                    {!analyticsLoading && (notificationAnalytics?.broadcasts ?? []).length === 0 && (
-                      <TableRow><TableCell colSpan={6} className="text-center text-[#8D8A87]">No broadcast analytics yet</TableCell></TableRow>
-                    )}
+                    {!analyticsLoading &&
+                      (notificationAnalytics?.broadcasts ?? []).length ===
+                        0 && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={6}
+                            className="text-center text-[#8D8A87]"
+                          >
+                            No broadcast analytics yet
+                          </TableCell>
+                        </TableRow>
+                      )}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -800,16 +1177,24 @@ export default function Admin() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(broadcasts ?? []).map((b) => (
+                    {(broadcasts ?? []).map(b => (
                       <TableRow key={b.id}>
                         <TableCell>
                           <div className="font-medium">{b.title}</div>
-                          <div className="max-w-xs truncate text-xs text-[#8D8A87]">{b.message}</div>
+                          <div className="max-w-xs truncate text-xs text-[#8D8A87]">
+                            {b.message}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-1">
-                            {(b.channels ?? []).map((c) => (
-                              <Badge key={c} variant="outline" className="capitalize text-xs">{c}</Badge>
+                            {(b.channels ?? []).map(c => (
+                              <Badge
+                                key={c}
+                                variant="outline"
+                                className="capitalize text-xs"
+                              >
+                                {c}
+                              </Badge>
                             ))}
                           </div>
                         </TableCell>
@@ -818,7 +1203,14 @@ export default function Admin() {
                       </TableRow>
                     ))}
                     {!broadcastsLoading && (broadcasts ?? []).length === 0 && (
-                      <TableRow><TableCell colSpan={4} className="text-center text-[#8D8A87]">No broadcasts yet</TableCell></TableRow>
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="text-center text-[#8D8A87]"
+                        >
+                          No broadcasts yet
+                        </TableCell>
+                      </TableRow>
                     )}
                   </TableBody>
                 </Table>
@@ -838,7 +1230,11 @@ export default function Admin() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="rounded-lg bg-[#F5EDE6] p-4">
                     <div className="text-xs text-[#8D8A87]">Status</div>
-                    <div className="font-medium">{smtpConfig?.isConfigured ? "Configured" : "Not configured"}</div>
+                    <div className="font-medium">
+                      {smtpConfig?.isConfigured
+                        ? "Configured"
+                        : "Not configured"}
+                    </div>
                   </div>
                   <div className="rounded-lg bg-[#F5EDE6] p-4">
                     <div className="text-xs text-[#8D8A87]">Host</div>
@@ -858,7 +1254,9 @@ export default function Admin() {
                   </div>
                   <div className="rounded-lg bg-[#F5EDE6] p-4">
                     <div className="text-xs text-[#8D8A87]">Password</div>
-                    <div className="font-medium">{smtpConfig?.hasPassword ? "Set (••••••••)" : "Not set"}</div>
+                    <div className="font-medium">
+                      {smtpConfig?.hasPassword ? "Set (••••••••)" : "Not set"}
+                    </div>
                   </div>
                 </div>
 
@@ -873,45 +1271,89 @@ export default function Admin() {
                           : "border-gray-200 bg-gray-100 text-gray-700"
                       }
                     >
-                      {smtpConfig?.source === "database" ? "Database" : "Environment (.env)"}
+                      {smtpConfig?.source === "database"
+                        ? "Database"
+                        : "Environment (.env)"}
                     </Badge>
                   </div>
-                  <Button variant="outline" size="sm" className="border-[#E8E0D8]" onClick={editSmtpConfig}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="border-[#E8E0D8]"
+                    onClick={editSmtpConfig}
+                  >
                     <Pencil className="mr-1 h-4 w-4" />
                     Edit Configuration
                   </Button>
                 </div>
 
-                <form onSubmit={saveSmtp} className="space-y-4 rounded-lg border border-[#E8E0D8] p-4">
+                <form
+                  onSubmit={saveSmtp}
+                  className="space-y-4 rounded-lg border border-[#E8E0D8] p-4"
+                >
                   <h3 className="font-medium">Update SMTP Settings</h3>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div>
                       <Label>Host</Label>
-                      <Input value={smtpForm.host} onChange={(e) => setSmtpForm((f) => ({ ...f, host: e.target.value }))} placeholder={smtpConfig?.host || "smtp.example.com"} />
+                      <Input
+                        aria-label="SMTP host" disabled={updateSmtp.isPending} value={smtpForm.host}
+                        onChange={e =>
+                          setSmtpForm(f => ({ ...f, host: e.target.value }))
+                        }
+                        placeholder={smtpConfig?.host || "smtp.example.com"}
+                      />
                     </div>
                     <div>
                       <Label>Port</Label>
-                      <Input value={smtpForm.port} onChange={(e) => setSmtpForm((f) => ({ ...f, port: e.target.value }))} placeholder={smtpConfig?.port || "587"} />
+                      <Input
+                        aria-label="SMTP port" disabled={updateSmtp.isPending} value={smtpForm.port}
+                        onChange={e =>
+                          setSmtpForm(f => ({ ...f, port: e.target.value }))
+                        }
+                        placeholder={smtpConfig?.port || "587"}
+                      />
                     </div>
                     <div>
                       <Label>Username</Label>
-                      <Input value={smtpForm.user} onChange={(e) => setSmtpForm((f) => ({ ...f, user: e.target.value }))} placeholder={smtpConfig?.user || "user@example.com"} />
+                      <Input
+                        aria-label="SMTP username" disabled={updateSmtp.isPending} value={smtpForm.user}
+                        onChange={e =>
+                          setSmtpForm(f => ({ ...f, user: e.target.value }))
+                        }
+                        placeholder={smtpConfig?.user || "user@example.com"}
+                      />
                     </div>
                     <div>
                       <Label>Password</Label>
                       <Input
                         type="password"
-                        value={smtpForm.pass}
-                        onChange={(e) => setSmtpForm((f) => ({ ...f, pass: e.target.value }))}
-                        placeholder={smtpConfig?.hasPassword ? "Leave blank to keep current password" : "Enter password"}
+                        aria-label="SMTP password" disabled={updateSmtp.isPending} value={smtpForm.pass}
+                        onChange={e =>
+                          setSmtpForm(f => ({ ...f, pass: e.target.value }))
+                        }
+                        placeholder={
+                          smtpConfig?.hasPassword
+                            ? "Leave blank to keep current password"
+                            : "Enter password"
+                        }
                       />
                     </div>
                     <div className="md:col-span-2">
                       <Label>From Email</Label>
-                      <Input value={smtpForm.from} onChange={(e) => setSmtpForm((f) => ({ ...f, from: e.target.value }))} placeholder={smtpConfig?.from || "noreply@example.com"} />
+                      <Input
+                        aria-label="SMTP from email" disabled={updateSmtp.isPending} value={smtpForm.from}
+                        onChange={e =>
+                          setSmtpForm(f => ({ ...f, from: e.target.value }))
+                        }
+                        placeholder={smtpConfig?.from || "noreply@example.com"}
+                      />
                     </div>
                   </div>
-                  <Button type="submit" disabled={!isSmtpDirty || updateSmtp.isPending} className="bg-[#C73E1D] hover:bg-[#C73E1D]/90">
+                  <Button
+                    type="submit"
+                    disabled={!isSmtpDirty || updateSmtp.isPending}
+                    className="bg-[#C73E1D] hover:bg-[#C73E1D]/90"
+                  >
                     Save SMTP Settings
                   </Button>
                   {smtpWarnings.length > 0 && (
@@ -920,7 +1362,9 @@ export default function Admin() {
                       <AlertTitle>Saved, but with warnings</AlertTitle>
                       <AlertDescription>
                         <ul className="list-inside list-disc space-y-1">
-                          {smtpWarnings.map((warning, index) => <li key={index}>{warning}</li>)}
+                          {smtpWarnings.map((warning, index) => (
+                            <li key={index}>{warning}</li>
+                          ))}
                         </ul>
                       </AlertDescription>
                     </Alert>
@@ -933,8 +1377,8 @@ export default function Admin() {
                     <Input
                       type="email"
                       placeholder="recipient@example.com"
-                      value={testTo}
-                      onChange={(e) => setTestTo(e.target.value)}
+                      aria-label="Test email recipient" value={testTo}
+                      onChange={e => setTestTo(e.target.value)}
                       className="max-w-sm"
                     />
                     <Button
@@ -951,10 +1395,15 @@ export default function Admin() {
                     </Button>
                   </div>
                   {testEmailError && (
-                    <Alert variant="destructive" className="border-red-200 bg-red-50 text-red-800">
+                    <Alert
+                      variant="destructive"
+                      className="border-red-200 bg-red-50 text-red-800"
+                    >
                       <AlertCircle className="h-4 w-4" />
                       <AlertTitle>{testEmailError.title}</AlertTitle>
-                      <AlertDescription>{testEmailError.detail}</AlertDescription>
+                      <AlertDescription>
+                        {testEmailError.detail}
+                      </AlertDescription>
                     </Alert>
                   )}
                 </div>
@@ -963,12 +1412,21 @@ export default function Admin() {
           </TabsContent>
         </Tabs>
 
-        <Dialog open={selectedAccountId !== null} onOpenChange={(open) => { if (!open) closeAccountDetail(); }}>
+        <Dialog
+          open={selectedAccountId !== null}
+          onOpenChange={open => {
+            if (!open) closeAccountDetail();
+          }}
+        >
           <DialogContent className="bg-white max-h-[90vh] overflow-y-auto sm:max-w-4xl">
             <DialogHeader>
-              <DialogTitle className="text-xl font-bold text-[#2D2A26]">{selectedAccount?.name ?? "Account Details"}</DialogTitle>
+              <DialogTitle className="text-xl font-bold text-[#2D2A26]">
+                {selectedAccount?.name ?? "Account Details"}
+              </DialogTitle>
               <DialogDescription>
-                <span className="font-mono text-sm text-[#8D8A87]">{selectedAccount?.accountId ?? ""}</span>
+                <span className="font-mono text-sm text-[#8D8A87]">
+                  {selectedAccount?.accountId ?? ""}
+                </span>
               </DialogDescription>
             </DialogHeader>
 
@@ -978,22 +1436,41 @@ export default function Admin() {
                   {accountDetail?.account?.name ?? selectedAccount?.name ?? "—"}
                 </div>
                 <div className="font-mono text-xs text-[#8D8A87]">
-                  {accountDetail?.account?.accountId ?? selectedAccount?.accountId}
+                  {accountDetail?.account?.accountId ??
+                    selectedAccount?.accountId}
                 </div>
               </div>
-              <Badge variant="outline" className="capitalize">{accountDetail?.account?.plan ?? selectedAccount?.plan ?? "—"}</Badge>
-              <Badge variant="outline" className="capitalize">{accountDetail?.account?.subscriptionStatus ?? selectedAccount?.subscriptionStatus ?? "—"}</Badge>
+              <Badge variant="outline" className="capitalize">
+                {accountDetail?.account?.plan ?? selectedAccount?.plan ?? "—"}
+              </Badge>
+              <Badge variant="outline" className="capitalize">
+                {accountDetail?.account?.subscriptionStatus ??
+                  selectedAccount?.subscriptionStatus ??
+                  "—"}
+              </Badge>
               <div className="text-xs text-[#8D8A87]">
-                Created {formatDate(accountDetail?.account?.createdAt ?? selectedAccount?.createdAt)}
+                Created{" "}
+                {formatDate(
+                  accountDetail?.account?.createdAt ??
+                    selectedAccount?.createdAt
+                )}
               </div>
               <div className="text-xs text-[#8D8A87]">
-                {accountDetail?.account?.userCount ?? selectedAccount?.userCount ?? 0} users ·{" "}
-                {accountDetail?.account?.businessCount ?? selectedAccount?.businessCount ?? 0} businesses
+                {accountDetail?.account?.userCount ??
+                  selectedAccount?.userCount ??
+                  0}{" "}
+                users ·{" "}
+                {accountDetail?.account?.businessCount ??
+                  selectedAccount?.businessCount ??
+                  0}{" "}
+                businesses
               </div>
             </div>
 
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-[#2D2A26]">Businesses</h3>
+              <h3 className="mb-2 text-sm font-semibold text-[#2D2A26]">
+                Businesses
+              </h3>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1005,15 +1482,26 @@ export default function Admin() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(accountDetail?.businesses ?? []).map((b) => (
+                  {(accountDetail?.businesses ?? []).map(b => (
                     <TableRow key={b.id}>
                       <TableCell>
                         <div className="font-medium">{b.name}</div>
                         <div className="text-xs text-[#8D8A87]">{b.slug}</div>
                       </TableCell>
-                      <TableCell><Badge variant="outline" className="capitalize">{b.plan ?? "—"}</Badge></TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={b.isActive ? "border-green-200 bg-green-100 text-green-800" : "border-red-200 bg-red-100 text-red-800"}>
+                        <Badge variant="outline" className="capitalize">
+                          {b.plan ?? "—"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={
+                            b.isActive
+                              ? "border-green-200 bg-green-100 text-green-800"
+                              : "border-red-200 bg-red-100 text-red-800"
+                          }
+                        >
                           {b.isActive ? "Active" : "Disabled"}
                         </Badge>
                       </TableCell>
@@ -1021,15 +1509,25 @@ export default function Admin() {
                       <TableCell>{formatDate(b.createdAt)}</TableCell>
                     </TableRow>
                   ))}
-                  {!accountDetailQuery.isLoading && (accountDetail?.businesses ?? []).length === 0 && (
-                    <TableRow><TableCell colSpan={5} className="text-center text-[#8D8A87]">No businesses</TableCell></TableRow>
-                  )}
+                  {!accountDetailQuery.isLoading &&
+                    (accountDetail?.businesses ?? []).length === 0 && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={5}
+                          className="text-center text-[#8D8A87]"
+                        >
+                          No businesses
+                        </TableCell>
+                      </TableRow>
+                    )}
                 </TableBody>
               </Table>
             </div>
 
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-[#2D2A26]">Users</h3>
+              <h3 className="mb-2 text-sm font-semibold text-[#2D2A26]">
+                Users
+              </h3>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1043,25 +1541,43 @@ export default function Admin() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(accountDetail?.users ?? []).map((u) => (
+                  {(accountDetail?.users ?? []).map(u => (
                     <TableRow key={u.id}>
                       <TableCell>
-                        <div className="font-medium">{u.name ?? u.username}</div>
-                        <div className="text-xs text-[#8D8A87]">@{u.username}</div>
+                        <div className="font-medium">
+                          {u.name ?? u.username}
+                        </div>
+                        <div className="text-xs text-[#8D8A87]">
+                          @{u.username}
+                        </div>
                       </TableCell>
                       <TableCell>
                         {u.email ? (
                           <span className="text-[#2D2A26]">{u.email}</span>
                         ) : (
-                          <Badge variant="outline" className="border-amber-200 bg-amber-100 text-amber-800">NO EMAIL</Badge>
+                          <Badge
+                            variant="outline"
+                            className="border-amber-200 bg-amber-100 text-amber-800"
+                          >
+                            NO EMAIL
+                          </Badge>
                         )}
                       </TableCell>
                       <TableCell className="capitalize">{u.role}</TableCell>
                       <TableCell>
-                        {u.businesses.length > 0 ? u.businesses.map((b) => b.name).join(", ") : "—"}
+                        {u.businesses.length > 0
+                          ? u.businesses.map(b => b.name).join(", ")
+                          : "—"}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className={u.isActive ? "border-green-200 bg-green-100 text-green-800" : "border-gray-200 bg-gray-100 text-gray-700"}>
+                        <Badge
+                          variant="outline"
+                          className={
+                            u.isActive
+                              ? "border-green-200 bg-green-100 text-green-800"
+                              : "border-gray-200 bg-gray-100 text-gray-700"
+                          }
+                        >
                           {u.isActive ? "Active" : "Disabled"}
                         </Badge>
                       </TableCell>
@@ -1072,8 +1588,17 @@ export default function Admin() {
                           size="sm"
                           className="border-[#E8E0D8]"
                           disabled={!u.email || pendingResetUserId !== null}
-                          title={u.email ? undefined : "User has no email address"}
-                          onClick={() => setResetConfirmUser({ id: u.id, username: u.username, name: u.name, email: u.email })}
+                          title={
+                            u.email ? undefined : "User has no email address"
+                          }
+                          onClick={() =>
+                            setResetConfirmUser({
+                              id: u.id,
+                              username: u.username,
+                              name: u.name,
+                              email: u.email,
+                            })
+                          }
                         >
                           {pendingResetUserId === u.id ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -1085,24 +1610,49 @@ export default function Admin() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {!accountDetailQuery.isLoading && (accountDetail?.users ?? []).length === 0 && (
-                    <TableRow><TableCell colSpan={7} className="text-center text-[#8D8A87]">No users</TableCell></TableRow>
-                  )}
+                  {!accountDetailQuery.isLoading &&
+                    (accountDetail?.users ?? []).length === 0 && (
+                      <TableRow>
+                        <TableCell
+                          colSpan={7}
+                          className="text-center text-[#8D8A87]"
+                        >
+                          No users
+                        </TableCell>
+                      </TableRow>
+                    )}
                 </TableBody>
               </Table>
             </div>
 
             {resetResult && (
-              <Alert variant="destructive" className="border-amber-200 bg-amber-50 text-amber-900">
+              <Alert
+                variant="destructive"
+                className="border-amber-200 bg-amber-50 text-amber-900"
+              >
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Password reset not delivered by email</AlertTitle>
                 <AlertDescription className="space-y-2">
                   <p>{resetResult.error}</p>
                   {resetResult.resetUrl && (
                     <div className="flex items-center gap-2">
-                      <Input readOnly value={resetResult.resetUrl} className="font-mono text-xs" />
-                      <Button type="button" variant="outline" size="sm" className="shrink-0 border-[#E8E0D8]" onClick={copyResetLink}>
-                        {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      <Input
+                        readOnly
+                        value={resetResult.resetUrl}
+                        className="font-mono text-xs"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 border-[#E8E0D8]"
+                        onClick={copyResetLink}
+                      >
+                        {copied ? (
+                          <Check className="h-4 w-4" />
+                        ) : (
+                          <Copy className="h-4 w-4" />
+                        )}
                         {copied ? "Copied" : "Copy Link"}
                       </Button>
                     </div>
@@ -1112,20 +1662,31 @@ export default function Admin() {
             )}
 
             <DialogFooter>
-              <Button variant="outline" className="border-[#E8E0D8]" onClick={closeAccountDetail}>
+              <Button
+                variant="outline"
+                className="border-[#E8E0D8]"
+                onClick={closeAccountDetail}
+              >
                 Close
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        <AlertDialog open={resetConfirmUser !== null} onOpenChange={(open) => { if (!open) setResetConfirmUser(null); }}>
+        <AlertDialog
+          open={resetConfirmUser !== null}
+          onOpenChange={open => {
+            if (!open) setResetConfirmUser(null);
+          }}
+        >
           <AlertDialogContent className="bg-white">
             <AlertDialogHeader>
               <AlertDialogTitle>Send Password Reset</AlertDialogTitle>
               <AlertDialogDescription>
-                Send a password reset to {resetConfirmUser?.name || resetConfirmUser?.username}
-                {resetConfirmUser?.email ? ` (${resetConfirmUser.email})` : ""}? The reset link expires in 60 minutes.
+                Send a password reset to{" "}
+                {resetConfirmUser?.name || resetConfirmUser?.username}
+                {resetConfirmUser?.email ? ` (${resetConfirmUser.email})` : ""}?
+                The reset link expires in 60 minutes.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -1133,7 +1694,7 @@ export default function Admin() {
               <AlertDialogAction
                 className="bg-[#C73E1D] hover:bg-[#C73E1D]/90"
                 disabled={sendPasswordReset.isPending}
-                onClick={(e) => {
+                onClick={e => {
                   e.preventDefault();
                   if (resetConfirmUser) {
                     setPendingResetUserId(resetConfirmUser.id);
@@ -1141,27 +1702,43 @@ export default function Admin() {
                   }
                 }}
               >
-                {sendPasswordReset.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                {sendPasswordReset.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                )}
                 Send
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
       </div>
-    </Layout>
+    </>
   );
 }
 
-function MetricCard({ title, value, icon, loading }: { title: string; value: string | number; icon: React.ReactNode; loading?: boolean }) {
+function MetricCard({
+  title,
+  value,
+  icon,
+  loading,
+}: {
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
+  loading?: boolean;
+}) {
   return (
     <Card className="border-[#E8E0D8]">
       <CardContent className="p-6">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm text-[#8D8A87]">{title}</p>
-            <p className="mt-1 text-2xl font-bold text-[#2D2A26]">{loading ? "—" : value}</p>
+            <p className="mt-1 text-2xl font-bold text-[#2D2A26]">
+              {loading ? "—" : value}
+            </p>
           </div>
-          <div className="rounded-lg bg-[#F5EDE6] p-3 text-[#C73E1D]">{icon}</div>
+          <div className="rounded-lg bg-[#F5EDE6] p-3 text-[#C73E1D]">
+            {icon}
+          </div>
         </div>
       </CardContent>
     </Card>

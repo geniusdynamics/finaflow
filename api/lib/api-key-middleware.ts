@@ -1,3 +1,5 @@
+import { TRPCError } from "@trpc/server";
+import { errorResponse } from "./api-response";
 import { createMiddleware } from "hono/factory";
 import type { ResolvedApiKey } from "./api-key-auth";
 import { resolveApiKey } from "./api-key-auth";
@@ -31,7 +33,11 @@ export function resolveApiKeyMiddleware(scope?: ApiScope) {
       return c.json({ error: "Invalid API key format" }, 401);
     }
 
-    const apiKey = await resolveApiKey(rawKey);
+    let apiKey: ResolvedApiKey | null;
+    try { apiKey = await resolveApiKey(rawKey); } catch (error) {
+      if (error instanceof TRPCError && error.code === "FORBIDDEN") return errorResponse(c, 403, "ACCOUNT_BILLING_HOLD", "Account is on billing hold");
+      throw error;
+    }
     if (!apiKey) {
       return c.json({ error: "Invalid API key" }, 401);
     }

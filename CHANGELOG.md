@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased] — Merge main into dev
+
+### Changed
+- Preserved both branches' changelog entries when resolving the merge conflict.
+
 ## [Unreleased] — Version 1.4.0
 
 ### Changed
@@ -15,6 +20,56 @@
 ### Tested
 - Synthetic bank parser tests and direct parsing of both supplied PDFs; printed transaction totals match.
 - TypeScript check and targeted lint.
+
+## [Unreleased] — Super-admin recovery browser verification
+
+### Fixed
+- Keep the plan assignment selector aligned with the selected account's loaded plan.
+
+### Verified
+- Confirmed held-owner recovery, pending renewal review, admin restoration, and fresh owner access in the narrow browser viewport.
+
+## [Unreleased] — Super-admin workspace browser QA
+
+### Fixed
+- Show “Search users” in the user directory instead of “Search customers.”
+
+### Verified
+- Checked all six admin sections and URL-backed account search/selection in a narrow in-app browser viewport.
+
+## [Unreleased] — Super-admin account support and billing recovery
+
+### Added
+- Responsive admin workspace with account and user directories, URL filters, account support actions, renewal review, and audit history.
+- Transactional account billing holds, standard plan and trial adjustments, individual user status controls, and manual renewal requests.
+- Billing recovery page for eligible account holders and shared access enforcement for platform features and integrations.
+- Migration `0035_admin_support.sql` for account holds and renewal review records.
+
+### Fixed
+- Completed sessions remain included in login analytics; aggregate counts return numbers.
+- Owner broadcasts link notifications to their history and report actual email outcomes.
+
+## [Unreleased] — Admin SMTP draft preservation
+
+### Fixed
+- Keep SMTP form values when saving fails; clear them after a successful save.
+
+## [Unreleased] — MCP setup guide and credentials
+
+### Added
+- **`/docs/mcp`** — a step-by-step MCP setup guide covering key creation, build, environment variables, Claude Desktop, Cursor, OpenCode and generic stdio clients, verification, example prompts, safety and troubleshooting.
+- **MCP card in Settings → Integrations** — explains the integration, links to the guide and creates a key with the MCP scope preset in one click.
+- **MCP environment block** — after creating a key, Settings shows the exact `FINAFLOW_BASE_URL` and `FINAFLOW_API_KEY` values with a copy button.
+- **Granular scope catalog** — the API key dialog now lists real `resource:action` scopes with descriptions, a read-only shortcut, and an MCP preset covering accounts, suppliers, categories, bills, expenses, sales, statements and subscriptions.
+- **Docs hub card** — `/docs` now links to the MCP guide, and the docs header includes an MCP link.
+
+### Fixed
+- **Coarse key presets** — the old `sales` and `expenses` options were not valid scopes and granted nothing. The dialog now sends granular scopes.
+- **Docs code blocks** — fenced code in markdown docs is rendered as escaped `<pre><code>` blocks instead of being wrapped in paragraphs or having backticks mangled.
+
+### Tested
+- `api/__tests__/docs-pages.test.ts` — **18 pass**, including `/docs/mcp`, configuration parameters, code-block rendering and navigation.
+- `npm run typecheck`, `npm run lint` (0 errors), `npm run build`.
 
 ## [Unreleased] — M-PESA analysis parity with bank statements
 

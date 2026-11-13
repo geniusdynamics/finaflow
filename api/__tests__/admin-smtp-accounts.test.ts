@@ -12,6 +12,7 @@ import {
   passwordResetTokens,
   userBusinesses,
   users,
+  userSessions,
 } from "@db/schema";
 
 // Prevent real email sends and real .env file writes during tests.
@@ -189,6 +190,20 @@ afterEach(async () => {
 });
 
 describe("admin.getSmtpConfig / admin.updateSmtpConfig", () => {
+  it("counts completed login sessions and returns numeric aggregate values", async () => {
+    target = await seedTargetAccount();
+    const db = getDb();
+    const loginAt = new Date("2040-02-10T10:00:00Z");
+    await db.insert(userSessions).values({ userId: target.userWithEmail.id, accountId: target.accountId, action: "logout", loginAt, logoutAt: new Date("2040-02-10T10:05:00Z"), sessionDuration: 300 });
+    try {
+      const result = await caller.admin.getLoginStats({ from: "2040-02-10", to: "2040-02-10" });
+      expect(result.totalLogins).toBe(1);
+      expect(result.uniqueUsers).toBe(1);
+      expect(result.daily[0].count).toBe(1);
+    } finally {
+      await db.delete(userSessions).where(eq(userSessions.userId, target.userWithEmail.id));
+    }
+  });
   it("denies non-super-admin users with NOT_FOUND", async () => {
     const nonAdmin = appRouter.createCaller({
       req: new Request("http://localhost/api/trpc", { headers: { origin: "http://localhost:3000" } }),

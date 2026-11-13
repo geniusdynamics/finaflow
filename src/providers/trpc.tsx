@@ -36,8 +36,11 @@ export function getAuthToken(): string | null {
   return authToken;
 }
 
-export function getCsrfTokenFromCookies(cookieHeader?: string | null): string | null {
-  const source = cookieHeader ?? (typeof document !== "undefined" ? document.cookie : "");
+export function getCsrfTokenFromCookies(
+  cookieHeader?: string | null
+): string | null {
+  const source =
+    cookieHeader ?? (typeof document !== "undefined" ? document.cookie : "");
   if (!source) return null;
 
   for (const part of source.split(";")) {
@@ -71,19 +74,26 @@ const trpcClient = trpc.createClient({
         return headers;
       },
       fetch(input, init) {
-        console.log(`[trpc-client] --> ${typeof input === "string" ? input : (input as URL).href}`, init?.method ?? "GET");
-        return globalThis.fetch(input, {
-          ...(init ?? {}),
-          credentials: "include",
-        }).then(async (res) => {
-          const clone = res.clone();
-          const body = await clone.text().catch(() => "<unreadable>");
-          console.log(`[trpc-client] <-- ${typeof input === "string" ? input : (input as URL).href} ${res.status} body=${body.slice(0, 300)}`);
-          return res;
-        }).catch((err) => {
-          console.error(`[trpc-client] <-- NETWORK ERROR:`, err);
-          throw err;
-        });
+        return globalThis
+          .fetch(input, {
+            ...(init ?? {}),
+            credentials: "include",
+          })
+          .then(async res => {
+            const clone = res.clone();
+            const body = await clone.text().catch(() => "<unreadable>");
+            if (
+              body.includes("ACCOUNT_BILLING_HOLD") &&
+              typeof window !== "undefined" &&
+              window.location.pathname !== "/billing"
+            )
+              window.location.replace("/billing");
+            return res;
+          })
+          .catch(err => {
+            console.error(`[trpc-client] <-- NETWORK ERROR:`, err);
+            throw err;
+          });
       },
     }),
   ],
@@ -109,9 +119,7 @@ export function getQueryClient() {
 export function TRPCProvider({ children }: { children: ReactNode }) {
   return (
     <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </trpc.Provider>
   );
 }

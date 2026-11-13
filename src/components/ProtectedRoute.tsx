@@ -1,7 +1,7 @@
 // ABOUTME: Auth-aware route guard that redirects unauthenticated or unauthorized users away from protected pages.
 // ABOUTME: Uses the centralised permission library so route gating stays in sync with backend definitions.
 import type { ReactNode } from "react";
-import { Navigate } from "react-router";
+import { Navigate, useLocation } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { Spinner } from "@/components/ui/spinner";
 import { hasAnyPermission } from "@/lib/permissions";
@@ -15,6 +15,7 @@ interface Props {
 
 export function ProtectedRoute({ children, requiredPermission }: Props) {
   const { user, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -28,9 +29,27 @@ export function ProtectedRoute({ children, requiredPermission }: Props) {
     return <Navigate to="/login" replace />;
   }
 
+  if (
+    user.accountAccess?.mode === "billing_only" &&
+    location.pathname !== "/billing"
+  ) {
+    return (
+      <Navigate
+        to="/billing"
+        replace
+        state={{ attemptedFeature: location.pathname }}
+      />
+    );
+  }
+  if (user.accountAccess?.mode === "blocked")
+    return <Navigate to="/login" replace />;
+
   if (requiredPermission) {
-    const perms = Array.isArray(requiredPermission) ? requiredPermission : [requiredPermission];
-    const userPerms = user.permissions?.length > 0 ? user.permissions : user.role;
+    const perms = Array.isArray(requiredPermission)
+      ? requiredPermission
+      : [requiredPermission];
+    const userPerms =
+      user.permissions?.length > 0 ? user.permissions : user.role;
     if (!hasAnyPermission(userPerms, perms)) {
       return <Navigate to="/unauthorized" replace />;
     }

@@ -14,6 +14,7 @@ import { eq, and, desc, isNull } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { encryptString, decryptString, looksEncrypted } from "./lib/crypto";
 import { generateApiKey, getKeyPrefix, hashApiKey } from "./lib/api-key-auth";
+import { API_SCOPES, MCP_SCOPES } from "./lib/api-scopes";
 import { env } from "./lib/env";
 import { getAdapter, listAdapters } from "./lib/integrations";
 import { disconnectSibling } from "./lib/integrations/connect-service";
@@ -307,6 +308,11 @@ export const integrationsRouter = createRouter({
     }),
 
   // API Keys
+  scopeCatalog: authedQuery.query(() => ({
+    scopes: Object.entries(API_SCOPES).map(([id, description]) => ({ id, description })),
+    mcp: MCP_SCOPES,
+  })),
+
   listKeys: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     const businessId = ctx.user?.currentBusiness?.id ?? ctx.user?.currentBusinessId;

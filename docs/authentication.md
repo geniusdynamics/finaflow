@@ -31,18 +31,27 @@ Each API key is granted a set of **scopes** that control which endpoints it can 
 | `locations:read` | Read locations / branches |
 | `users:read` | Read users and role templates |
 | `users:write` | Create and update users |
+| `sales:read` | Read daily sales batches and payment channels |
 | `sales:write` | Ingest daily sales batches |
+| `subscriptions:read` | Read subscriptions and subscription payment history |
+| `subscriptions:write` | Record subscription payments |
+| `statements:read` | Read statement imports, analyses and exports |
+| `statements:write` | Parse and import statement files, tag rows and link bills |
 | `journal:write` | Create and post journal entries |
 | `webhooks` | Manage webhook subscriptions |
+
+The FinaFlow MCP server uses a preset with the scopes it needs. See the
+[MCP setup guide](/docs/mcp) for the full client configuration.
 
 ### Legacy scopes
 
 Older API keys may use coarse scopes (`read`, `write`). These are automatically resolved to the granular equivalents:
 
-- `read` → `accounts:read`, `suppliers:read`, `categories:read`, `business:read`, `locations:read`, `users:read`, `bills:read`, `expenses:read`
+- `read` → `accounts:read`, `suppliers:read`, `categories:read`, `business:read`, `locations:read`, `users:read`, `bills:read`, `expenses:read`, `sales:read`
 - `write` → `suppliers:write`, `categories:write`, `accounts:write`, `bills:write`
 
-This ensures backward compatibility without requiring key rotation.
+Legacy scopes do not grant statement, subscription or sales-write access. Use an
+MCP key or a custom key with the granular scopes for those.
 
 ## Cookie vs Bearer auth
 

@@ -1,3 +1,4 @@
+import { assertBusinessOperational, isBillingHoldError } from "../../lib/account-access";
 // ABOUTME: POST /api/v1/webhooks/finabill — incoming webhook handler with HMAC signature verification.
 import { Hono } from "hono";
 import { Sentry } from "../../instrument";
@@ -60,6 +61,7 @@ webhooks.post("/finabill", async (c) => {
       return errorResponse(c, 401, "INVALID_SIGNATURE", "Invalid signature");
     }
 
+    try { await assertBusinessOperational(businessId); } catch (error) { if (!isBillingHoldError(error)) throw error; return errorResponse(c, 403, "ACCOUNT_BILLING_HOLD", "Account is on billing hold"); }
     const result = await handleProviderWebhook("finabill", parsed.data as Record<string, unknown>);
     return successResponse(c, result.body);
   } catch (err) {

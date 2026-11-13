@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { eq } from "drizzle-orm";
 import { getDb } from "../../queries/connection";
-import { apiKeys } from "@db/schema";
+import { apiKeys, businesses } from "@db/schema";
 import {
   generateApiKey,
   getKeyPrefix,
@@ -12,6 +12,15 @@ import {
 } from "../api-key-auth";
 
 describe("api-key-auth", () => {
+  let testBusinessId: number;
+  beforeEach(async () => {
+    const [business] = await getDb().insert(businesses).values({accountId:"KEY-AUTH-FIXTURE",name:"Key auth fixture",slug:crypto.randomUUID()}).returning();
+    testBusinessId=business.id;
+  });
+  afterEach(async () => {
+    await getDb().delete(apiKeys).where(eq(apiKeys.businessId,testBusinessId));
+    await getDb().delete(businesses).where(eq(businesses.id,testBusinessId));
+  });
   it("generates keys with the fna_ prefix and correct length", () => {
     const key = generateApiKey();
     expect(key.startsWith("fna_")).toBe(true);
@@ -43,7 +52,7 @@ describe("api-key-auth", () => {
     const [row] = await db
       .insert(apiKeys)
       .values({
-        businessId: 12345,
+        businessId: testBusinessId,
         name: "Bcrypt Key Test",
         keyHash,
         keyPrefix: prefix,
@@ -54,7 +63,7 @@ describe("api-key-auth", () => {
     const resolved = await resolveApiKey(rawKey);
     expect(resolved).not.toBeNull();
     expect(resolved!.id).toBe(row.id);
-    expect(resolved!.businessId).toBe(12345);
+    expect(resolved!.businessId).toBe(testBusinessId);
     expect(resolved!.scopes).toEqual(["read", "write"]);
 
     // lastUsedAt should be updated.
@@ -70,7 +79,7 @@ describe("api-key-auth", () => {
     const [row] = await db
       .insert(apiKeys)
       .values({
-        businessId: 12346,
+        businessId: testBusinessId,
         name: "Legacy SHA-256 Key Test",
         keyHash: shaHash,
         keyPrefix: prefix,
@@ -81,7 +90,7 @@ describe("api-key-auth", () => {
     const resolved = await resolveApiKey(rawKey);
     expect(resolved).not.toBeNull();
     expect(resolved!.id).toBe(row.id);
-    expect(resolved!.businessId).toBe(12346);
+    expect(resolved!.businessId).toBe(testBusinessId);
     expect(resolved!.scopes).toEqual(["read"]);
 
     // The DB row should now be stored as a bcrypt hash.
@@ -92,7 +101,7 @@ describe("api-key-auth", () => {
     // A second resolve should still work via the new bcrypt hash.
     const resolved2 = await resolveApiKey(rawKey);
     expect(resolved2).not.toBeNull();
-    expect(resolved2!.businessId).toBe(12346);
+    expect(resolved2!.businessId).toBe(testBusinessId);
   });
 
   it("resolveApiKey rejects inactive keys", async () => {
@@ -103,7 +112,7 @@ describe("api-key-auth", () => {
     await db
       .insert(apiKeys)
       .values({
-        businessId: 12347,
+        businessId: testBusinessId,
         name: "Inactive Key Test",
         keyHash,
         keyPrefix: prefix,

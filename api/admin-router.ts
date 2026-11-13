@@ -1,6 +1,7 @@
 // ABOUTME: Platform-wide admin analytics and configuration endpoints.
 // ABOUTME: Accessible only to users whose accountId matches SUPER_ADMIN_ACCOUNT.
 import { z } from "zod";
+import { adminSupportRouter } from "./admin-support-router";
 import { createRouter, adminProcedure } from "./middleware";
 import { getDb } from "./queries/connection";
 import { users, customerAccounts, userSessions, notifications, emailLogs, ownerBroadcasts, businesses, userBusinesses } from "@db/schema";
@@ -14,14 +15,16 @@ import { env } from "./lib/env";
 import { TRPCError } from "@trpc/server";
 
 const dateRangeInput = z.object({
-  from: z.string().optional(),
-  to: z.string().optional(),
+  from: z.iso.date().optional(),
+  to: z.iso.date().optional(),
+}).refine(input => !input.from || !input.to || input.from <= input.to, {
+  message: "Start date must be on or before end date",
 });
 
 function parseDateRange(input: z.infer<typeof dateRangeInput>): { from?: Date; to?: Date } {
   return {
     from: input.from ? new Date(input.from) : undefined,
-    to: input.to ? new Date(input.to) : undefined,
+    to: input.to ? new Date(`${input.to}T23:59:59.999Z`) : undefined,
   };
 }
 
@@ -34,6 +37,7 @@ function withDateRange(conds: SQL<unknown>[], dateCol: typeof userSessions.login
 }
 
 export const adminRouter = createRouter({
+  ...adminSupportRouter._def.record,
   // Verify the caller is the configured super admin.
   verify: adminProcedure.query(() => ({ isSuperAdmin: true })),
 
@@ -43,19 +47,19 @@ export const adminRouter = createRouter({
       const db = getDb();
       const range = parseDateRange(input);
 
-      const totalLogins = await db.select({ count: sql<number>`COUNT(*)` }).from(userSessions)
-        .where(and(...withDateRange([eq(userSessions.action, "login")], userSessions.loginAt, range)));
-      const uniqueUsers = await db.select({ count: sql<number>`COUNT(DISTINCT ${userSessions.userId})` }).from(userSessions)
-        .where(and(...withDateRange([eq(userSessions.action, "login")], userSessions.loginAt, range)));
-      const totalLogouts = await db.select({ count: sql<number>`COUNT(*)` }).from(userSessions)
+      const totalLogins = await db.select({ count: sql<number>`COUNT(*)`.mapWith(Number) }).from(userSessions)
+        .where(and(...withDateRange([sql`${userSessions.loginAt} IS NOT NULL`], userSessions.loginAt, range)));
+      const uniqueUsers = await db.select({ count: sql<number>`COUNT(DISTINCT ${userSessions.userId})`.mapWith(Number) }).from(userSessions)
+        .where(and(...withDateRange([sql`${userSessions.loginAt} IS NOT NULL`], userSessions.loginAt, range)));
+      const totalLogouts = await db.select({ count: sql<number>`COUNT(*)`.mapWith(Number) }).from(userSessions)
         .where(and(...withDateRange([eq(userSessions.action, "logout")], userSessions.loginAt, range)));
 
       const daily = await db.select({
         date: sql<string>`DATE(${userSessions.loginAt})`,
-        count: sql<number>`COUNT(*)`,
-        uniqueUsers: sql<number>`COUNT(DISTINCT ${userSessions.userId})`,
+        count: sql<number>`COUNT(*)`.mapWith(Number),
+        uniqueUsers: sql<number>`COUNT(DISTINCT ${userSessions.userId})`.mapWith(Number),
       }).from(userSessions)
-        .where(and(...withDateRange([eq(userSessions.action, "login")], userSessions.loginAt, range)))
+        .where(and(...withDateRange([sql`${userSessions.loginAt} IS NOT NULL`], userSessions.loginAt, range)))
         .groupBy(sql`DATE(${userSessions.loginAt})`)
         .orderBy(sql`DATE(${userSessions.loginAt})`);
 
@@ -75,12 +79,12 @@ export const adminRouter = createRouter({
 
       const accountActivity = await db.select({
         accountId: userSessions.accountId,
-        uniqueUsers: sql<number>`COUNT(DISTINCT ${userSessions.userId})`,
-        totalLogins: sql<number>`COUNT(*)`,
+        uniqueUsers: sql<number>`COUNT(DISTINCT ${userSessions.userId})`.mapWith(Number),
+        totalLogins: sql<number>`COUNT(*)`.mapWith(Number),
         lastLogin: sql<Date | null>`MAX(${userSessions.loginAt})`,
       }).from(userSessions)
         .where(and(...withDateRange([
-          eq(userSessions.action, "login"),
+          sql`${userSessions.loginAt} IS NOT NULL`,
           sql`${userSessions.accountId} IS NOT NULL`,
         ], userSessions.loginAt, range)))
         .groupBy(userSessions.accountId)
@@ -123,11 +127,11 @@ export const adminRouter = createRouter({
       const loginStats = userIds.length > 0
         ? await db.select({
             userId: userSessions.userId,
-            loginCount: sql<number>`COUNT(*)`,
+            loginCount: sql<number>`COUNT(*)`.mapWith(Number),
             lastLogin: sql<Date | null>`MAX(${userSessions.loginAt})`,
-            avgDuration: sql<number | null>`AVG(${userSessions.sessionDuration})`,
+            avgDuration: sql<number | null>`AVG(${userSessions.sessionDuration})`.mapWith(Number),
           }).from(userSessions)
-            .where(and(eq(userSessions.action, "login"), sql`${userSessions.userId} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`))
+            .where(and(sql`${userSessions.loginAt} IS NOT NULL`, sql`${userSessions.userId} IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`))
             .groupBy(userSessions.userId)
         : [];
       const loginMap = new Map(loginStats.map((row) => [row.userId, row]));
@@ -155,9 +159,9 @@ export const adminRouter = createRouter({
       const range = parseDateRange(input);
 
       const overall = await db.select({
-        avgDuration: sql<number | null>`AVG(${userSessions.sessionDuration})`,
+        avgDuration: sql<number | null>`AVG(${userSessions.sessionDuration})`.mapWith(Number),
         maxDuration: sql<number | null>`MAX(${userSessions.sessionDuration})`,
-        totalSessions: sql<number>`COUNT(*)`,
+        totalSessions: sql<number>`COUNT(*)`.mapWith(Number),
       }).from(userSessions)
         .where(and(...withDateRange([
           eq(userSessions.action, "logout"),
@@ -166,8 +170,8 @@ export const adminRouter = createRouter({
 
       const byAccount = await db.select({
         accountId: userSessions.accountId,
-        avgDuration: sql<number | null>`AVG(${userSessions.sessionDuration})`,
-        sessions: sql<number>`COUNT(*)`,
+        avgDuration: sql<number | null>`AVG(${userSessions.sessionDuration})`.mapWith(Number),
+        sessions: sql<number>`COUNT(*)`.mapWith(Number),
       }).from(userSessions)
         .where(and(...withDateRange([
           eq(userSessions.action, "logout"),
@@ -194,14 +198,14 @@ export const adminRouter = createRouter({
 
       const plans = await db.select({
         plan: customerAccounts.plan,
-        count: sql<number>`COUNT(*)`,
+        count: sql<number>`COUNT(*)`.mapWith(Number),
       }).from(customerAccounts)
         .where(and(...filters))
         .groupBy(customerAccounts.plan);
 
       const statuses = await db.select({
         status: customerAccounts.subscriptionStatus,
-        count: sql<number>`COUNT(*)`,
+        count: sql<number>`COUNT(*)`.mapWith(Number),
       }).from(customerAccounts)
         .where(and(...filters))
         .groupBy(customerAccounts.subscriptionStatus);
@@ -214,7 +218,7 @@ export const adminRouter = createRouter({
       let extendedTrials = 0;
       for (const row of features) {
         const feats = row.features as Record<string, unknown> | null;
-        if (feats && feats.trialExtended === true) extendedTrials++;
+        if (feats && typeof feats.trialExtendedAt === "string") extendedTrials++;
       }
 
       return {
@@ -226,7 +230,7 @@ export const adminRouter = createRouter({
     }),
 
   getAccountList: adminProcedure
-    .input(z.object({ search: z.string().optional(), limit: z.number().default(50), offset: z.number().default(0) }).optional())
+    .input(z.object({ search: z.string().optional(), limit: z.number().int().min(1).max(100).default(50), offset: z.number().int().min(0).default(0) }).optional())
     .query(async ({ input }) => {
       const db = getDb();
       const search = input?.search?.trim();
@@ -247,21 +251,19 @@ export const adminRouter = createRouter({
       const accountIds = list.map((a) => a.accountId);
 
       const userCounts = accountIds.length > 0
-        ? await db.select({
-            accountId: users.accountId,
-            count: sql<number>`COUNT(*)`,
-          }).from(users)
-            .where(and(sql`${users.accountId} IN (${sql.join(accountIds.map(id => sql`${id}`), sql`, `)})`, isNull(users.deletedAt)))
-            .groupBy(users.accountId)
+        ? await db.select({ accountId: customerAccounts.accountId, count: sql<number>`COUNT(*)`.mapWith(Number) })
+          .from(users).innerJoin(customerAccounts, or(eq(users.accountId, customerAccounts.accountId), eq(users.accountRefId, customerAccounts.id)))
+          .where(and(sql`${customerAccounts.accountId} IN (${sql.join(accountIds.map(id => sql`${id}`), sql`, `)})`, isNull(users.deletedAt)))
+          .groupBy(customerAccounts.accountId)
         : [];
       const userCountMap = new Map(userCounts.map((row) => [row.accountId, row.count]));
 
       const businessCounts = accountIds.length > 0
         ? await db.select({
             accountId: businesses.accountId,
-            count: sql<number>`COUNT(*)`,
+            count: sql<number>`COUNT(*)`.mapWith(Number),
           }).from(businesses)
-            .where(sql`${businesses.accountId} IN (${sql.join(accountIds.map(id => sql`${id}`), sql`, `)})`)
+            .where(and(sql`${businesses.accountId} IN (${sql.join(accountIds.map(id => sql`${id}`), sql`, `)})`, isNull(businesses.deletedAt)))
             .groupBy(businesses.accountId)
         : [];
       const businessCountMap = new Map(businessCounts.map((row) => [row.accountId, row.count]));
@@ -469,10 +471,10 @@ export const adminRouter = createRouter({
       if (range.to) conds.push(lte(emailLogs.createdAt, range.to));
       const where = conds.length > 0 ? and(...conds) : undefined;
 
-      const total = await db.select({ count: sql<number>`COUNT(*)` }).from(emailLogs).where(where);
-      const totalSent = await db.select({ count: sql<number>`COUNT(*)` }).from(emailLogs)
+      const total = await db.select({ count: sql<number>`COUNT(*)`.mapWith(Number) }).from(emailLogs).where(where);
+      const totalSent = await db.select({ count: sql<number>`COUNT(*)`.mapWith(Number) }).from(emailLogs)
         .where(where ? and(where, eq(emailLogs.status, "sent")) : eq(emailLogs.status, "sent"));
-      const totalFailed = await db.select({ count: sql<number>`COUNT(*)` }).from(emailLogs)
+      const totalFailed = await db.select({ count: sql<number>`COUNT(*)`.mapWith(Number) }).from(emailLogs)
         .where(where ? and(where, eq(emailLogs.status, "failed")) : eq(emailLogs.status, "failed"));
 
       const today = new Date();
@@ -480,21 +482,21 @@ export const adminRouter = createRouter({
       const thisWeekStart = new Date(today);
       thisWeekStart.setDate(today.getDate() - today.getDay());
 
-      const sentToday = await db.select({ count: sql<number>`COUNT(*)` }).from(emailLogs)
+      const sentToday = await db.select({ count: sql<number>`COUNT(*)`.mapWith(Number) }).from(emailLogs)
         .where(and(eq(emailLogs.status, "sent"), gte(emailLogs.sentAt, today), ...(where ? [where] : [])));
-      const sentThisWeek = await db.select({ count: sql<number>`COUNT(*)` }).from(emailLogs)
+      const sentThisWeek = await db.select({ count: sql<number>`COUNT(*)`.mapWith(Number) }).from(emailLogs)
         .where(and(eq(emailLogs.status, "sent"), gte(emailLogs.sentAt, thisWeekStart), ...(where ? [where] : [])));
 
       const byType = await db.select({
         type: emailLogs.type,
-        count: sql<number>`COUNT(*)`,
+        count: sql<number>`COUNT(*)`.mapWith(Number),
       }).from(emailLogs)
         .where(where)
         .groupBy(emailLogs.type);
 
       const byStatus = await db.select({
         status: emailLogs.status,
-        count: sql<number>`COUNT(*)`,
+        count: sql<number>`COUNT(*)`.mapWith(Number),
       }).from(emailLogs)
         .where(where)
         .groupBy(emailLogs.status);
@@ -513,7 +515,7 @@ export const adminRouter = createRouter({
   getEmailLogs: adminProcedure
     .input(z.object({
       limit: z.number().default(50),
-      offset: z.number().default(0),
+      offset: z.number().int().min(0).default(0),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
@@ -533,8 +535,8 @@ export const adminRouter = createRouter({
 
   sendOwnerBroadcast: adminProcedure
     .input(z.object({
-      title: z.string().min(1).max(255),
-      message: z.string().min(1),
+      title: z.string().trim().min(1).max(255),
+      message: z.string().trim().min(1),
       channels: z.array(z.enum(["email", "notification", "banner"])).min(1),
       linkUrl: z.string().url().optional(),
       linkLabel: z.string().min(1).max(255).optional(),
@@ -549,59 +551,52 @@ export const adminRouter = createRouter({
         name: users.name,
         username: users.username,
       }).from(users)
-        .where(and(eq(users.role, "owner"), eq(users.isActive, true), isNull(users.deletedAt), sql`${users.email} IS NOT NULL`));
+        .where(and(eq(users.role, "owner"), eq(users.isActive, true), isNull(users.deletedAt)));
 
       const channels = input.channels;
       const sendEmailFlag = channels.includes("email");
       const sendNotification = channels.includes("notification");
       const sendBanner = channels.includes("banner");
 
+      const broadcast = await db.transaction(async (tx) => {
+        const [record] = await tx.insert(ownerBroadcasts).values({
+          title: input.title, message: input.message, channels, sentBy: user.id,
+          recipientCount: owners.length,
+        }).returning({ id: ownerBroadcasts.id });
+        if (sendNotification || sendBanner) {
+          for (const owner of owners) {
+            await tx.insert(notifications).values({
+              userId: owner.id, type: "owner_broadcast", title: input.title,
+              message: input.message, severity: "info", priority: 100,
+              entityType: sendBanner ? "banner" : "broadcast", entityId: record.id,
+              linkUrl: input.linkUrl, linkLabel: input.linkLabel,
+              highlightState: "highlighted", lastHighlightedAt: new Date(), highlightCount: 1,
+            });
+          }
+        }
+        return record;
+      });
       let emailsQueued = 0;
-      let notificationsCreated = 0;
-
+      let emailsFailed = 0;
       for (const owner of owners) {
         if (sendEmailFlag && owner.email) {
-          await sendLoggedEmail("owner_broadcast", {
-            to: owner.email,
-            subject: input.title,
+          const result = await sendLoggedEmail("owner_broadcast", {
+            to: owner.email, subject: input.title,
             text: ownerBroadcastText(input.title, input.message),
             html: ownerBroadcastHtml(input.title, input.message),
           });
-          emailsQueued++;
-        }
-
-        if (sendNotification || sendBanner) {
-          await db.insert(notifications).values({
-            userId: owner.id,
-            type: "owner_broadcast",
-            title: input.title,
-            message: input.message,
-            severity: "info",
-            priority: 100,
-            entityType: sendBanner ? "banner" : "broadcast",
-            linkUrl: input.linkUrl,
-            linkLabel: input.linkLabel,
-            highlightState: "highlighted",
-            lastHighlightedAt: new Date(),
-            highlightCount: 1,
-          } as typeof notifications.$inferInsert);
-          notificationsCreated++;
+          if (result.delivered) emailsQueued++;
+          else emailsFailed++;
         }
       }
-
-      const [broadcast] = await db.insert(ownerBroadcasts).values({
-        title: input.title,
-        message: input.message,
-        channels,
-        sentBy: user.id,
-        recipientCount: owners.length,
-      } as typeof ownerBroadcasts.$inferInsert).returning({ id: ownerBroadcasts.id });
+      const notificationsCreated = sendNotification || sendBanner ? owners.length : 0;
 
       return {
         success: true,
         broadcastId: broadcast?.id ?? null,
         recipientCount: owners.length,
         emailsQueued,
+        emailsFailed,
         notificationsCreated,
       };
     }),
@@ -609,7 +604,7 @@ export const adminRouter = createRouter({
   getOwnerBroadcasts: adminProcedure
     .input(z.object({
       limit: z.number().default(20),
-      offset: z.number().default(0),
+      offset: z.number().int().min(0).default(0),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
@@ -629,10 +624,10 @@ export const adminRouter = createRouter({
       const stats = broadcastIds.length > 0
         ? await db.select({
             broadcastId: notifications.entityId,
-            reads: sql<number>`COUNT(CASE WHEN ${notifications.readAt} IS NOT NULL THEN 1 END)`,
-            clicks: sql<number>`COALESCE(SUM(${notifications.linkClicks}), 0)`,
-            dismissals: sql<number>`COUNT(CASE WHEN ${notifications.dismissedAt} IS NOT NULL THEN 1 END)`,
-            recipients: sql<number>`COUNT(*)`,
+            reads: sql<number>`COUNT(CASE WHEN ${notifications.readAt} IS NOT NULL THEN 1 END)`.mapWith(Number),
+            clicks: sql<number>`COALESCE(SUM(${notifications.linkClicks}), 0)`.mapWith(Number),
+            dismissals: sql<number>`COUNT(CASE WHEN ${notifications.dismissedAt} IS NOT NULL THEN 1 END)`.mapWith(Number),
+            recipients: sql<number>`COUNT(*)`.mapWith(Number),
           }).from(notifications)
             .where(and(
               eq(notifications.type, "owner_broadcast"),
