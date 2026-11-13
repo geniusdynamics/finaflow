@@ -395,7 +395,7 @@ export function StatementImportPanel({
             </Label>
             <p className="mt-1 text-xs text-[#8D8A87]">
               {isBank
-                ? "Drop one or more bank statement PDFs (up to 12, 10 MB each). KCB online statements are supported today; more banks are coming."
+                ? "Drop one or more bank statement PDFs (up to 12, 10 MB each). KCB, Co-operative Bank and Family Bank are supported."
                 : "Drop one or more PDF or CSV statements (up to 12, 10 MB each). Files are parsed in memory and never stored."}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -584,7 +584,7 @@ export function StatementImportPanel({
                                 />
                               </td>
                               <td className="whitespace-nowrap px-2 py-1.5 text-[#8D8A87]">{row.date}</td>
-                              <td className="max-w-[300px] truncate px-2 py-1.5 text-[#2D2A26]">{row.details}</td>
+                              <td className="max-w-[300px] truncate px-2 py-1.5 text-[#2D2A26]">{shortenStatementHashes(row.details)}</td>
                               <td className={`whitespace-nowrap px-2 py-1.5 text-right font-mono ${row.direction === "in" ? "text-[#2E7D32]" : "text-[#D32F2F]"}`}>
                                 {row.direction === "in" ? "+" : "-"}
                                 {formatKES(row.amount)}
@@ -676,3 +676,4 @@ export function StatementImportPanel({
     </div>
   );
 }
+import { shortenStatementHashes } from "@shared/statements/display";

@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased] — Version 1.4.0
+
+### Changed
+- Bumped the application minor version from 1.3.0 to 1.4.0.
+
+## [Unreleased] — Co-operative Bank and Family Bank statements
+
+### Added
+- Added Co-operative Bank and Family Bank PDF detection, transaction parsing and analysis, including wrapped descriptions and Family Bank hashed contacts.
+- Shortened hashed contacts in statement displays while retaining full identifiers in parsed data and exports.
+- Warn when printed opening and closing balances do not reconcile with parsed movements.
+
+### Tested
+- Synthetic bank parser tests and direct parsing of both supplied PDFs; printed transaction totals match.
+- TypeScript check and targeted lint.
+
 ## [Unreleased] — M-PESA analysis parity with bank statements
 
 ### Added
@@ -836,4 +852,3 @@ Permission-aware navigation, landing pages, data scoping, and the Users location
 ### Files
 - `src/components/landing/RotatingHeadline.tsx` — switched from `{ line1, line2 }` to `{ headline }`, added construction + budget variations, horizontal gradient, smaller font, bigger mobile min-h
 - `src/components/landing/__tests__/RotatingHeadline.tsx` — switched from `{ line1, line2 }` to `{ headline }`, added construction + budget variations, horizontal gradient, smaller font, bigger mobile min-h
-

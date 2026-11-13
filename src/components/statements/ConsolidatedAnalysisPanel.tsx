@@ -160,7 +160,7 @@ export function ConsolidatedAnalysisPanel({ consolidated }: { consolidated: Cons
               {inRows.map((row) => (
                 <tr key={row.name} className="border-t border-[#E8E0D8]">
                   <td className="px-3 py-2">
-                    {row.name}
+                    {shortenStatementHashes(row.name)}
                     {inMode === "grouped" && (
                       <span className="ml-1 text-[10px] text-[#8D8A87]">({row.members ?? 1} variants)</span>
                     )}
@@ -200,7 +200,7 @@ export function ConsolidatedAnalysisPanel({ consolidated }: { consolidated: Cons
               {outRows.map((row) => (
                 <tr key={row.name} className="border-t border-[#E8E0D8]">
                   <td className="px-3 py-2">
-                    {row.name}
+                    {shortenStatementHashes(row.name)}
                     {outMode === "grouped" && (
                       <span className="ml-1 text-[10px] text-[#8D8A87]">({row.members ?? 1} variants)</span>
                     )}
@@ -351,3 +351,4 @@ export function ConsolidatedAnalysisPanel({ consolidated }: { consolidated: Cons
     </div>
   );
 }
+import { shortenStatementHashes } from "@shared/statements/display";
