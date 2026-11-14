@@ -1,5 +1,22 @@
 # Changelog
 
+## [Unreleased] — Payroll: casuals, partial payment and reversal
+
+### Added
+- Casual and hourly pay: a daily rate times the days worked, edited per payroll entry.
+- Partial and selective payroll payments: pay a subset of staff, any amount, across several runs, each recorded separately.
+- Reverse any individual payment, which mirrors its ledger entries, restores the account balance, and reopens the balance owed.
+- A payments list per period showing each disbursement, its method, date and reversal state.
+
+### Fixed
+- Processing a payroll no longer pulls in every active employee at the location; only people explicitly assigned to the period are processed.
+- Removing someone from a period now sticks, and is blocked once they have been paid.
+- Housing levy is tracked separately from advances, so the levy payable is no longer overstated by advance deductions.
+- Payroll settlement state is per entry (unpaid / part paid / paid) instead of a single period-level flag.
+
+### Tested
+- TypeScript check, production build, and 248 tests passed.
+
 ## [Unreleased] — Public navigation and product positioning
 
 ### Added
