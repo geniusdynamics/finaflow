@@ -7,12 +7,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  Landmark, TrendingUp, Users, ShieldCheck, Zap,
+  TrendingUp, Users, ShieldCheck, Zap,
   CheckCircle, ArrowRight, Store, FileSpreadsheet, CreditCard, Bell,
-  Menu, X, BarChart3, Wallet, Receipt, PiggyBank,
-  ChevronRight, ChevronDown, Globe, Lock,
+  BarChart3, Wallet, Receipt, PiggyBank,
+  ChevronRight, Globe, Lock,
   RefreshCw, Building2, Percent, HeartHandshake,
-  Github, Star, Plus, Sparkles, HelpCircle, BookOpen, LogIn, UserPlus,
+  Github, Plus, Sparkles, HelpCircle, BookOpen, LogIn,
   Smartphone,
 } from "lucide-react";
 
@@ -30,6 +30,8 @@ import BillingCycleToggle from "@/components/pricing/BillingCycleToggle";
 import PricingCard from "@/components/pricing/PricingCard";
 import RotatingHeadline from "@/components/landing/RotatingHeadline";
 import AnimatedCounter from "@/components/landing/AnimatedCounter";
+import { SiteHeader } from "@/components/marketing/SiteHeader";
+import { SiteFooter } from "@/components/marketing/SiteFooter";
 
 interface ShowcaseItem {
   title: string;
@@ -212,7 +214,6 @@ const stats: {
 
 export default function Home() {
   const { user, isLoading } = useAuth();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
 
   if (!isLoading && user) {
@@ -242,148 +243,7 @@ export default function Home() {
       </Helmet>
 
       <div className="min-h-screen bg-white">
-        {/* Navigation */}
-        <nav className="sticky top-0 z-50 border-b border-[#E8E0D8] bg-white/95 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-            <Link to="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#C73E1D]">
-                <Landmark className="h-4 w-4 text-white" />
-              </div>
-              <span className="font-serif text-xl font-bold text-[#2D2A26]">Finaflow</span>
-            </Link>
-            <div className="hidden items-center gap-5 text-sm text-[#2D2A26] lg:flex">
-              <a href="#showcase" className="hover:text-[#C73E1D]">Product</a>
-              <a href="#solutions" className="hover:text-[#C73E1D]">Solutions</a>
-              <a href="#features" className="hover:text-[#C73E1D]">Features</a>
-              <a href="#how-it-works" className="hover:text-[#C73E1D]">How it works</a>
-              <a href="#pricing" className="hover:text-[#C73E1D]">Pricing</a>
-              <a href="#faq" className="hover:text-[#C73E1D]">FAQ</a>
-              <div className="group relative">
-                <Link to="/tools/mpesa-statement-converter" className="flex items-center gap-1 hover:text-[#C73E1D]">
-                  Statement tools <ChevronDown className="h-3 w-3" />
-                </Link>
-                <div className="invisible absolute left-0 top-full z-50 w-56 pt-2 opacity-0 transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100">
-                  <div className="rounded-lg border border-[#E8E0D8] bg-white p-2 shadow-lg">
-                    <Link to="/tools/mpesa-statement-converter" className="block rounded px-2 py-1.5 text-sm hover:bg-[#F5EDE6]">
-                      M-PESA converter
-                    </Link>
-                    <Link to="/tools/bank-statement-converter" className="block rounded px-2 py-1.5 text-sm hover:bg-[#F5EDE6]">
-                      Bank statement converter
-                    </Link>
-                    <Link to="/tools/mpesa-to-excel" className="block rounded px-2 py-1.5 text-sm hover:bg-[#F5EDE6]">
-                      PDF to Excel
-                    </Link>
-                    <Link to="/tools/mpesa-for-accountants" className="block rounded px-2 py-1.5 text-sm hover:bg-[#F5EDE6]">
-                      For accountants
-                    </Link>
-                  </div>
-                </div>
-              </div>
-              <a
-                href="https://github.com/geniusdynamics/finaflow"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Star Finaflow on GitHub"
-                className="group inline-flex items-center gap-1.5 rounded-md border border-[#2D2A26] bg-[#2D2A26] px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-[#1a1815]"
-              >
-                <Github className="h-3.5 w-3.5" />
-                <Star className="h-3 w-3 transition-all group-hover:scale-110 group-hover:fill-yellow-400 group-hover:text-yellow-400" />
-                <span>Star</span>
-              </a>
-            </div>
-            <div className="flex items-center gap-2">
-              <div
-                role="tablist"
-                aria-label="Sign in or sign up"
-                className="flex rounded-lg border border-[#E8E0D8] bg-white p-1"
-                data-testid="header-auth-tabs"
-              >
-                <Link
-                  to="/login"
-                  role="tab"
-                  aria-selected="true"
-                  data-testid="header-tab-signin"
-                  className="flex items-center justify-center gap-1.5 rounded-md bg-[#C73E1D] px-3 py-1.5 text-xs font-medium text-white shadow-sm min-h-[40px] sm:min-h-[44px] sm:text-sm"
-                >
-                  <LogIn className="h-3.5 w-3.5" />
-                  <span>Sign In</span>
-                </Link>
-                <Link
-                  to="/login?type=standard"
-                  role="tab"
-                  aria-selected="false"
-                  data-testid="header-tab-signup"
-                  className="flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-[#8D8A87] transition-all hover:text-[#2D2A26] min-h-[40px] sm:min-h-[44px] sm:text-sm"
-                >
-                  <UserPlus className="h-3.5 w-3.5" />
-                  <span>Sign Up</span>
-                </Link>
-              </div>
-              <Link
-                to="/login?type=partner"
-                data-testid="header-partner-cta"
-                className="hidden items-center gap-1.5 rounded-md border border-[#D4A854] bg-white px-3 py-2 text-xs font-medium text-[#D4A854] transition-colors hover:bg-[#D4A854]/10 min-h-[44px] sm:text-sm md:flex"
-              >
-                <HeartHandshake className="h-3.5 w-3.5" />
-                <span>Join as Partner</span>
-              </Link>
-              <Link
-                to="/login"
-                data-testid="header-mobile-signin"
-                aria-label="Sign in"
-                className="hidden items-center justify-center rounded-md bg-[#C73E1D] px-3 py-2 text-xs font-medium text-white shadow-sm transition-colors hover:bg-[#C73E1D]/90 min-h-[44px] sm:text-sm sm:flex lg:hidden"
-              >
-                <LogIn className="h-3.5 w-3.5" />
-                <span className="ml-1.5">Sign In</span>
-              </Link>
-              <button
-                className="flex items-center justify-center rounded-md p-2 text-[#2D2A26] hover:bg-[#F5EDE6] min-h-[44px] min-w-[44px] lg:hidden"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-                aria-expanded={mobileMenuOpen}
-              >
-                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </button>
-            </div>
-          </div>
-          {mobileMenuOpen && (
-            <div className="border-t border-[#E8E0D8] px-4 py-3 lg:hidden space-y-2 text-sm">
-              <a href="#showcase" onClick={() => setMobileMenuOpen(false)} className="block py-1">Product</a>
-              <a href="#solutions" onClick={() => setMobileMenuOpen(false)} className="block py-1">Solutions</a>
-              <a href="#features" onClick={() => setMobileMenuOpen(false)} className="block py-1">Features</a>
-              <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="block py-1">How it works</a>
-              <a href="#pricing" onClick={() => setMobileMenuOpen(false)} className="block py-1">Pricing</a>
-              <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block py-1">FAQ</a>
-              <p className="pt-2 text-xs uppercase tracking-wider text-[#8D8A87]">Free statement tools</p>
-              <Link to="/tools/mpesa-statement-converter" onClick={() => setMobileMenuOpen(false)} className="block py-1">
-                M-PESA converter
-              </Link>
-              <Link to="/tools/bank-statement-converter" onClick={() => setMobileMenuOpen(false)} className="block py-1">
-                Bank statement converter
-              </Link>
-              <Link to="/tools/mpesa-to-excel" onClick={() => setMobileMenuOpen(false)} className="block py-1">
-                PDF to Excel
-              </Link>
-              <Link to="/tools/mpesa-for-accountants" onClick={() => setMobileMenuOpen(false)} className="block py-1">
-                For accountants
-              </Link>
-              <a
-                href="https://github.com/geniusdynamics/finaflow"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 py-1 font-medium"
-              >
-                <Github className="h-3.5 w-3.5" /> Star us on GitHub
-              </a>
-              <Link to="/login?type=standard" onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-center gap-2 rounded-md bg-[#C73E1D] py-3 font-medium text-white min-h-[48px]">
-                <UserPlus className="h-4 w-4" /> Get Started
-              </Link>
-              <Link to="/login?type=partner" onClick={() => setMobileMenuOpen(false)} className="flex items-center justify-center gap-2 rounded-md border border-[#D4A854] py-3 font-medium text-[#D4A854] min-h-[48px]">
-                <HeartHandshake className="h-4 w-4" /> Join as Partner
-              </Link>
-            </div>
-          )}
-        </nav>
+        <SiteHeader onHome />
 
         {/* Hero Section */}
         <section className="relative overflow-hidden">
@@ -578,8 +438,118 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Screenshot Showcase */}
-        <section id="showcase" className="py-20 md:py-28">
+        {/* Why it goes wrong */}
+        <section id="why" className="border-t border-[#E8E0D8] bg-white py-20 md:py-28">
+          <div className="mx-auto max-w-6xl px-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="mx-auto mb-12 max-w-2xl text-center"
+            >
+              <h2 className="font-serif text-4xl font-bold text-[#2D2A26]">
+                Running a business without the numbers is a gamble
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm text-[#8D8A87]">
+                Owners rarely lack data — they lack it in one place, on time, in a form they can act on.
+              </p>
+            </motion.div>
+            <div className="grid gap-5 md:grid-cols-3">
+              {[
+                {
+                  icon: Smartphone,
+                  title: "Money lives in too many places",
+                  desc: "Cash in the till, float on M-PESA and Airtel Money, balances across three bank accounts. They never sit in one figure you can trust.",
+                },
+                {
+                  icon: Bell,
+                  title: "The numbers arrive too late",
+                  desc: "By the time the month is totalled, the restock, the hire or the price change has already been decided on a hunch.",
+                },
+                {
+                  icon: TrendingUp,
+                  title: "Profitable on paper, tight on cash",
+                  desc: "Sales look healthy while supplier bills, payroll and statutory dues quietly drain the account you actually pay from.",
+                },
+              ].map((pain, i) => (
+                <motion.div
+                  key={pain.title}
+                  initial={{ opacity: 0, y: 24 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ delay: i * 0.1, duration: 0.55, type: "spring", bounce: 0.25 }}
+                  className="rounded-2xl border border-[#E8E0D8] bg-[#FBF8F5] p-6"
+                >
+                  <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-[#D32F2F]/10">
+                    <pain.icon className="h-5 w-5 text-[#D32F2F]" />
+                  </div>
+                  <h3 className="font-serif text-lg font-bold text-[#2D2A26]">{pain.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-[#8D8A87]">{pain.desc}</p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* What Finaflow is */}
+        <section className="border-t border-[#E8E0D8] bg-[#F5EDE6] py-20 md:py-28">
+          <div className="mx-auto max-w-6xl px-4">
+            <div className="grid items-center gap-12 md:grid-cols-2">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-60px" }}
+                transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <h2 className="font-serif text-4xl font-bold text-[#2D2A26]">
+                  One place where the whole business adds up
+                </h2>
+                <p className="mt-4 text-sm leading-relaxed text-[#4A4742]">
+                  Finaflow is a financial operations platform for African businesses. It turns everyday
+                  activity — sales, expenses, supplier bills, M-PESA payments, payroll — into one set of
+                  books you can open at any time, across every branch and every account.
+                </p>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Link to="/login?type=standard">
+                    <Button className="bg-[#C73E1D] px-6 py-5 text-sm hover:bg-[#C73E1D]/90">
+                      Start free <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </Link>
+                  <a
+                    href="#how-it-works"
+                    className="inline-flex items-center gap-1 self-center rounded-md border border-[#E8E0D8] bg-white px-4 py-2.5 text-sm font-medium text-[#2D2A26] transition-colors hover:bg-white/70"
+                  >
+                    See how it works
+                  </a>
+                </div>
+              </motion.div>
+              <motion.div
+                initial={{ opacity: 0, y: 24 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-60px" }}
+                transition={{ delay: 0.1, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+                className="grid gap-4 sm:grid-cols-2"
+              >
+                {[
+                  { icon: Receipt, title: "Record every day", desc: "Daily sales, expenses and payments, tagged to the right branch and account." },
+                  { icon: CreditCard, title: "See the real position", desc: "Cash, bank, wallet and other — reconciled, not estimated." },
+                  { icon: FileSpreadsheet, title: "Report without the scramble", desc: "Profit & loss, budgets vs actual, cash-flow forecast, KRA-ready exports." },
+                  { icon: Lock, title: "Built to be trusted", desc: "Roles, permissions, audit logs and encryption on every mutation." },
+                ].map((pillar) => (
+                  <div key={pillar.title} className="rounded-2xl border border-[#E8E0D8] bg-white p-5">
+                    <pillar.icon className="h-5 w-5 text-[#C73E1D]" />
+                    <h3 className="mt-3 text-sm font-semibold text-[#2D2A26]">{pillar.title}</h3>
+                    <p className="mt-1.5 text-xs leading-relaxed text-[#8D8A87]">{pillar.desc}</p>
+                  </div>
+                ))}
+              </motion.div>
+            </div>
+          </div>
+        </section>
+
+        {/* Product / Screenshot Showcase */}
+        <section id="product" className="py-20 md:py-28">
           <div className="mx-auto max-w-6xl px-4">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -747,6 +717,152 @@ export default function Home() {
                   </motion.div>
                 );
               })}
+            </div>
+          </div>
+        </section>
+
+        {/* Audiences */}
+        <section id="audiences" className="border-t border-[#E8E0D8] bg-[#F5EDE6] py-20 md:py-28">
+          <div className="mx-auto max-w-6xl px-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="mb-12 text-center"
+            >
+              <h2 className="font-serif text-4xl font-bold text-[#2D2A26]">
+                Built for the people who run the money
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm text-[#8D8A87]">
+                One system, tuned to how each person works with it every day.
+              </p>
+            </motion.div>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {[
+                { icon: Store, title: "Owners & founders", desc: "Know what the business is worth today, not what the accountant says in two weeks." },
+                { icon: FileSpreadsheet, title: "Finance & operations", desc: "Record, reconcile and close the month without a wall of spreadsheets." },
+                { icon: Users, title: "Accountants & consultants", desc: "Run client books from one login and earn 20% revenue share per client." },
+                { icon: Smartphone, title: "Agents & distributors", desc: "Track float, commissions and outlet costs across every point of presence." },
+              ].map((aud, i) => (
+                <motion.div
+                  key={aud.title}
+                  initial={{ opacity: 0, y: 24 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ delay: i * 0.08, duration: 0.5, type: "spring", bounce: 0.25 }}
+                  className="rounded-2xl border border-[#E8E0D8] bg-white p-6"
+                >
+                  <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-[#C73E1D]/10">
+                    <aud.icon className="h-5 w-5 text-[#C73E1D]" />
+                  </div>
+                  <h3 className="font-serif text-lg font-bold text-[#2D2A26]">{aud.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-[#8D8A87]">{aud.desc}</p>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Decisions */}
+        <section id="decisions" className="border-t border-[#E8E0D8] bg-white py-20 md:py-28">
+          <div className="mx-auto max-w-6xl px-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="mb-12 text-center"
+            >
+              <h2 className="font-serif text-4xl font-bold text-[#2D2A26]">
+                The questions you can finally answer
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm text-[#8D8A87]">
+                Straight answers to the calls a business owner makes every week.
+              </p>
+            </motion.div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {[
+                { q: "How much cash do we actually have?", a: "One figure across cash, bank and mobile wallets, per branch and consolidated." },
+                { q: "Which branch or product really makes money?", a: "Margins by location, category and item — not just total sales." },
+                { q: "Can we afford this restock or hire?", a: "See the effect on your cash position against upcoming bills and payroll before you commit." },
+                { q: "Are we on track on the budget?", a: "Budget vs actual with early warnings when a line is heading over." },
+                { q: "Did we cover payroll and statutory dues?", a: "PAYE, NHIF and NSSF calculated and tracked alongside every other payment." },
+                { q: "Where did this month's money go?", a: "Every expense categorised and tied to the account it left from." },
+              ].map((item, i) => (
+                <motion.div
+                  key={item.q}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ delay: (i % 2) * 0.08, duration: 0.5, type: "spring", bounce: 0.25 }}
+                  className="flex items-start gap-3 rounded-2xl border border-[#E8E0D8] bg-[#FBF8F5] p-5"
+                >
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#C73E1D]/10">
+                    <HelpCircle className="h-4 w-4 text-[#C73E1D]" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#2D2A26]">{item.q}</h3>
+                    <p className="mt-1 text-sm leading-relaxed text-[#8D8A87]">{item.a}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Integrations */}
+        <section id="integrations" className="border-t border-[#E8E0D8] bg-[#F5EDE6] py-20 md:py-28">
+          <div className="mx-auto max-w-6xl px-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-50px" }}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="mb-12 text-center"
+            >
+              <h2 className="font-serif text-4xl font-bold text-[#2D2A26]">
+                Works with the tools you already use
+              </h2>
+              <p className="mx-auto mt-3 max-w-xl text-sm text-[#8D8A87]">
+                Bring your existing data in, and push updates out. Nothing to rip and replace.
+              </p>
+            </motion.div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                { icon: Smartphone, title: "M-PESA & Airtel Money", desc: "Paste statements or SMS batches; Finaflow parses, matches and reconciles them.", status: "Available" },
+                { icon: FileSpreadsheet, title: "Bank statements", desc: "Import PDF statements from major Kenyan banks and reconcile against the ledger.", status: "Available" },
+                { icon: Building2, title: "FinaBill & Fina Connect", desc: "Sync invoicing and partner data over the versioned integration API.", status: "Available" },
+                { icon: Globe, title: "REST API & webhooks", desc: "Read and write your data with API keys, plus outbound webhooks on key events.", status: "Available" },
+                { icon: RefreshCw, title: "Recurring bills & subscriptions", desc: "Model repeating supplier bills and subscription revenue in the same ledger.", status: "Available" },
+                { icon: CreditCard, title: "CRM, ERP & banking feeds", desc: "Direct live connectors beyond statement import are on our roadmap.", status: "Coming soon" },
+              ].map((int, i) => (
+                <motion.div
+                  key={int.title}
+                  initial={{ opacity: 0, y: 24 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-40px" }}
+                  transition={{ delay: (i % 3) * 0.08, duration: 0.5, type: "spring", bounce: 0.25 }}
+                  className="rounded-2xl border border-[#E8E0D8] bg-white p-5"
+                >
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#C73E1D]/10">
+                      <int.icon className="h-5 w-5 text-[#C73E1D]" />
+                    </div>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+                        int.status === "Available"
+                          ? "bg-[#2E7D32]/10 text-[#2E7D32]"
+                          : "bg-[#8D8A87]/10 text-[#8D8A87]"
+                      }`}
+                    >
+                      {int.status}
+                    </span>
+                  </div>
+                  <h3 className="text-sm font-semibold text-[#2D2A26]">{int.title}</h3>
+                  <p className="mt-1.5 text-xs leading-relaxed text-[#8D8A87]">{int.desc}</p>
+                </motion.div>
+              ))}
             </div>
           </div>
         </section>
@@ -1111,51 +1227,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Footer */}
-        <footer className="border-t border-[#E8E0D8] py-8">
-          <div className="mx-auto max-w-6xl px-4">
-            <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-              <div className="flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded bg-[#C73E1D]">
-                  <Landmark className="h-3 w-3 text-white" />
-                </div>
-                <span className="font-serif text-sm font-bold text-[#2D2A26]">Finaflow</span>
-                <span className="text-xs text-[#8D8A87]">
-                  by {" "}
-                  <a
-                    href="https://genius.africa"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-[#2D2A26] underline decoration-[#D4A854] decoration-2 underline-offset-4 transition-colors hover:text-[#C73E1D]"
-                  >
-                    genius
-                  </a>
-                </span>
-              </div>
-              <p className="text-xs text-[#8D8A87]">{"\u00A9"} 2026 Finaflow. Built for African Businesses.</p>
-              <div className="flex items-center gap-4 text-xs text-[#8D8A87]">
-                <Link to="/tools/mpesa-statement-converter" className="transition-colors hover:text-[#2D2A26]">
-                  Free M-PESA converter
-                </Link>
-                <Link to="/tools/bank-statement-converter" className="transition-colors hover:text-[#2D2A26]">
-                  Bank statement converter
-                </Link>
-                <a
-                  href="https://github.com/geniusdynamics/finaflow"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Finaflow on GitHub"
-                  className="flex items-center gap-1 transition-colors hover:text-[#2D2A26]"
-                >
-                  <Github className="h-3.5 w-3.5" />
-                  <span>GitHub</span>
-                </a>
-                <Link to="/login" className="hover:text-[#2D2A26]">Sign In</Link>
-                <Link to="/login?type=standard" className="hover:text-[#2D2A26]">Sign Up</Link>
-              </div>
-            </div>
-          </div>
-        </footer>
+        <SiteFooter />
       </div>
     </>
   );

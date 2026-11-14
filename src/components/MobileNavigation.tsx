@@ -33,19 +33,24 @@ const primaryNavItems: { path: string; label: string; icon: () => React.ReactNod
   { path: "/reports", label: "Reports", icon: () => <FileSpreadsheet className="h-5 w-5" />, perms: [PERMISSIONS.REPORTS_VIEW] },
 ];
 
-// ABOUTME: Secondary navigation items shown in hamburger menu with required permissions.
-const secondaryNavItems: { path: string; label: string; icon: React.ComponentType<{ className?: string }>; perms: Permission[] }[] = [
-  { path: "/suppliers", label: "Suppliers", icon: Building, perms: [PERMISSIONS.SUPPLIERS_VIEW, PERMISSIONS.SUPPLIERS_MANAGE] },
-  { path: "/bills", label: "Bills", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE] },
-  { path: "/accounts", label: "Accounts", icon: CreditCard, perms: [PERMISSIONS.ACCOUNTS_VIEW, PERMISSIONS.ACCOUNTS_MANAGE] },
-  { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_PROCESS] },
-  { path: "/wallet", label: "Wallet", icon: Wallet, perms: [PERMISSIONS.WALLET_VIEW, PERMISSIONS.WALLET_IMPORT] },
-  { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
-  { path: "/subscriptions", label: "Subscriptions", icon: Repeat, perms: [PERMISSIONS.SUBSCRIPTIONS_VIEW] },
-  { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
-  { path: "/users", label: "Users & Roles", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },
-  { path: "/settings", label: "Settings", icon: Settings, perms: [PERMISSIONS.SETTINGS_MANAGE] },
-  { path: "/partner", label: "Partner", icon: Handshake, perms: [PERMISSIONS.PARTNER_VIEW] },
+// ABOUTME: Secondary navigation, grouped to mirror the desktop sidebar sections.
+const secondaryNavItems: { path: string; label: string; group: string; icon: React.ComponentType<{ className?: string }>; perms: Permission[] }[] = [
+  { path: "/daily-sales", label: "Daily Sales", group: "Operations", icon: Receipt, perms: [PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_VIEW_OWN] },
+  { path: "/expenses", label: "Expenses", group: "Operations", icon: TrendingDown, perms: [PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE] },
+  { path: "/bills", label: "Bills", group: "Operations", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE] },
+  { path: "/suppliers", label: "Suppliers", group: "Operations", icon: Building, perms: [PERMISSIONS.SUPPLIERS_VIEW, PERMISSIONS.SUPPLIERS_MANAGE] },
+  { path: "/subscriptions", label: "Subscriptions", group: "Operations", icon: Repeat, perms: [PERMISSIONS.SUBSCRIPTIONS_VIEW] },
+  { path: "/accounts", label: "Accounts", group: "Money", icon: CreditCard, perms: [PERMISSIONS.ACCOUNTS_VIEW, PERMISSIONS.ACCOUNTS_MANAGE] },
+  { path: "/wallet", label: "Wallet", group: "Money", icon: Wallet, perms: [PERMISSIONS.WALLET_VIEW, PERMISSIONS.WALLET_IMPORT] },
+  { path: "/payroll", label: "Payroll", group: "Money", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_PROCESS] },
+  { path: "/calendar", label: "Calendar", group: "Money", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
+  { path: "/reports", label: "Reports", group: "Insights", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
+  { path: "/budgets", label: "Budgets", group: "Insights", icon: FileSpreadsheet, perms: [PERMISSIONS.BUDGETS_VIEW] },
+  { path: "/businesses", label: "Businesses", group: "Workspace", icon: Building, perms: [PERMISSIONS.BUSINESS_MANAGE] },
+  { path: "/locations", label: "Locations", group: "Workspace", icon: Building, perms: [PERMISSIONS.BUSINESS_MANAGE] },
+  { path: "/users", label: "Users & Roles", group: "Workspace", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },
+  { path: "/partner", label: "Partner", group: "Workspace", icon: Handshake, perms: [PERMISSIONS.PARTNER_VIEW] },
+  { path: "/settings", label: "Settings", group: "Workspace", icon: Settings, perms: [PERMISSIONS.SETTINGS_MANAGE] },
 ];
 
 export function MobileBottomNavigation() {
@@ -102,6 +107,15 @@ export function MobileHamburgerMenu({
   const [bizOpen, setBizOpen] = useState(false);
 
   const visibleSecondaryItems = secondaryNavItems.filter((item) => hasAnyPermission(userPermissions.length > 0 ? userPermissions : role, item.perms));
+  const groupedSecondaryItems = visibleSecondaryItems.reduce<Array<{ group: string; items: typeof visibleSecondaryItems }>>(
+    (groups, item) => {
+      const existing = groups.find((group) => group.group === item.group);
+      if (existing) existing.items.push(item);
+      else groups.push({ group: item.group, items: [item] });
+      return groups;
+    },
+    [],
+  );
 
   return (
     <>
@@ -126,31 +140,38 @@ export function MobileHamburgerMenu({
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3">
-          <ul className="space-y-0.5">
-            {visibleSecondaryItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.path;
-              return (
-                <li key={item.path}>
-                  <Link
-                    to={item.path}
-                    onClick={onClose}
-                    className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                      isActive
-                        ? "bg-[#C73E1D]/10 text-[#C73E1D]"
-                        : "text-[#2D2A26] hover:bg-[#F5EDE6]"
-                    }`}
-                  >
-                    <div className={`rounded-lg p-1.5 ${isActive ? "bg-[#C73E1D]/10" : "bg-[#F5EDE6]"}`}>
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <span>{item.label}</span>
-                    {isActive && <ChevronRight className="ml-auto h-3 w-3" />}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          {groupedSecondaryItems.map((group) => (
+            <div key={group.group} className="mb-3">
+              <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-[#8D8A87]">
+                {group.group}
+              </p>
+              <ul className="space-y-0.5">
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = location.pathname === item.path;
+                  return (
+                    <li key={item.path}>
+                      <Link
+                        to={item.path}
+                        onClick={onClose}
+                        className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                          isActive
+                            ? "bg-[#C73E1D]/10 text-[#C73E1D]"
+                            : "text-[#2D2A26] hover:bg-[#F5EDE6]"
+                        }`}
+                      >
+                        <div className={`rounded-lg p-1.5 ${isActive ? "bg-[#C73E1D]/10" : "bg-[#F5EDE6]"}`}>
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <span>{item.label}</span>
+                        {isActive && <ChevronRight className="ml-auto h-3 w-3" />}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </nav>
 
         <div className="border-t border-[#E8E0D8] p-3">
