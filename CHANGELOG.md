@@ -1,5 +1,55 @@
 # Changelog
 
+## [Unreleased] — Payroll: casuals, partial payment and reversal
+
+### Added
+- Casual and hourly pay: a daily rate times the days worked, edited per payroll entry.
+- Partial and selective payroll payments: pay a subset of staff, any amount, across several runs, each recorded separately.
+- Reverse any individual payment, which mirrors its ledger entries, restores the account balance, and reopens the balance owed.
+- A payments list per period showing each disbursement, its method, date and reversal state.
+
+### Fixed
+- Processing a payroll no longer pulls in every active employee at the location; only people explicitly assigned to the period are processed.
+- Removing someone from a period now sticks, and is blocked once they have been paid.
+- Housing levy is tracked separately from advances, so the levy payable is no longer overstated by advance deductions.
+- Payroll settlement state is per entry (unpaid / part paid / paid) instead of a single period-level flag.
+
+### Tested
+- TypeScript check, production build, and 248 tests passed.
+
+## [Unreleased] — Public navigation and product positioning
+
+### Added
+- Shared public header and footer (`SiteHeader`, `SiteFooter`) used by the landing page, the mobile money agents solution page and every free statement tool.
+- Labelled Product, Solutions and Free tools menus with descriptions, plus an organised four-column footer.
+- Landing page sections for the problem, what Finaflow is, audiences, decisions and integrations — each tied to shipped capability.
+
+### Changed
+- Repositioned the landing page around financial operations clarity for African businesses rather than a generic cashflow tool.
+- Listed ERPNext, QuickBooks and Xero as available integrations (reached through FinaBill) instead of labelling ERP as roadmap.
+- Grouped the in-app sidebar into Operations, Money, Insights and Workspace sections, and mirrored the grouping in the mobile menu.
+- Added Businesses and Locations to the in-app navigation.
+
+### Tested
+- TypeScript check, production build and 232 source tests passed; lint clean on all touched files.
+
+## [Unreleased] — Admin workspace and password-change recovery
+
+### Added
+- Reshaped `/admin` around an overview, customer directories, support tools and a security-report queue.
+- Added audited manual password setting with in-app and email alerts, a one-time report link, and self-service recovery.
+- Account administrators' password changes now use the same security-notice flow.
+- Added a migration for password-change incidents and credential-change timestamps.
+
+### Fixed
+- Sign-in now recognizes exact stored account IDs containing punctuation before trying the normalized form.
+- Password resets consume tokens atomically, verify the new hash, revoke refresh tokens, and show the account ID and username needed to sign in.
+- New passwords must contain at least eight characters across account creation and password-change flows.
+- Existing sessions are invalidated when a password changes; admin password setting reports email delivery and sign-in eligibility.
+
+### Tested
+- TypeScript check, build, and admin workspace tests passed. Database-backed integration tests were added but could not run without local PostgreSQL.
+
 ## [Unreleased] — Merge main into dev
 
 ### Changed

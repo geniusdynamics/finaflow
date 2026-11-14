@@ -88,6 +88,7 @@ const Subscriptions = lazy(() =>
   import("./pages/Subscriptions").then(m => ({ default: m.Subscriptions }))
 );
 const Admin = lazy(() => import("./pages/Admin"));
+const ReportPasswordChange = lazy(() => import("./pages/ReportPasswordChange"));
 const Billing = lazy(() => import("./pages/Billing"));
 
 function SuspendedPage({ children }: { children: React.ReactNode }) {
@@ -204,6 +205,7 @@ export default function App() {
             </Suspense>
           }
         />
+        <Route path="/report-password-change" element={<ErrorBoundary><Suspense fallback={<PageSkeleton />}><ReportPasswordChange /></Suspense></ErrorBoundary>} />
         <Route
           path="/dashboard"
           element={

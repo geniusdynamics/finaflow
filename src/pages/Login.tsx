@@ -259,8 +259,8 @@ export default function Login() {
       toast.error("Passwords do not match");
       return;
     }
-    if (signupForm.password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (signupForm.password.length < 8) {
+      toast.error("Password must be at least 8 characters");
       return;
     }
     if (accountNameStatus === "taken" || accountNameStatus === "invalid") {
@@ -691,7 +691,7 @@ export default function Login() {
                           type={showSignupPassword ? "text" : "password"}
                           value={signupForm.password}
                           onChange={e => setSignupForm(p => ({ ...p, password: e.target.value }))}
-                          placeholder="Min 6 chars"
+                          placeholder="Min 8 chars"
                           required
                         />
                         <button

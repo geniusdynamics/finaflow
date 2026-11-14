@@ -4,9 +4,10 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createRouter, authedQuery, userManage, requireAuthorizedLocation, getAuthorizedLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
-import { users, userBusinesses, userLocations } from "@db/schema";
+import { users, userBusinesses, userLocations, refreshTokens } from "@db/schema";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { hashPassword } from "./lib/password";
+import { setAdminPassword } from "./lib/admin-password-change";
 import { logAudit, logCrossAccountAccess } from "./lib/audit";
 import { findLinkedRecordsForUser, formatLinkedRecordsMessage } from "./lib/user-references";
 
@@ -316,7 +317,7 @@ export const usersRouter = createRouter({
   create: userManage
     .input(z.object({
       username: z.string().min(3).max(100),
-      password: z.string().min(4).max(100),
+      password: z.string().min(8).max(100),
       name: z.string().min(1).max(255),
       email: z.string().email().optional(),
       phone: z.string().optional(),
@@ -703,7 +704,7 @@ export const usersRouter = createRouter({
   changePassword: userManage
     .input(z.object({
       userId: z.number(),
-      newPassword: z.string().min(4).max(100),
+      newPassword: z.string().min(8).max(100),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
@@ -723,8 +724,14 @@ export const usersRouter = createRouter({
         });
         throw new Error("User not found in this account");
       }
+      if (input.userId !== ctx.user!.id) {
+        return setAdminPassword(input.userId, ctx.user!.id, input.newPassword, "Account administrator set password");
+      }
       const newHash = await hashPassword(input.newPassword);
-      await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, input.userId));
+      await db.transaction(async tx => {
+        await tx.update(users).set({ passwordHash: newHash, passwordChangedAt: new Date() }).where(eq(users.id, input.userId));
+        await tx.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.userId, input.userId));
+      });
       await logAudit({
         userId: ctx.user?.id ?? input.userId,
         action: "UPDATE",

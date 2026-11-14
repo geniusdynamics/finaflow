@@ -166,7 +166,7 @@ export function Users() {
     onError: (err) => toast.error(err.message || "Failed to enable user"),
   });
   const changePassword = trpc.users.changePassword.useMutation({
-    onSuccess: () => { toast.success("Password changed"); setPassOpen(null); },
+    onSuccess: result => { toast.success("Password changed"); if ("emailStatus" in result && result.emailStatus !== "sent") toast.warning(`In-app alert created; email: ${result.emailStatus}`); setPassOpen(null); },
     onError: (err) => toast.error(err.message || "Failed to change password"),
   });
   const setUserLocations = trpc.users.setUserLocations.useMutation({
@@ -344,7 +344,7 @@ export function Users() {
                 <form onSubmit={handleCreate} className="space-y-4">
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-2"><Label>Username</Label><Input value={form.username} onChange={e => setForm(p => ({ ...p, username: e.target.value }))} placeholder="john.doe" required /></div>
-                    <div className="space-y-2"><Label>Password</Label><Input type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Min 4 characters" required /></div>
+                     <div className="space-y-2"><Label>Password</Label><Input type="password" value={form.password} onChange={e => setForm(p => ({ ...p, password: e.target.value }))} placeholder="Min 8 characters" minLength={8} required /></div>
                   </div>
                   <div className="space-y-2"><Label>Full Name</Label><Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="John Doe" required /></div>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -439,8 +439,8 @@ export function Users() {
                                     </DialogTrigger>
                                     <DialogContent className="bg-white">
                                       <DialogHeader><DialogTitle className="font-serif text-xl">Change Password</DialogTitle></DialogHeader>
-                                      <form onSubmit={(e) => { e.preventDefault(); if (!passForm.newPassword || passForm.newPassword.length < 4) { toast.error("Password must be at least 4 characters"); return; } changePassword.mutate({ userId: u.id, newPassword: passForm.newPassword }); }} className="space-y-3">
-                                        <div className="space-y-2"><Label>New Password</Label><Input type="password" value={passForm.newPassword} onChange={e => setPassForm(p => ({ ...p, newPassword: e.target.value }))} placeholder="Min 4 characters" required /></div>
+                                       <form onSubmit={(e) => { e.preventDefault(); if (!passForm.newPassword || passForm.newPassword.length < 8) { toast.error("Password must be at least 8 characters"); return; } changePassword.mutate({ userId: u.id, newPassword: passForm.newPassword }); }} className="space-y-3">
+                                         <div className="space-y-2"><Label>New Password</Label><Input type="password" value={passForm.newPassword} onChange={e => setPassForm(p => ({ ...p, newPassword: e.target.value }))} placeholder="Min 8 characters" minLength={8} required /></div>
                                         <Button type="submit" className="w-full bg-[#C73E1D]" disabled={changePassword.isPending}>{changePassword.isPending ? "Saving..." : "Update Password"}</Button>
                                       </form>
                                     </DialogContent>

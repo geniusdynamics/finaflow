@@ -8,28 +8,32 @@ import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { Activity, Building2, Users, BarChart3, Mail, ShieldAlert, Search, KeyRound } from "lucide-react";
 
 const sections = [
+  "overview",
   "accounts",
   "users",
-  "overview",
   "plans",
   "communications",
+  "security",
   "audit",
 ] as const;
 const labels = [
+  "Overview",
   "Accounts",
   "Users",
-  "Overview",
   "Usage & Plans",
   "Communications",
+  "Security reports",
   "Audit",
 ];
+const sectionIcons = [Activity, Building2, Users, BarChart3, Mail, ShieldAlert, Search];
 const selectClass = "h-10 rounded-md border bg-white px-3 text-sm";
 
 export default function AdminWorkspace() {
   const [params, setParams] = useSearchParams();
-  const section = params.get("section") ?? "accounts";
+  const section = params.get("section") ?? "overview";
   const [draft, setDraft] = useState(params.get("search") ?? "");
   const change = useCallback((values: Record<string, string>) =>
     setParams(current => {
@@ -74,37 +78,40 @@ export default function AdminWorkspace() {
   return (
     <Layout>
       <div className="space-y-6">
-        <header>
-          <h1 className="text-2xl font-bold text-[#2D2A26]">Platform admin</h1>
-          <p className="text-sm text-muted-foreground">
-            Customer support, access and platform activity
-          </p>
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E8E0D8] pb-5">
+          <div><h1 className="font-serif text-3xl font-bold text-[#2D2A26]">Platform admin</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Customer access, activity and support in one place</p></div>
+          <span className="rounded-full border border-[#E8E0D8] bg-white px-3 py-1 text-xs font-medium text-[#C73E1D]">Platform workspace</span>
         </header>
-        <div className="lg:flex lg:gap-6">
+        <div className="lg:flex lg:gap-7">
           <nav
             aria-label="Admin sections"
-            className="mb-5 flex gap-1 overflow-x-auto lg:w-48 lg:shrink-0 lg:flex-col"
+            className="mb-5 flex gap-1 overflow-x-auto rounded-xl border border-[#E8E0D8] bg-[#FAF8F5] p-2 lg:w-52 lg:shrink-0 lg:self-start lg:flex-col lg:sticky lg:top-5"
           >
-            {sections.map((item, index) => (
+            {sections.map((item, index) => {
+              const Icon = sectionIcons[index];
+              return (
               <Button
                 key={item}
                 variant={section === item ? "secondary" : "ghost"}
-                className="justify-start"
+                className={`shrink-0 justify-start gap-3 ${section === item ? "bg-white text-[#C73E1D] shadow-sm" : "text-[#514D49]"}`}
                 onClick={() =>
                   change({ section: item, page: "", account: "", search: "" })
                 }
               >
-                {labels[index]}
+                <Icon className="h-4 w-4" aria-hidden="true" />{labels[index]}
               </Button>
-            ))}
+              );
+            })}
           </nav>
           <main className="min-w-0 flex-1 space-y-5">
+            {section !== "accounts" && <div className="border-b border-[#E8E0D8] pb-3"><h2 className="font-serif text-2xl font-semibold text-[#2D2A26]">{labels[sections.indexOf(section as typeof sections[number])] || "Overview"}</h2><p className="text-sm text-muted-foreground">{section === "security" ? "Password changes reported by account holders" : "Platform-wide insights and support tools"}</p></div>}
             {section === "accounts" && accountId ? (
               <AccountWorkspace
                 accountId={accountId}
                 onBack={() => change({ account: "" })}
               />
-            ) : ["accounts", "users", "audit"].includes(section) ? (
+            ) : section === "security" ? <SecurityReports onOpen={id => change({ section: "accounts", account: id })} /> : ["accounts", "users", "audit"].includes(section) ? (
               <>
                 {section === "accounts" && <RenewalQueue onOpen={id=>change({account:id})}/>}
                 {section !== "audit" && (
@@ -273,16 +280,22 @@ export default function AdminWorkspace() {
                 </nav>
                 <AdminReports section={params.get("tool") ?? "email"} />
               </>
-            ) : (
-              <AdminReports
-                section={section === "plans" ? "plans" : "overview"}
-              />
+            ) : section === "overview" ? <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_16rem]"><AdminReports section="overview" /><aside className="space-y-4 rounded-xl border border-[#E8E0D8] bg-[#FAF8F5] p-5 xl:self-start"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#F5EDE6] text-[#C73E1D]"><Activity className="h-5 w-5" /></div><h3 className="font-serif text-xl font-semibold text-[#2D2A26]">Support desk</h3><p className="text-sm text-muted-foreground">Review customer access, respond to password reports, and check recent activity.</p><div className="space-y-2 border-t border-[#E8E0D8] pt-4"><Button variant="outline" className="w-full justify-start" onClick={() => change({ section: "accounts" })}>Browse accounts</Button><Button variant="outline" className="w-full justify-start" onClick={() => change({ section: "security" })}>Review security reports</Button><Button variant="outline" className="w-full justify-start" onClick={() => change({ section: "audit" })}>View support history</Button></div></aside></div> : (
+              <AdminReports section="plans" />
             )}
           </main>
         </div>
       </div>
     </Layout>
   );
+}
+
+function SecurityReports({ onOpen }: { onOpen: (accountId: string) => void }) {
+  const reports = trpc.admin.getPasswordChangeReports.useQuery();
+  return <section className="space-y-4"><div className="rounded-xl border border-[#E8E0D8] bg-white p-5"><div className="flex items-center gap-2"><ShieldAlert className="h-5 w-5 text-[#C73E1D]" /><h3 className="font-semibold">Reported password changes</h3></div>
+    <p className="mt-1 text-sm text-muted-foreground">A report means the user says they did not request an admin-set password. Follow up using a trusted contact channel.</p></div>
+    {reports.isLoading ? <p role="status">Loading security reports…</p> : reports.error ? <p role="alert">{reports.error.message} <Button variant="outline" onClick={() => reports.refetch()}>Retry</Button></p> : reports.data?.length ? <div className="divide-y rounded-xl border border-[#E8E0D8] bg-white">{reports.data.map(r => <div key={r.id} className="flex flex-wrap items-center justify-between gap-3 p-4"><div><strong>{r.name || r.username}</strong><p className="text-sm text-muted-foreground">{r.accountId || "Unknown account"} · Reported {r.reportedAt ? new Date(r.reportedAt).toLocaleString() : "—"}</p></div><div className="flex items-center gap-2"><span className={`rounded-full px-2 py-1 text-xs ${r.resolvedAt ? "bg-green-50 text-green-800" : "bg-amber-50 text-amber-800"}`}>{r.resolvedAt ? "Password recovered" : "Awaiting recovery"}</span>{r.accountId && <Button variant="outline" onClick={() => onOpen(r.accountId!)}>Open account</Button>}</div></div>)}</div> : <p className="rounded-xl border p-6 text-sm text-muted-foreground">No password changes have been reported.</p>}
+  </section>;
 }
 
 function RenewalQueue({onOpen}:{onOpen:(accountId:string)=>void}) {
@@ -315,6 +328,9 @@ function AccountWorkspace({
   );
   const [expiry, setExpiry] = useState("");
   const [resetLink, setResetLink] = useState<string | null>(null);
+  const [passwordTarget, setPasswordTarget] = useState<{ id: number; username: string } | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [passwordFeedback, setPasswordFeedback] = useState<string | null>(null);
   const utils = trpc.useUtils();
   const options = {
     onSuccess: () => {
@@ -341,6 +357,14 @@ function AccountWorkspace({
     },
     onError: e => toast.error(e.message),
   });
+  const setPassword = trpc.admin.setUserPassword.useMutation({
+    onSuccess: r => {
+      setPasswordTarget(null); setNewPassword("");
+      setPasswordFeedback(`Password saved for ${r.username}. In-app notification created. Email: ${r.emailStatus}.${r.canSignIn ? ` Sign in with account ID ${r.accountId} and username ${r.username}.` : " This user cannot sign in yet: check active status and business membership."}`);
+      utils.admin.invalidate();
+    },
+    onError: e => toast.error(e.message),
+  });
   const pending =
     hold.isPending ||
     restore.isPending ||
@@ -358,7 +382,7 @@ function AccountWorkspace({
     ) {
       setPlan(account.plan as typeof plan);
     }
-  }, [account?.accountId, account?.plan]);
+  }, [account]);
   const confirmAction = (description: string, action: () => void) => {
     if (reason.trim() && window.confirm(description)) action();
   };
@@ -379,6 +403,7 @@ function AccountWorkspace({
       ) : (
         <>
           <h2 className="text-xl font-semibold">{account.name}</h2>
+          {passwordFeedback && <div role="status" className="rounded-lg border border-[#E8E0D8] bg-white p-4 text-sm">{passwordFeedback}<Button variant="ghost" size="sm" onClick={() => setPasswordFeedback(null)}>Dismiss</Button></div>}
           {resetLink && <div role="alert" className="space-y-2 rounded-md border p-4"><p>Reset email was not delivered. Deliver this single-use link privately to the account holder.</p><Input aria-label="Manual password reset link" value={resetLink} readOnly/><Button variant="outline" onClick={()=>setResetLink(null)}>Dismiss reset link</Button></div>}
           <p>
             {accountId} · {account.plan} · {account.subscriptionStatus}
@@ -507,11 +532,17 @@ function AccountWorkspace({
                       reset.mutate({ userId: u.id });
                   }}
                 >
-                  Reset password
+                  Send reset link
                 </Button>
+                <Button variant="outline" disabled={setPassword.isPending || !reason.trim()} onClick={() => { setPasswordTarget({ id: u.id, username: u.username }); setNewPassword(""); }}><KeyRound className="h-4 w-4" />Set password</Button>
               </div>
             </div>
           ))}
+          {passwordTarget && <form className="space-y-3 rounded-xl border border-[#E8E0D8] bg-[#FAF8F5] p-4" onSubmit={e => { e.preventDefault(); if (window.confirm(`Set a new password for ${passwordTarget.username}? Their existing sessions will be revoked and they will be notified.`)) setPassword.mutate({ userId: passwordTarget.id, password: newPassword, reason }); }}>
+            <h4 className="font-semibold">Set password for {passwordTarget.username}</h4><p className="text-sm text-muted-foreground">Use a secure channel to share this password. The user will receive an in-app notice and an email when delivery is configured.</p>
+            <label className="block text-sm">New password (at least 8 characters)<Input type="password" autoComplete="new-password" minLength={8} maxLength={100} required value={newPassword} onChange={e => setNewPassword(e.target.value)} /></label>
+            <div className="flex gap-2"><Button type="submit" disabled={setPassword.isPending || newPassword.length < 8 || !reason.trim()}>Save password</Button><Button type="button" variant="outline" onClick={() => { setPasswordTarget(null); setNewPassword(""); }}>Cancel</Button></div>
+          </form>}
           <h3 className="font-semibold">Renewal requests</h3>
           {requests.error ? (
             <p role="alert">{requests.error.message}</p>

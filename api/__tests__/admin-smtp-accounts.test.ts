@@ -10,6 +10,9 @@ import {
   businesses,
   customerAccounts,
   passwordResetTokens,
+  passwordChangeEvents,
+  notifications,
+  refreshTokens,
   userBusinesses,
   users,
   userSessions,
@@ -34,6 +37,8 @@ const { getDb } = await import("../queries/connection");
 const { sendLoggedEmail } = await import("../lib/logged-email");
 const { updateEnvVarSafe } = await import("../lib/update-env");
 const { getSmtpPassword } = await import("../lib/smtp-config");
+const { verifyPassword } = await import("../lib/password");
+const { verifyLocalToken } = await import("../local-auth-router");
 
 const SMTP_CONFIG_KEY = "smtp_config";
 const ENV_SMTP_KEYS = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"] as const;
@@ -154,6 +159,9 @@ async function cleanupAccount(accountId: string): Promise<void> {
   const accountUsers = await db.select({ id: users.id }).from(users).where(eq(users.accountId, accountId));
   const userIds = accountUsers.map((u) => u.id);
   if (userIds.length > 0) {
+    await db.delete(notifications).where(inArray(notifications.userId, userIds));
+    await db.delete(passwordChangeEvents).where(inArray(passwordChangeEvents.userId, userIds));
+    await db.delete(refreshTokens).where(inArray(refreshTokens.userId, userIds));
     await db.delete(passwordResetTokens).where(inArray(passwordResetTokens.userId, userIds));
     await db.delete(userBusinesses).where(inArray(userBusinesses.userId, userIds));
   }
@@ -187,6 +195,42 @@ afterEach(async () => {
   for (const id of seededAccountIds.splice(0)) {
     await cleanupAccount(id);
   }
+});
+
+describe("admin-set password incident recovery", () => {
+  it("accepts Lucy2026!, notifies the user, records a report and only permits one recovery", async () => {
+    target = await seedTargetAccount();
+    const userId = target.userWithoutEmail.id;
+    const db = getDb();
+    const [{ id: actorId }] = await db.insert(users).values({ username: `support-${target.accountRefId}`, accountId: target.accountId, role: "owner" }).returning({ id: users.id });
+    const support = createSuperAdminCaller(actorId);
+    const result = await support.admin.setUserPassword({ userId, password: "Lucy2026!", reason: "Owner requested assisted setup" });
+    expect(result).toMatchObject({ success: true, canSignIn: true, accountId: target.accountId, username: target.userWithoutEmail.username });
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    expect(await verifyPassword("Lucy2026!", user.passwordHash!)).toBe(true);
+    const login = await support.localAuth.login({ accountId: target.accountId, username: user.username, password: "Lucy2026!" });
+    expect(login.user.id).toBe(userId);
+    const [notice] = await db.select().from(notifications).where(and(eq(notifications.userId, userId), eq(notifications.type, "password_changed")));
+    expect(notice.linkUrl).toContain("/report-password-change?token=");
+    const token = new URL(notice.linkUrl!).searchParams.get("token")!;
+    expect((await support.admin.getPasswordChangeReports()).find(r => r.username === user.username)).toBeUndefined();
+    await support.localAuth.reportPasswordChange({ token });
+    await support.localAuth.reportPasswordChange({ token }); // reporting is idempotent
+    expect((await support.admin.getPasswordChangeReports()).find(r => r.username === user.username)?.resolvedAt).toBeNull();
+    await support.localAuth.recoverReportedPassword({ token, password: "NewSecure2026!" });
+    const [recovered] = await db.select().from(users).where(eq(users.id, userId));
+    expect(await verifyPassword("NewSecure2026!", recovered.passwordHash!)).toBe(true);
+    expect(await verifyLocalToken(login.token)).toBeNull();
+    await expect(support.localAuth.login({ accountId: target.accountId, username: user.username, password: "Lucy2026!" })).rejects.toThrow();
+    expect((await support.localAuth.login({ accountId: target.accountId, username: user.username, password: "NewSecure2026!" })).user.id).toBe(userId);
+    await expect(support.localAuth.recoverReportedPassword({ token, password: "Another2026!" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect((await support.admin.getPasswordChangeReports()).find(r => r.username === user.username)?.resolvedAt).toBeTruthy();
+  });
+
+  it("rejects missing users and weak passwords", async () => {
+    await expect(caller.admin.setUserPassword({ userId: 99999999, password: "Lucy2026!", reason: "Test" })).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(caller.admin.setUserPassword({ userId: 99999999, password: "short", reason: "Test" })).rejects.toMatchObject({ code: "BAD_REQUEST" });
+  });
 });
 
 describe("admin.getSmtpConfig / admin.updateSmtpConfig", () => {

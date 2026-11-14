@@ -4,6 +4,7 @@
 import { Link } from "react-router";
 import { CheckCircle2, FileSpreadsheet, ShieldCheck } from "lucide-react";
 import { ToolHeader } from "@/components/tools/ToolHeader";
+import { SiteFooter } from "@/components/marketing/SiteFooter";
 
 interface Props {
   kind: "excel" | "accountants";
@@ -112,17 +113,7 @@ export default function StatementGuide({ kind }: Props) {
         </section>
       </main>
 
-      <footer className="border-t border-[#E8E0D8] bg-white py-6">
-        <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-2 px-4 text-xs text-[#8D8A87]">
-          <span>FinaFlow · statement tools</span>
-          <div className="flex gap-3">
-            <Link to="/tools/mpesa-statement-converter" className="hover:text-[#2D2A26]">Converter</Link>
-            <Link to="/tools/mpesa-to-excel" className="hover:text-[#2D2A26]">PDF to Excel</Link>
-            <Link to="/tools/mpesa-for-accountants" className="hover:text-[#2D2A26]">For accountants</Link>
-            <Link to="/" className="hover:text-[#2D2A26]">Home</Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

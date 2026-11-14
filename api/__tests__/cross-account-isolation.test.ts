@@ -215,7 +215,7 @@ describe("Cross-Account Data Isolation", () => {
     const aCaller = await createAuthedCaller(tokenA);
     const bCaller = await createAuthedCaller(tokenB);
     const usersA = await aCaller.users.list();
-    await expect(bCaller.users.changePassword({ userId: usersA[0].id, newPassword: "hacked" }))
+    await expect(bCaller.users.changePassword({ userId: usersA[0].id, newPassword: "hacked123!" }))
       .rejects.toThrow("User not found in this account");
   });
 

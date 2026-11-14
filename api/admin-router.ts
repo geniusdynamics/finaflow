@@ -4,13 +4,14 @@ import { z } from "zod";
 import { adminSupportRouter } from "./admin-support-router";
 import { createRouter, adminProcedure } from "./middleware";
 import { getDb } from "./queries/connection";
-import { users, customerAccounts, userSessions, notifications, emailLogs, ownerBroadcasts, businesses, userBusinesses } from "@db/schema";
+import { users, customerAccounts, userSessions, notifications, emailLogs, ownerBroadcasts, businesses, userBusinesses, passwordChangeEvents } from "@db/schema";
 import { eq, and, or, sql, isNull, desc, gte, lte, type SQL } from "drizzle-orm";
 import { isEmailConfiguredAsync } from "./lib/email";
 import { sendLoggedEmail } from "./lib/logged-email";
 import { ownerBroadcastHtml, ownerBroadcastText } from "./lib/email-templates";
 import { getSmtpConfig, saveSmtpConfig } from "./lib/smtp-config";
 import { sendPasswordResetEmail } from "./lib/password-reset";
+import { adminPasswordSchema, setAdminPassword } from "./lib/admin-password-change";
 import { env } from "./lib/env";
 import { TRPCError } from "@trpc/server";
 
@@ -404,6 +405,20 @@ export const adminRouter = createRouter({
         email: user.email,
       });
     }),
+
+  setUserPassword: adminProcedure
+    .input(z.object({ userId: z.number().int().positive(), password: z.string().min(adminPasswordSchema.min).max(adminPasswordSchema.max), reason: z.string().trim().min(1).max(2000) }))
+    .mutation(async ({ input, ctx }) => setAdminPassword(input.userId, ctx.user!.id, input.password, input.reason)),
+
+  getPasswordChangeReports: adminProcedure.query(async () => {
+    return getDb().select({
+      id: passwordChangeEvents.id, accountId: passwordChangeEvents.accountId,
+      username: users.username, name: users.name, reportedAt: passwordChangeEvents.reportedAt,
+      resolvedAt: passwordChangeEvents.resolvedAt, createdAt: passwordChangeEvents.createdAt,
+    }).from(passwordChangeEvents).innerJoin(users, eq(users.id, passwordChangeEvents.userId))
+      .where(sql`${passwordChangeEvents.reportedAt} IS NOT NULL`)
+      .orderBy(desc(passwordChangeEvents.reportedAt)).limit(50);
+  }),
 
   getSmtpConfig: adminProcedure.query(async () => {
     const config = await getSmtpConfig();

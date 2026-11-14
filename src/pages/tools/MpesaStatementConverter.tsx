@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToolHeader } from "@/components/tools/ToolHeader";
+import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { ConsolidatedAnalysisPanel } from "@/components/statements/ConsolidatedAnalysisPanel";
 import {
   AlertCircle,
@@ -437,16 +438,7 @@ export default function MpesaStatementConverter() {
         </section>
       </main>
 
-      <footer className="border-t border-[#E8E0D8] bg-white py-6">
-        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-4 text-xs text-[#8D8A87]">
-          <span>FinaFlow · statement tools</span>
-          <div className="flex gap-3">
-            <Link to="/tools/mpesa-to-excel" className="hover:text-[#2D2A26]">PDF to Excel</Link>
-            <Link to="/tools/mpesa-for-accountants" className="hover:text-[#2D2A26]">For accountants</Link>
-            <Link to="/" className="hover:text-[#2D2A26]">Home</Link>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

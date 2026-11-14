@@ -267,7 +267,7 @@ export function leadInvitationSmsText(params: Omit<LeadInvitationTemplateParams,
   return `${params.referrerName} invited ${params.businessName} to Finaflow. Use code ${params.referralCode} or sign up here: ${params.referralLink}`;
 }
 
-function escapeHtml(value: string): string {
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
