@@ -832,10 +832,10 @@ export default function Home() {
               {[
                 { icon: Smartphone, title: "M-PESA & Airtel Money", desc: "Paste statements or SMS batches; Finaflow parses, matches and reconciles them.", status: "Available" },
                 { icon: FileSpreadsheet, title: "Bank statements", desc: "Import PDF statements from major Kenyan banks and reconcile against the ledger.", status: "Available" },
+                { icon: Building2, title: "ERPNext, QuickBooks & Xero", desc: "Push journals, sales, suppliers and accounts to your ERP through FinaBill.", status: "Available" },
                 { icon: Building2, title: "FinaBill & Fina Connect", desc: "Sync invoicing and partner data over the versioned integration API.", status: "Available" },
                 { icon: Globe, title: "REST API & webhooks", desc: "Read and write your data with API keys, plus outbound webhooks on key events.", status: "Available" },
-                { icon: RefreshCw, title: "Recurring bills & subscriptions", desc: "Model repeating supplier bills and subscription revenue in the same ledger.", status: "Available" },
-                { icon: CreditCard, title: "CRM, ERP & banking feeds", desc: "Direct live connectors beyond statement import are on our roadmap.", status: "Coming soon" },
+                { icon: RefreshCw, title: "Live bank feeds & CRM sync", desc: "Direct bank-feed and CRM connections beyond statement import are on our roadmap.", status: "Coming soon" },
               ].map((int, i) => (
                 <motion.div
                   key={int.title}

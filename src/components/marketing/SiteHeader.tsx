@@ -55,7 +55,7 @@ function buildMenus(onHome: boolean): MenuGroup[] {
         { to: anchorTarget(onHome, "#product"), label: "Platform overview", desc: "The whole business on one dashboard", icon: LayoutDashboard },
         { to: anchorTarget(onHome, "#features"), label: "Features", desc: "Sales, expenses, payroll, reports", icon: FileSpreadsheet },
         { to: anchorTarget(onHome, "#how-it-works"), label: "How it works", desc: "From signup to first report", icon: Receipt },
-        { to: anchorTarget(onHome, "#integrations"), label: "Integrations", desc: "M-PESA, banks, and the Finaflow API", icon: Building2 },
+        { to: anchorTarget(onHome, "#integrations"), label: "Integrations", desc: "M-PESA, banks, ERPNext, QuickBooks & Xero", icon: Building2 },
       ],
     },
     {

@@ -9,6 +9,7 @@
 
 ### Changed
 - Repositioned the landing page around financial operations clarity for African businesses rather than a generic cashflow tool.
+- Listed ERPNext, QuickBooks and Xero as available integrations (reached through FinaBill) instead of labelling ERP as roadmap.
 - Grouped the in-app sidebar into Operations, Money, Insights and Workspace sections, and mirrored the grouping in the mobile menu.
 - Added Businesses and Locations to the in-app navigation.
 
