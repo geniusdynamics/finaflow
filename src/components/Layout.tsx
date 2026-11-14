@@ -11,29 +11,64 @@ import {
   PanelLeftClose, PanelLeftOpen, Repeat,
 } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
-import { hasAnyPermission, PERMISSIONS } from "@/lib/permissions";
+import { hasAnyPermission, PERMISSIONS, type Permission } from "@/lib/permissions";
 import { APP_VERSION_DISPLAY } from "@/lib/version";
 import { MobileBottomNavigation } from "@/components/MobileNavigation";
 import { BannerNotifications } from "@/components/BannerNotifications";
 
-const allNavItems = [
-  { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, perms: [PERMISSIONS.DASHBOARD_VIEW] },
-  { path: "/daily-sales", label: "Daily Sales", icon: Receipt, perms: [PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_VIEW_OWN] },
-  { path: "/expenses", label: "Expenses", icon: TrendingDown, perms: [PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE] },
-  { path: "/suppliers", label: "Suppliers", icon: Users, perms: [PERMISSIONS.SUPPLIERS_VIEW, PERMISSIONS.SUPPLIERS_MANAGE] },
-  { path: "/bills", label: "Bills", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE] },
-  { path: "/accounts", label: "Accounts", icon: CreditCard, perms: [PERMISSIONS.ACCOUNTS_VIEW, PERMISSIONS.ACCOUNTS_MANAGE] },
-  { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_PROCESS] },
-  { path: "/wallet", label: "Wallet", icon: Wallet, perms: [PERMISSIONS.WALLET_VIEW] },
-  { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
-  { path: "/subscriptions", label: "Subscriptions", icon: Repeat, perms: [PERMISSIONS.SUBSCRIPTIONS_VIEW] },
-  { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
-  { path: "/budgets", label: "Budgets", icon: FileSpreadsheet, perms: [PERMISSIONS.BUDGETS_VIEW] },
-  { path: "/users", label: "Users & Roles", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },
-  
-  { path: "/settings", label: "Settings", icon: Settings, perms: [PERMISSIONS.SETTINGS_MANAGE] },
-  { path: "/partner", label: "Partner", icon: Handshake, perms: [PERMISSIONS.PARTNER_VIEW] },
-  { path: "/admin", label: "Admin", icon: ShieldCheck, perms: [], adminOnly: true },
+const NAV_SECTIONS: Array<{
+  label: string | null;
+  items: Array<{
+    path: string;
+    label: string;
+    icon: typeof LayoutDashboard;
+    perms: Permission[];
+    adminOnly?: boolean;
+  }>;
+}> = [
+  {
+    label: null,
+    items: [
+      { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard, perms: [PERMISSIONS.DASHBOARD_VIEW] },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { path: "/daily-sales", label: "Daily Sales", icon: Receipt, perms: [PERMISSIONS.SALES_VIEW, PERMISSIONS.SALES_CREATE, PERMISSIONS.SALES_VIEW_OWN] },
+      { path: "/expenses", label: "Expenses", icon: TrendingDown, perms: [PERMISSIONS.EXPENSES_VIEW, PERMISSIONS.EXPENSES_CREATE] },
+      { path: "/bills", label: "Bills", icon: FileText, perms: [PERMISSIONS.BILLS_VIEW, PERMISSIONS.BILLS_CREATE] },
+      { path: "/suppliers", label: "Suppliers", icon: Users, perms: [PERMISSIONS.SUPPLIERS_VIEW, PERMISSIONS.SUPPLIERS_MANAGE] },
+      { path: "/subscriptions", label: "Subscriptions", icon: Repeat, perms: [PERMISSIONS.SUBSCRIPTIONS_VIEW] },
+    ],
+  },
+  {
+    label: "Money",
+    items: [
+      { path: "/accounts", label: "Accounts", icon: CreditCard, perms: [PERMISSIONS.ACCOUNTS_VIEW, PERMISSIONS.ACCOUNTS_MANAGE] },
+      { path: "/wallet", label: "Wallet", icon: Wallet, perms: [PERMISSIONS.WALLET_VIEW] },
+      { path: "/payroll", label: "Payroll", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_PROCESS] },
+      { path: "/calendar", label: "Calendar", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
+    ],
+  },
+  {
+    label: "Insights",
+    items: [
+      { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
+      { path: "/budgets", label: "Budgets", icon: FileSpreadsheet, perms: [PERMISSIONS.BUDGETS_VIEW] },
+    ],
+  },
+  {
+    label: "Workspace",
+    items: [
+      { path: "/businesses", label: "Businesses", icon: Building, perms: [PERMISSIONS.BUSINESS_MANAGE] },
+      { path: "/locations", label: "Locations", icon: Building, perms: [PERMISSIONS.BUSINESS_MANAGE] },
+      { path: "/users", label: "Users & Roles", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },
+      { path: "/partner", label: "Partner", icon: Handshake, perms: [PERMISSIONS.PARTNER_VIEW] },
+      { path: "/settings", label: "Settings", icon: Settings, perms: [PERMISSIONS.SETTINGS_MANAGE] },
+      { path: "/admin", label: "Admin", icon: ShieldCheck, perms: [], adminOnly: true },
+    ],
+  },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -92,12 +127,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
     onSuccess: () => { utils.invalidate(); window.location.reload(); },
   });
 
-  const navItems = allNavItems.filter((item) => {
-    if ((item as { adminOnly?: boolean }).adminOnly) {
-      return user?.isSuperAdmin === true;
-    }
-    return hasAnyPermission(userPermissions.length > 0 ? userPermissions : role, item.perms);
-  });
+  const canSeeNavItem = (item: { perms: Permission[]; adminOnly?: boolean }) =>
+    item.adminOnly
+      ? user?.isSuperAdmin === true
+      : hasAnyPermission(userPermissions.length > 0 ? userPermissions : role, item.perms);
+  const navSections = NAV_SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter(canSeeNavItem),
+  })).filter((section) => section.items.length > 0);
+  const navItems = navSections.flatMap((section) => section.items);
   const isActive = useCallback((path: string) => location.pathname === path, [location.pathname]);
 
   const pinnedSection = (
@@ -262,28 +300,40 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-2 py-4">
-          <ul className="space-y-1">
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const active = isActive(item.path);
-              return (
-                <li key={item.path}>
-                  <Link
-                    to={item.path}
-                    className={`flex items-center rounded-lg text-sm font-medium transition-colors ${
-                      sidebarCollapsed
-                        ? "justify-center px-2 py-3"
-                        : "gap-3 px-3 py-2.5"
-                    } ${active ? "bg-[#C73E1D]/10 text-[#C73E1D]" : "text-[#2D2A26] hover:bg-[#F5EDE6]"}`}
-                    title={sidebarCollapsed ? item.label : undefined}
-                  >
-                    <Icon className="h-5 w-5 shrink-0" />
-                    {!sidebarCollapsed && <><span>{item.label}</span>{active && <ChevronRight className="ml-auto h-4 w-4" />}</>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          {navSections.map((section, sectionIndex) => (
+            <div key={section.label ?? "primary"} className={sectionIndex > 0 ? "mt-4" : undefined}>
+              {section.label && !sidebarCollapsed && (
+                <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#8D8A87]">
+                  {section.label}
+                </p>
+              )}
+              {section.label && sidebarCollapsed && (
+                <div className="mx-auto mb-1 w-6 border-t border-[#E8E0D8]" aria-hidden />
+              )}
+              <ul className="space-y-1">
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.path);
+                  return (
+                    <li key={item.path}>
+                      <Link
+                        to={item.path}
+                        className={`flex items-center rounded-lg text-sm font-medium transition-colors ${
+                          sidebarCollapsed
+                            ? "justify-center px-2 py-3"
+                            : "gap-3 px-3 py-2.5"
+                        } ${active ? "bg-[#C73E1D]/10 text-[#C73E1D]" : "text-[#2D2A26] hover:bg-[#F5EDE6]"}`}
+                        title={sidebarCollapsed ? item.label : undefined}
+                      >
+                        <Icon className="h-5 w-5 shrink-0" />
+                        {!sidebarCollapsed && <><span>{item.label}</span>{active && <ChevronRight className="ml-auto h-4 w-4" />}</>}
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </nav>
 
         {/* Toggle + Pinned */}
