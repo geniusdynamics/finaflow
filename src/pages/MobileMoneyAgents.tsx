@@ -1,18 +1,19 @@
 // ABOUTME: Dedicated marketing page for mobile money agents and agent-outlet operators.
 // ABOUTME: Every capability claimed here is verified against shipped code; anything not yet built is
 // ABOUTME: listed in the explicitly-labelled roadmap section instead of being sold as available.
-import { useState } from "react";
 import { Link } from "react-router";
 import { Helmet } from "react-helmet-async";
 import { motion } from "framer-motion";
+import { SiteHeader } from "@/components/marketing/SiteHeader";
+import { SiteFooter } from "@/components/marketing/SiteFooter";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Landmark, Smartphone, Wallet, Banknote, PiggyBank, ArrowRight,
   ArrowUpRight, CheckCircle, AlertTriangle,
   Users, Receipt, Bell, FileSpreadsheet, Building2, Lock, RefreshCw,
-  Sparkles, HelpCircle, BookOpen, LogIn, UserPlus, Plus, Github,
-  Menu, X, Store, ShieldCheck, MapPin, Clock, Upload, ListChecks,
+  Sparkles, HelpCircle, BookOpen, LogIn, Plus,
+  Store, ShieldCheck, MapPin, Clock, Upload, ListChecks,
   CalendarDays, HandCoins, WalletCards, ClipboardList, TrendingUp,
 } from "lucide-react";
 
@@ -208,8 +209,6 @@ const faqs = [
 ];
 
 export default function MobileMoneyAgents() {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-
   return (
     <>
       <Helmet>
@@ -243,74 +242,18 @@ export default function MobileMoneyAgents() {
       </Helmet>
 
       <div className="min-h-screen bg-white">
-        {/* Navigation */}
-        <nav className="sticky top-0 z-50 border-b border-[#E8E0D8] bg-white/95 backdrop-blur">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
-            <Link to="/" className="flex items-center gap-2 transition-opacity hover:opacity-80">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#C73E1D]">
-                <Landmark className="h-4 w-4 text-white" />
-              </div>
-              <span className="font-serif text-xl font-bold text-[#2D2A26]">Finaflow</span>
-            </Link>
-            <div className="hidden items-center gap-5 text-sm text-[#2D2A26] lg:flex">
-              <a href="#capabilities" className="hover:text-[#C73E1D]">What you get</a>
-              <a href="#daily-loop" className="hover:text-[#C73E1D]">How it works</a>
-              <a href="#outlets" className="hover:text-[#C73E1D]">Multi-outlet</a>
-              <a href="#roadmap" className="hover:text-[#C73E1D]">What&apos;s next</a>
-              <a href="#faq" className="hover:text-[#C73E1D]">FAQ</a>
-            </div>
-            <div className="flex items-center gap-2">
-              <div
-                role="tablist"
-                aria-label="Sign in or sign up"
-                className="flex rounded-lg border border-[#E8E0D8] bg-white p-1"
-                data-testid="agent-header-auth-tabs"
-              >
-                <Link
-                  to="/login"
-                  role="tab"
-                  aria-selected="true"
-                  className="flex min-h-[40px] items-center justify-center gap-1.5 rounded-md bg-[#C73E1D] px-3 py-1.5 text-xs font-medium text-white shadow-sm sm:min-h-[44px] sm:text-sm"
-                >
-                  <LogIn className="h-3.5 w-3.5" />
-                  <span>Sign In</span>
-                </Link>
-                <Link
-                  to="/login?type=standard"
-                  role="tab"
-                  aria-selected="false"
-                  className="flex min-h-[40px] items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-[#8D8A87] transition-all hover:text-[#2D2A26] sm:min-h-[44px] sm:text-sm"
-                >
-                  <UserPlus className="h-3.5 w-3.5" />
-                  <span>Sign Up</span>
-                </Link>
-              </div>
-              <button
-                className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 text-[#2D2A26] hover:bg-[#F5EDE6] lg:hidden"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
-                aria-expanded={mobileMenuOpen}
-              >
-                {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-              </button>
-            </div>
+        <SiteHeader />
+        <nav
+          aria-label="Page sections"
+          className="border-b border-[#E8E0D8] bg-white/80 backdrop-blur"
+        >
+          <div className="mx-auto flex max-w-6xl gap-4 overflow-x-auto px-4 py-2 text-sm text-[#5C5853]">
+            <a href="#capabilities" className="shrink-0 whitespace-nowrap hover:text-[#C73E1D]">What you get</a>
+            <a href="#daily-loop" className="shrink-0 whitespace-nowrap hover:text-[#C73E1D]">How it works</a>
+            <a href="#outlets" className="shrink-0 whitespace-nowrap hover:text-[#C73E1D]">Multi-outlet</a>
+            <a href="#roadmap" className="shrink-0 whitespace-nowrap hover:text-[#C73E1D]">What&apos;s next</a>
+            <a href="#faq" className="shrink-0 whitespace-nowrap hover:text-[#C73E1D]">FAQ</a>
           </div>
-          {mobileMenuOpen && (
-            <div className="space-y-2 border-t border-[#E8E0D8] px-4 py-3 text-sm lg:hidden">
-              <a href="#capabilities" onClick={() => setMobileMenuOpen(false)} className="block py-1">What you get</a>
-              <a href="#daily-loop" onClick={() => setMobileMenuOpen(false)} className="block py-1">How it works</a>
-              <a href="#outlets" onClick={() => setMobileMenuOpen(false)} className="block py-1">Multi-outlet</a>
-              <a href="#roadmap" onClick={() => setMobileMenuOpen(false)} className="block py-1">What&apos;s next</a>
-              <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="block py-1">FAQ</a>
-              <Link
-                to="/login?type=standard"
-                onClick={() => setMobileMenuOpen(false)}
-                className="flex min-h-[48px] items-center justify-center gap-2 rounded-md bg-[#C73E1D] py-3 font-medium text-white"
-              >
-                <UserPlus className="h-4 w-4" /> Get Started
-              </Link>
-            </div>
-          )}
         </nav>
 
         {/* Hero */}
@@ -948,46 +891,7 @@ export default function MobileMoneyAgents() {
           </div>
         </section>
 
-        {/* Footer */}
-        <footer className="border-t border-[#E8E0D8] py-8">
-          <div className="mx-auto max-w-6xl px-4">
-            <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
-              <div className="flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded bg-[#C73E1D]">
-                  <Landmark className="h-3 w-3 text-white" />
-                </div>
-                <span className="font-serif text-sm font-bold text-[#2D2A26]">Finaflow</span>
-                <span className="text-xs text-[#8D8A87]">
-                  by{" "}
-                  <a
-                    href="https://genius.africa"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-[#2D2A26] underline decoration-[#D4A854] decoration-2 underline-offset-4 transition-colors hover:text-[#C73E1D]"
-                  >
-                    genius
-                  </a>
-                </span>
-              </div>
-              <p className="text-xs text-[#8D8A87]">{"\u00A9"} 2026 Finaflow. Built for African Businesses.</p>
-              <div className="flex items-center gap-4 text-xs text-[#8D8A87]">
-                <a
-                  href={GITHUB_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label="Finaflow on GitHub"
-                  className="flex items-center gap-1 transition-colors hover:text-[#2D2A26]"
-                >
-                  <Github className="h-3.5 w-3.5" />
-                  <span>GitHub</span>
-                </a>
-                <a href="/#solutions" className="hover:text-[#2D2A26]">Solutions</a>
-                <Link to="/login" className="hover:text-[#2D2A26]">Sign In</Link>
-                <Link to="/login?type=standard" className="hover:text-[#2D2A26]">Sign Up</Link>
-              </div>
-            </div>
-          </div>
-        </footer>
+        <SiteFooter />
       </div>
     </>
   );

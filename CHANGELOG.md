@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased] — Public navigation and product positioning
+
+### Added
+- Shared public header and footer (`SiteHeader`, `SiteFooter`) used by the landing page, the mobile money agents solution page and every free statement tool.
+- Labelled Product, Solutions and Free tools menus with descriptions, plus an organised four-column footer.
+- Landing page sections for the problem, what Finaflow is, audiences, decisions and integrations — each tied to shipped capability.
+
+### Changed
+- Repositioned the landing page around financial operations clarity for African businesses rather than a generic cashflow tool.
+- Listed ERPNext, QuickBooks and Xero as available integrations (reached through FinaBill) instead of labelling ERP as roadmap.
+- Grouped the in-app sidebar into Operations, Money, Insights and Workspace sections, and mirrored the grouping in the mobile menu.
+- Added Businesses and Locations to the in-app navigation.
+
+### Tested
+- TypeScript check, production build and 232 source tests passed; lint clean on all touched files.
+
 ## [Unreleased] — Admin workspace and password-change recovery
 
 ### Added
