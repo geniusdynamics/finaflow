@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
 import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
@@ -27,7 +27,6 @@ export function Payroll() {
   const [empEditOpen, setEmpEditOpen] = useState<number | null>(null);
   const [advanceOpen, setAdvanceOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<number | null>(null);
-  const [payPeriod, setPayPeriod] = useState<number | null>(null);
   const [assignEmpOpen, setAssignEmpOpen] = useState(false);
   const [createdEmployee, setCreatedEmployee] = useState<{ name: string; username: string; initialPassword: string } | null>(null);
 
@@ -43,6 +42,10 @@ export function Payroll() {
   const { data: employeeDetail } = trpc.employees.get.useQuery(
     { id: empViewOpen ?? 0 },
     { enabled: empViewOpen !== null }
+  );
+  const { data: paymentList } = trpc.payroll.payments.useQuery(
+    { periodId: selectedPeriod ?? 0 },
+    { enabled: selectedPeriod !== null }
   );
 
   const utils = trpc.useUtils();
@@ -65,7 +68,7 @@ export function Payroll() {
     onError: (err) => toast.error(err.message),
   });
   const markPaid = trpc.payroll.markPaid.useMutation({
-    onSuccess: () => { setPayPeriod(null); toast.success("Payroll marked as paid"); utils.payroll.periods.invalidate(); utils.payroll.entries.invalidate(); },
+    onSuccess: () => { setPayOpen(null); toast.success("Payroll paid in full"); utils.payroll.periods.invalidate(); utils.payroll.entries.invalidate(); utils.payroll.payments.invalidate(); },
     onError: (err) => toast.error(err.message),
   });
   const requestAdvance = trpc.payroll.requestAdvance.useMutation({ onSuccess: () => { setAdvanceOpen(false); utils.employees.list.invalidate(); } });
@@ -79,6 +82,30 @@ export function Payroll() {
   });
   const deleteEmployee = trpc.employees.deleteWithUser.useMutation({
     onSuccess: (_data) => { toast.success("Employee and linked user account deleted"); setDeleteConfirm(null); setEmpViewOpen(null); utils.employees.list.invalidate(); },
+    onError: (err) => toast.error(err.message),
+  });
+  const recordPayments = trpc.payroll.recordPayments.useMutation({
+    onSuccess: (res) => {
+      toast.success(`Recorded ${res.payments.length} payment${res.payments.length === 1 ? "" : "s"}`);
+      setPayOpen(null); setPayAccount("");
+      utils.payroll.periods.invalidate();
+      utils.payroll.entries.invalidate();
+      utils.payroll.payments.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const reversePayment = trpc.payroll.reversePayment.useMutation({
+    onSuccess: () => {
+      toast.success("Payment reversed");
+      setReverseTarget(null); setReverseReason("");
+      utils.payroll.periods.invalidate();
+      utils.payroll.entries.invalidate();
+      utils.payroll.payments.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+  const setDaysWorked = trpc.payroll.setEntryDaysWorked.useMutation({
+    onSuccess: () => { toast.success("Days worked updated"); utils.payroll.entries.invalidate(); utils.payroll.periods.invalidate(); },
     onError: (err) => toast.error(err.message),
   });
 
@@ -95,6 +122,42 @@ export function Payroll() {
     nhifRate: "2.75", nssfTier1Employee: "420", nssfTier2Employee: "1740",
     personalRelief: "2400", insuranceRelief: "0",
   });
+
+  // Partial / selective payment, payment reversal, and casual days worked.
+  const [payOpen, setPayOpen] = useState<number | null>(null);
+  const [payAccount, setPayAccount] = useState("");
+  const [payMethod, setPayMethod] = useState<"cash" | "mpesa" | "bank_transfer" | "wallet">("mpesa");
+  const [payAmounts, setPayAmounts] = useState<Record<number, string>>({});
+  const [paySelected, setPaySelected] = useState<Record<number, boolean>>({});
+  const [reverseTarget, setReverseTarget] = useState<number | null>(null);
+  const [reverseReason, setReverseReason] = useState("");
+
+  // Prefill the payment dialog with each person's outstanding balance.
+  useEffect(() => {
+    if (payOpen === null || !periodEntries) return;
+    const amounts: Record<number, string> = {};
+    const selected: Record<number, boolean> = {};
+    for (const row of periodEntries) {
+      if (!row.entry) continue;
+      const remaining = Number(row.entry.netPay) - Number(row.entry.paidAmount ?? 0);
+      if (remaining > 0.005) {
+        amounts[row.entry.id] = remaining.toFixed(2);
+        selected[row.entry.id] = true;
+      }
+    }
+    setPayAmounts(amounts);
+    setPaySelected(selected);
+  }, [payOpen, periodEntries]);
+
+  const submitPayments = () => {
+    if (!payOpen || !payAccount) { toast.error("Select a payment account"); return; }
+    const payments = Object.keys(paySelected)
+      .filter(id => paySelected[Number(id)])
+      .map(id => ({ entryId: Number(id), amount: payAmounts[Number(id)] ?? "0" }))
+      .filter(p => Number(p.amount) > 0);
+    if (payments.length === 0) { toast.error("Select at least one person to pay"); return; }
+    recordPayments.mutate({ periodId: payOpen, accountId: Number(payAccount), paymentMethod: payMethod, payments });
+  };
 
   const selectedPeriodData = periods?.find(p => p.id === selectedPeriod);
   const selectedLocationName = locations?.find(l => l.id === selectedPeriodData?.locationId)?.name ?? "";
@@ -362,25 +425,84 @@ export function Payroll() {
                       {canProcess && period.status === "open" && (
                         <Button size="sm" variant="outline" className="border-[#C73E1D] text-[#C73E1D]" onClick={() => { if (confirm("Process payroll for this period?")) processPayroll.mutate({ periodId: period.id }); }} disabled={processPayroll.isPending}><Play className="h-3 w-3" /></Button>
                       )}
-                      {canProcess && period.status === "processing" && (
-                        <Dialog open={payPeriod === period.id} onOpenChange={v => setPayPeriod(v ? period.id : null)}>
+                      {canProcess && (period.status === "processing" || period.status === "paid") && (
+                        <Dialog open={payOpen === period.id} onOpenChange={v => { setPayOpen(v ? period.id : null); if (v) setSelectedPeriod(period.id); }}>
                           <DialogTrigger asChild><Button size="sm" className="bg-[#2E7D32]"><Banknote className="h-3 w-3 mr-1"/>Pay</Button></DialogTrigger>
-                          <DialogContent className="bg-white">
-                            <DialogHeader><DialogTitle className="font-serif text-xl">Mark Period as Paid</DialogTitle></DialogHeader>
+                          <DialogContent className="bg-white max-h-[90vh] overflow-y-auto">
+                            <DialogHeader><DialogTitle className="font-serif text-xl">Record payroll payment</DialogTitle></DialogHeader>
                             <div className="space-y-3">
                               <div className="rounded bg-[#F5EDE6] p-3">
                                 <p className="text-sm font-medium">{period.periodName}</p>
                                 <p className="text-xs text-[#8D8A87]">Total net pay: {formatKES(period.totalNetPay ?? "0")}</p>
-                                <p className="text-xs text-[#8D8A87]">{formatDate(period.startDate)} - {formatDate(period.endDate)}</p>
+                                <p className="text-xs text-[#8D8A87]">Pay everyone in full, a few people, or just part of what is owed.</p>
+                              </div>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <Label>Payment Account</Label>
+                                  <select value={payAccount} onChange={e => setPayAccount(e.target.value)} className="w-full rounded border px-3 py-2 text-sm">
+                                    <option value="">Select account</option>
+                                    {accounts?.filter(a => a.isActive && a.locationId === period.locationId).map(a => (
+                                      <option key={a.id} value={a.id}>{a.name} · {formatKES(a.currentBalance)}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <Label>Method</Label>
+                                  <select value={payMethod} onChange={e => setPayMethod(e.target.value as typeof payMethod)} className="w-full rounded border px-3 py-2 text-sm">
+                                    <option value="mpesa">M-PESA</option>
+                                    <option value="bank_transfer">Bank transfer</option>
+                                    <option value="cash">Cash</option>
+                                    <option value="wallet">Wallet</option>
+                                  </select>
+                                </div>
                               </div>
                               <div className="space-y-2">
-                                <Label>Payment Account</Label>
-                                <p className="text-xs text-[#8D8A87]">Select the account used to disburse payroll. Total will be deducted.</p>
-                                <select onChange={(e) => { if (e.target.value) markPaid.mutate({ periodId: period.id, accountId: +e.target.value }); }} className="w-full rounded border px-3 py-2 text-sm">
-                                  <option value="">Select account</option>
-                                  {accounts?.filter(a => a.isActive).map(a => { const loc = locations?.find(l => l.id === a.locationId)?.name ?? ""; return <option key={a.id} value={a.id}>{a.name} {loc ? `· ${loc}` : ""} · {formatKES(a.currentBalance)}</option>; })}
-                                </select>
+                                <Label>Who to pay</Label>
+                                {periodEntries && periodEntries.some(r => r.entry) ? (
+                                  <div className="max-h-64 space-y-1 overflow-y-auto rounded border p-2">
+                                    {periodEntries.filter(r => r.entry).map(({ employee, entry }) => {
+                                      const remaining = Number(entry!.netPay) - Number(entry!.paidAmount ?? 0);
+                                      if (remaining <= 0.005) {
+                                        return (
+                                          <div key={employee.id} className="flex items-center justify-between px-1 py-1 text-xs text-[#8D8A87]">
+                                            <span>{employee.fullName}</span><span>Paid in full</span>
+                                          </div>
+                                        );
+                                      }
+                                      return (
+                                        <div key={employee.id} className="flex items-center gap-2 px-1 py-1">
+                                          <input
+                                            type="checkbox"
+                                            aria-label={`Pay ${employee.fullName}`}
+                                            checked={Boolean(paySelected[entry!.id])}
+                                            onChange={e => setPaySelected(p => ({ ...p, [entry!.id]: e.target.checked }))}
+                                          />
+                                          <span className="flex-1 text-sm">{employee.fullName}</span>
+                                          <span className="text-xs text-[#8D8A87]">due {formatKES(remaining.toFixed(2))}</span>
+                                          <Input
+                                            type="number" step="0.01" className="h-8 w-28"
+                                            aria-label={`Amount for ${employee.fullName}`}
+                                            value={payAmounts[entry!.id] ?? ""}
+                                            disabled={!paySelected[entry!.id]}
+                                            onChange={e => setPayAmounts(p => ({ ...p, [entry!.id]: e.target.value }))}
+                                          />
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : <p className="text-sm text-[#8D8A87]">No employees assigned to this period.</p>}
                               </div>
+                              <Button onClick={submitPayments} disabled={recordPayments.isPending} className="w-full bg-[#2E7D32]">
+                                {recordPayments.isPending ? "Recording..." : "Record payment"}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                className="w-full"
+                                disabled={markPaid.isPending || !payAccount}
+                                onClick={() => { if (payAccount) markPaid.mutate({ periodId: period.id, accountId: Number(payAccount) }); }}
+                              >
+                                {markPaid.isPending ? "Paying..." : "Pay everyone the full amount"}
+                              </Button>
                             </div>
                           </DialogContent>
                         </Dialog>
@@ -442,10 +564,13 @@ export function Payroll() {
                   <thead>
                     <tr className="border-b">
                       <th className="pb-2 text-left text-xs font-medium uppercase tracking-wider text-[#8D8A87]">Employee</th>
+                      <th className="pb-2 text-right text-xs font-medium uppercase tracking-wider text-[#8D8A87]">Days</th>
                       <th className="pb-2 text-right text-xs font-medium uppercase tracking-wider text-[#8D8A87]">Basic Pay</th>
                       <th className="pb-2 text-right text-xs font-medium uppercase tracking-wider text-[#8D8A87]">Advances</th>
                       <th className="pb-2 text-right text-xs font-medium uppercase tracking-wider text-[#8D8A87]">Deductions</th>
                       <th className="pb-2 text-right text-xs font-medium uppercase tracking-wider text-[#8D8A87]">Net Pay</th>
+                      <th className="pb-2 text-right text-xs font-medium uppercase tracking-wider text-[#8D8A87]">Paid</th>
+                      <th className="pb-2 text-right text-xs font-medium uppercase tracking-wider text-[#8D8A87]">Due</th>
                       <th className="pb-2 text-center text-xs font-medium uppercase tracking-wider text-[#8D8A87]">Status</th>
                       <th className="pb-2 text-right text-xs font-medium uppercase tracking-wider text-[#8D8A87]">Action</th>
                     </tr>
@@ -454,17 +579,42 @@ export function Payroll() {
                     {periodEntries && periodEntries.length > 0 ? (
                       periodEntries.map(({ employee, entry }) => (
                         <tr key={employee.id} className="hover:bg-[#F5EDE6]/50">
-                          <td className="py-3 text-sm font-medium text-[#2D2A26]">{employee.fullName}</td>
+                          <td className="py-3 text-sm font-medium text-[#2D2A26]">
+                            {employee.fullName}
+                            <span className="ml-2 text-xs capitalize text-[#8D8A87]">{employee.salaryType}</span>
+                          </td>
+                          <td className="py-3 text-right font-mono text-sm">
+                            {entry && (employee.salaryType === "daily" || employee.salaryType === "hourly") ? (
+                              <Input
+                                type="number" step="0.5" min="0"
+                                aria-label={`Days worked for ${employee.fullName}`}
+                                className="ml-auto h-8 w-20"
+                                defaultValue={entry.daysWorked ?? "0"}
+                                disabled={Number(entry.paidAmount ?? 0) > 0 || selectedPeriodData?.status !== "open"}
+                                onBlur={e => {
+                                  const value = Number(e.target.value);
+                                  if (!Number.isFinite(value)) return;
+                                  if (value.toFixed(2) !== Number(entry.daysWorked ?? 0).toFixed(2)) {
+                                    setDaysWorked.mutate({ periodId: selectedPeriod!, employeeId: employee.id, daysWorked: value });
+                                  }
+                                }}
+                              />
+                            ) : (entry?.daysWorked ?? "—")}
+                          </td>
                           <td className="py-3 text-right font-mono text-sm">{entry ? formatKES(entry.basicPay) : "-"}</td>
                           <td className="py-3 text-right font-mono text-sm text-[#D32F2F]">{entry ? formatKES(entry.advancesDeducted) : "-"}</td>
                           <td className="py-3 text-right font-mono text-sm text-[#D32F2F]">{entry ? formatKES(entry.deductions) : "-"}</td>
                           <td className="py-3 text-right font-mono text-sm font-semibold text-[#2E7D32]">{entry ? formatKES(entry.netPay) : "-"}</td>
+                          <td className="py-3 text-right font-mono text-sm">{entry && Number(entry.paidAmount ?? 0) > 0 ? formatKES(entry.paidAmount ?? "0") : "—"}</td>
+                          <td className="py-3 text-right font-mono text-sm">{entry ? formatKES((Number(entry.netPay) - Number(entry.paidAmount ?? 0)).toFixed(2)) : "—"}</td>
                           <td className="py-3 text-center">
                             {entry ? (
-                              entry.paidAt ? (
+                              entry.paymentStatus === "paid" ? (
                                 <span className="rounded-full bg-[#2E7D32]/10 px-2 py-0.5 text-xs text-[#2E7D32]">Paid</span>
+                              ) : entry.paymentStatus === "partial" ? (
+                                <span className="rounded-full bg-[#D4A854]/10 px-2 py-0.5 text-xs text-[#D4A854]">Part paid</span>
                               ) : (
-                                <span className="rounded-full bg-[#D4A854]/10 px-2 py-0.5 text-xs text-[#D4A854]">Pending</span>
+                                <span className="rounded-full bg-[#8D8A87]/10 px-2 py-0.5 text-xs text-[#8D8A87]">Unpaid</span>
                               )
                             ) : (
                               <span className="rounded-full bg-[#8D8A87]/10 px-2 py-0.5 text-xs text-[#8D8A87]">Not assigned</span>
@@ -509,7 +659,7 @@ export function Payroll() {
                                     </DialogContent>
                                   </Dialog>
                                 )}
-                                {entry && !entry.paidAt && (
+                                {entry && Number(entry.paidAmount ?? 0) <= 0 && (
                                   <Button size="sm" variant="ghost" onClick={() => { if (confirm(`Remove ${employee.fullName} from this period?`)) removeFromPeriod.mutate({ periodId: selectedPeriod!, employeeId: employee.id }); }}>
                                     <UserMinus className="h-4 w-4 text-[#D32F2F]" />
                                   </Button>
@@ -520,17 +670,90 @@ export function Payroll() {
                         </tr>
                       ))
                     ) : (
-                      <tr><td colSpan={7} className="py-8 text-center text-sm text-[#8D8A87]">
+                      <tr><td colSpan={10} className="py-8 text-center text-sm text-[#8D8A87]">
                         {selectedPeriodData?.status === "open" ? <p>No employees assigned. Click <strong>Assign Employee</strong> to add staff.</p> : <p>No entries found.</p>}
                       </td></tr>
                     )}
                   </tbody>
                 </table>
               </div>
+
+              {paymentList && paymentList.length > 0 && (
+                <div className="mt-6 border-t border-[#E8E0D8] pt-4">
+                  <h3 className="mb-2 flex items-center gap-2 font-serif text-base font-semibold">
+                    <Banknote className="h-4 w-4 text-[#2E7D32]" /> Payments for this period
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Employee</th>
+                          <th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Amount</th>
+                          <th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Method</th>
+                          <th className="pb-2 text-left text-xs uppercase text-[#8D8A87]">Date</th>
+                          <th className="pb-2 text-right text-xs uppercase text-[#8D8A87]">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#E8E0D8]">
+                        {paymentList.map(p => (
+                          <tr key={p.id} className={p.reversedAt ? "opacity-60" : ""}>
+                            <td className="py-2 text-sm">{p.employeeName ?? `Employee #${p.employeeId}`}</td>
+                            <td className="py-2 text-right font-mono text-sm">{formatKES(p.amount)}</td>
+                            <td className="py-2 text-sm capitalize">{p.paymentMethod.replace("_", " ")}</td>
+                            <td className="py-2 text-sm text-[#8D8A87]">{formatDate(p.paidAt)}</td>
+                            <td className="py-2 text-right">
+                              {p.reversedAt ? (
+                                <span className="text-xs text-[#D32F2F]">Reversed{p.reversalReason ? `: ${p.reversalReason}` : ""}</span>
+                              ) : canProcess ? (
+                                <Button
+                                  size="sm" variant="outline" className="border-[#D32F2F] text-[#D32F2F]"
+                                  onClick={() => { setReverseTarget(p.id); setReverseReason(""); }}
+                                >
+                                  Reverse
+                                </Button>
+                              ) : null}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
       </div>
+
+      <AlertDialog open={reverseTarget !== null} onOpenChange={openState => { if (!openState) setReverseTarget(null); }}>
+        <AlertDialogContent className="bg-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reverse this payment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The ledger entries for this payment are mirrored back, the account balance is restored, and the
+              employee's outstanding balance is reopened. A reason is recorded in the audit trail.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Input
+            value={reverseReason}
+            onChange={e => setReverseReason(e.target.value)}
+            placeholder="Reason for reversal (required)"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setReverseTarget(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-[#D32F2F] hover:bg-[#B71C1C]"
+              disabled={!reverseReason.trim() || reversePayment.isPending}
+              onClick={e => {
+                e.preventDefault();
+                if (reverseTarget) reversePayment.mutate({ paymentId: reverseTarget, reason: reverseReason.trim() });
+              }}
+            >
+              {reversePayment.isPending ? "Reversing..." : "Reverse payment"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 }

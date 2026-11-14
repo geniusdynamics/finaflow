@@ -48,7 +48,7 @@ export function Profile() {
   });
   const changePassword = trpc.users.changePassword.useMutation({
     onSuccess: () => {
-      toast.success("Password changed");
+      toast.success("Password changed. Sign in again with your new password.");
       setPwOpen(false);
       setPwForm({ userId: 0, newPassword: "", confirmPassword: "" });
     },
@@ -193,8 +193,8 @@ export function Profile() {
                             toast.error("Passwords do not match");
                             return;
                           }
-                          if (pwForm.newPassword.length < 4) {
-                            toast.error("Password must be at least 4 characters");
+                          if (pwForm.newPassword.length < 8) {
+                            toast.error("Password must be at least 8 characters");
                             return;
                           }
                           changePassword.mutate({ userId: pwForm.userId, newPassword: pwForm.newPassword });

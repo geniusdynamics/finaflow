@@ -43,6 +43,8 @@ export const subscriptionStatusEnum = pgEnum("subscription_status", ["active", "
 export const subscriptionPostingEnum = pgEnum("subscription_posting", ["none", "expense", "bill"]);
 export const payrollStatusEnum = pgEnum("payrollStatus", ["open", "processing", "paid", "cancelled"]);
 export const advanceStatusEnum = pgEnum("advanceStatus", ["pending", "approved", "partially_repaid", "repaid", "cancelled"]);
+// Per-entry settlement state so payroll can be paid in parts or per person.
+export const payrollPaymentStatusEnum = pgEnum("payroll_payment_status", ["unpaid", "partial", "paid"]);
 export const leadStatusEnum = pgEnum("leadStatus", ["new", "contacted", "converted", "declined"]);
 export const leadCommissionStatusEnum = pgEnum("lead_commission_status", ["pending", "eligible", "info_only", "ineligible"]);
 export const orderStatusEnum = pgEnum("orderStatus", ["draft", "sent", "delivered", "billed", "cancelled"]);
@@ -55,6 +57,7 @@ export const emailLogTypeEnum = pgEnum("email_log_type", [
   "welcome",
   "new_signup_notification",
   "password_reset",
+  "password_changed",
   "owner_broadcast",
   "smtp_test",
   "lead_invitation",
@@ -146,6 +149,7 @@ export const users = pgTable("users", {
   unionId: varchar("unionId", { length: 255 }).unique(),
   username: varchar("username", { length: 100 }).notNull(),
   passwordHash: varchar("passwordHash", { length: 255 }),
+  passwordChangedAt: timestamp("passwordChangedAt"),
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 320 }),
   avatar: text("avatar"),
@@ -711,6 +715,8 @@ export const payrollEntries = pgTable("payroll_entries", {
   periodId: bigint("periodId", { mode: "number" }).notNull().references(() => payrollPeriods.id, { onDelete: "no action" }),
   employeeId: bigint("employeeId", { mode: "number" }).notNull().references(() => employees.id, { onDelete: "no action" }),
   basicPay: numeric("basicPay", { precision: 15, scale: 2 }).notNull(),
+  // Days (or hours) worked in the period — the basis for casual / daily pay.
+  daysWorked: numeric("daysWorked", { precision: 8, scale: 2 }),
   advancesDeducted: numeric("advancesDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
   deductions: numeric("deductions", { precision: 15, scale: 2 }).default("0.00").notNull(),
   bonuses: numeric("bonuses", { precision: 15, scale: 2 }).default("0.00").notNull(),
@@ -718,7 +724,11 @@ export const payrollEntries = pgTable("payroll_entries", {
   payeDeducted: numeric("payeDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
   nhifDeducted: numeric("nhifDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
   nssfDeducted: numeric("nssfDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  housingLevyDeducted: numeric("housingLevyDeducted", { precision: 15, scale: 2 }).default("0.00").notNull(),
   netPay: numeric("netPay", { precision: 15, scale: 2 }).notNull(),
+  // Settlement tracking: how much of netPay has been paid, and the resulting state.
+  paidAmount: numeric("paidAmount", { precision: 15, scale: 2 }).default("0.00").notNull(),
+  paymentStatus: payrollPaymentStatusEnum("paymentStatus").default("unpaid").notNull(),
   paymentMethod: paymentMethodEnum("paymentMethod").default("mpesa").notNull(),
   paidAt: timestamp("paidAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -727,6 +737,30 @@ export const payrollEntries = pgTable("payroll_entries", {
 });
 
 export type PayrollEntry = typeof payrollEntries.$inferSelect;
+
+// Individual payroll disbursements. One row per payment so a period can be paid
+// in parts, per person, and each payment can be reversed on its own.
+export const payrollPayments = pgTable("payroll_payments", {
+  id: serial("id").primaryKey(),
+  periodId: bigint("periodId", { mode: "number" }).notNull().references(() => payrollPeriods.id, { onDelete: "no action" }),
+  entryId: bigint("entryId", { mode: "number" }).notNull().references(() => payrollEntries.id, { onDelete: "no action" }),
+  employeeId: bigint("employeeId", { mode: "number" }).notNull().references(() => employees.id, { onDelete: "no action" }),
+  amount: numeric("amount", { precision: 15, scale: 2 }).notNull(),
+  accountId: bigint("accountId", { mode: "number" }).notNull(),
+  paymentMethod: paymentMethodEnum("paymentMethod").default("mpesa").notNull(),
+  reference: varchar("reference", { length: 100 }),
+  paidAt: timestamp("paidAt").defaultNow().notNull(),
+  reversedAt: timestamp("reversedAt"),
+  reversalReason: text("reversalReason"),
+  reversedBy: bigint("reversedBy", { mode: "number" }),
+  createdBy: bigint("createdBy", { mode: "number" }),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => ({
+  idx_payroll_payments_period: index("idx_payroll_payments_period").on(table.periodId),
+  idx_payroll_payments_entry: index("idx_payroll_payments_entry").on(table.entryId),
+}));
+
+export type PayrollPayment = typeof payrollPayments.$inferSelect;
 
 export const payrollAdvances = pgTable("payroll_advances", {
   id: serial("id").primaryKey(),
@@ -861,6 +895,23 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+
+// A one-time recovery capability for an administrator-initiated password change.
+export const passwordChangeEvents = pgTable("password_change_events", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number" }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  actorId: bigint("actorId", { mode: "number" }).references(() => users.id, { onDelete: "set null" }),
+  accountId: varchar("accountId", { length: 100 }),
+  tokenHash: varchar("tokenHash", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  reportedAt: timestamp("reportedAt"),
+  resolvedAt: timestamp("resolvedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => ({
+  userIdx: index("idx_password_change_events_user").on(table.userId),
+  accountIdx: index("idx_password_change_events_account").on(table.accountId),
+  reportedIdx: index("idx_password_change_events_reported").on(table.reportedAt),
+}));
 
 // Businesses (multi-tenancy)
 export const businesses = pgTable("businesses", {
