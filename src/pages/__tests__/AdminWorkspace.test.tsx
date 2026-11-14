@@ -15,8 +15,8 @@ import AdminWorkspace from "@/components/admin/AdminWorkspace";
 const render=(url="/admin")=>renderToStaticMarkup(<MemoryRouter initialEntries={[url]}><AdminWorkspace/></MemoryRouter>);
 beforeEach(()=>{state.error=null;state.calls=[];});
 describe("Admin workspace",()=>{
-  it("opens the accounts directory and only enables its query",()=>{const html=render();expect(html).toContain("Search customers");expect(state.calls.filter(c=>c.enabled).map(c=>c.name)).toEqual(["accounts"]);expect(html).toContain("No matching records");});
+  it("opens the overview dashboard by default",()=>{const html=render();expect(html).toContain("Report overview");expect(html).toContain("Support desk");expect(state.calls.filter(c=>c.enabled).map(c=>c.name)).toEqual([]);});
   it("restores URL filters and page offset",()=>{render("/admin?section=accounts&search=Acme&plan=pro&access=held&page=2");expect(state.calls.find(c=>c.name==="accounts")?.input).toEqual({search:"Acme",plan:"pro",access:"held",limit:25,offset:50});});
-  it("presents failed requests as errors with retry rather than empty results",()=>{state.error={message:"Directory unavailable"};const html=render();expect(html).toContain("Directory unavailable");expect(html).toContain("Retry");expect(html).not.toContain("No matching records");});
+  it("presents failed requests as errors with retry rather than empty results",()=>{state.error={message:"Directory unavailable"};const html=render("/admin?section=accounts");expect(html).toContain("Directory unavailable");expect(html).toContain("Retry");expect(html).not.toContain("No matching records");});
   it("enables the users directory when selected in the URL",()=>{render("/admin?section=users");expect(state.calls.filter(c=>c.enabled).map(c=>c.name)).toEqual(["users"]);});
 });
