@@ -236,7 +236,7 @@ async function ensureTestDatabase(): Promise<void> {
       await testPool.query(`DROP TABLE IF EXISTS "budget_plans" CASCADE`);
     }
 
-    for (const file of [
+    const listedMigrations = [
       "0001_misty_mulholland_black.sql",
       "0002_add_currency_columns.sql",
       "0004_add_wallet_account_type.sql",
@@ -269,10 +269,30 @@ async function ensureTestDatabase(): Promise<void> {
       "0033_statement_imports.sql",
       "0034_audit_download_action.sql",
       "0035_admin_support.sql",
-    ]) {
+    ];
+    for (const file of listedMigrations) {
       const p = path.resolve(import.meta.dirname, `../../db/migrations/${file}`);
       if (fs.existsSync(p)) {
         await applyMigrationFile(testPool, p);
+      }
+    }
+
+    // Safety net: apply any migration numbered above the last explicit one, so a
+    // new schema change is never skipped in CI just because the list above was
+    // not updated. Runs in ascending order.
+    const migrationsDir = path.resolve(import.meta.dirname, "../../db/migrations");
+    const listed = new Set(listedMigrations);
+    const highestListed = listedMigrations.reduce(
+      (max, file) => Math.max(max, Number(file.slice(0, 4)) || 0),
+      0,
+    );
+    if (fs.existsSync(migrationsDir)) {
+      const newerMigrations = fs.readdirSync(migrationsDir)
+        .filter((file) => file.endsWith(".sql") && /^\d{4}_/.test(file))
+        .filter((file) => Number(file.slice(0, 4)) > highestListed && !listed.has(file))
+        .sort();
+      for (const file of newerMigrations) {
+        await applyMigrationFile(testPool, path.join(migrationsDir, file));
       }
     }
 
