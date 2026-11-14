@@ -55,6 +55,7 @@ export const emailLogTypeEnum = pgEnum("email_log_type", [
   "welcome",
   "new_signup_notification",
   "password_reset",
+  "password_changed",
   "owner_broadcast",
   "smtp_test",
   "lead_invitation",
@@ -146,6 +147,7 @@ export const users = pgTable("users", {
   unionId: varchar("unionId", { length: 255 }).unique(),
   username: varchar("username", { length: 100 }).notNull(),
   passwordHash: varchar("passwordHash", { length: 255 }),
+  passwordChangedAt: timestamp("passwordChangedAt"),
   name: varchar("name", { length: 255 }),
   email: varchar("email", { length: 320 }),
   avatar: text("avatar"),
@@ -861,6 +863,23 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
 
 export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type InsertPasswordResetToken = typeof passwordResetTokens.$inferInsert;
+
+// A one-time recovery capability for an administrator-initiated password change.
+export const passwordChangeEvents = pgTable("password_change_events", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number" }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  actorId: bigint("actorId", { mode: "number" }).references(() => users.id, { onDelete: "set null" }),
+  accountId: varchar("accountId", { length: 100 }),
+  tokenHash: varchar("tokenHash", { length: 64 }).notNull().unique(),
+  expiresAt: timestamp("expiresAt").notNull(),
+  reportedAt: timestamp("reportedAt"),
+  resolvedAt: timestamp("resolvedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, table => ({
+  userIdx: index("idx_password_change_events_user").on(table.userId),
+  accountIdx: index("idx_password_change_events_account").on(table.accountId),
+  reportedIdx: index("idx_password_change_events_reported").on(table.reportedAt),
+}));
 
 // Businesses (multi-tenancy)
 export const businesses = pgTable("businesses", {

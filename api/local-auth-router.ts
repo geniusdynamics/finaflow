@@ -28,6 +28,7 @@ import { isEmailConfiguredAsync } from "./lib/email";
 import { sendLoggedEmail } from "./lib/logged-email";
 import { welcomeEmailHtml, welcomeEmailText, newSignupNotificationHtml, newSignupNotificationText, passwordResetHtml, passwordResetText } from "./lib/email-templates";
 import { createPasswordResetForUser } from "./lib/password-reset";
+import { adminPasswordSchema, reportAdminPasswordChange, recoverReportedPassword, setAdminPassword } from "./lib/admin-password-change";
 import { serialize } from "cookie";
 import { createHash } from "node:crypto";
 import { TRPCError } from "@trpc/server";
@@ -40,7 +41,8 @@ const JWT_SECRET = new TextEncoder().encode(env.appSecret);
 
 async function signLocalToken(payload: { userId: number; username: string }, expiresIn: string = "30d"): Promise<string> {
   await assertPrincipalCanAuthenticate(payload.userId);
-  return new jose.SignJWT(payload as unknown as jose.JWTPayload)
+  const [user] = await getDb().select({ passwordChangedAt: users.passwordChangedAt }).from(users).where(eq(users.id, payload.userId)).limit(1);
+  return new jose.SignJWT({ ...payload, credentialAt: user?.passwordChangedAt?.getTime() ?? 0 } as jose.JWTPayload)
     .setProtectedHeader({ alg: JWT_ALG })
     .setIssuedAt()
     .setExpirationTime(expiresIn)
@@ -51,6 +53,8 @@ export async function verifyLocalToken(token: string): Promise<{ userId: number;
   try {
     const { payload } = await jose.jwtVerify(token, JWT_SECRET, { algorithms: [JWT_ALG], clockTolerance: 60 });
     await assertPrincipalCanAuthenticate(Number(payload.userId));
+    const [user] = await getDb().select({ passwordChangedAt: users.passwordChangedAt }).from(users).where(eq(users.id, Number(payload.userId))).limit(1);
+    if ((user?.passwordChangedAt?.getTime() ?? 0) !== (payload.credentialAt ?? 0)) return null;
     return payload as unknown as { userId: number; username: string };
   } catch {
     return null;
@@ -300,8 +304,9 @@ export const localAuthRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const accountId = normalizeAccountId(input.accountId);
-      const account = await findCustomerAccount(db, accountId);
+      const exactAccountId = input.accountId.trim();
+      const account = await findCustomerAccount(db, exactAccountId) ?? await findCustomerAccount(db, normalizeAccountId(exactAccountId));
+      const accountId = account?.accountId ?? normalizeAccountId(exactAccountId);
       const accountBusiness = await findPrimaryBusinessForAccount(db, accountId, account?.id ?? null);
       if (!accountBusiness) throw new Error("Invalid account ID or credentials");
 
@@ -319,7 +324,7 @@ export const localAuthRouter = createRouter({
       if (!user && accountBusiness) {
         const fallbackRows = await db.select({
           id: users.id, name: users.name, username: users.username, role: users.role,
-          email: users.email, phone: users.phone, passwordHash: users.passwordHash,
+          email: users.email, phone: users.phone, passwordHash: users.passwordHash, passwordChangedAt: users.passwordChangedAt,
           isActive: users.isActive, currentBusinessId: users.currentBusinessId,
           accountId: users.accountId, accountRefId: users.accountRefId,
           userType: users.userType, locationId: users.locationId,
@@ -544,7 +549,7 @@ export const localAuthRouter = createRouter({
       name: z.string().min(1).max(255),
       username: z.string().min(3).max(100),
       email: z.string().email().max(255),
-      password: z.string().min(6).max(100),
+      password: z.string().min(8).max(100),
       userType: z.enum(["standard", "partner"]).default("standard"),
       businessName: z.string().max(255).optional(),
       accountName: z.string().min(2).max(100),
@@ -1069,7 +1074,7 @@ export const localAuthRouter = createRouter({
   migratePassword: publicQuery
     .input(z.object({
       oldSha256Hash: z.string().min(1),
-      newPassword: z.string().min(6).max(100),
+      newPassword: z.string().min(8).max(100),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
@@ -1091,7 +1096,7 @@ export const localAuthRouter = createRouter({
       }
 
       const newHash = await hashPassword(input.newPassword);
-      await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, claim.userId));
+      await db.update(users).set({ passwordHash: newHash, passwordChangedAt: new Date() }).where(eq(users.id, claim.userId));
 
       await logAudit({
         userId: claim.userId,
@@ -1108,7 +1113,7 @@ export const localAuthRouter = createRouter({
     .input(z.object({
       userId: z.number().optional(),
       currentPassword: z.string().min(1).optional(),
-      newPassword: z.string().min(4).max(100),
+      newPassword: z.string().min(8).max(100),
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
@@ -1134,6 +1139,12 @@ export const localAuthRouter = createRouter({
 
       const targetUser = await db.select().from(users).where(eq(users.id, targetUserId)).limit(1);
       if (!targetUser[0]) throw new Error("User not found");
+      if (targetUserId !== requestingUserId) {
+        const [actor] = await db.select({ accountId: users.accountId }).from(users).where(eq(users.id, requestingUserId));
+        if (!actor?.accountId || targetUser[0].accountId !== actor.accountId)
+          throw new TRPCError({ code: "FORBIDDEN", message: "User not found in this account" });
+        return setAdminPassword(targetUserId, requestingUserId, input.newPassword, "Account administrator set password");
+      }
 
       if (targetUserId === requestingUserId && input.currentPassword) {
         if (targetUser[0].passwordHash) {
@@ -1143,7 +1154,10 @@ export const localAuthRouter = createRouter({
       }
 
       const newHash = await hashPassword(input.newPassword);
-      await db.update(users).set({ passwordHash: newHash }).where(eq(users.id, targetUserId));
+      await db.transaction(async tx => {
+        await tx.update(users).set({ passwordHash: newHash, passwordChangedAt: new Date() }).where(eq(users.id, targetUserId));
+        await tx.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.userId, targetUserId));
+      });
 
       await logAudit({
         userId: requestingUserId,
@@ -1185,40 +1199,38 @@ export const localAuthRouter = createRouter({
   resetPassword: publicQuery
     .input(z.object({
       token: z.string().min(1).max(255),
-      password: z.string().min(6).max(100),
+      password: z.string().min(8).max(100),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
       const tokenHash = createHash("sha256").update(input.token).digest("hex");
 
-      const tokenRows = await db.select().from(passwordResetTokens)
-        .where(and(
-          eq(passwordResetTokens.tokenHash, tokenHash),
-          sql`${passwordResetTokens.expiresAt} > ${new Date()}`,
-          isNull(passwordResetTokens.usedAt),
-        ))
-        .limit(1);
-      const tokenRecord = tokenRows[0];
-
-      if (!tokenRecord) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired reset token" });
-      }
-
-      const userRows = await db.select().from(users)
-        .where(and(eq(users.id, tokenRecord.userId), isNull(users.deletedAt)))
-        .limit(1);
-      if (!userRows[0]) {
-        throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired reset token" });
-      }
-
       const newHash = await hashPassword(input.password);
-      await db.transaction(async (tx) => {
-        await tx.update(users).set({ passwordHash: newHash }).where(eq(users.id, tokenRecord.userId));
-        await tx.update(passwordResetTokens).set({ usedAt: new Date() }).where(eq(passwordResetTokens.id, tokenRecord.id));
+      if (!await verifyPassword(input.password, newHash)) throw new Error("Password verification failed");
+      const identity = await db.transaction(async (tx) => {
+        const [tokenRecord] = await tx.select().from(passwordResetTokens)
+          .where(eq(passwordResetTokens.tokenHash, tokenHash)).for("update");
+        if (!tokenRecord || tokenRecord.expiresAt <= new Date() || tokenRecord.usedAt)
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired reset token" });
+        const [user] = await tx.select({ id: users.id, username: users.username, accountId: users.accountId }).from(users)
+          .where(and(eq(users.id, tokenRecord.userId), isNull(users.deletedAt)));
+        if (!user) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid or expired reset token" });
+        await tx.update(users).set({ passwordHash: newHash, passwordChangedAt: new Date() }).where(eq(users.id, user.id));
+        await tx.update(refreshTokens).set({ isRevoked: true }).where(eq(refreshTokens.userId, user.id));
+        await tx.update(passwordResetTokens).set({ usedAt: new Date() }).where(and(eq(passwordResetTokens.userId, user.id), isNull(passwordResetTokens.usedAt)));
+        return { username: user.username, accountId: user.accountId };
       });
 
-      return { success: true, message: "Password reset successfully. You can now sign in with your new password." };
+      return { success: true, message: "Password reset successfully. You can now sign in with your new password.", ...identity };
     }),
+
+  reportPasswordChange: publicQuery
+    .input(z.object({ token: z.string().length(64).regex(/^[0-9a-f]+$/) }))
+    .mutation(({ input }) => reportAdminPasswordChange(input.token)),
+
+  recoverReportedPassword: publicQuery
+    .input(z.object({ token: z.string().length(64).regex(/^[0-9a-f]+$/), password: z.string().min(adminPasswordSchema.min).max(adminPasswordSchema.max) }))
+    .mutation(({ input }) => recoverReportedPassword(input.token, input.password)),
 
   refresh: publicQuery.mutation(async ({ ctx }) => {
     const cookies = parseCookie(ctx.req.headers.get("cookie") || "");
