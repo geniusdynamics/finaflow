@@ -16,6 +16,23 @@
 ### Tested
 - TypeScript check, production build and 232 source tests passed; lint clean on all touched files.
 
+## [Unreleased] — Admin workspace and password-change recovery
+
+### Added
+- Reshaped `/admin` around an overview, customer directories, support tools and a security-report queue.
+- Added audited manual password setting with in-app and email alerts, a one-time report link, and self-service recovery.
+- Account administrators' password changes now use the same security-notice flow.
+- Added a migration for password-change incidents and credential-change timestamps.
+
+### Fixed
+- Sign-in now recognizes exact stored account IDs containing punctuation before trying the normalized form.
+- Password resets consume tokens atomically, verify the new hash, revoke refresh tokens, and show the account ID and username needed to sign in.
+- New passwords must contain at least eight characters across account creation and password-change flows.
+- Existing sessions are invalidated when a password changes; admin password setting reports email delivery and sign-in eligibility.
+
+### Tested
+- TypeScript check, build, and admin workspace tests passed. Database-backed integration tests were added but could not run without local PostgreSQL.
+
 ## [Unreleased] — Merge main into dev
 
 ### Changed

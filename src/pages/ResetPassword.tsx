@@ -15,11 +15,11 @@ export default function ResetPassword() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState<{ accountId: string | null; username: string } | null>(null);
 
   const mutation = trpc.localAuth.resetPassword.useMutation({
-    onSuccess: () => {
-      setSubmitted(true);
+    onSuccess: result => {
+      setSubmitted({ accountId: result.accountId, username: result.username });
       toast.success("Password reset successfully");
     },
     onError: (err: { message?: string }) => {
@@ -37,8 +37,8 @@ export default function ResetPassword() {
       toast.error("Please enter a new password");
       return;
     }
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters");
       return;
     }
     if (password !== confirmPassword) {
@@ -85,6 +85,7 @@ export default function ResetPassword() {
                   <p className="text-sm text-[#8D8A87]">
                     Your password has been reset. You can now sign in with your new password.
                   </p>
+                  <p className="text-sm text-[#2D2A26]">Account ID: <strong>{submitted.accountId ?? "Ask your account owner"}</strong><br />Username: <strong>{submitted.username}</strong></p>
                   <Button
                     asChild
                     className="w-full bg-[#C73E1D] hover:bg-[#C73E1D]/90 min-h-[48px] text-base"
@@ -105,7 +106,7 @@ export default function ResetPassword() {
                         autoComplete="new-password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Min 6 characters"
+                        placeholder="Min 8 characters"
                         className="pl-9 pr-10"
                         required
                       />
