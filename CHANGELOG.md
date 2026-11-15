@@ -1,5 +1,21 @@
 # Changelog
 
+## [Unreleased] — Billing, payroll and calendar follow-ups
+
+### Fixed
+- Admin "Set password" can now be opened without first typing a support reason; the reason is captured in the form and still audited.
+- Logging out no longer flashes restricted menus (e.g. Budgets) for a frame while the session clears.
+- Payroll periods in `processing` can be reversed back to `open` when no payment has been recorded, discarding the generated bill.
+
+### Added
+- Bills: pay several bills in one run, choosing which bills and how much of each — the same selective, partial-payment flow payroll has.
+
+### Changed
+- Calendar: event rows are now compact single-line entries in one bordered list per month instead of a card each, and the overdue/due-soon/outstanding summary is a slim strip.
+
+### Tested
+- TypeScript check, production build, and 248 tests passed.
+
 ## [Unreleased] — Payroll: casuals, partial payment and reversal
 
 ### Added

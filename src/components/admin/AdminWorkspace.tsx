@@ -330,6 +330,7 @@ function AccountWorkspace({
   const [resetLink, setResetLink] = useState<string | null>(null);
   const [passwordTarget, setPasswordTarget] = useState<{ id: number; username: string } | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [passwordReason, setPasswordReason] = useState("");
   const [passwordFeedback, setPasswordFeedback] = useState<string | null>(null);
   const utils = trpc.useUtils();
   const options = {
@@ -534,15 +535,32 @@ function AccountWorkspace({
                 >
                   Send reset link
                 </Button>
-                <Button variant="outline" disabled={setPassword.isPending || !reason.trim()} onClick={() => { setPasswordTarget({ id: u.id, username: u.username }); setNewPassword(""); }}><KeyRound className="h-4 w-4" />Set password</Button>
+                <Button variant="outline" disabled={setPassword.isPending} onClick={() => { setPasswordTarget({ id: u.id, username: u.username }); setNewPassword(""); setPasswordReason(reason); }}><KeyRound className="h-4 w-4" />Set password</Button>
               </div>
             </div>
           ))}
-          {passwordTarget && <form className="space-y-3 rounded-xl border border-[#E8E0D8] bg-[#FAF8F5] p-4" onSubmit={e => { e.preventDefault(); if (window.confirm(`Set a new password for ${passwordTarget.username}? Their existing sessions will be revoked and they will be notified.`)) setPassword.mutate({ userId: passwordTarget.id, password: newPassword, reason }); }}>
-            <h4 className="font-semibold">Set password for {passwordTarget.username}</h4><p className="text-sm text-muted-foreground">Use a secure channel to share this password. The user will receive an in-app notice and an email when delivery is configured.</p>
-            <label className="block text-sm">New password (at least 8 characters)<Input type="password" autoComplete="new-password" minLength={8} maxLength={100} required value={newPassword} onChange={e => setNewPassword(e.target.value)} /></label>
-            <div className="flex gap-2"><Button type="submit" disabled={setPassword.isPending || newPassword.length < 8 || !reason.trim()}>Save password</Button><Button type="button" variant="outline" onClick={() => { setPasswordTarget(null); setNewPassword(""); }}>Cancel</Button></div>
-          </form>}
+          {passwordTarget && (
+            <form
+              className="space-y-3 rounded-xl border border-[#E8E0D8] bg-[#FAF8F5] p-4"
+              onSubmit={e => {
+                e.preventDefault();
+                const supportReason = passwordReason.trim() || reason.trim();
+                if (!supportReason) { toast.error("Add a reason for this change"); return; }
+                if (window.confirm(`Set a new password for ${passwordTarget.username}? Their existing sessions will be revoked and they will be notified.`)) {
+                  setPassword.mutate({ userId: passwordTarget.id, password: newPassword, reason: supportReason });
+                }
+              }}
+            >
+              <h4 className="font-semibold">Set password for {passwordTarget.username}</h4>
+              <p className="text-sm text-muted-foreground">Use a secure channel to share this password. The user will receive an in-app notice and an email when delivery is configured.</p>
+              <label className="block text-sm">New password (at least 8 characters)<Input type="password" autoComplete="new-password" minLength={8} maxLength={100} required value={newPassword} onChange={e => setNewPassword(e.target.value)} /></label>
+              <label className="block text-sm">Reason (recorded in the audit log)<Input value={passwordReason} onChange={e => setPasswordReason(e.target.value)} placeholder="Why is this password being set?" /></label>
+              <div className="flex gap-2">
+                <Button type="submit" disabled={setPassword.isPending || newPassword.length < 8 || !(passwordReason.trim() || reason.trim())}>Save password</Button>
+                <Button type="button" variant="outline" onClick={() => { setPasswordTarget(null); setNewPassword(""); setPasswordReason(""); }}>Cancel</Button>
+              </div>
+            </form>
+          )}
           <h3 className="font-semibold">Renewal requests</h3>
           {requests.error ? (
             <p role="alert">{requests.error.message}</p>

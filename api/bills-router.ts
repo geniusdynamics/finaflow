@@ -383,6 +383,100 @@ export const billsRouter = createRouter({
       return { id: result.paymentId, newBalanceDue: result.newBalanceDue, status: result.status, success: true };
     }),
 
+  // Pay several bills in one run, each with its own amount.
+  recordPayments: billPay
+    .input(z.object({
+      payments: z.array(z.object({ billId: z.number(), amount: z.string() })).min(1),
+      paymentMethod: z.enum(["cash", "wallet", "bank_transfer", "card"]),
+      paymentDate: notFutureDateString("Payment date"),
+      reference: z.string().optional(),
+      accountId: z.number().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const enteredBy = (ctx as any).user?.id ?? 1;
+
+      let accountLocationId: number | null = null;
+      if (input.accountId) {
+        const acct = await requireAuthorizedEntity(ctx, accounts, input.accountId);
+        accountLocationId = acct.locationId;
+      }
+
+      const prepared: Array<{ bill: typeof bills.$inferSelect; amount: string; categoryId: number }> = [];
+      for (const payment of input.payments) {
+        if (!d(payment.amount).gt(0)) {
+          throw new Error("Every selected bill needs an amount greater than zero");
+        }
+        const bill = await requireAuthorizedEntity(ctx, bills, payment.billId) as typeof bills.$inferSelect;
+        if (accountLocationId !== null && bill.locationId !== accountLocationId) {
+          throw new Error("The funding account must belong to the same location as every bill");
+        }
+        const categoryId = await resolveBillCategoryId(db, payment.billId, bill.supplierId);
+        if (!categoryId) {
+          throw new Error(`No category is defined for "${bill.description}". Define one before paying.`);
+        }
+        prepared.push({ bill, amount: payment.amount, categoryId });
+      }
+
+      const results = await db.transaction(async (tx) => {
+        const out: Array<{ billId: number; paymentId: number; newBalanceDue: string; status: string }> = [];
+        for (const { bill, amount, categoryId } of prepared) {
+          const payResult = await payBill({
+            db: tx,
+            billId: bill.id,
+            paymentMethod: input.paymentMethod,
+            amount,
+            paymentDate: input.paymentDate,
+            reference: input.reference,
+            accountId: input.accountId,
+            categoryId,
+            enteredBy,
+            businessId: bill.businessId!,
+            locationId: bill.locationId!,
+            supplierId: bill.supplierId,
+            billNumber: bill.billNumber,
+            description: bill.description,
+          });
+
+          if (bill.debtId) {
+            const linkedBills = await tx
+              .select({ amountPaid: bills.amountPaid })
+              .from(bills)
+              .where(and(eq(bills.debtId, bill.debtId), isNull(bills.deletedAt)));
+            const totalPaid = linkedBills.reduce((sum, b) => sum.plus(d(b.amountPaid || "0")), d(0));
+            const [debt] = await tx.select().from(debts).where(eq(debts.id, bill.debtId)).limit(1);
+            if (debt) {
+              const isFullyPaid = totalPaid.gte(d(debt.totalAmount || "0"));
+              await tx.update(debts).set({
+                paidAmount: totalPaid.toFixed(2),
+                status: isFullyPaid ? "paid" : debt.status === "paid" ? "active" : debt.status,
+              }).where(eq(debts.id, bill.debtId));
+            }
+          }
+
+          await clearNotificationsForBill(tx, { userId: enteredBy, billId: bill.id });
+          out.push({ billId: bill.id, paymentId: payResult.paymentId, newBalanceDue: payResult.newBalanceDue, status: payResult.status });
+        }
+        return out;
+      });
+
+      for (const { bill, amount } of prepared) {
+        const result = results.find((r) => r.billId === bill.id);
+        if (!result) continue;
+        void triggerBillPaid(bill.businessId!, {
+          billId: bill.id,
+          amount,
+          paymentId: result.paymentId,
+          externalId: bill.externalId ?? null,
+          externalSystem: bill.externalSystem ?? null,
+          expenseId: undefined,
+        });
+      }
+
+      return { payments: results, success: true };
+    }),
+
   delete: billCreate
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input, ctx }) => {

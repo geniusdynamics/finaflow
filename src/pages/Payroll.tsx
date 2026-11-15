@@ -11,7 +11,7 @@ import { PhoneInput } from "@/components/ui/phone-input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Plus, Users, DollarSign, CreditCard, CheckCircle, Clock, Eye, Play, Banknote, Pencil, UserCircle, UserPlus, UserMinus, Calculator, Landmark, Shield, Trash2 } from "lucide-react";
+import { Plus, Users, DollarSign, CreditCard, CheckCircle, Clock, Eye, Play, Banknote, Pencil, UserCircle, UserPlus, UserMinus, Calculator, Landmark, Shield, Trash2, RotateCcw } from "lucide-react";
 import { LocationSelector } from "@/components/LocationSelector";
 import { toast } from "sonner";
 
@@ -106,6 +106,15 @@ export function Payroll() {
   });
   const setDaysWorked = trpc.payroll.setEntryDaysWorked.useMutation({
     onSuccess: () => { toast.success("Days worked updated"); utils.payroll.entries.invalidate(); utils.payroll.periods.invalidate(); },
+    onError: (err) => toast.error(err.message),
+  });
+  const reverseProcessing = trpc.payroll.reverseProcessing.useMutation({
+    onSuccess: () => {
+      toast.success("Payroll returned to open");
+      utils.payroll.periods.invalidate();
+      utils.payroll.entries.invalidate();
+      utils.payroll.payments.invalidate();
+    },
     onError: (err) => toast.error(err.message),
   });
 
@@ -506,6 +515,21 @@ export function Payroll() {
                             </div>
                           </DialogContent>
                         </Dialog>
+                      )}
+                      {canProcess && period.status === "processing" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="border-[#ED6C02] text-[#ED6C02]"
+                          title="Reverse processing (only when nothing has been paid)"
+                          disabled={reverseProcessing.isPending}
+                          onClick={() => {
+                            const reason = window.prompt("Reason for reversing this processed payroll", "Correction");
+                            if (reason && reason.trim()) reverseProcessing.mutate({ periodId: period.id, reason: reason.trim() });
+                          }}
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                        </Button>
                       )}
                       <Button size="sm" variant="outline" onClick={() => { setSelectedPeriod(period.id); setTimeout(() => utils.payroll.entries.invalidate(), 50); }} className={selectedPeriod === period.id ? "border-[#C73E1D] text-[#C73E1D]" : ""}><Eye className="h-3 w-3" /></Button>
                     </div>
