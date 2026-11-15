@@ -1,5 +1,18 @@
 # Changelog
 
+## [Unreleased] — Integrations catalog
+
+### Added
+- Integrations page at `/integrations`: category filters with counts, search, and a card per connection with its live state.
+- Adapter-backed systems (FinaBill, Glomish) show real connection status and can be paused or resumed; ERPNext, QuickBooks, Xero, the API, M-PESA import, bank statements and Fina Connect link to the page that configures them.
+- Sidebar entry under Workspace, gated on `integrations:manage`.
+
+### Fixed
+- The Pay bills action is visible to anyone with `bills:pay`, not only roles that can also create bills.
+
+### Tested
+- TypeScript check, production build, and 248 tests passed.
+
 ## [Unreleased] — Billing, payroll and calendar follow-ups
 
 ### Fixed

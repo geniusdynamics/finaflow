@@ -92,6 +92,29 @@ export const integrationsRouter = createRouter({
     }));
   }),
 
+  // Catalog view: every adapter with its live connection state, for the Integrations page.
+  overview: integrationsManage.query(async ({ ctx }) => {
+    const db = getDb();
+    const businessId = requireBusinessId(ctx);
+    const rows = await db.select().from(integrationConnections).where(
+      and(eq(integrationConnections.businessId, businessId), isNull(integrationConnections.deletedAt))
+    );
+    return listAdapters().map((adapter) => {
+      const connection = rows.find((row) => row.targetSystem === adapter.targetSystem);
+      const configured = Boolean(connection && (connection.webhookSecret || connection.authData));
+      return {
+        targetSystem: adapter.targetSystem,
+        name: adapter.name,
+        description: adapter.description,
+        features: adapter.features,
+        configured,
+        connected: Boolean(configured && connection?.isActive),
+        isActive: connection?.isActive ?? false,
+        lastSyncAt: connection?.updatedAt ?? null,
+      };
+    });
+  }),
+
   status: integrationsManage
     .input(z.object({ targetSystem: z.string().min(1).max(50) }))
     .query(async ({ input, ctx }) => {
