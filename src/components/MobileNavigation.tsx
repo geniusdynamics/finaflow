@@ -17,6 +17,7 @@ import {
   ChevronRight,
   Wallet,
   Repeat,
+  Plug,
 } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
@@ -49,6 +50,7 @@ const secondaryNavItems: { path: string; label: string; group: string; icon: Rea
   { path: "/businesses", label: "Businesses", group: "Workspace", icon: Building, perms: [PERMISSIONS.BUSINESS_MANAGE] },
   { path: "/locations", label: "Locations", group: "Workspace", icon: Building, perms: [PERMISSIONS.BUSINESS_MANAGE] },
   { path: "/users", label: "Users & Roles", group: "Workspace", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },
+  { path: "/integrations", label: "Integrations", group: "Workspace", icon: Plug, perms: [PERMISSIONS.INTEGRATIONS_MANAGE] },
   { path: "/partner", label: "Partner", group: "Workspace", icon: Handshake, perms: [PERMISSIONS.PARTNER_VIEW] },
   { path: "/settings", label: "Settings", group: "Workspace", icon: Settings, perms: [PERMISSIONS.SETTINGS_MANAGE] },
 ];

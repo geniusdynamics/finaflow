@@ -312,13 +312,14 @@ export function Bills() {
             <h1 className="font-serif text-2xl font-bold text-[#2D2A26]">Bills & Payables</h1>
             <p className="mt-1 text-sm text-[#8D8A87]">Manage bills, partial payments, and line items</p>
           </div>
-          {canCreate && (
+          {(canCreate || canPay) && (
             <div className="flex flex-wrap gap-2">
               {canPay && (
                 <Button variant="outline" className="border-[#2E7D32] text-[#2E7D32]" onClick={openBulkPay}>
                   <CreditCard className="mr-2 h-4 w-4" /> Pay bills
                 </Button>
               )}
+              {canCreate && (<>
               <Dialog open={recurringOpen} onOpenChange={setRecurringOpen}>
                 <DialogTrigger asChild><Button variant="outline" className="border-[#D4A854] text-[#D4A854]"><Plus className="mr-2 h-4 w-4" /> Recurring</Button></DialogTrigger>
                 <DialogContent className="bg-white max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle className="font-serif text-xl">Add Recurring Bill</DialogTitle></DialogHeader>
@@ -422,6 +423,7 @@ export function Bills() {
                   </form>
                 </DialogContent>
               </Dialog>
+              </>)}
             </div>
           )}
         </div>
