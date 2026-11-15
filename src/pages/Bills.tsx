@@ -64,6 +64,7 @@ export function Bills() {
   const [itemsOpen, setItemsOpen] = useState<number | null>(null);
   const [addCategoryOpen, setAddCategoryOpen] = useState(false);
   const [addSupplierOpen, setAddSupplierOpen] = useState(false);
+  const [bulkPayOpen, setBulkPayOpen] = useState(false);
 
   const { data: locations } = trpc.locations.list.useQuery();
   const { data: suppliers } = trpc.suppliers.list.useQuery();
@@ -101,8 +102,16 @@ export function Bills() {
       toast.error(msg, { duration: 6000 });
     }
   });
-  const addItem = trpc.bills.addItem.useMutation({ onSuccess: () => { utils.bills.getItems.invalidate(); utils.bills.list.invalidate(); } });
-  const deleteItem = trpc.bills.deleteItem.useMutation({ onSuccess: () => { utils.bills.getItems.invalidate(); utils.bills.list.invalidate(); } });
+  const recordPayments = trpc.bills.recordPayments.useMutation({
+    onSuccess: (res) => {
+      setBulkPayOpen(false);
+      utils.bills.list.invalidate();
+      utils.bills.getSupplierSummary.invalidate();
+      toast.success(`Recorded ${res.payments.length} payment${res.payments.length === 1 ? "" : "s"}`);
+    },
+    onError: (e) => toast.error(e.message, { duration: 6000 }),
+  });
+  const addItem = trpc.bills.addItem.useMutation({ onSuccess: () => { utils.bills.getItems.invalidate(); utils.bills.list.invalidate(); } });  const deleteItem = trpc.bills.deleteItem.useMutation({ onSuccess: () => { utils.bills.getItems.invalidate(); utils.bills.list.invalidate(); } });
   const deleteBill = trpc.bills.delete.useMutation({ onSuccess: () => utils.bills.list.invalidate() });
   const reverseBill = trpc.bills.reverse.useMutation({
     onSuccess: () => { utils.bills.list.invalidate(); toast.success("Bill reversed"); },
@@ -129,6 +138,14 @@ export function Bills() {
     nextDueDate: "",
   });
   const [payForm, setPayForm] = useState<{ paymentMethod: "cash" | "wallet" | "bank_transfer" | "card"; amount: string; paymentDate: string; reference: string; accountId: string }>({ paymentMethod: "wallet", amount: "", paymentDate: getLocalDateString(), reference: "", accountId: "" });
+  const [bulkForm, setBulkForm] = useState<{
+    paymentMethod: "cash" | "wallet" | "bank_transfer" | "card";
+    paymentDate: string;
+    reference: string;
+    accountId: string;
+    selected: Record<number, boolean>;
+    amounts: Record<number, string>;
+  }>({ paymentMethod: "wallet", paymentDate: getLocalDateString(), reference: "", accountId: "", selected: {}, amounts: {} });
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const todayDate = getLocalDateString();
 
@@ -247,6 +264,44 @@ export function Bills() {
     recordPayment.mutate({ billId, paymentMethod: payForm.paymentMethod, amount: payForm.amount, paymentDate: payForm.paymentDate, reference: payForm.reference, accountId: payForm.accountId ? +payForm.accountId : undefined });
   };
 
+  const openBulkPay = () => {
+    const selected: Record<number, boolean> = {};
+    const amounts: Record<number, string> = {};
+    for (const bill of bills ?? []) {
+      if (bill.status === "paid" || bill.reversedAt) continue;
+      const due = Number(bill.balanceDue ?? 0);
+      if (due > 0.005) {
+        selected[bill.id] = true;
+        amounts[bill.id] = due.toFixed(2);
+      }
+    }
+    setBulkForm({ paymentMethod: "wallet", paymentDate: getLocalDateString(), reference: "", accountId: "", selected, amounts });
+    setBulkPayOpen(true);
+  };
+
+  const submitBulkPay = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (bulkForm.paymentDate > todayDate) {
+      toast.error("Payment date cannot be in the future");
+      return;
+    }
+    const payments = Object.keys(bulkForm.selected)
+      .filter((id) => bulkForm.selected[Number(id)])
+      .map((id) => ({ billId: Number(id), amount: bulkForm.amounts[Number(id)] ?? "0" }))
+      .filter((p) => Number(p.amount) > 0);
+    if (payments.length === 0) {
+      toast.error("Select at least one bill to pay");
+      return;
+    }
+    recordPayments.mutate({
+      payments,
+      paymentMethod: bulkForm.paymentMethod,
+      paymentDate: bulkForm.paymentDate,
+      reference: bulkForm.reference || undefined,
+      accountId: bulkForm.accountId ? Number(bulkForm.accountId) : undefined,
+    });
+  };
+
   const getStatusStyle = (s: string) => { switch(s){ case "paid": return "text-[#2E7D32] bg-[#2E7D32]/10"; case "overdue": return "text-[#D32F2F] bg-[#D32F2F]/10"; case "partial": return "text-[#ED6C02] bg-[#ED6C02]/10"; default: return "text-[#8D8A87] bg-[#8D8A87]/10"; } };
 
   return (
@@ -258,7 +313,12 @@ export function Bills() {
             <p className="mt-1 text-sm text-[#8D8A87]">Manage bills, partial payments, and line items</p>
           </div>
           {canCreate && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              {canPay && (
+                <Button variant="outline" className="border-[#2E7D32] text-[#2E7D32]" onClick={openBulkPay}>
+                  <CreditCard className="mr-2 h-4 w-4" /> Pay bills
+                </Button>
+              )}
               <Dialog open={recurringOpen} onOpenChange={setRecurringOpen}>
                 <DialogTrigger asChild><Button variant="outline" className="border-[#D4A854] text-[#D4A854]"><Plus className="mr-2 h-4 w-4" /> Recurring</Button></DialogTrigger>
                 <DialogContent className="bg-white max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle className="font-serif text-xl">Add Recurring Bill</DialogTitle></DialogHeader>
@@ -555,6 +615,49 @@ export function Bills() {
           }}
         />
       )}
+      <Dialog open={bulkPayOpen} onOpenChange={setBulkPayOpen}>
+        <DialogContent className="bg-white max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="font-serif text-xl">Pay bills</DialogTitle></DialogHeader>
+          <form onSubmit={submitBulkPay} className="space-y-3">
+            <p className="text-xs text-[#8D8A87]">Tick the bills to settle and adjust any amount. Each payment is recorded separately.</p>
+            <div className="max-h-64 space-y-1 overflow-y-auto rounded border p-2">
+              {(bills ?? [])
+                .filter(b => b.status !== "paid" && !b.reversedAt && Number(b.balanceDue) > 0.005)
+                .map(bill => (
+                  <div key={bill.id} className="flex items-center gap-2 px-1 py-1">
+                    <input
+                      type="checkbox"
+                      aria-label={`Pay ${bill.description}`}
+                      checked={Boolean(bulkForm.selected[bill.id])}
+                      onChange={e => setBulkForm(p => ({ ...p, selected: { ...p.selected, [bill.id]: e.target.checked } }))}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm">{bill.description}</span>
+                    <span className="shrink-0 text-xs text-[#8D8A87]">due {formatKES(bill.balanceDue)}</span>
+                    <Input
+                      type="number" step="0.01" className="h-8 w-28"
+                      aria-label={`Amount for ${bill.description}`}
+                      value={bulkForm.amounts[bill.id] ?? ""}
+                      disabled={!bulkForm.selected[bill.id]}
+                      onChange={e => setBulkForm(p => ({ ...p, amounts: { ...p.amounts, [bill.id]: e.target.value } }))}
+                    />
+                  </div>
+                ))}
+              {(bills ?? []).filter(b => b.status !== "paid" && !b.reversedAt && Number(b.balanceDue) > 0.005).length === 0 && (
+                <p className="py-4 text-center text-sm text-[#8D8A87]">Nothing outstanding.</p>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Method</Label><select value={bulkForm.paymentMethod} onChange={e => setBulkForm(p => ({ ...p, paymentMethod: e.target.value as typeof p.paymentMethod }))} className="w-full rounded border px-3 py-2 text-sm"><option value="cash">Cash</option><option value="wallet">Wallet</option><option value="bank_transfer">Bank</option><option value="card">Card</option></select></div>
+              <div><Label>Payment Date</Label><Input type="date" value={bulkForm.paymentDate} max={todayDate} onChange={e => setBulkForm(p => ({ ...p, paymentDate: e.target.value }))} required /></div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Funding Source</Label><select value={bulkForm.accountId} onChange={e => setBulkForm(p => ({ ...p, accountId: e.target.value }))} className="w-full rounded border px-3 py-2 text-sm"><option value="">Auto-detect</option>{getFundingAccounts(bulkForm.paymentMethod, accounts as FundingAccount[] | undefined)?.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+              <div><Label>Reference</Label><Input value={bulkForm.reference} onChange={e => setBulkForm(p => ({ ...p, reference: e.target.value }))} placeholder="Optional" /></div>
+            </div>
+            <Button type="submit" className="w-full bg-[#2E7D32]" disabled={recordPayments.isPending}>{recordPayments.isPending ? "Recording..." : "Record payments"}</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }

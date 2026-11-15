@@ -488,6 +488,49 @@ export const payrollRouter = createRouter({
       return result;
     }),
 
+  // Returns a processed-but-unpaid period to open, discarding its generated bill.
+  reverseProcessing: payrollProcess
+    .input(z.object({ periodId: z.number(), reason: z.string().trim().min(1).max(500) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const userId = (ctx as any).user?.id ?? 1;
+      const period = await requireAuthorizedEntity(ctx, payrollPeriods, input.periodId);
+
+      if (period.status !== "processing") {
+        throw new Error("Only a payroll still in processing can be reversed");
+      }
+
+      const payments = await db.select({ id: payrollPayments.id }).from(payrollPayments).where(
+        and(eq(payrollPayments.periodId, input.periodId), isNull(payrollPayments.reversedAt))
+      );
+      if (payments.length > 0) {
+        throw new Error("Payments have already been recorded for this period. Reverse those payments first.");
+      }
+
+      await db.transaction(async (tx) => {
+        if (period.generatedBillId) {
+          await tx.update(billItems).set({ deletedAt: new Date() }).where(eq(billItems.billId, period.generatedBillId));
+          await tx.update(bills).set({ deletedAt: new Date() }).where(eq(bills.id, period.generatedBillId));
+        }
+        await tx.update(payrollPeriods).set({
+          status: "open",
+          generatedBillId: null,
+          totalNetPay: "0.00",
+        }).where(eq(payrollPeriods.id, input.periodId));
+      });
+
+      await logAudit({
+        userId,
+        action: "UPDATE",
+        resource: "payroll",
+        resourceId: input.periodId,
+        details: { action: "reverse_processing", reason: input.reason },
+      });
+
+      return { success: true };
+    }),
+
   payments: payrollQuery
     .input(z.object({ periodId: z.number() }))
     .query(async ({ input, ctx }) => {

@@ -61,6 +61,10 @@ export function MobileBottomNavigation() {
 
   const visibleItems = primaryNavItems.filter((item) => hasAnyPermission(userPermissions.length > 0 ? userPermissions : role, item.perms));
 
+  // While logging out `user` is cleared; render nothing rather than falling
+  // back to the viewer role and flashing restricted items.
+  if (!user) return null;
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-[#E8E0D8] bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
       <div className="flex h-16 items-center justify-around px-2">
@@ -116,6 +120,8 @@ export function MobileHamburgerMenu({
     },
     [],
   );
+
+  if (!user) return null;
 
   return (
     <>

@@ -131,10 +131,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
     item.adminOnly
       ? user?.isSuperAdmin === true
       : hasAnyPermission(userPermissions.length > 0 ? userPermissions : role, item.perms);
-  const navSections = NAV_SECTIONS.map((section) => ({
-    ...section,
-    items: section.items.filter(canSeeNavItem),
-  })).filter((section) => section.items.length > 0);
+  // Render no menus until the session is known. Falling back to the viewer role
+  // while logging out made restricted items (e.g. Budgets) flash on screen.
+  const navSections = user
+    ? NAV_SECTIONS.map((section) => ({
+        ...section,
+        items: section.items.filter(canSeeNavItem),
+      })).filter((section) => section.items.length > 0)
+    : [];
   const navItems = navSections.flatMap((section) => section.items);
   const isActive = useCallback((path: string) => location.pathname === path, [location.pathname]);
 
