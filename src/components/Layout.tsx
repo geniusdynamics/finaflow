@@ -8,7 +8,7 @@ import {
   ChevronRight, FileSpreadsheet,
   ShieldCheck, Settings,
   Building, Bell, Handshake, Wallet,
-  PanelLeftClose, PanelLeftOpen, Repeat,
+  PanelLeftClose, PanelLeftOpen, Repeat, Plug,
 } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
 import { hasAnyPermission, PERMISSIONS, type Permission } from "@/lib/permissions";
@@ -64,6 +64,7 @@ const NAV_SECTIONS: Array<{
       { path: "/businesses", label: "Businesses", icon: Building, perms: [PERMISSIONS.BUSINESS_MANAGE] },
       { path: "/locations", label: "Locations", icon: Building, perms: [PERMISSIONS.BUSINESS_MANAGE] },
       { path: "/users", label: "Users & Roles", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },
+      { path: "/integrations", label: "Integrations", icon: Plug, perms: [PERMISSIONS.INTEGRATIONS_MANAGE] },
       { path: "/partner", label: "Partner", icon: Handshake, perms: [PERMISSIONS.PARTNER_VIEW] },
       { path: "/settings", label: "Settings", icon: Settings, perms: [PERMISSIONS.SETTINGS_MANAGE] },
       { path: "/admin", label: "Admin", icon: ShieldCheck, perms: [], adminOnly: true },

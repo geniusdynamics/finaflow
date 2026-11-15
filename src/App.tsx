@@ -65,6 +65,9 @@ const Locations = lazy(() =>
 const Settings = lazy(() =>
   import("./pages/Settings").then(m => ({ default: m.Settings }))
 );
+const Integrations = lazy(() =>
+  import("./pages/Integrations").then(m => ({ default: m.Integrations }))
+);
 const ConnectAuthorize = lazy(() => import("./pages/ConnectAuthorize"));
 const Businesses = lazy(() => import("./pages/Businesses"));
 const BusinessOverview = lazy(() =>
@@ -421,6 +424,18 @@ export default function App() {
               <SuspendedPage>
                 <ProtectedPage requiredPermission="settings:manage">
                   <Settings />
+                </ProtectedPage>
+              </SuspendedPage>
+            </ErrorBoundary>
+          }
+        />
+        <Route
+          path="/integrations"
+          element={
+            <ErrorBoundary>
+              <SuspendedPage>
+                <ProtectedPage requiredPermission="integrations:manage">
+                  <Integrations />
                 </ProtectedPage>
               </SuspendedPage>
             </ErrorBoundary>
