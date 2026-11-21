@@ -8,6 +8,8 @@ import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { getFinabillWebhookUrl } from "@/lib/webhook-url";
+import { canLinkAccounts } from "@/lib/connect-referral";
+import { useAuth } from "@/hooks/useAuth";
 import { generateRandomSecret } from "@/lib/random-secret";
 import {
   Plug,
@@ -21,6 +23,7 @@ import {
   Building2,
   ExternalLink,
   Unplug,
+  Sparkles,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -51,6 +54,9 @@ export function FinabillIntegrationCard({
   targetSystem?: string;
 }) {
   const utils = trpc.useUtils();
+  const { user } = useAuth();
+  const canCreateAccount =
+    canManage && canLinkAccounts(user?.businessRole ?? user?.role);
   const webhookUrl = useMemo(() => getFinabillWebhookUrl(), []);
 
   const { data: adapters } = trpc.integrations.listAdapters.useQuery();
@@ -76,6 +82,13 @@ export function FinabillIntegrationCard({
   const currentState = businessStates?.states.find(
     (s) => s.businessId === businessStates?.currentBusinessId
   );
+
+  const signupLink = trpc.connect.signupLink.useMutation({
+    onSuccess: ({ url }) => {
+      window.location.href = url;
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   const createSession = trpc.connect.createSession.useMutation({
     onSuccess: (res) => {
@@ -268,6 +281,21 @@ export function FinabillIntegrationCard({
                     >
                       Enter pairing code
                     </Button>
+                    {canCreateAccount ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      disabled={signupLink.isPending}
+                      onClick={() => signupLink.mutate({ targetSystem: "finabill" })}
+                    >
+                      {signupLink.isPending ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="mr-2 h-4 w-4" />
+                      )}
+                      Create a FinaBill account
+                    </Button>
+                    ) : null}
                   </div>
 
                   {pairingCode && authorizeUrl && (

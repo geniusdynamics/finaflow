@@ -2,6 +2,23 @@
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-11-21
+
+### Added — FinaBill upsell and automatic linking
+- **Daily Sales now offers FinaBill.** Owners and account admins see a "Turn
+  these sales into invoices" card that opens FinaBill's signup with the FinaFlow
+  business id/name and `ref=FINAFLOW`; staff roles do not see it.
+- **The new FinaBill account is asked to link.** After signup, FinaBill shows
+  the link prompt and, on accept, completes the Fina Connect exchange
+  server-side (`autoComplete`), creating the integration on both sides without a
+  second browser tab. Decline leaves both accounts unlinked.
+- **The FinaBill integration card offers account creation** for owners/admins
+  ("Create a FinaBill account"); an already-connected business is told to
+  disconnect first.
+- `connect.signupLink`, a bounded `ttlMinutes` for connect sessions, and
+  `autoComplete` on the partner approval. The signup referral helper is tested
+  (5/5) alongside the pure URL builder (4/4).
+
 ## [1.5.1] - 2026-11-21
 
 ### Fixed — Insights ▸ Budgets is reachable again

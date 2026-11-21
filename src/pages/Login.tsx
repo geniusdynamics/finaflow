@@ -14,6 +14,7 @@ import { setCsrfFromResponse } from "@/hooks/useAuth";
 import { setAuthToken } from "@/providers/trpc";
 import { getDefaultLandingPage } from "@/lib/permissions";
 import { readRecentAccounts, saveRecentAccount, type RecentAccount } from "@/lib/recent-accounts";
+import { saveConnectReferral, type StoredConnectReferral } from "@/lib/connect-referral";
 
 
 type Intent = "login" | "signup";
@@ -60,8 +61,9 @@ export default function Login() {
 
   const preselectedType = searchParams.get("type");
   const referralCodeFromUrl = searchParams.get("ref");
+  const connectFromUrl = searchParams.get("connect");
   const initialIntent: Intent =
-    preselectedType === "partner" || preselectedType === "standard" || referralCodeFromUrl ? "signup" : "login";
+    preselectedType === "partner" || preselectedType === "standard" || referralCodeFromUrl || connectFromUrl ? "signup" : "login";
   const initialUserType: UserType = preselectedType === "partner" ? "partner" : "standard";
 
   const [intent, setIntent] = useState<Intent>(initialIntent);
@@ -85,6 +87,8 @@ export default function Login() {
       : null,
   );
   const [loginForm, setLoginForm] = useState({ username: "", password: "" });
+  const [connectReferral, setConnectReferral] =
+    useState<StoredConnectReferral | null>(null);
   const [signupForm, setSignupForm] = useState({
     name: "", username: "", email: "", password: "", confirmPassword: "",
     accountName: "", phone: "", businessName: "", createDemo: false,
@@ -98,6 +102,20 @@ export default function Login() {
       setSignupForm((prev) => ({ ...prev, referralCode: referralCodeFromUrl.toUpperCase() }));
     }
   }, [referralCodeFromUrl]);
+
+  // A signup arriving from the sibling app carries a Fina Connect session. Keep
+  // it for the post-signup link prompt and prefill the business name.
+  useEffect(() => {
+    const stored = saveConnectReferral(searchParams);
+    if (!stored) return;
+    setConnectReferral(stored);
+    if (stored.sourceName) {
+      setSignupForm((prev) => ({
+        ...prev,
+        businessName: prev.businessName || stored.sourceName || "",
+      }));
+    }
+  }, [searchParams]);
   const [accountNameStatus, setAccountNameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
   const [accountNameMessage, setAccountNameMessage] = useState("");
   const [lookupLoading, setLookupLoading] = useState(false);
@@ -575,6 +593,18 @@ export default function Login() {
               )}
               {mode === "signup" && (
                 <form onSubmit={handleSignup} className="space-y-4" noValidate>
+                  {connectReferral ? (
+                    <div className="rounded-lg border border-[#D4A854]/50 bg-[#D4A854]/10 p-3 text-sm text-[#2D2A26]">
+                      <p className="font-medium">Referred by FinaBill</p>
+                      <p className="mt-1 text-xs text-[#8D8A87]">
+                        {connectReferral.sourceName ??
+                          connectReferral.sourceAccount ??
+                          "Your FinaBill account"}
+                        . After you create this account, FinaFlow will offer to
+                        link the two so sales, bills and expenses stay in sync.
+                      </p>
+                    </div>
+                  ) : null}
                   <div>
                     <Label htmlFor="signup-userType" className="text-xs text-[#8D8A87]">Account Type</Label>
                     <div className="relative">

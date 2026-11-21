@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Layout } from "@/components/Layout";
+import { FinabillUpsellCard } from "@/components/FinabillUpsellCard";
 import { trpc } from "@/providers/trpc";
 import { formatKES, formatDate, getLocalDateString } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -210,6 +211,7 @@ export function DailySales() {
   return (
     <Layout>
       <div className="space-y-6">
+        <FinabillUpsellCard />
         <div className="flex items-center justify-between">
           <div>
             <h1 className="font-serif text-2xl font-bold text-[#2D2A26]">Daily Sales</h1>
