@@ -43,6 +43,21 @@ Each API key is granted a set of **scopes** that control which endpoints it can 
 The FinaFlow MCP server uses a preset with the scopes it needs. See the
 [MCP setup guide](/docs/mcp) for the full client configuration.
 
+### Instance-control scopes
+
+Two scopes belong to **FinaBill instance controllers**, not to `fna_` merchant
+keys, and are only accepted on `/api/v1/instance/*`:
+
+| Scope | Description |
+|---|---|
+| `instance:read` | Read instance health, accounts, users and the plan catalogue. |
+| `instance:manage` | Hold or resume an account, change its plan, enable or disable a user. |
+
+A controller key is prefixed `fic_` and is paired with an
+`X-Fina-Controller-Id` header. `instance:manage` does not imply
+`instance:read`. See the [instance-control API](/docs/instance-api) for the
+allowlist, headers and endpoint contract.
+
 ### Legacy scopes
 
 Older API keys may use coarse scopes (`read`, `write`). These are automatically resolved to the granular equivalents:

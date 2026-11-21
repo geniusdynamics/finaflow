@@ -197,6 +197,13 @@
       "when": 1794787200000,
       "tag": "0037_payroll_payments_and_casuals",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1795239692684,
+      "tag": "0038_instance_controllers",
+      "breakpoints": true
     }
   ]
 }

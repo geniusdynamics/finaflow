@@ -197,6 +197,11 @@ app.get("/docs", (c) => {
         <p>Connect Claude, Cursor or another MCP client to FinaFlow. Create a scoped key, configure the server, and call the 32 tools.</p>
         <a href="/docs/mcp" class="link">Set up MCP &rarr;</a>
       </div>
+      <div class="card">
+        <h2><a href="/docs/instance-api">FinaBill instance control</a></h2>
+        <p>Allow a FinaBill instance to manage this FinaFlow instance: controller allowlist, fic_ keys, account holds and plan changes.</p>
+        <a href="/docs/instance-api" class="link">Read the instance API &rarr;</a>
+      </div>
     </div>
     <footer>
       <p>FinaFlow &mdash; Financial management for multi-location businesses.</p>
@@ -291,6 +296,10 @@ app.get("/docs/webhooks", (c) => {
 
 app.get("/docs/mcp", (c) => {
   return c.html(renderDocPage("MCP Server", "mcp.md"));
+});
+
+app.get("/docs/instance-api", (c) => {
+  return c.html(renderDocPage("FinaBill instance control", "instance-api.md"));
 });
 
 // Scalar docs need CDN scripts — relax CSP for docs routes

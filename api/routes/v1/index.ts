@@ -19,6 +19,7 @@ import expensesRouter from "./expenses";
 import subscriptionsRouter from "./subscriptions";
 import statements from "./statements";
 import webhooks from "./webhooks";
+import instance from "./instance";
 
 const v1 = new Hono<{ Variables: ApiKeyVariables }>();
 
@@ -41,6 +42,7 @@ v1.route("/expenses", expensesRouter);
 v1.route("/subscriptions", subscriptionsRouter);
 v1.route("/statements", statements);
 v1.route("/webhooks", webhooks);
+v1.route("/instance", instance);
 
 // 404 catch-all for unmatched v1 routes
 v1.all("/*", (c) => {

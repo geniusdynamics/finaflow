@@ -1626,6 +1626,39 @@ export const apiKeys = pgTable("api_keys", {
 
 export type ApiKey = typeof apiKeys.$inferSelect;
 
+// Machine-to-machine controllers: sibling FinaBill instances allowed to manage this instance.
+export const instanceControllers = pgTable("instance_controllers", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 120 }).notNull(),
+  controllerId: varchar("controllerId", { length: 100 }).notNull(),
+  keyHash: varchar("keyHash", { length: 64 }).notNull(),
+  keyPrefix: varchar("keyPrefix", { length: 20 }).notNull(),
+  scopes: json("scopes")
+    .$type<string[]>()
+    .default(sql`'["instance:read","instance:manage"]'::json`)
+    .notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  lastUsedAt: timestamp("lastUsedAt"),
+  createdByUserId: bigint("createdByUserId", { mode: "number" }).references(
+    () => users.id
+  ),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deletedAt"),
+}, (table) => ({
+  uqKeyHash: uniqueIndex("uq_instance_controllers_key_hash").on(table.keyHash),
+  uqController: uniqueIndex("uq_instance_controllers_controller")
+    .on(table.controllerId)
+    .where(sql`${table.deletedAt} IS NULL`),
+  idxActive: index("idx_instance_controllers_active").on(
+    table.isActive,
+    table.deletedAt
+  ),
+}));
+
+export type InstanceController = typeof instanceControllers.$inferSelect;
+export type InsertInstanceController = typeof instanceControllers.$inferInsert;
+
 // Integration connections (incoming webhook secrets, OAuth tokens for external systems)
 export const integrationConnections = pgTable(
   "integration_connections",

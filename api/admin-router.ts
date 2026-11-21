@@ -2,6 +2,7 @@
 // ABOUTME: Accessible only to users whose accountId matches SUPER_ADMIN_ACCOUNT.
 import { z } from "zod";
 import { adminSupportRouter } from "./admin-support-router";
+import { adminControllersRouter } from "./admin-controllers-router";
 import { createRouter, adminProcedure } from "./middleware";
 import { getDb } from "./queries/connection";
 import { users, customerAccounts, userSessions, notifications, emailLogs, ownerBroadcasts, businesses, userBusinesses, passwordChangeEvents } from "@db/schema";
@@ -39,6 +40,8 @@ function withDateRange(conds: SQL<unknown>[], dateCol: typeof userSessions.login
 
 export const adminRouter = createRouter({
   ...adminSupportRouter._def.record,
+  // Nested so the FinaBill controller procedures read as admin.controllers.*.
+  controllers: adminControllersRouter,
   // Verify the caller is the configured super admin.
   verify: adminProcedure.query(() => ({ isSuperAdmin: true })),
 

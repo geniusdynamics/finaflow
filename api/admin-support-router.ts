@@ -31,7 +31,7 @@ function fail(
 ): never {
   throw new TRPCError({ code, message });
 }
-async function lockedAccount(tx: Tx, accountId: string) {
+export async function lockedAccount(tx: Tx, accountId: string) {
   const [account] = await tx
     .select()
     .from(customerAccounts)
@@ -47,18 +47,19 @@ async function lockedAccount(tx: Tx, accountId: string) {
     return fail("The platform account is protected", "FORBIDDEN");
   return account;
 }
-async function audit(
+export async function audit(
   tx: Tx,
-  actor: number,
+  actor: number | null,
   accountId: string,
   recordId: number,
   operation: string,
   supportReason: string,
   before: unknown,
-  after: unknown
+  after: unknown,
+  tableName = "admin_support"
 ) {
   await tx.insert(auditLog).values({
-    tableName: "admin_support",
+    tableName,
     recordId,
     action: "UPDATE",
     changedBy: actor,
@@ -76,7 +77,7 @@ function sameHold(actual: Date | null, expected: string) {
   if (!actual || actual.toISOString() !== expected)
     fail("Billing hold changed; refresh before reviewing", "CONFLICT");
 }
-async function entitlementPatch(
+export async function entitlementPatch(
   tx: Tx,
   account: typeof customerAccounts.$inferSelect,
   selectedPlan: z.infer<typeof plan>,
