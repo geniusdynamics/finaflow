@@ -61,6 +61,7 @@ export const PERMISSIONS = {
   PURCHASE_ORDERS_VIEW: "po:view",
   PURCHASE_ORDERS_MANAGE: "po:manage",
   CALENDAR_VIEW: "calendar:view",
+  BUDGETS_VIEW: "budgets:view",
   BUDGET_MANAGE: "budget:manage",
   COGS_MANAGE: "cogs:manage",
   ALERTS_CONFIG: "alerts:config",
@@ -97,7 +98,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.BUSINESS_MANAGE,
     PERMISSIONS.INQUIRY_VIEW,
     PERMISSIONS.PURCHASE_ORDERS_VIEW, PERMISSIONS.PURCHASE_ORDERS_MANAGE,
-    PERMISSIONS.CALENDAR_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.COGS_MANAGE,
+    PERMISSIONS.CALENDAR_VIEW, PERMISSIONS.BUDGETS_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.COGS_MANAGE,
     PERMISSIONS.ALERTS_CONFIG, PERMISSIONS.LEDGER_VIEW, PERMISSIONS.DASHBOARD_VIEW,
     PERMISSIONS.DEBTS_VIEW, PERMISSIONS.DEBTS_MANAGE,
     PERMISSIONS.PAYMENT_METHODS_VIEW, PERMISSIONS.PAYMENT_METHODS_MANAGE,
@@ -117,7 +118,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.FEEDBACK_MANAGE,
     PERMISSIONS.INQUIRY_VIEW,
     PERMISSIONS.PURCHASE_ORDERS_VIEW, PERMISSIONS.PURCHASE_ORDERS_MANAGE,
-    PERMISSIONS.CALENDAR_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.COGS_MANAGE,
+    PERMISSIONS.CALENDAR_VIEW, PERMISSIONS.BUDGETS_VIEW, PERMISSIONS.BUDGET_MANAGE, PERMISSIONS.COGS_MANAGE,
     PERMISSIONS.ALERTS_CONFIG, PERMISSIONS.LEDGER_VIEW, PERMISSIONS.DASHBOARD_VIEW,
     PERMISSIONS.DEBTS_VIEW, PERMISSIONS.DEBTS_MANAGE,
     PERMISSIONS.PAYMENT_METHODS_VIEW,
@@ -138,7 +139,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     PERMISSIONS.MPESA_VIEW,
     PERMISSIONS.FEEDBACK_MANAGE,
     PERMISSIONS.SUBSCRIPTIONS_VIEW,
-    PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.CALENDAR_VIEW,
+    PERMISSIONS.DASHBOARD_VIEW, PERMISSIONS.CALENDAR_VIEW, PERMISSIONS.BUDGETS_VIEW,
   ],
 };
 
@@ -491,6 +492,13 @@ export const purchaseOrdersView = baseProcedure.use(requirePermission(PERMISSION
 export const purchaseOrdersManage = baseProcedure.use(requirePermission(PERMISSIONS.PURCHASE_ORDERS_MANAGE));
 export const calendarView = baseProcedure.use(requirePermission(PERMISSIONS.CALENDAR_VIEW));
 export const budgetManage = baseProcedure.use(requirePermission(PERMISSIONS.BUDGET_MANAGE));
+// Reading a budget is legitimate for a viewer; writing one is not. The
+// permission catalogue has advertised `budgets:view` while the router only
+// accepted `budget:manage`, so the Insights nav item was unreachable for
+// every role. Accept either permission on the read procedures.
+export const budgetView = baseProcedure.use(
+  requireAnyPermission([PERMISSIONS.BUDGETS_VIEW, PERMISSIONS.BUDGET_MANAGE]),
+);
 export const cogsManage = baseProcedure.use(requirePermission(PERMISSIONS.COGS_MANAGE));
 export const alertsConfig = baseProcedure.use(requirePermission(PERMISSIONS.ALERTS_CONFIG));
 export const ledgerView = baseProcedure.use(requirePermission(PERMISSIONS.LEDGER_VIEW));

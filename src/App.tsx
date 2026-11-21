@@ -382,7 +382,7 @@ export default function App() {
           element={
             <ErrorBoundary>
               <SuspendedPage>
-                <ProtectedPage requiredPermission="budgets:view">
+                <ProtectedPage requiredPermission={["budgets:view", "budget:manage"]}>
                   <Budgets />
                 </ProtectedPage>
               </SuspendedPage>

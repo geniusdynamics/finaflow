@@ -46,7 +46,7 @@ const secondaryNavItems: { path: string; label: string; group: string; icon: Rea
   { path: "/payroll", label: "Payroll", group: "Money", icon: Users, perms: [PERMISSIONS.PAYROLL_VIEW, PERMISSIONS.PAYROLL_PROCESS] },
   { path: "/calendar", label: "Calendar", group: "Money", icon: CalendarDays, perms: [PERMISSIONS.CALENDAR_VIEW] },
   { path: "/reports", label: "Reports", group: "Insights", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
-  { path: "/budgets", label: "Budgets", group: "Insights", icon: FileSpreadsheet, perms: [PERMISSIONS.BUDGETS_VIEW] },
+  { path: "/budgets", label: "Budgets", group: "Insights", icon: FileSpreadsheet, perms: [PERMISSIONS.BUDGETS_VIEW, PERMISSIONS.BUDGET_MANAGE] },
   { path: "/businesses", label: "Businesses", group: "Workspace", icon: Building, perms: [PERMISSIONS.BUSINESS_MANAGE] },
   { path: "/locations", label: "Locations", group: "Workspace", icon: Building, perms: [PERMISSIONS.BUSINESS_MANAGE] },
   { path: "/users", label: "Users & Roles", group: "Workspace", icon: ShieldCheck, perms: [PERMISSIONS.USERS_MANAGE] },
