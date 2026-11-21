@@ -497,6 +497,7 @@ app.post("/api/connect/partner-approve", connectLimiter, async (c) => {
       webhookSecret: String(body.webhookSecret ?? ""),
       scopes: Array.isArray(body.scopes) ? body.scopes : undefined,
       approvedByUserId: body.approvedByUserId ? Number(body.approvedByUserId) : undefined,
+      autoComplete: body.autoComplete === true,
     });
     return c.json(result);
   } catch (err) {

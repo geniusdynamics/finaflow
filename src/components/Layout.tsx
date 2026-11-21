@@ -15,6 +15,7 @@ import { hasAnyPermission, PERMISSIONS, type Permission } from "@/lib/permission
 import { APP_VERSION_DISPLAY } from "@/lib/version";
 import { MobileBottomNavigation } from "@/components/MobileNavigation";
 import { BannerNotifications } from "@/components/BannerNotifications";
+import { ConnectReferralPrompt } from "@/components/ConnectReferralPrompt";
 
 const NAV_SECTIONS: Array<{
   label: string | null;
@@ -486,6 +487,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
       )}
 
       {/* Main Content */}
+      <ConnectReferralPrompt />
+
       <main className={`min-h-screen transition-all duration-300 ${sidebarCollapsed ? "lg:ml-16" : "lg:ml-64"}`}>
         <BannerNotifications />
         <div className="mx-auto max-w-7xl p-4 lg:p-8 pb-20 lg:pb-8">

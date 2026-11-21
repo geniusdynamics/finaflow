@@ -201,6 +201,12 @@ export async function createConnectSession(input: {
   scopes?: string[];
   /** Partner system to pair with ("finabill" default, "glomish" supported). */
   targetSystem?: string;
+  /**
+   * Session lifetime in minutes (1-1440, default 10). A signup referral needs
+   * longer than a browser redirect because the person still has to create an
+   * account before approving.
+   */
+  ttlMinutes?: number;
 }) {
 
   await assertBusinessOperational(input.businessId);
@@ -212,7 +218,8 @@ export async function createConnectSession(input: {
   const codeVerifier = randomToken(32);
   const codeChallenge = hashCode(codeVerifier);
   const scopes = input.scopes?.length ? input.scopes : [...DEFAULT_CONNECT_SCOPES];
-  const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+  const ttlMinutes = Math.min(Math.max(input.ttlMinutes ?? 10, 1), 1440);
+  const expiresAt = new Date(Date.now() + ttlMinutes * 60_000);
 
   const { appUrl: partnerAppUrl, apiUrl: partnerApiUrl } =
     partnerUrlsFor(targetSystem);
@@ -362,6 +369,12 @@ export async function partnerApproveSession(input: {
   webhookSecret: string;
   scopes?: string[];
   approvedByUserId?: number;
+  /**
+   * Complete the initiator side in this request instead of waiting for the
+   * browser callback. The signup referral flow has no initiator tab to return
+   * to, so it asks for this.
+   */
+  autoComplete?: boolean;
 }) {
   const db = getDb();
   const [session] = await db
@@ -423,11 +436,40 @@ export async function partnerApproveSession(input: {
     })
     .where(eq(integrationConnectSessions.id, session.id));
 
+  if (input.autoComplete) {
+    if (!session.initiatorBusinessId) {
+      throw new Error("Connect business is missing");
+    }
+    if (!session.createdByUserId) {
+      throw new Error("Connect session has no owner");
+    }
+    const codeVerifier =
+      typeof existingPayload.codeVerifier === "string"
+        ? existingPayload.codeVerifier
+        : undefined;
+    const completed = await exchangeConnectSession({
+      sessionPublicId: session.sessionPublicId,
+      authorizationCode: authCode,
+      codeVerifier,
+      businessId: session.initiatorBusinessId,
+      userId: session.createdByUserId,
+    });
+    return {
+      authorizationCode: authCode,
+      redirectUri: null,
+      state: session.state,
+      sessionPublicId: session.sessionPublicId,
+      completed: true,
+      connectionId: completed.connectionId,
+    };
+  }
+
   return {
     authorizationCode: authCode,
     redirectUri: session.redirectUri,
     state: session.state,
     sessionPublicId: session.sessionPublicId,
+    completed: false,
   };
 }
 
@@ -622,6 +664,8 @@ export async function approveAsPartner(input: {
   businessId: number;
   userId: number;
   scopes?: string[];
+  /** Ask the initiator to complete the exchange without a browser callback. */
+  autoComplete?: boolean;
 }) {
 
   await assertBusinessOperational(input.businessId);
@@ -660,6 +704,7 @@ export async function approveAsPartner(input: {
         webhookSecret,
         scopes,
         approvedByUserId: input.userId,
+        autoComplete: input.autoComplete === true,
       }),
     }
   );
@@ -674,6 +719,8 @@ export async function approveAsPartner(input: {
     redirectUri: string | null;
     state: string;
     sessionPublicId: string;
+    completed?: boolean;
+    connectionId?: number;
   };
 
   return {

@@ -14,6 +14,10 @@ import {
 } from "./lib/integrations/connect-service";
 import { DEFAULT_CONNECT_SCOPES } from "./lib/api-scopes";
 import { env } from "./lib/env";
+import { getDb } from "./queries/connection";
+import { businesses } from "@db/schema";
+import { eq } from "drizzle-orm";
+import { buildSignupReferralUrl } from "./lib/integrations/connect-referral";
 import { assertSafeOutboundUrl } from "./lib/url-guard";
 
 function requireBusinessId(ctx: {
@@ -43,6 +47,7 @@ export const connectRouter = createRouter({
           scopes: z.array(z.string()).optional(),
           mode: z.enum(["redirect", "pairing"]).optional(),
           targetSystem: z.string().min(2).max(50).optional(),
+          ttlMinutes: z.number().int().min(1).max(1440).optional(),
         })
         .optional()
     )
@@ -53,7 +58,63 @@ export const connectRouter = createRouter({
         userId: ctx.user!.id,
         scopes: input?.scopes,
         targetSystem: input?.targetSystem,
+        ttlMinutes: input?.ttlMinutes,
       });
+    }),
+
+  /**
+   * A referral signup link: the owner/admin starts a FinaBill account, and the
+   * session lets the new business approve the pairing at the end of signup.
+   * The session outlives a normal redirect (60 minutes).
+   */
+  signupLink: integrationsManage
+    .input(
+      z
+        .object({
+          targetSystem: z.enum(["finabill"]).default("finabill"),
+        })
+        .optional()
+    )
+    .mutation(async ({ ctx }) => {
+      const businessId = requireBusinessId(ctx);
+      const appUrl = env.finabillAppUrl.replace(/\/$/, "");
+      if (!appUrl) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message:
+            "FinaBill is not configured on this deployment. Set FINABILL_APP_URL to offer an account link.",
+        });
+      }
+      try {
+        const session = await createConnectSession({
+          businessId,
+          userId: ctx.user!.id,
+          targetSystem: "finabill",
+          ttlMinutes: 60,
+        });
+        const [biz] = await getDb()
+          .select({ accountId: businesses.accountId, name: businesses.name })
+          .from(businesses)
+          .where(eq(businesses.id, businessId))
+          .limit(1);
+        const url = buildSignupReferralUrl({
+          target: "finabill",
+          appUrl,
+          sessionPublicId: session.sessionPublicId,
+          state: session.state,
+          sourceAccount: biz?.accountId,
+          sourceName: biz?.name,
+        });
+        return { url, expiresAt: session.expiresAt };
+      } catch (error) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Could not create the account link",
+        });
+      }
     }),
 
   sessionStatus: integrationsManage
@@ -101,6 +162,7 @@ export const connectRouter = createRouter({
         state: z.string().min(8),
         scopes: z.array(z.string()).optional(),
         initiatorSystem: z.string().min(2).max(50).optional(),
+        autoComplete: z.boolean().optional(),
       })
     )
     .mutation(async ({ input, ctx }) => {
@@ -119,6 +181,7 @@ export const connectRouter = createRouter({
           userId: ctx.user!.id,
           scopes: input.scopes,
           initiatorSystem: input.initiatorSystem,
+          autoComplete: input.autoComplete,
         });
       } catch (err) {
         throw new TRPCError({
