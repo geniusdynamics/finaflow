@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+## [1.5.0] - 2026-11-21
+
+### FinaBill instance control
+
+#### Added
+- Instance-control API at `/api/v1/instance` for a sibling FinaBill deployment: health, account list/detail, hold/resume, plan change, user list/status, and the plan catalogue. Reads need `instance:read`; mutations need `instance:manage`.
+- `instance_controllers` allowlist (migration `0038_instance_controllers`) with `fic_` keys stored as SHA-256 hashes, one-time display, rotation, revocation and soft deletion. The controller ID is the FinaBill account ID; a key is only accepted when `X-Fina-Controller-Id` matches the same row.
+- **Admin ▸ FinaBill controllers** in the superadmin workspace: create a controller for a FinaBill account ID, choose read or read/manage scopes, copy the key once, rotate, revoke or delete. Backed by `admin.controllers.*`.
+- Hold and resume map to the existing billing hold (`billingHoldAt`), so owners/admins fall back to billing-only access and other users and business API keys are blocked. Plan changes apply the plan's limits to the account and every business under it.
+- Every controller mutation writes an `instance_control` audit row with the supplied reason; controller management writes `instance_controller` rows. Responses never include password hashes, sessions or keys.
+
+### Security
+- A tenant `fna_` key cannot call the instance API — it is rejected at the `fic_` prefix check. Unknown, revoked and deleted controllers are a flat `401`; a missing scope is `403`.
+- The internal platform account (`SUPER_ADMIN_ACCOUNT`) is protected from hold, resume and plan changes.
+- Instance routes inherit the v1 integration limiter and the no-cookie/no-CSRF machine-to-machine path.
+
+### Docs
+- New [instance-control API](/docs/instance-api) guide, `instance:read` / `instance:manage` in the authentication guide, and the `/instance/*` paths and schemas in the OpenAPI reference.
+
+### Tests
+- `api/__tests__/admin-controllers.test.ts` pins one-time key exposure, hashing, rotation, revocation, audit rows and the superadmin gate; `api/__tests__/instance-control.test.ts` covers the instance endpoints.
+
 ## [Unreleased] — Integrations catalog
 
 ### Added

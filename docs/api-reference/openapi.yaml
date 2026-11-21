@@ -3,7 +3,9 @@ info:
   title: FinaFlow Integration API
   description: |
     REST API for external integrators. All endpoints require an API key
-    (`Authorization: Bearer fna_...`) unless noted otherwise.
+    (`Authorization: Bearer fna_...`) unless noted otherwise. The `/instance/*`
+    endpoints are the exception: they belong to FinaBill instance controllers
+    and use a `fic_...` key plus an `X-Fina-Controller-Id` header.
 
     **Response envelope** — every response uses:
     - Success: `{ "data": <payload>, "meta": { "requestId": "req_..." } }`
@@ -52,6 +54,8 @@ tags:
     description: Sales ingestion
   - name: Webhooks
     description: Incoming webhook receivers
+  - name: Instance
+    description: FinaBill instance control (`fic_` controller keys)
 
 paths:
   /verify:
@@ -1386,6 +1390,322 @@ paths:
         "404":
           description: Unknown provider
 
+  # ── Instance control (FinaBill controllers) ───────────────────────
+  /instance/health:
+    get:
+      operationId: getInstanceHealth
+      summary: Instance health
+      description: |
+        Liveness and counts for this FinaFlow instance. A connection test proves
+        this route and `instance:read`; it does not prove `instance:manage`.
+      tags: [Instance]
+      security:
+        - ControllerAuth: []
+        - ScopeAuth: ["instance:read"]
+      parameters:
+        - $ref: "#/components/parameters/ControllerId"
+      responses:
+        "200":
+          description: Instance is reachable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceHealthResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /instance/accounts:
+    get:
+      operationId: listInstanceAccounts
+      summary: List accounts
+      description: |
+        Paginated account register. `access=held` selects accounts with a billing
+        hold; `access=active` selects those without one.
+      tags: [Instance]
+      security:
+        - ControllerAuth: []
+        - ScopeAuth: ["instance:read"]
+      parameters:
+        - $ref: "#/components/parameters/ControllerId"
+        - $ref: "#/components/parameters/Offset"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+          description: Maximum accounts to return
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Match account id or name (case-insensitive)
+        - name: plan
+          in: query
+          schema: { type: string }
+          description: Exact plan key
+        - name: access
+          in: query
+          schema:
+            type: string
+            enum: [all, held, active]
+            default: all
+          description: Filter by billing-hold state
+      responses:
+        "200":
+          description: Paginated account register
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceAccountListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /instance/accounts/{accountId}:
+    get:
+      operationId: getInstanceAccount
+      summary: Get one account
+      description: One account with its businesses and users. Never includes credentials.
+      tags: [Instance]
+      security:
+        - ControllerAuth: []
+        - ScopeAuth: ["instance:read"]
+      parameters:
+        - $ref: "#/components/parameters/ControllerId"
+        - $ref: "#/components/parameters/AccountId"
+      responses:
+        "200":
+          description: Account detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceAccountDetailResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /instance/accounts/{accountId}/hold:
+    post:
+      operationId: holdInstanceAccount
+      summary: Put an account on billing hold
+      description: |
+        Sets `billingHoldAt`. Owners and admins keep billing-only access; other
+        users and business API keys are blocked. Idempotent, and the reason is
+        audited.
+      tags: [Instance]
+      security:
+        - ControllerAuth: []
+        - ScopeAuth: ["instance:manage"]
+      parameters:
+        - $ref: "#/components/parameters/ControllerId"
+        - $ref: "#/components/parameters/AccountId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstanceReasonBody"
+      responses:
+        "200":
+          description: Account state after the action
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceAccountStateResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /instance/accounts/{accountId}/resume:
+    post:
+      operationId: resumeInstanceAccount
+      summary: Clear an account's billing hold
+      tags: [Instance]
+      security:
+        - ControllerAuth: []
+        - ScopeAuth: ["instance:manage"]
+      parameters:
+        - $ref: "#/components/parameters/ControllerId"
+        - $ref: "#/components/parameters/AccountId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstanceReasonBody"
+      responses:
+        "200":
+          description: Account state after the action
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceAccountStateResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /instance/accounts/{accountId}/plan:
+    post:
+      operationId: setInstanceAccountPlan
+      summary: Change an account's plan
+      description: |
+        Applies the plan's limits and features to the account and every business
+        under it. `expiresOn` makes the subscription a trial; omitting it clears
+        the expiry. Refused for the protected platform account and for partner
+        entitlements.
+      tags: [Instance]
+      security:
+        - ControllerAuth: []
+        - ScopeAuth: ["instance:manage"]
+      parameters:
+        - $ref: "#/components/parameters/ControllerId"
+        - $ref: "#/components/parameters/AccountId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstancePlanChangeBody"
+      responses:
+        "200":
+          description: Account state after the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceAccountStateResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /instance/users:
+    get:
+      operationId: listInstanceUsers
+      summary: List users
+      tags: [Instance]
+      security:
+        - ControllerAuth: []
+        - ScopeAuth: ["instance:read"]
+      parameters:
+        - $ref: "#/components/parameters/ControllerId"
+        - $ref: "#/components/parameters/Offset"
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+          description: Maximum users to return
+        - name: accountId
+          in: query
+          schema: { type: string }
+          description: Restrict to one account
+        - name: search
+          in: query
+          schema: { type: string }
+          description: Match name, username or email
+      responses:
+        "200":
+          description: Paginated user register
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceUserListResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /instance/users/{userId}/status:
+    post:
+      operationId: setInstanceUserStatus
+      summary: Enable or disable a user
+      description: |
+        The user must belong to `accountId`. The last active owner of an account
+        cannot be disabled.
+      tags: [Instance]
+      security:
+        - ControllerAuth: []
+        - ScopeAuth: ["instance:manage"]
+      parameters:
+        - $ref: "#/components/parameters/ControllerId"
+        - name: userId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstanceUserStatusBody"
+      responses:
+        "200":
+          description: User state after the change
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstanceUserStatusResponse"
+        "400":
+          $ref: "#/components/responses/ValidationError"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /instance/plans:
+    get:
+      operationId: listInstancePlans
+      summary: Plan catalogue
+      description: |
+        The four sellable plans with their limits. Read-only: plan import is not
+        part of this API.
+      tags: [Instance]
+      security:
+        - ControllerAuth: []
+        - ScopeAuth: ["instance:read"]
+      parameters:
+        - $ref: "#/components/parameters/ControllerId"
+      responses:
+        "200":
+          description: Plan catalogue
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InstancePlanListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
 components:
   securitySchemes:
     BearerAuth:
@@ -1420,8 +1740,28 @@ components:
             "statements:read": Read statement imports, analyses and exports
             "statements:write": Parse and import statement files
             "webhooks": Manage webhooks
+            "instance:read": Read instance accounts, users and plans
+            "instance:manage": Hold/resume accounts, change plans and user access
+    ControllerAuth:
+      type: http
+      scheme: bearer
+      description: "FinaFlow instance controller key prefixed with `fic_`. The request must also carry `X-Fina-Controller-Id` naming the FinaBill account id allowlisted for that key."
 
   parameters:
+    ControllerId:
+      name: X-Fina-Controller-Id
+      in: header
+      required: true
+      schema:
+        type: string
+      description: The FinaBill account id stored beside the controller key.
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      schema:
+        type: string
+      description: The FinaFlow account id (not the numeric row id).
     Offset:
       name: offset
       in: query
@@ -1985,6 +2325,301 @@ components:
 
         **Retry policy**: Up to 3 attempts with exponential backoff (1s, 2s).
         All attempts recorded in `webhookDeliveries`.
+
+    InstanceHealthResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            product:
+              type: string
+              example: finaflow
+            version:
+              type: string
+              example: 1.4.0
+            accountCount:
+              type: integer
+            userCount:
+              type: integer
+            serverTime:
+              type: string
+              format: date-time
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    InstanceAccountSummary:
+      type: object
+      required: [accountId, name, plan, isActive]
+      properties:
+        accountId:
+          type: string
+          example: ACC-7F3K9Q
+        name:
+          type: string
+          example: Alpha Lodge
+        plan:
+          type: string
+          example: growth
+        subscriptionStatus:
+          type: string
+          example: active
+        isActive:
+          type: boolean
+        billingHoldAt:
+          type: [string, "null"]
+          format: date-time
+          description: Non-null means the account is on billing hold.
+        subscriptionExpiry:
+          type: [string, "null"]
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+        businessCount:
+          type: integer
+        userCount:
+          type: integer
+
+    InstanceAccountState:
+      type: object
+      required: [accountId, name, plan, isActive]
+      properties:
+        accountId:
+          type: string
+          example: ACC-7F3K9Q
+        name:
+          type: string
+          example: Alpha Lodge
+        plan:
+          type: string
+          example: growth
+        subscriptionStatus:
+          type: string
+          example: active
+        isActive:
+          type: boolean
+        billingHoldAt:
+          type: [string, "null"]
+          format: date-time
+        subscriptionExpiry:
+          type: [string, "null"]
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+
+    InstanceBusiness:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        slug:
+          type: string
+        plan:
+          type: string
+        subscriptionStatus:
+          type: string
+        subscriptionExpiry:
+          type: [string, "null"]
+          format: date
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    InstanceUser:
+      type: object
+      description: Identity and role only — never a password hash or session.
+      properties:
+        id:
+          type: integer
+        name:
+          type: [string, "null"]
+        username:
+          type: string
+        email:
+          type: [string, "null"]
+        role:
+          type: string
+        accountId:
+          type: [string, "null"]
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    InstanceAccountListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstanceAccountSummary"
+        meta:
+          $ref: "#/components/schemas/PaginatedMeta"
+
+    InstanceAccountStateResponse:
+      type: object
+      properties:
+        data:
+          $ref: "#/components/schemas/InstanceAccountState"
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    InstanceAccountDetailResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            account:
+              type: object
+              required: [accountId, name, plan, isActive]
+              properties:
+                accountId:
+                  type: string
+                name:
+                  type: string
+                plan:
+                  type: string
+                subscriptionStatus:
+                  type: string
+                isActive:
+                  type: boolean
+                billingHoldAt:
+                  type: [string, "null"]
+                  format: date-time
+                subscriptionExpiry:
+                  type: [string, "null"]
+                  format: date
+                createdAt:
+                  type: string
+                  format: date-time
+                maxBusinesses:
+                  type: integer
+                maxUsers:
+                  type: integer
+                maxTransactionsPerMonth:
+                  type: integer
+                updatedAt:
+                  type: string
+                  format: date-time
+            businesses:
+              type: array
+              items:
+                $ref: "#/components/schemas/InstanceBusiness"
+            users:
+              type: array
+              items:
+                $ref: "#/components/schemas/InstanceUser"
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    InstanceUserListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstanceUser"
+        meta:
+          $ref: "#/components/schemas/PaginatedMeta"
+
+    InstanceReasonBody:
+      type: object
+      required: [reason]
+      additionalProperties: false
+      properties:
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 2000
+          example: Invoice 4471 unpaid for 30 days
+
+    InstancePlanChangeBody:
+      type: object
+      required: [plan, reason]
+      additionalProperties: false
+      properties:
+        plan:
+          type: string
+          enum: [free, starter, growth, pro]
+        expiresOn:
+          type: string
+          format: date
+          description: Sets a trial expiry; omit to clear it and mark the subscription active.
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 2000
+
+    InstanceUserStatusBody:
+      type: object
+      required: [accountId, isActive, reason]
+      additionalProperties: false
+      properties:
+        accountId:
+          type: string
+          example: ACC-7F3K9Q
+        isActive:
+          type: boolean
+        reason:
+          type: string
+          minLength: 3
+          maxLength: 2000
+
+    InstanceUserStatusResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            id:
+              type: integer
+            isActive:
+              type: boolean
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    InstancePlan:
+      type: object
+      properties:
+        plan:
+          type: string
+          enum: [free, starter, growth, pro]
+        name:
+          type: string
+        priceLabel:
+          type: string
+          example: KES 1,500/mo
+        maxBusinesses:
+          type: integer
+        maxBranches:
+          type: integer
+        maxUsers:
+          type: integer
+        transactionQuota:
+          type: integer
+          description: Monthly transactions; 999999 means unlimited.
+        payrollEnabled:
+          type: boolean
+        supportTier:
+          type: string
+
+    InstancePlanListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/InstancePlan"
+        meta:
+          $ref: "#/components/schemas/Meta"
 
 webhooks:
   saleRecorded:

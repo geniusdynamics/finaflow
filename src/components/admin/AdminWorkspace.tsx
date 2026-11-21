@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "react-router";
 import { Layout } from "@/components/Layout";
+import { ControllersPanel } from "@/components/admin/ControllersPanel";
 import { AdminReports } from "@/pages/Admin";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import { Activity, Building2, Users, BarChart3, Mail, ShieldAlert, Search, KeyRo
 const sections = [
   "overview",
   "accounts",
+  "controllers",
   "users",
   "plans",
   "communications",
@@ -22,13 +24,14 @@ const sections = [
 const labels = [
   "Overview",
   "Accounts",
+  "FinaBill controllers",
   "Users",
   "Usage & Plans",
   "Communications",
   "Security reports",
   "Audit",
 ];
-const sectionIcons = [Activity, Building2, Users, BarChart3, Mail, ShieldAlert, Search];
+const sectionIcons = [Activity, Building2, KeyRound, Users, BarChart3, Mail, ShieldAlert, Search];
 const selectClass = "h-10 rounded-md border bg-white px-3 text-sm";
 
 export default function AdminWorkspace() {
@@ -105,7 +108,7 @@ export default function AdminWorkspace() {
             })}
           </nav>
           <main className="min-w-0 flex-1 space-y-5">
-            {section !== "accounts" && <div className="border-b border-[#E8E0D8] pb-3"><h2 className="font-serif text-2xl font-semibold text-[#2D2A26]">{labels[sections.indexOf(section as typeof sections[number])] || "Overview"}</h2><p className="text-sm text-muted-foreground">{section === "security" ? "Password changes reported by account holders" : "Platform-wide insights and support tools"}</p></div>}
+            {section !== "accounts" && <div className="border-b border-[#E8E0D8] pb-3"><h2 className="font-serif text-2xl font-semibold text-[#2D2A26]">{labels[sections.indexOf(section as typeof sections[number])] || "Overview"}</h2><p className="text-sm text-muted-foreground">{section === "security" ? "Password changes reported by account holders" : section === "controllers" ? "Allow a FinaBill instance to manage this FinaFlow instance" : "Platform-wide insights and support tools"}</p></div>}
             {section === "accounts" && accountId ? (
               <AccountWorkspace
                 accountId={accountId}
@@ -258,6 +261,8 @@ export default function AdminWorkspace() {
                   </>
                 )}
               </>
+            ) : section === "controllers" ? (
+              <ControllersPanel />
             ) : section === "communications" ? (
               <>
                 <nav
