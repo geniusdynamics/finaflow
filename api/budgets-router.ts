@@ -1,7 +1,7 @@
 // ABOUTME: Budget Plan router -- period-aware budget CRUD with monthly/quarterly/half-yearly/annual support.
 // ABOUTME: All procedures require budget:manage permission and are scoped to the active business locations.
 import { z } from "zod";
-import { createRouter, budgetManage, authedQuery, getCurrentBusinessLocationIds } from "./middleware";
+import { createRouter, budgetManage, budgetView, authedQuery, getCurrentBusinessLocationIds } from "./middleware";
 import { getDb } from "./queries/connection";
 import { budgetPlans, budgetPlanBuckets, budgetBucketLines, expenseCategories, businesses, type InsertBudgetPlan } from "@db/schema";
 import { eq, and, isNull, sql, inArray } from "drizzle-orm";
@@ -90,7 +90,7 @@ export const budgetsRouter = createRouter({
       return created;
     }),
 
-  listByYear: budgetManage
+  listByYear: budgetView
     .input(z.object({ year: z.number().int(), statuses: z.array(z.string()).optional(), locationId: z.number().optional() }))
     .query(async ({ input, ctx }) => {
       const db = getDb();
@@ -124,7 +124,7 @@ export const budgetsRouter = createRouter({
       return plans.map((p) => ({ ...p, bucketCount: countMap.get(p.id) ?? 0 }));
     }),
 
-  get: budgetManage
+  get: budgetView
     .input(z.object({ planId: z.number() }))
     .query(async ({ input, ctx }) => {
       const db = getDb();

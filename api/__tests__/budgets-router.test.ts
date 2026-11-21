@@ -428,6 +428,28 @@ describe("Budgets Router", () => {
     await expect(caller.budgets.archive({ planId: 99999999 })).rejects.toThrow("Budget plan not found");
   });
 
+  it("lets a viewer read budgets without granting write access", async () => {
+    const viewer = { ...user, role: "viewer" } as typeof user;
+    const caller = makeAuthedCaller(viewer, biz, [biz.id]);
+
+    // `budgets:view` is the permission the Insights nav and the route guard
+    // ask for; before the router accepted it, the page was unreachable.
+    const plans = await caller.budgets.listByYear({ year: 2025 });
+    expect(plans.some((p) => p.id === sharedPlanId)).toBe(true);
+
+    const detail = await caller.budgets.get({ planId: sharedPlanId });
+    expect(detail.id).toBe(sharedPlanId);
+
+    await expect(
+      caller.budgets.create({
+        locationId: loc.id,
+        fiscalYearStart: 2025,
+        period: "monthly",
+        lines: [{ categoryId: cat1.id, amount: "10.00" }],
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
   // ── Cleanup: remove the shared plan ──────────────────────────────────
 
   it("(cleanup) removes the shared plan", async () => {

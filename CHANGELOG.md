@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [1.5.1] - 2026-11-21
+
+### Fixed — Insights ▸ Budgets is reachable again
+- **The Budgets item was hidden for every role.** The sidebar and the `/budgets` route required `budgets:view`, while the server defined only `budget:manage` and filtered every stored permission through `Object.values(PERMISSIONS)`. `budgets:view` could therefore never appear in `user.permissions`, and the nav filter removed the item for owners, admins, managers and viewers alike.
+- **The permission now exists and viewers can read.** The server catalogue defines `budgets:view` and grants it to owner/admin/manager/viewer. `budgets.listByYear` and `budgets.get` accept `budgets:view` **or** `budget:manage`; create, update, lock, archive and the fiscal-year write still require `budget:manage`.
+- **Custom role rows keep working.** Users who already hold `budget:manage` see the page even when their business has a `role_permissions` row that predates this permission, because the nav, route guard and read procedures all accept either value.
+- Tests: `api/__tests__/budgets-router.test.ts` gains a viewer case pinning read access and the write refusal (18/18).
+
 ## [1.5.0] - 2026-11-21
 
 ### FinaBill instance control

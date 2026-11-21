@@ -55,7 +55,7 @@ const NAV_SECTIONS: Array<{
     label: "Insights",
     items: [
       { path: "/reports", label: "Reports", icon: FileSpreadsheet, perms: [PERMISSIONS.REPORTS_VIEW] },
-      { path: "/budgets", label: "Budgets", icon: FileSpreadsheet, perms: [PERMISSIONS.BUDGETS_VIEW] },
+      { path: "/budgets", label: "Budgets", icon: FileSpreadsheet, perms: [PERMISSIONS.BUDGETS_VIEW, PERMISSIONS.BUDGET_MANAGE] },
     ],
   },
   {
