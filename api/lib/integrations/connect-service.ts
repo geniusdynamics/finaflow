@@ -218,7 +218,10 @@ export async function createConnectSession(input: {
   const codeVerifier = randomToken(32);
   const codeChallenge = hashCode(codeVerifier);
   const scopes = input.scopes?.length ? input.scopes : [...DEFAULT_CONNECT_SCOPES];
-  const ttlMinutes = Math.min(Math.max(input.ttlMinutes ?? 10, 1), 1440);
+  const ttlMinutes = Math.min(
+    Math.max(input.ttlMinutes ?? SESSION_TTL_MS / 60_000, 1),
+    1440
+  );
   const expiresAt = new Date(Date.now() + ttlMinutes * 60_000);
 
   const { appUrl: partnerAppUrl, apiUrl: partnerApiUrl } =
